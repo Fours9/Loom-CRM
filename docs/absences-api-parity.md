@@ -4,10 +4,13 @@ Source of truth: ProjectWeekend `ApiService` + models. Status: `ready` | `partia
 
 | PW UI | Method | Expected response | Loom endpoint | Status |
 |-------|--------|-------------------|---------------|--------|
-| Dashboard | getEmployee | EmployeeProfile | GET /employees/:id | partial |
-| Dashboard | getSchedule | ScheduleDay[] | GET /employees/:id/schedule | partial |
+| Dashboard | getEmployee | EmployeeProfile | GET /employees/:id | ready |
+| Dashboard | getSchedule | ScheduleDay[] (breaks) | GET /employees/:id/schedule | ready |
 | Dashboard | getEmployeeRequests | { items } | GET /absences/employees/:id/requests | ready |
-| Dashboard | downloadEmployeePdf | Blob | GET /employees/:id/export.pdf | missing/partial |
+| Dashboard | downloadEmployeePdf | Blob | GET /employees/:id/export.pdf | ready |
+| Employees list | getEmployees | list DTO + filters | GET /employees | ready |
+| Employees edit | patchEmployee | detail | PATCH /employees/:id | ready |
+| Account | attach/status/delete | detail | POST/PATCH/DELETE …/account | ready |
 | Requests list | getRequests | { items, page, pageSize, total } | GET /absences/requests | ready |
 | Detail | getRequest | permissions + history + attachments | GET /absences/requests/:id | ready |
 | Create | createRequest | detail | POST /absences/requests | ready |

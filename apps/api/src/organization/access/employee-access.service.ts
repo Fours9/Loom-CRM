@@ -24,36 +24,141 @@ export class EmployeeAccessService {
     return scopeForRole(actor.role);
   }
 
+  isAdmin(viewer: User): boolean {
+    return viewer.role === UserRole.Admin;
+  }
+
+  isOwner(viewer: User, target: Employee): boolean {
+    return target.userId != null && target.userId === viewer.id;
+  }
+
+  isManager(viewer: User): boolean {
+    return (
+      viewer.role === UserRole.DepartmentManager ||
+      Boolean(viewer.isDepartmentManager)
+    );
+  }
+
   async requireCanView(actor: User, target: Employee): Promise<void> {
-    if (this.scope(actor) === 'all') return;
-    if (target.userId === actor.id) return;
-    if (this.scope(actor) === 'managed_departments') {
-      const deptIds = await this.managedDepartmentIds(actor);
-      if (target.departmentId && deptIds.includes(target.departmentId)) {
-        return;
-      }
+    if (!(await this.canViewEmployeeProfile(actor, target))) {
+      throw new ForbiddenException('Cannot view employee');
     }
-    throw new ForbiddenException('Cannot view employee');
   }
 
   async requireCanEdit(actor: User, target: Employee): Promise<void> {
-    if (actor.role === UserRole.Admin) return;
+    if (!(await this.canEditEmployeeProfile(actor, target))) {
+      throw new ForbiddenException('Cannot edit employee');
+    }
+  }
+
+  async canViewEmployeeProfile(
+    actor: User,
+    target: Employee,
+  ): Promise<boolean> {
+    if (this.scope(actor) === 'all') return true;
+    if (this.isOwner(actor, target)) return true;
     if (this.scope(actor) === 'managed_departments') {
       const deptIds = await this.managedDepartmentIds(actor);
-      if (target.departmentId && deptIds.includes(target.departmentId)) {
-        return;
-      }
+      return Boolean(
+        target.departmentId && deptIds.includes(target.departmentId),
+      );
     }
-    throw new ForbiddenException('Cannot edit employee');
+    return false;
+  }
+
+  async canEditEmployeeProfile(
+    actor: User,
+    target: Employee,
+  ): Promise<boolean> {
+    if (this.isAdmin(actor)) return true;
+    if (this.scope(actor) === 'managed_departments') {
+      const deptIds = await this.managedDepartmentIds(actor);
+      return Boolean(
+        target.departmentId && deptIds.includes(target.departmentId),
+      );
+    }
+    return false;
+  }
+
+  async canEditEmployeeSchedule(
+    actor: User,
+    target: Employee,
+  ): Promise<boolean> {
+    return this.canEditEmployeeProfile(actor, target);
+  }
+
+  async canViewWorkContacts(viewer: User, target: Employee): Promise<boolean> {
+    if (this.isAdmin(viewer) || this.isOwner(viewer, target)) return true;
+    return this.canViewEmployeeProfile(viewer, target);
+  }
+
+  canViewAccountDetails(viewer: User, target: Employee): boolean {
+    return this.isAdmin(viewer) || this.isOwner(viewer, target);
+  }
+
+  canViewComment(viewer: User, _target: Employee): boolean {
+    return this.isAdmin(viewer) || this.isManager(viewer);
+  }
+
+  canEditComment(viewer: User, target: Employee): Promise<boolean> {
+    return this.canEditEmployeeProfile(viewer, target);
+  }
+
+  canViewAdminComment(viewer: User): boolean {
+    return this.isAdmin(viewer);
+  }
+
+  canEditAdminComment(viewer: User): boolean {
+    return this.isAdmin(viewer);
+  }
+
+  canViewPersonalContacts(viewer: User): boolean {
+    return this.isAdmin(viewer);
+  }
+
+  canEditPersonalContacts(viewer: User): boolean {
+    return this.isAdmin(viewer);
+  }
+
+  canCreateEmployeeAccount(viewer: User, target: Employee): boolean {
+    return this.isAdmin(viewer) && target.userId == null;
+  }
+
+  canManageExistingEmployeeAccount(viewer: User, target: Employee): boolean {
+    return this.isAdmin(viewer) && target.userId != null;
+  }
+
+  canResetEmployeePassword(viewer: User): boolean {
+    return this.isAdmin(viewer);
+  }
+
+  async canExportProfilePdf(
+    viewer: User,
+    target: Employee,
+  ): Promise<boolean> {
+    if (!(this.isAdmin(viewer) || this.isManager(viewer))) return false;
+    return this.canViewEmployeeProfile(viewer, target);
+  }
+
+  canViewVisibilityOverrides(viewer: User, _targetRole: string): boolean {
+    return this.isAdmin(viewer);
+  }
+
+  canEditVisibilityOverrides(viewer: User, _targetRole: string): boolean {
+    return this.isAdmin(viewer);
   }
 
   async listVisibleEmployees(actor: User): Promise<Employee[]> {
     if (this.scope(actor) === 'all') {
-      return this.employees.find({ order: { lastName: 'ASC' } });
+      return this.employees.find({
+        relations: ['department', 'position', 'user'],
+        order: { lastName: 'ASC' },
+      });
     }
     if (this.scope(actor) === 'self') {
       const self = await this.employees.findOne({
         where: { userId: actor.id },
+        relations: ['department', 'position', 'user'],
       });
       return self ? [self] : [];
     }
@@ -61,22 +166,27 @@ export class EmployeeAccessService {
     if (!deptIds.length) {
       const self = await this.employees.findOne({
         where: { userId: actor.id },
+        relations: ['department', 'position', 'user'],
       });
       return self ? [self] : [];
     }
     return this.employees.find({
       where: { departmentId: In(deptIds) },
+      relations: ['department', 'position', 'user'],
       order: { lastName: 'ASC' },
     });
   }
 
   async getEmployeeOrFail(id: string): Promise<Employee> {
-    const emp = await this.employees.findOne({ where: { id } });
+    const emp = await this.employees.findOne({
+      where: { id },
+      relations: ['department', 'position', 'user'],
+    });
     if (!emp) throw new NotFoundException('Employee not found');
     return emp;
   }
 
-  private async managedDepartmentIds(actor: User): Promise<string[]> {
+  async managedDepartmentIds(actor: User): Promise<string[]> {
     const self = await this.employees.findOne({ where: { userId: actor.id } });
     if (!self) return [];
     const rows = await this.managed.find({ where: { employeeId: self.id } });

@@ -1,0 +1,33 @@
+---
+description: LoomCRM agent boundaries — copy-source, modules, migrations, tooling
+alwaysApply: true
+---
+
+# LoomCRM
+
+## ProjectWeekend
+
+- `ProjectWeekend/**` is **read-only**. Do not edit, format, rename, delete, or generate files there.
+- Prefer copying logic into `apps/` / `libs/` instead of changing the copy-source.
+- Before finish if the tree may have been touched: `pnpm check:copy-source`.
+
+## Architecture
+
+- Arrow `A → B` = A may import B’s public API.
+- Allowed: Organization → Platform; Absences → Platform; Absences → Organization.
+- Forbidden: Platform → Absences; Organization → Absences; frontend → `apps/api` source.
+- Backend: `apps/api/src/{platform,organization,modules}` (Variant A).
+- Never enable TypeORM `synchronize: true`. Schema via migrations only.
+
+## Tooling
+
+- pnpm **10.15.0** (`packageManager` + Corepack); Node **22.x**.
+- Do not commit `.env` / secrets / casual `cutover-report-*.json`.
+
+## Database
+
+- Live Postgres is not in git. Commit shared state only via `scripts/db-snapshot.ps1` → `data/app.snapshot.sql`; restore with `scripts/db-restore.ps1`.
+
+## Docs
+
+- Ops/onboarding docs live in `docs/dev/` (UA).

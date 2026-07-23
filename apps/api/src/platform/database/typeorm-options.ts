@@ -16,6 +16,8 @@ import { IdentityAndPlatform1730000001000 } from './migrations/1730000001000-Ide
 import { OrganizationCore1730000002000 } from './migrations/1730000002000-OrganizationCore';
 import { AbsencesModule1730000003000 } from './migrations/1730000003000-AbsencesModule';
 import { AbsencesPwParity1730000004000 } from './migrations/1730000004000-AbsencesPwParity';
+import { EmployeeProfilePwParity1730000005000 } from './migrations/1730000005000-EmployeeProfilePwParity';
+import { WorkSchedulePwParity1730000006000 } from './migrations/1730000006000-WorkSchedulePwParity';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -42,6 +44,8 @@ export function getDataSourceOptions(): DataSourceOptions {
       OrganizationCore1730000002000,
       AbsencesModule1730000003000,
       AbsencesPwParity1730000004000,
+      EmployeeProfilePwParity1730000005000,
+      WorkSchedulePwParity1730000006000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

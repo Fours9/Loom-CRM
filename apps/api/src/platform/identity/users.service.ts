@@ -30,6 +30,10 @@ export class UsersService {
     return this.users.findOne({ where: { email: email.toLowerCase() } });
   }
 
+  count(): Promise<number> {
+    return this.users.count();
+  }
+
   async createUser(input: {
     email: string;
     passwordHash: string;
@@ -53,6 +57,10 @@ export class UsersService {
 
   async save(user: User): Promise<User> {
     return this.users.save(user);
+  }
+
+  async deleteById(id: string): Promise<void> {
+    await this.users.delete({ id });
   }
 
   toPublic(user: User): PublicUser {

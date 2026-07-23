@@ -1,0 +1,14 @@
+---
+description: Runbooks and ops docs — PW-style clarity, Postgres reality
+globs: docs/**/*,AGENTS.md,README.md,compose.yaml,docker/**/*,.env.example,.env.production.example
+alwaysApply: false
+---
+
+# Docs and ops
+
+- Write runbooks step-by-step; use symptom → fix tables for troubleshooting.
+- Hub is `docs/README.md`; link instead of duplicating long procedures.
+- Document **existing** tooling only (`compose.yaml`, `start.bat`, `pnpm migration:*`, `scripts/db-snapshot.ps1`, `scripts/db-restore.ps1`). Do not invent tunnel/ngrok scripts.
+- Live DB is PostgreSQL (volume / `DATABASE_URL`) — not in git. Shared state: `data/app.snapshot.sql` (PW-style snapshot/restore).
+- Production secrets: `.env.production.example` template; never commit real `.env.production`.
+- Human-facing LoomCRM ops/onboarding docs: Ukrainian. Keep claims aligned with `compose.yaml` and health endpoints (`/api/v1/health/live`, `/ready`).

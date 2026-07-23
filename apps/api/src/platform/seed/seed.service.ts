@@ -19,14 +19,14 @@ export class SeedService implements OnModuleInit {
   }
 
   private async ensureAdmin(): Promise<void> {
+    const total = await this.users.count();
+    if (total > 0) {
+      return;
+    }
     const email = (
       process.env.SEED_ADMIN_EMAIL || 'admin@loom.local'
     ).toLowerCase();
     const password = process.env.SEED_ADMIN_PASSWORD || 'Admin123!';
-    const existing = await this.users.findByEmail(email);
-    if (existing) {
-      return;
-    }
     const passwordHash = await bcrypt.hash(password, 12);
     await this.users.createUser({
       email,

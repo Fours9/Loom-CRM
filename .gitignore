@@ -13,8 +13,10 @@ out-tsc/
 # Env & secrets
 .env
 .env.local
+.env.production
 .env.*.local
 !.env.example
+!.env.production.example
 
 # Logs & OS
 logs/
@@ -37,8 +39,11 @@ coverage/
 # Never commit it into LoomCRM.
 /ProjectWeekend/
 
-# Local data
-data/
+# Local data / live DB dumps. Commit DB state only via explicit snapshot:
+#   scripts/db-snapshot.ps1 → data/app.snapshot.sql
+# Live Postgres (Compose volume / local) is never tracked.
+data/**
+!data/app.snapshot.sql
 *.sqlite
 *.sqlite-*
 cutover-report-*.json
