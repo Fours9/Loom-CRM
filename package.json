@@ -1,0 +1,27 @@
+{
+  "name": "loom-crm",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "dev": "pnpm migration:run && pnpm -r --parallel dev",
+    "dev:apps": "pnpm -r --parallel dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "migration:run": "pnpm --filter @loom/api migration:run",
+    "migration:revert": "pnpm --filter @loom/api migration:revert",
+    "migration:show": "pnpm --filter @loom/api migration:show",
+    "check:copy-source": "node scripts/check-projectweekend-clean.mjs",
+    "check:gitignore-pw": "node scripts/check-projectweekend-ignored.mjs",
+    "check:no-synchronize": "node scripts/check-no-synchronize.mjs",
+    "cutover:dry-run": "node scripts/cutover/import-from-projectweekend.mjs --dry-run",
+    "cutover:import": "node scripts/cutover/import-from-projectweekend.mjs"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^13.0.1"
+  }
+}

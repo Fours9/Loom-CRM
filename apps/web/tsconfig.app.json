@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/app",
+    "types": [],
+    "paths": {
+      "@loom/contracts-common": ["../../libs/contracts/common/src/index.ts"],
+      "@loom/contracts-auth": ["../../libs/contracts/auth/src/index.ts"],
+      "@loom/contracts-employees": ["../../libs/contracts/employees/src/index.ts"],
+      "@loom/contracts-absences": ["../../libs/contracts/absences/src/index.ts"],
+      "@loom/ui": ["../../libs/frontend/ui/src/index.ts"]
+    }
+  },
+  "files": ["src/main.ts"],
+  "include": ["src/**/*.d.ts", "src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts"]
+}
