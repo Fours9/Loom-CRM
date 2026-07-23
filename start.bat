@@ -29,7 +29,11 @@ if errorlevel 1 goto :end
 echo Starting API + Web...
 echo   http://localhost:3000/api/v1/health/live
 echo   http://localhost:4200
-echo   admin@loom.local / Admin123!
+echo   After cutover: hr@tier.ua / (your PW password or reset)
+echo   Empty DB seed: admin@loom.local / Admin123!
+echo Building API...
+call pnpm --filter @loom/api build
+if errorlevel 1 goto :end
 call pnpm -r --parallel dev
 
 :end

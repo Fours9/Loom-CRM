@@ -11,11 +11,12 @@ import {
   PLATFORM_TAGLINE,
 } from '../../core/brand/platform';
 import { ThemeService } from '../../core/theme/theme.service';
+import { PasswordVisibilityToggleComponent } from '../../shared/password-visibility-toggle.component';
 
 @Component({
   selector: 'loom-login-page',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, PasswordVisibilityToggleComponent],
   template: `
     <div class="login app-shell">
       <button
@@ -55,22 +56,32 @@ import { ThemeService } from '../../core/theme/theme.service';
         @if (error()) {
           <p class="error">{{ error() }}</p>
         }
-        <label>
-          Email
-          <input [(ngModel)]="email" name="email" type="email" autocomplete="username" />
-        </label>
-        <label>
-          Пароль
-          <input
-            [(ngModel)]="password"
-            name="password"
-            type="password"
-            autocomplete="current-password"
-          />
-        </label>
-        <button type="button" class="btn" (click)="submit()" [disabled]="busy()">
-          Увійти
-        </button>
+        <form class="login-form" (ngSubmit)="submit()">
+          <label>
+            Email
+            <input [(ngModel)]="email" name="email" type="email" autocomplete="username" />
+          </label>
+          <label>
+            Пароль
+            <div class="password-row">
+              <input
+                [(ngModel)]="password"
+                name="password"
+                [type]="showPassword() ? 'text' : 'password'"
+                autocomplete="current-password"
+              />
+              <app-password-visibility-toggle
+                [visible]="showPassword()"
+                showLabel="Показати"
+                hideLabel="Сховати"
+                (toggled)="togglePassword()"
+              />
+            </div>
+          </label>
+          <button type="submit" class="btn" [disabled]="busy()">
+            Увійти
+          </button>
+        </form>
         @if (showGuest()) {
           <button type="button" class="link" (click)="guest()">
             Продовжити як гість (dev)
@@ -181,6 +192,19 @@ import { ThemeService } from '../../core/theme/theme.service';
         font-size: 0.9rem;
         color: var(--pw-muted);
       }
+      .login-form {
+        display: grid;
+        gap: 1rem;
+      }
+      .password-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: stretch;
+      }
+      .password-row input {
+        flex: 1;
+        min-width: 0;
+      }
       input {
         border: 1px solid var(--pw-border-strong);
         background: var(--pw-input-bg);
@@ -231,6 +255,11 @@ export class LoginPageComponent {
   password = 'Admin123!';
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+  readonly showPassword = signal(false);
+
+  togglePassword(): void {
+    this.showPassword.update((v) => !v);
+  }
 
   showGuest(): boolean {
     return environment.allowGuestMode;

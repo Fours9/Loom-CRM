@@ -19,7 +19,7 @@
     "check:gitignore-pw": "node scripts/check-projectweekend-ignored.mjs",
     "check:no-synchronize": "node scripts/check-no-synchronize.mjs",
     "cutover:dry-run": "node scripts/cutover/import-from-projectweekend.mjs --dry-run",
-    "cutover:import": "node scripts/cutover/import-from-projectweekend.mjs"
+    "cutover:import": "node scripts/cutover/import-from-projectweekend.mjs --reset"
   },
   "devDependencies": {
     "better-sqlite3": "^13.0.1"

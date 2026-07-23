@@ -25,7 +25,16 @@ Review `cutover-report-*.json` counts.
 
 ```bash
 set DATABASE_URL=postgres://loom:loom@127.0.0.1:5432/loom_crm
-node scripts/cutover/import-from-projectweekend.mjs --sqlite path/to/backup.sqlite
+node scripts/cutover/import-from-projectweekend.mjs --reset --sqlite ProjectWeekend/data/app.sqlite
+```
+
+`--reset` clears Loom domain tables (users, employees, catalogs, requests, …) then imports. Keeps `migrations` / `bootstrap_state`.
+
+Then refresh the tracked DB snapshot:
+
+```powershell
+.\scripts\db-snapshot.ps1
+git add data/app.snapshot.sql
 ```
 
 The importer:
