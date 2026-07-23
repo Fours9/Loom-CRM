@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+tmp/
+out-tsc/
+.angular/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs & OS
+logs/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# ProjectWeekend is a local read-only copy-source (separate git repo).
+# Never commit it into LoomCRM.
+/ProjectWeekend/
+
+# Local data
+data/
+*.sqlite
+*.sqlite-*
+cutover-report-*.json
+
+# Docker volumes
+.docker-data/

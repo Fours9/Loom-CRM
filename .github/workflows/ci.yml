@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: loom
+          POSTGRES_PASSWORD: loom
+          POSTGRES_DB: loom_crm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U loom -d loom_crm"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://loom:loom@localhost:5432/loom_crm
+      JWT_SECRET: ci-jwt-secret-not-for-production
+      NODE_ENV: test
+      PORT: '3000'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable Corepack pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+          pnpm -v
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Guard ProjectWeekend gitignore
+        run: pnpm check:gitignore-pw
+
+      - name: Guard synchronize disabled
+        run: pnpm check:no-synchronize
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run migrations
+        run: pnpm migration:run
+
+      - name: Migration idempotent
+        run: pnpm migration:run
+
+      - name: Start API and hit health
+        run: |
+          pnpm --filter @loom/api start:prod &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3000/api/v1/health/live && curl -sf http://127.0.0.1:3000/api/v1/health/ready; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Health checks failed"
+          exit 1

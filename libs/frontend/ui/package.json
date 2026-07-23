@@ -1,0 +1,19 @@
+{
+  "name": "@loom/ui",
+  "version": "0.0.1",
+  "private": true,
+  "sideEffects": false,
+  "scripts": {
+    "lint": "echo \"no lint\"",
+    "typecheck": "echo \"ui types via consuming app\"",
+    "test": "echo \"no tests\"",
+    "build": "echo \"ui is source-consumed\""
+  },
+  "peerDependencies": {
+    "@angular/common": "^19.2.0",
+    "@angular/core": "^19.2.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}
