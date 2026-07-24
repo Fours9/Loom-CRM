@@ -54,14 +54,20 @@ function Test-ComposePostgres {
 
 Write-Host "Writing snapshot: $Snapshot"
 
+$Utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
 if (Test-ComposePostgres) {
     Push-Location $Root
     try {
-        $dump = docker compose exec -T postgres pg_dump -U loom -d loom_crm --clean --if-exists --no-owner --no-acl
+        # Dump to a file inside the container, then copy — avoids PowerShell UTF-8 mangling of Cyrillic.
+        docker compose exec -T postgres pg_dump -U loom -d loom_crm --clean --if-exists --no-owner --no-acl -f /tmp/loom-snapshot.sql
         if ($LASTEXITCODE -ne 0) {
             throw 'pg_dump via docker compose failed'
         }
-        [System.IO.File]::WriteAllText($Snapshot, ($dump -join "`n") + "`n")
+        docker compose cp postgres:/tmp/loom-snapshot.sql $Snapshot
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Snapshot)) {
+            throw 'docker compose cp of snapshot failed'
+        }
     } finally {
         Pop-Location
     }
@@ -84,9 +90,9 @@ $header = @"
 -- Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 
 "@
-$body = [System.IO.File]::ReadAllText($Snapshot)
+$body = [System.IO.File]::ReadAllText($Snapshot, $Utf8NoBom)
 if ($body -notmatch 'LoomCRM DB snapshot') {
-    [System.IO.File]::WriteAllText($Snapshot, $header + $body)
+    [System.IO.File]::WriteAllText($Snapshot, $header + $body, $Utf8NoBom)
 }
 
 Write-Host "Snapshot updated: $Snapshot"

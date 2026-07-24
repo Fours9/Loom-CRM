@@ -22,46 +22,61 @@
 | Корінь LoomCRM | `C:\Loom-CRM-Core` (локально) / клон репо |
 | Read-only copy-source | `ProjectWeekend/` (gitignore; **не** змінювати в рамках LoomCRM) |
 
+## База даних (як у ProjectWeekend, але PostgreSQL)
+
+| Що | Де | У git? |
+| --- | --- | --- |
+| **Жива БД** | PostgreSQL за `DATABASE_URL` (Compose volume `postgres_data` або локальний Postgres 16) | **ні** |
+| **Знімок** | `data/app.snapshot.sql` | **так** |
+
+- `pnpm migration:run` / `start.bat` створюють **лише схему** (порожні таблиці або seed-адмін).
+- Демо-акаунти й дані зі знімка з’являються **тільки** після `.\scripts\db-restore.ps1`.
+- `git pull` **не** перезаписує живу БД. Новий знімок з GitHub → знову `db-restore.ps1`.
+
+Детальніше: [docs/dev/git-sync.md](docs/dev/git-sync.md).
+
 ## Вимоги
 
 - Node.js 22.x
 - pnpm 10.15.0
-- Docker (PostgreSQL) або локальний Postgres 16
+- Docker (PostgreSQL) **або** локальний Postgres 16 (`psql` / `pg_dump` у PATH)
 
 ```bash
 corepack enable
 corepack prepare pnpm@10.15.0 --activate
 ```
 
-## Швидкий старт
+## Швидкий старт (новий ПК)
 
-```bash
+Порядок обов’язковий. Без кроку restore логін зі знімка не спрацює.
+
+```powershell
 git clone https://github.com/Fours9/Loom-CRM.git
 cd Loom-CRM
-cp .env.example .env
+copy .env.example .env
 pnpm install
 docker compose up -d postgres
 pnpm migration:run
-# опційно — демо-стан зі знімка (як у PW):
-#   .\scripts\db-restore.ps1
-pnpm dev
+.\scripts\db-restore.ps1
+.\start.bat
 ```
 
-Windows: `start.bat` (migrate + api + web), `test.bat` (lint / typecheck / test / build).
+На Windows `start.bat` сам ставить залежності, ганяє міграції й **якщо таблиця `users` порожня** — пропонує / виконує restore зі знімка. Краще все одно один раз явно викликати `db-restore.ps1` після першого clone.
 
 | | URL / облікові дані |
 | --- | --- |
 | API live | http://localhost:3000/api/v1/health/live |
 | Web (dev) | http://localhost:4200 |
-| Адмін (seed) | `admin@loom.local` / `Admin123!` |
+| Після restore (знімок) | див. дані в знімку; часто `hr@tier.ua` |
+| Порожня БД без restore (seed) | `admin@loom.local` / `Admin123!` |
 
 Корисні скрипти:
 
 | Script | Призначення |
 | --- | --- |
-| `pnpm dev` | Міграції, потім api + web |
+| `pnpm dev` | Міграції, потім api + web (**без** auto-restore) |
 | `pnpm dev:apps` | Старт без міграцій |
-| `pnpm migration:run` | Застосувати pending-міграції |
+| `pnpm migration:run` | Застосувати pending-міграції (схема, не дані) |
 | `pnpm check:copy-source` | Fail, якщо `ProjectWeekend` має локальні зміни |
 | `.\scripts\db-snapshot.ps1` | Жива Postgres → `data/app.snapshot.sql` (у git) |
 | `.\scripts\db-restore.ps1` | Знімок → жива БД (з авто-бекапом `.bak`) |
@@ -75,6 +90,8 @@ docker compose up -d --build
 - Web (nginx): http://localhost:8080  
 - API: http://localhost:3000  
 - Порядок: postgres → migrate → api → web  
+
+Compose **не** підставляє `data/app.snapshot.sql` автоматично. Для демо-стану після першого підйому: `.\scripts\db-restore.ps1` (коли Postgres уже healthy).
 
 Секрети для smoke/prod: [`.env.production.example`](.env.production.example). Runbook: [docs/dev/deploy.md](docs/dev/deploy.md).
 
