@@ -17,6 +17,13 @@ const DEPARTMENT_MANAGER: Permission[] = [
 const ADMIN: Permission[] = [
   ...DEPARTMENT_MANAGER,
   Permission.EmployeesCreate,
+  Permission.EmployeesReadPersonal,
+  Permission.EmployeesWritePersonal,
+  Permission.EmployeesReadEmergency,
+  Permission.EmployeesWriteEmergency,
+  Permission.EmployeesChangeAssignment,
+  Permission.EmployeesChangeStatus,
+  Permission.EmployeesViewHistory,
   Permission.DepartmentsManage,
   Permission.PositionsManage,
   Permission.SettingsManage,

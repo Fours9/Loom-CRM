@@ -18,6 +18,7 @@ import { Employee } from './employee.entity';
 import { WorkScheduleDay } from './work-schedule-day.entity';
 import { EmployeeManagedDepartment } from './employee-managed-department.entity';
 import { EmployeeSerializer } from './employee.serializer';
+import { AuditService } from '../../platform/audit/audit.service';
 
 export type ScheduleDayInput = {
   weekday: number;
@@ -68,6 +69,7 @@ export class EmployeesService {
     private readonly positions: PositionsService,
     private readonly users: UsersService,
     private readonly serializer: EmployeeSerializer,
+    private readonly audit: AuditService,
   ) {}
 
   async findAll(
@@ -250,6 +252,14 @@ export class EmployeesService {
       await this.replaceScheduleInternal(emp.id, this.defaultSchedule());
     }
 
+    await this.audit.record({
+      actorId: actor.id,
+      action: 'employee.created',
+      entityType: 'Employee',
+      entityId: emp.id,
+      metadata: { employeeNumber: emp.employeeNumber },
+    });
+
     return this.findOne(actor, emp.id);
   }
 
@@ -340,6 +350,14 @@ export class EmployeesService {
     if (dto.schedule?.length === 7) {
       await this.replaceScheduleInternal(id, dto.schedule);
     }
+
+    await this.audit.record({
+      actorId: actor.id,
+      action: 'employee.basic_updated',
+      entityType: 'Employee',
+      entityId: id,
+      metadata: { fields: Object.keys(dto) },
+    });
 
     return this.findOne(actor, id);
   }

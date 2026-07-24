@@ -11,6 +11,11 @@ import { Position } from '../../organization/positions/position.entity';
 import { Employee } from '../../organization/employees/employee.entity';
 import { WorkScheduleDay } from '../../organization/employees/work-schedule-day.entity';
 import { EmployeeManagedDepartment } from '../../organization/employees/employee-managed-department.entity';
+import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
+import { EmployeeEmergencyContact } from '../../organization/employees/employee-emergency-contact.entity';
+import { EmploymentAssignment } from '../../organization/employees/employment-assignment.entity';
+import { Company } from '../../organization/companies/company.entity';
+import { Direction } from '../../organization/companies/direction.entity';
 import { InitialPlatformBaseline1730000000000 } from './migrations/1730000000000-InitialPlatformBaseline';
 import { IdentityAndPlatform1730000001000 } from './migrations/1730000001000-IdentityAndPlatform';
 import { OrganizationCore1730000002000 } from './migrations/1730000002000-OrganizationCore';
@@ -18,6 +23,7 @@ import { AbsencesModule1730000003000 } from './migrations/1730000003000-Absences
 import { AbsencesPwParity1730000004000 } from './migrations/1730000004000-AbsencesPwParity';
 import { EmployeeProfilePwParity1730000005000 } from './migrations/1730000005000-EmployeeProfilePwParity';
 import { WorkSchedulePwParity1730000006000 } from './migrations/1730000006000-WorkSchedulePwParity';
+import { EmployeeProfileCore1730000007000 } from './migrations/1730000007000-EmployeeProfileCore';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -37,6 +43,11 @@ export function getDataSourceOptions(): DataSourceOptions {
       Employee,
       WorkScheduleDay,
       EmployeeManagedDepartment,
+      EmployeeContact,
+      EmployeeEmergencyContact,
+      EmploymentAssignment,
+      Company,
+      Direction,
     ],
     migrations: [
       InitialPlatformBaseline1730000000000,
@@ -46,6 +57,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       AbsencesPwParity1730000004000,
       EmployeeProfilePwParity1730000005000,
       WorkSchedulePwParity1730000006000,
+      EmployeeProfileCore1730000007000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

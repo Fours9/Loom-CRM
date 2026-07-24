@@ -45,6 +45,32 @@ export class Employee {
   @Column({ name: 'middle_name', type: 'varchar', length: 120, nullable: true })
   middleName!: string | null;
 
+  @Column({ name: 'preferred_name', type: 'varchar', length: 120, nullable: true })
+  preferredName!: string | null;
+
+  @Column({ name: 'birth_date', type: 'date', nullable: true })
+  birthDate!: string | null;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  city!: string | null;
+
+  @Column({ name: 'preferred_language', type: 'varchar', length: 64, nullable: true })
+  preferredLanguage!: string | null;
+
+  @Column({
+    name: 'employment_status',
+    type: 'varchar',
+    length: 32,
+    default: 'active',
+  })
+  employmentStatus!: string;
+
+  @Column({ name: 'current_assignment_id', type: 'uuid', nullable: true })
+  currentAssignmentId!: string | null;
+
+  @Column({ name: 'archived_at', type: 'timestamptz', nullable: true })
+  archivedAt!: Date | null;
+
   @Column({ name: 'work_email', type: 'varchar', length: 320, nullable: true })
   workEmail!: string | null;
 

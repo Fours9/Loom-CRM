@@ -4,11 +4,18 @@ import { DepartmentsModule } from '../departments/departments.module';
 import { PositionsModule } from '../positions/positions.module';
 import { IdentityModule } from '../../platform/identity/identity.module';
 import { AuditModule } from '../../platform/audit/audit.module';
+import { AuditLog } from '../../platform/audit/audit-log.entity';
 import { EmployeeAccessService } from '../access/employee-access.service';
 import { Employee } from './employee.entity';
 import { WorkScheduleDay } from './work-schedule-day.entity';
 import { EmployeeManagedDepartment } from './employee-managed-department.entity';
+import { EmployeeContact } from './employee-contact.entity';
+import { EmployeeEmergencyContact } from './employee-emergency-contact.entity';
+import { EmploymentAssignment } from './employment-assignment.entity';
+import { Company } from '../companies/company.entity';
+import { Direction } from '../companies/direction.entity';
 import { EmployeesService } from './employees.service';
+import { EmployeeProfileService } from './employee-profile.service';
 import { EmployeesController } from './employees.controller';
 import { EmployeeSerializer } from './employee.serializer';
 import { EmployeeProfileExportService } from './employee-profile-export.service';
@@ -22,6 +29,12 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
       Employee,
       WorkScheduleDay,
       EmployeeManagedDepartment,
+      EmployeeContact,
+      EmployeeEmergencyContact,
+      EmploymentAssignment,
+      Company,
+      Direction,
+      AuditLog,
     ]),
     DepartmentsModule,
     PositionsModule,
@@ -30,6 +43,7 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
   ],
   providers: [
     EmployeesService,
+    EmployeeProfileService,
     EmployeeAccessService,
     EmployeeSerializer,
     EmployeeProfileExportService,
@@ -41,6 +55,11 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
     },
   ],
   controllers: [EmployeesController],
-  exports: [EmployeesService, EmployeeAccessService, EmployeeIdentityLookup],
+  exports: [
+    EmployeesService,
+    EmployeeProfileService,
+    EmployeeAccessService,
+    EmployeeIdentityLookup,
+  ],
 })
 export class EmployeesModule {}

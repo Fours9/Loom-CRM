@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Анкета співробітника 360° · People Core CRM</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#1A1916;--ink2:#5F5E5A;--ink3:#888780;
+  --paper:#FAFAF8;--paper2:#F4F2EC;--paper3:#ECEAE2;
+  --green:#3B6D11;--green-l:#EAF3DE;--green-d:#1A3A05;
+  --blue:#185FA5;--blue-l:#E6F1FB;
+  --purple:#534AB7;--purple-l:#EEEDFE;
+  --amber:#854F0B;--amber-l:#FAEEDA;
+  --red:#A32D2D;--red-l:#FCEBEB;
+  --teal:#0F6E56;--teal-l:#E1F5EE;
+  --radius:10px;--radius-sm:6px;
+  --shadow:0 1px 3px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.06);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;font-size:14px;color:var(--ink);background:var(--paper2);line-height:1.55}
+
+/* LAYOUT */
+.shell{max-width:860px;margin:0 auto;padding:24px 16px 60px}
+
+/* HEADER */
+.doc-header{background:var(--green-d);color:#fff;border-radius:var(--radius);padding:28px 32px;margin-bottom:28px;display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+.doc-header-left{}
+.doc-logo{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:6px}
+.doc-title{font-size:22px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px}
+.doc-sub{font-size:13px;color:rgba(255,255,255,.65)}
+.doc-badge{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 12px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+
+/* META GRID */
+.meta-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:28px}
+.meta-cell{background:var(--paper);border:1px solid var(--paper3);border-radius:var(--radius-sm);padding:10px 12px}
+.meta-label{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin-bottom:5px}
+.meta-input{width:100%;border:none;background:none;font-size:13px;color:var(--ink);outline:none;font-family:inherit}
+.meta-checkrow{display:flex;gap:10px;flex-wrap:wrap}
+.meta-checkrow label{display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer}
+
+/* PROGRESS */
+.progress-bar-wrap{background:var(--paper);border:1px solid var(--paper3);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:20px;display:flex;align-items:center;gap:14px}
+.progress-label{font-size:12px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.progress-track{flex:1;height:7px;background:var(--paper3);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:var(--green);border-radius:4px;transition:width .4s ease}
+.progress-pct{font-size:13px;font-weight:700;color:var(--green);min-width:36px;text-align:right}
+
+/* SECTION */
+.sec{background:var(--paper);border:1px solid var(--paper3);border-radius:var(--radius);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow)}
+.sec-head{padding:13px 18px;display:flex;align-items:center;gap:11px;cursor:pointer;user-select:none;border-bottom:1px solid transparent;transition:background .12s}
+.sec-head:hover{background:var(--paper2)}
+.sec-head.open{border-bottom-color:var(--paper3)}
+.sec-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.sec-title{font-size:14px;font-weight:600;flex:1}
+.sec-who{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:2px 8px}
+.sec-arrow{color:var(--ink3);font-size:13px;transition:transform .2s}
+.sec-arrow.open{transform:rotate(90deg)}
+.sec-body{padding:16px 18px;display:none}
+.sec-body.open{display:block}
+
+/* COLORS PER SECTION TYPE */
+.who-emp .sec-num{background:var(--blue-l);color:var(--blue)}
+.who-emp .sec-who{background:var(--blue-l);color:var(--blue)}
+.who-hr .sec-num{background:var(--green-l);color:var(--green)}
+.who-hr .sec-who{background:var(--green-l);color:var(--green)}
+.who-mgr .sec-num{background:var(--amber-l);color:var(--amber)}
+.who-mgr .sec-who{background:var(--amber-l);color:var(--amber)}
+.who-both .sec-num{background:var(--purple-l);color:var(--purple)}
+.who-both .sec-who{background:var(--purple-l);color:var(--purple)}
+.who-conf .sec-num{background:var(--red-l);color:var(--red)}
+.who-conf .sec-who{background:var(--red-l);color:var(--red)}
+
+/* FIELDS */
+.field-row{display:grid;grid-template-columns:220px 1fr;gap:0;border-bottom:1px solid var(--paper3);min-height:40px}
+.field-row:last-child{border-bottom:none}
+.field-label{padding:9px 12px;font-size:12px;font-weight:600;color:var(--ink2);background:var(--paper2);display:flex;align-items:center;border-right:1px solid var(--paper3)}
+.field-label.req::after{content:'*';color:var(--red);margin-left:3px}
+.field-val{padding:6px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.field-val input[type=text],.field-val input[type=email],.field-val input[type=tel],.field-val input[type=date],.field-val input[type=number],.field-val select,.field-val textarea{
+  border:none;background:none;font-size:13px;color:var(--ink);outline:none;font-family:inherit;width:100%;
+}
+.field-val textarea{resize:vertical;min-height:60px;padding:2px 0}
+.field-note{font-size:11px;color:var(--ink3);background:var(--paper2);border:1px solid var(--paper3);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:10px;line-height:1.5}
+
+/* CHECKBOXES */
+.check-grid{display:flex;flex-wrap:wrap;gap:8px;padding:4px 0}
+.check-item{display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer}
+.check-item input{width:15px;height:15px;cursor:pointer;accent-color:var(--green)}
+
+/* TABLES */
+.data-table{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0}
+.data-table th{background:var(--paper2);padding:7px 10px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);border-bottom:1px solid var(--paper3)}
+.data-table td{padding:6px 10px;border-bottom:1px solid var(--paper3);vertical-align:top}
+.data-table td input{border:none;background:none;width:100%;font-size:12.5px;font-family:inherit;color:var(--ink);outline:none}
+.data-table td select{border:none;background:none;width:100%;font-size:12.5px;font-family:inherit;color:var(--ink);outline:none;cursor:pointer}
+.data-table tr:last-child td{border-bottom:none}
+
+/* SKILL MATRIX */
+.skill-section-head{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:8px 10px;background:var(--paper2);border-radius:var(--radius-sm);color:var(--ink2);margin:10px 0 4px}
+.skill-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--paper3)}
+.skill-row:last-child{border-bottom:none}
+.skill-name{font-size:13px}
+.skill-dots{display:flex;gap:4px}
+.skill-dot{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--paper3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;cursor:pointer;color:var(--ink3);transition:all .12s;background:var(--paper)}
+.skill-dot:hover{border-color:var(--green);color:var(--green)}
+.skill-dot.active{background:var(--green);border-color:var(--green);color:#fff}
+
+/* RATING */
+.rating-row{display:grid;grid-template-columns:200px 1fr auto;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--paper3);font-size:13px}
+.rating-row:last-child{border-bottom:none}
+.rating-stars{display:flex;gap:4px}
+.rating-star{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--paper3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;cursor:pointer;color:var(--ink3);transition:all .12s;background:var(--paper)}
+.rating-star:hover,.rating-star.active{background:var(--amber);border-color:var(--amber);color:#fff}
+
+/* GOALS TABLE */
+.goals-table{width:100%;border-collapse:collapse;font-size:12px}
+.goals-table th{background:var(--paper2);padding:7px 8px;text-align:left;font-weight:600;color:var(--ink2);border:1px solid var(--paper3);font-size:11px}
+.goals-table td{border:1px solid var(--paper3);padding:5px 8px;vertical-align:top}
+.goals-table td input,.goals-table td select{border:none;background:none;width:100%;font-size:12px;font-family:inherit;color:var(--ink);outline:none}
+
+/* CHECKLIST */
+.checklist-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--paper3);font-size:13px}
+.checklist-item:last-child{border-bottom:none}
+.checklist-item input[type=checkbox]{width:17px;height:17px;margin-top:1px;cursor:pointer;accent-color:var(--green);flex-shrink:0}
+.checklist-item .ci-label{flex:1;font-weight:500}
+.checklist-item .ci-who{font-size:11px;color:var(--ink3);min-width:80px}
+.checklist-item .ci-date{font-size:12px;border:none;background:none;font-family:inherit;color:var(--ink);outline:none;border-bottom:1px solid var(--paper3);width:90px}
+
+/* STATUS SELECT */
+.status-select{border:1px solid var(--paper3);border-radius:var(--radius-sm);padding:4px 8px;font-size:12px;font-family:inherit;background:var(--paper);cursor:pointer;outline:none}
+
+/* CONSENT */
+.consent-item{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid var(--paper3);font-size:13px}
+.consent-item:last-child{border-bottom:none}
+.consent-item input{margin-top:2px;cursor:pointer;accent-color:var(--green);flex-shrink:0}
+
+/* SIGNATURE ROW */
+.sign-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:10px}
+.sign-cell{border-top:2px solid var(--ink);padding-top:6px}
+.sign-cell-label{font-size:11px;color:var(--ink3);margin-bottom:4px;font-weight:600}
+.sign-cell input{border:none;background:none;font-size:12px;color:var(--ink);font-family:inherit;outline:none;width:100%}
+
+/* ACTIONS */
+.actions{position:fixed;bottom:0;left:0;right:0;background:var(--paper);border-top:1px solid var(--paper3);padding:12px 20px;display:flex;justify-content:center;gap:10px;z-index:100;box-shadow:0 -4px 20px rgba(0,0,0,.07)}
+.btn{padding:9px 20px;border-radius:var(--radius-sm);border:1.5px solid var(--paper3);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s;display:inline-flex;align-items:center;gap:6px}
+.btn-g{background:var(--green-d);color:#fff;border-color:var(--green-d)}
+.btn-g:hover{background:var(--green)}
+.btn:hover{background:var(--paper2)}
+.btn-out{background:var(--paper)}
+
+/* CONTROL ROW */
+.ctrl-row{display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px}
+.expand-all{font-size:12px;color:var(--blue);cursor:pointer;padding:4px 8px;border-radius:4px}
+.expand-all:hover{background:var(--blue-l)}
+
+/* PRINT */
+@media print{
+  .actions,.ctrl-row{display:none!important}
+  .shell{max-width:100%;padding:0}
+  .sec-body{display:block!important}
+  .sec-head{cursor:default}
+  body{background:#fff}
+}
+
+@media(max-width:600px){
+  .meta-grid{grid-template-columns:1fr}
+  .field-row{grid-template-columns:1fr;grid-template-rows:auto auto}
+  .field-label{border-right:none;border-bottom:1px solid var(--paper3)}
+  .sign-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- HEADER -->
+<div class="doc-header">
+  <div class="doc-header-left">
+    <div class="doc-logo">People Core CRM</div>
+    <div class="doc-title">Анкета співробітника 360°</div>
+    <div class="doc-sub">Повний профіль для внесення до внутрішньої HR-системи</div>
+  </div>
+  <div class="doc-badge">Конфіденційно</div>
+</div>
+
+<!-- META -->
+<div class="meta-grid">
+  <div class="meta-cell">
+    <div class="meta-label">ПІБ співробітника</div>
+    <input class="meta-input" id="meta-pib" type="text" placeholder="Прізвище Ім'я По-батькові" oninput="updateProgress()">
+  </div>
+  <div class="meta-cell">
+    <div class="meta-label">Посада</div>
+    <input class="meta-input" id="meta-pos" type="text" placeholder="Оператор / Кравець / Менеджер..." oninput="updateProgress()">
+  </div>
+  <div class="meta-cell">
+    <div class="meta-label">Компанія / напрямок</div>
+    <div class="meta-checkrow">
+      <label><input type="checkbox" name="dir" value="Адмін"> Адмін</label>
+      <label><input type="checkbox" name="dir" value="OLIMI"> OLIMI</label>
+      <label><input type="checkbox" name="dir" value="TIER"> TIER</label>
+      <label><input type="checkbox" name="dir" value="Шв"> Шв.</label>
+      <label><input type="checkbox" name="dir" value="LIKE"> LIKE</label>
+      <label><input type="checkbox" name="dir" value="РАЗОМ"> РАЗОМ</label>
+      <label><input type="checkbox" name="dir" value="СТК"> СТК</label>
+      <label><input type="checkbox" name="dir" value="Меб"> Меб.</label>
+    </div>
+  </div>
+  <div class="meta-cell">
+    <div class="meta-label">Дата заповнення</div>
+    <input class="meta-input" type="date" id="meta-date">
+  </div>
+  <div class="meta-cell" style="grid-column:span 2">
+    <div class="meta-label">Заповнює</div>
+    <div class="meta-checkrow">
+      <label><input type="checkbox" name="who-fills" value="emp"> Співробітник</label>
+      <label><input type="checkbox" name="who-fills" value="mgr"> Керівник</label>
+      <label><input type="checkbox" name="who-fills" value="hr"> HR</label>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS -->
+<div class="progress-bar-wrap">
+  <span class="progress-label">Заповнення профілю</span>
+  <div class="progress-track"><div class="progress-fill" id="pbar" style="width:0%"></div></div>
+  <span class="progress-pct" id="ppct">0%</span>
+</div>
+
+<!-- EXPAND ALL -->
+<div class="ctrl-row">
+  <span class="expand-all" onclick="toggleAll(true)">Розкрити всі ▾</span>
+  <span class="expand-all" onclick="toggleAll(false)">Згорнути всі ▴</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- БЛОК 1: ОСОБИСТІ ДАНІ -->
+<div class="sec who-emp">
+  <div class="sec-head open" onclick="toggle(this)">
+    <span class="sec-num">1</span>
+    <span class="sec-title">Особисті дані</span>
+    <span class="sec-who">Співробітник</span>
+    <span class="sec-arrow open">▶</span>
+  </div>
+  <div class="sec-body open">
+    <div class="field-note">Обов'язкові поля позначені *. Точна адреса і документи зберігаються лише у захищеному кадровому розділі.</div>
+    <div class="field-row"><span class="field-label req">Прізвище</span><div class="field-val"><input type="text" id="f-surname" oninput="updateProgress()"></div></div>
+    <div class="field-row"><span class="field-label req">Ім'я</span><div class="field-val"><input type="text" id="f-name" oninput="updateProgress()"></div></div>
+    <div class="field-row"><span class="field-label">По батькові</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label req">Дата народження</span><div class="field-val"><input type="date" id="f-bday" oninput="updateProgress();calcAge()"><span id="age-label" style="font-size:12px;color:var(--ink3);margin-left:8px"></span></div></div>
+    <div class="field-row"><span class="field-label req">Місто проживання</span><div class="field-val"><input type="text" oninput="updateProgress()"></div></div>
+    <div class="field-row"><span class="field-label">Фото для профілю</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Додано</label>
+        <label class="check-item"><input type="checkbox"> Додам пізніше</label>
+        <label class="check-item"><input type="checkbox"> Не бажаю</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label req">Основний телефон</span><div class="field-val"><input type="tel" placeholder="+38 (0__) ___ __ __" id="f-phone" oninput="updateProgress()"></div></div>
+    <div class="field-row"><span class="field-label">Додатковий телефон</span><div class="field-val"><input type="tel" placeholder="+38 (0__) ___ __ __"></div></div>
+    <div class="field-row"><span class="field-label req">Особиста email</span><div class="field-val"><input type="email" placeholder="name@gmail.com" id="f-email" oninput="updateProgress()"></div></div>
+    <div class="field-row"><span class="field-label">Telegram</span><div class="field-val"><input type="text" placeholder="@username"></div></div>
+    <div class="field-row"><span class="field-label">Бажана мова</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox" checked> Українська</label>
+        <label class="check-item"><input type="checkbox"> Англійська</label>
+        <label class="check-item"><input type="checkbox"> Інша: <input type="text" style="width:80px;border-bottom:1px solid var(--paper3)"></label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Ім'я для звернення</span><div class="field-val"><input type="text" placeholder="як зручно звертатись"></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 2: СІМ'Я -->
+<div class="sec who-emp">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">2</span>
+    <span class="sec-title">Сім'я та важливі дати</span>
+    <span class="sec-who">Добровільно</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Цей блок — добровільний. Використовується лише для корпоративних привітань, подарунків і соціальних програм.</div>
+    <div class="field-row"><span class="field-label">Сімейний стан</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Не вказую</label>
+        <label class="check-item"><input type="checkbox"> Неодружений/незаміжня</label>
+        <label class="check-item"><input type="checkbox"> Одружений/заміжня</label>
+        <label class="check-item"><input type="checkbox"> Інше</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Чи є діти</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Так</label>
+        <label class="check-item"><input type="checkbox"> Ні</label>
+        <label class="check-item"><input type="checkbox"> Не вказую</label>
+      </div>
+    </div></div>
+    <div style="margin:10px 0 4px;font-size:12px;font-weight:600;color:var(--ink2)">Діти (окремий рядок на кожну дитину)</div>
+    <table class="data-table">
+      <thead><tr><th>Ім'я дитини</th><th>Дата народження</th><th>Вік</th><th>Примітка</th></tr></thead>
+      <tbody id="children-table">
+        <tr><td><input type="text"></td><td><input type="date" onchange="calcChildAge(this)"></td><td class="age-cell" style="color:var(--ink3);font-size:12px"></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="date" onchange="calcChildAge(this)"></td><td class="age-cell" style="color:var(--ink3);font-size:12px"></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="date" onchange="calcChildAge(this)"></td><td class="age-cell" style="color:var(--ink3);font-size:12px"></td><td><input type="text"></td></tr>
+      </tbody>
+    </table>
+    <div class="field-row" style="margin-top:8px"><span class="field-label">Дозвіл для подарунків</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="checkbox"> Так</label><label class="check-item"><input type="checkbox"> Ні</label></div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Домашні тварини</span><div class="field-val"><input type="text" placeholder="кіт Мурчик, собака Рекс..."></div></div>
+    <div class="field-row"><span class="field-label">Інші важливі дати</span><div class="field-val"><input type="text" placeholder="ювілей, річниця..."></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 3: ЕКСТРЕНИЙ КОНТАКТ -->
+<div class="sec who-hr">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">3</span>
+    <span class="sec-title">Контакт на екстрений випадок</span>
+    <span class="sec-who">HR (конфіденційно)</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Доступ: тільки HR та відповідальні особи.</div>
+    <div class="field-row"><span class="field-label req">ПІБ контактної особи</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label req">Ким доводиться</span><div class="field-val"><input type="text" placeholder="мати, чоловік, дружина..."></div></div>
+    <div class="field-row"><span class="field-label req">Основний телефон</span><div class="field-val"><input type="tel" placeholder="+38 (0__) ___ __ __"></div></div>
+    <div class="field-row"><span class="field-label">Додатковий телефон</span><div class="field-val"><input type="tel" placeholder="+38 (0__) ___ __ __"></div></div>
+    <div class="field-row"><span class="field-label">Набирати першим</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="checkbox"> Цю особу</label><label class="check-item"><input type="checkbox"> Іншу: <input type="text" style="width:100px;border-bottom:1px solid var(--paper3)"></label></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- БЛОК 4: РОБОТА В КОМПАНІЇ -->
+<div class="sec who-hr">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">4</span>
+    <span class="sec-title">Інформація про роботу в компанії</span>
+    <span class="sec-who">HR + Керівник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-row"><span class="field-label req">Компанія / напрямок</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label req">Підрозділ</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label req">Посада</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label">Функціональна роль</span><div class="field-val"><input type="text" placeholder="напр. відповідальний за якість зміни"></div></div>
+    <div class="field-row"><span class="field-label req">Безпосередній керівник</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label">Наставник</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label">HR-відповідальний</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label req">Дата виходу на роботу</span><div class="field-val"><input type="date" id="f-start" oninput="updateProgress()"></div></div>
+    <div class="field-row"><span class="field-label">Кінець випроб. терміну</span><div class="field-val"><input type="date"></div></div>
+    <div class="field-row"><span class="field-label">Статус</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox" name="status"> Стажування</label>
+        <label class="check-item"><input type="checkbox" name="status"> Випробувальний</label>
+        <label class="check-item"><input type="checkbox" name="status"> Активний</label>
+        <label class="check-item"><input type="checkbox" name="status"> Відпустка</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Формат роботи</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Офіс</label>
+        <label class="check-item"><input type="checkbox"> Виробництво</label>
+        <label class="check-item"><input type="checkbox"> Гібрид</label>
+        <label class="check-item"><input type="checkbox"> Дистанційно</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Графік</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> 09:00–18:00</label>
+        <label class="check-item"><input type="checkbox"> Позмінний</label>
+        <label class="check-item"><input type="checkbox"> Гнучкий</label>
+        <label class="check-item"><input type="checkbox"> Інший: <input type="text" style="width:80px;border-bottom:1px solid var(--paper3)"></label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Тип зайнятості</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Повна</label>
+        <label class="check-item"><input type="checkbox"> Часткова</label>
+        <label class="check-item"><input type="checkbox"> Проєктна</label>
+        <label class="check-item"><input type="checkbox"> Погодинна</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Тип оформлення</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Штат</label>
+        <label class="check-item"><input type="checkbox"> ФОП</label>
+        <label class="check-item"><input type="checkbox"> ЦПХ</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Локація роботи</span><div class="field-val"><input type="text"></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 5: ГРЕЙД -->
+<div class="sec who-mgr">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">5</span>
+    <span class="sec-title">Грейд і рівень посади</span>
+    <span class="sec-who">Керівник + HR</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Грейд визначають керівник та HR за критеріями конкретної ролі. Людина не визначає грейд самостійно.</div>
+    <div class="field-row"><span class="field-label req">Поточний грейд</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="radio" name="grade"> G0 — Стажер</label>
+        <label class="check-item"><input type="radio" name="grade"> G1 — Молодший</label>
+        <label class="check-item"><input type="radio" name="grade"> G2 — Базовий</label>
+        <label class="check-item"><input type="radio" name="grade"> G3 — Старший</label>
+        <label class="check-item"><input type="radio" name="grade"> G4 — Провідний</label>
+        <label class="check-item"><input type="radio" name="grade"> G5 — Директор</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Дата присвоєння</span><div class="field-val"><input type="date"></div></div>
+    <div class="field-row"><span class="field-label">Хто присвоїв</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label">Наступний грейд</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="radio" name="next-grade"> G1</label>
+        <label class="check-item"><input type="radio" name="next-grade"> G2</label>
+        <label class="check-item"><input type="radio" name="next-grade"> G3</label>
+        <label class="check-item"><input type="radio" name="next-grade"> G4</label>
+        <label class="check-item"><input type="radio" name="next-grade"> G5</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Критерії переходу</span><div class="field-val"><textarea placeholder="Що має зробити / вміти для підвищення грейду..."></textarea></div></div>
+    <div class="field-row"><span class="field-label">Дата перегляду</span><div class="field-val"><input type="date"></div></div>
+    <div class="field-row"><span class="field-label">ЗП на руки (₴)</span><div class="field-val"><input type="number" placeholder="15000"></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 6: ДОСВІД -->
+<div class="sec who-emp">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">6</span>
+    <span class="sec-title">Професійний досвід</span>
+    <span class="sec-who">Співробітник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-row"><span class="field-label">Загальний стаж</span><div class="field-val"><input type="text" placeholder="напр. 5 років"></div></div>
+    <div class="field-row"><span class="field-label">Керували людьми?</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="checkbox"> Так, кількість: <input type="number" style="width:50px;border-bottom:1px solid var(--paper3)"></label><label class="check-item"><input type="checkbox"> Ні</label></div>
+    </div></div>
+    <div style="margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--ink2)">Попередні місця роботи</div>
+    <table class="data-table">
+      <thead><tr><th>Компанія</th><th>Посада</th><th>Період</th><th>Ключові результати</th></tr></thead>
+      <tbody>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text" placeholder="2020–2023"></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td></tr>
+      </tbody>
+    </table>
+    <div class="field-row" style="margin-top:8px"><span class="field-label">Досягнення якими пишаюся</span><div class="field-val"><textarea placeholder="Опишіть 1–3 результати якими ви пишаєтесь..."></textarea></div></div>
+    <div class="field-row"><span class="field-label">Чого хочу навчитись</span><div class="field-val"><textarea placeholder="Навички або напрямки які хочете розвинути..."></textarea></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 7: МАТРИЦЯ НАВИЧОК -->
+<div class="sec who-both">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">7</span>
+    <span class="sec-title">Матриця навичок</span>
+    <span class="sec-who">Співробітник + Керівник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Оцінка 0–5: 0 Не вмію · 1 Бачив(ла) · 2 З допомогою · 3 Самостійно · 4 Складні задачі · 5 Навчаю інших</div>
+
+    <div class="skill-section-head">🔧 Технічні / виробничі</div>
+    <div id="skills-tech"></div>
+
+    <div class="skill-section-head">💅 Сервіс / краса</div>
+    <div id="skills-beauty"></div>
+
+    <div class="skill-section-head">💼 Офіс / управління</div>
+    <div id="skills-office"></div>
+
+    <div class="skill-section-head">➕ Додаткові навички</div>
+    <div class="field-row"><span class="field-label">Інша навичка 1</span><div class="field-val"><input type="text" placeholder="назва..."> <div class="skill-dots" id="extra1"></div></div></div>
+    <div class="field-row"><span class="field-label">Інша навичка 2</span><div class="field-val"><input type="text" placeholder="назва..."> <div class="skill-dots" id="extra2"></div></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 8: ОСВІТА -->
+<div class="sec who-emp">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">8</span>
+    <span class="sec-title">Освіта та навчання</span>
+    <span class="sec-who">Співробітник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-row"><span class="field-label">Рівень освіти</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Середня</label>
+        <label class="check-item"><input type="checkbox"> Середня спеціальна</label>
+        <label class="check-item"><input type="checkbox"> Незакінчена вища</label>
+        <label class="check-item"><input type="checkbox"> Бакалавр</label>
+        <label class="check-item"><input type="checkbox"> Магістр</label>
+        <label class="check-item"><input type="checkbox"> Кандидат / Доктор</label>
+      </div>
+    </div></div>
+    <div style="margin:10px 0 4px;font-size:12px;font-weight:600;color:var(--ink2)">Навчальні заклади</div>
+    <table class="data-table">
+      <thead><tr><th>Заклад</th><th>Спеціальність</th><th>Роки навчання</th><th>Ступінь</th></tr></thead>
+      <tbody>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text" placeholder="2015–2019"></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td></tr>
+      </tbody>
+    </table>
+    <div style="margin:10px 0 4px;font-size:12px;font-weight:600;color:var(--ink2)">Мови</div>
+    <table class="data-table">
+      <thead><tr><th>Мова</th><th>Рідна</th><th>Розмовний</th><th>Середній</th><th>Просунутий</th></tr></thead>
+      <tbody>
+        <tr><td>Українська</td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td></tr>
+        <tr><td>Англійська</td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td></tr>
+        <tr><td><input type="text" placeholder="Інша..."></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--green)"></td></tr>
+      </tbody>
+    </table>
+    <div class="field-row" style="margin-top:8px"><span class="field-label">Сертифікати / курси</span><div class="field-val"><textarea placeholder="Назва, установа, рік отримання, дата закінчення дії..."></textarea></div></div>
+    <div class="field-row"><span class="field-label">Водійське посвідчення</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Немає</label>
+        <label class="check-item"><input type="checkbox"> А</label>
+        <label class="check-item"><input type="checkbox"> В</label>
+        <label class="check-item"><input type="checkbox"> С</label>
+        <label class="check-item"><input type="checkbox"> D</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Які курси хочу пройти</span><div class="field-val"><textarea placeholder="Назви курсів або тем..."></textarea></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 9: СИЛЬНІ СТОРОНИ -->
+<div class="sec who-emp">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">9</span>
+    <span class="sec-title">Сильні сторони та потенціал</span>
+    <span class="sec-who">Співробітник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-row"><span class="field-label">Три сильні сторони</span><div class="field-val"><textarea placeholder="Що у вас виходить найкраще?"></textarea></div></div>
+    <div class="field-row"><span class="field-label">Задачі виходять найкраще</span><div class="field-val"><textarea placeholder="Конкретні типи задач або ситуацій..."></textarea></div></div>
+    <div class="field-row"><span class="field-label">Що дає енергію</span><div class="field-val"><textarea placeholder="Що мотивує у роботі?"></textarea></div></div>
+    <div class="field-row"><span class="field-label">Що не подобається</span><div class="field-val"><textarea placeholder="Задачі або ситуації які демотивують..."></textarea></div></div>
+    <div class="field-row"><span class="field-label">Що заважає</span><div class="field-val"><textarea placeholder="Що заважає працювати ефективніше?"></textarea></div></div>
+    <div class="field-row"><span class="field-label">За якими питаннями звертатись</span><div class="field-val"><textarea placeholder="У чому ви можете допомогти колегам?"></textarea></div></div>
+    <div class="field-row"><span class="field-label">Через 2 роки бачу себе</span><div class="field-val"><input type="text" placeholder="Посада / напрямок / роль..."></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 10: ХОБІ -->
+<div class="sec who-emp">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">10</span>
+    <span class="sec-title">Хобі, інтереси та корпоративне життя</span>
+    <span class="sec-who">Співробітник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Ці дані допомагають формувати команди, корпоративні активності та внутрішні проєкти.</div>
+    <div class="field-row"><span class="field-label">Хобі та інтереси</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Спорт / фітнес</label>
+        <label class="check-item"><input type="checkbox"> Біг / ходьба</label>
+        <label class="check-item"><input type="checkbox"> Велоспорт</label>
+        <label class="check-item"><input type="checkbox"> Плавання</label>
+        <label class="check-item"><input type="checkbox"> Готування їжі</label>
+        <label class="check-item"><input type="checkbox"> Подорожі</label>
+        <label class="check-item"><input type="checkbox"> Читання</label>
+        <label class="check-item"><input type="checkbox"> Музика</label>
+        <label class="check-item"><input type="checkbox"> Рукоділля / творчість</label>
+        <label class="check-item"><input type="checkbox"> Садівництво</label>
+        <label class="check-item"><input type="checkbox"> Фотографія</label>
+        <label class="check-item"><input type="checkbox"> Ігри</label>
+        <label class="check-item"><input type="checkbox"> Волонтерство</label>
+        <label class="check-item"><input type="checkbox"> Кіно / серіали</label>
+        <label class="check-item"><input type="checkbox"> Танці</label>
+        <label class="check-item"><input type="checkbox"> Йога / медитація</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Інші інтереси</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label">Розмір футболки</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="radio" name="shirt"> XS</label>
+        <label class="check-item"><input type="radio" name="shirt"> S</label>
+        <label class="check-item"><input type="radio" name="shirt"> M</label>
+        <label class="check-item"><input type="radio" name="shirt"> L</label>
+        <label class="check-item"><input type="radio" name="shirt"> XL</label>
+        <label class="check-item"><input type="radio" name="shirt"> XXL</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Розмір верхнього одягу</span><div class="field-val"><input type="text" placeholder="M / L / XL..."></div></div>
+    <div class="field-row"><span class="field-label">Харчові особливості</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Немає</label>
+        <label class="check-item"><input type="checkbox"> Є: <input type="text" style="width:150px;border-bottom:1px solid var(--paper3)"></label>
+        <label class="check-item"><input type="checkbox"> Не вказую</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Формат подарунка</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Корпоративний мерч</label>
+        <label class="check-item"><input type="checkbox"> Сертифікат</label>
+        <label class="check-item"><input type="checkbox"> Враження</label>
+        <label class="check-item"><input type="checkbox"> Корисна річ</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Вітати з Днем народження</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="radio" name="bday-pub"> Публічно</label><label class="check-item"><input type="radio" name="bday-pub"> Лише в HR</label><label class="check-item"><input type="radio" name="bday-pub"> Не потрібно</label></div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Готовий/а до корпоративів</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="radio" name="corp"> Так, активно</label><label class="check-item"><input type="radio" name="corp"> Іноді</label><label class="check-item"><input type="radio" name="corp"> Не дуже</label></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- БЛОК 11: СТИЛЬ РОБОТИ -->
+<div class="sec who-emp">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">11</span>
+    <span class="sec-title">Стиль роботи та комунікація</span>
+    <span class="sec-who">Співробітник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Цей блок допомагає керівнику ефективніше взаємодіяти з вами.</div>
+    <div class="field-row"><span class="field-label">Зручно отримувати задачі</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Усно</label>
+        <label class="check-item"><input type="checkbox"> Письмово (месенджер)</label>
+        <label class="check-item"><input type="checkbox"> В системі (CRM/таск-менеджер)</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Потреба у зворотному зв'язку</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="radio" name="fb"> Щодня</label>
+        <label class="check-item"><input type="radio" name="fb"> Щотижня</label>
+        <label class="check-item"><input type="radio" name="fb"> За потребою</label>
+        <label class="check-item"><input type="radio" name="fb"> Рідко</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Критику краще давати</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Тет-а-тет</label>
+        <label class="check-item"><input type="checkbox"> Письмово</label>
+        <label class="check-item"><input type="checkbox"> Прямо / одразу</label>
+        <label class="check-item"><input type="checkbox"> М'яко з прикладами</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Продуктивніший/а</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="radio" name="prod"> Вранці</label>
+        <label class="check-item"><input type="radio" name="prod"> Вдень</label>
+        <label class="check-item"><input type="radio" name="prod"> Ввечері</label>
+        <label class="check-item"><input type="radio" name="prod"> Однаково</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Краще працюю</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="radio" name="work-style"> Самостійно</label>
+        <label class="check-item"><input type="radio" name="work-style"> В команді</label>
+        <label class="check-item"><input type="radio" name="work-style"> По-різному</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Основні мотиватори</span><div class="field-val"><textarea placeholder="Що крім зарплати мотивує вас у роботі?"></textarea></div></div>
+    <div class="field-row"><span class="field-label">Основні демотиватори</span><div class="field-val"><textarea placeholder="Що найбільше знижує вашу ефективність?"></textarea></div></div>
+    <div class="field-row"><span class="field-label">Що важливо знати керівнику</span><div class="field-val"><textarea placeholder="Що дозволить нам краще працювати разом?"></textarea></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 12: БЕЗПЕКА ПРАЦІ -->
+<div class="sec who-hr">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">12</span>
+    <span class="sec-title">Безпека праці та робочі обмеження</span>
+    <span class="sec-who">Добровільно / HR</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Вказуйте лише інформацію критично важливу для безпечного виконання роботи. Не потрібно вказувати діагнози.</div>
+    <div class="field-row"><span class="field-label">Обмеження по навантаженню</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="checkbox"> Немає</label><label class="check-item"><input type="checkbox"> Є: <input type="text" style="width:200px;border-bottom:1px solid var(--paper3)"></label><label class="check-item"><input type="checkbox"> Не вказую</label></div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Сильні алергії</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="checkbox"> Немає</label><label class="check-item"><input type="checkbox"> Є: <input type="text" style="width:200px;border-bottom:1px solid var(--paper3)"></label><label class="check-item"><input type="checkbox"> Не вказую</label></div>
+    </div></div>
+    <div class="field-row"><span class="field-label">У невідкладній ситуації</span><div class="field-val"><textarea placeholder="Що важливо знати і зробити..."></textarea></div></div>
+    <div class="field-row"><span class="field-label">Медичний огляд пройдено</span><div class="field-val"><input type="date"></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 13: КАР'ЄРНІ ЦІЛІ -->
+<div class="sec who-both">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">13</span>
+    <span class="sec-title">Кар'єрні цілі та розвиток</span>
+    <span class="sec-who">Співробітник + Керівник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-row"><span class="field-label">Роль через 1 рік</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label">Роль через 2–3 роки</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label">Готовий взяти вже зараз</span><div class="field-val"><textarea placeholder="Яку відповідальність або задачі готові взяти?"></textarea></div></div>
+    <div class="field-row"><span class="field-label">Навички для розвитку</span><div class="field-val"><textarea placeholder="Які навички хочете розвинути першими?"></textarea></div></div>
+    <div class="field-row"><span class="field-label">Формат навчання</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="checkbox"> Наставник</label>
+        <label class="check-item"><input type="checkbox"> Практика</label>
+        <label class="check-item"><input type="checkbox"> Онлайн-курс</label>
+        <label class="check-item"><input type="checkbox"> Книга</label>
+        <label class="check-item"><input type="checkbox"> Зовнішнє навчання</label>
+      </div>
+    </div></div>
+    <div style="margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--ink2)">Індивідуальний план розвитку</div>
+    <table class="goals-table">
+      <thead><tr><th>Ціль розвитку</th><th>Критерій результату</th><th>Дія / навчання</th><th>Наставник</th><th>Дедлайн</th><th>Статус</th></tr></thead>
+      <tbody>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><select><option>—</option><option>Не почато</option><option>В процесі</option><option>Виконано</option></select></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><select><option>—</option><option>Не почато</option><option>В процесі</option><option>Виконано</option></select></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><select><option>—</option><option>Не почато</option><option>В процесі</option><option>Виконано</option></select></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- БЛОК 14: ЦІЛІ НА ВИПРОБУВАЛЬНИЙ ТЕРМІН -->
+<div class="sec who-mgr">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">14</span>
+    <span class="sec-title">Цілі на випробувальний термін / квартал</span>
+    <span class="sec-who">Керівник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <table class="goals-table">
+      <thead><tr><th>Ціль</th><th>Показник / результат</th><th>Що треба зробити</th><th>Термін</th><th>Статус</th><th>Коментар</th></tr></thead>
+      <tbody>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><select><option>—</option><option>В роботі</option><option>Виконано</option><option>Не виконано</option></select></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><select><option>—</option><option>В роботі</option><option>Виконано</option><option>Не виконано</option></select></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><select><option>—</option><option>В роботі</option><option>Виконано</option><option>Не виконано</option></select></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><select><option>—</option><option>В роботі</option><option>Виконано</option><option>Не виконано</option></select></td><td><input type="text"></td></tr>
+        <tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><select><option>—</option><option>В роботі</option><option>Виконано</option><option>Не виконано</option></select></td><td><input type="text"></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- БЛОК 15: ОЦІНКА КЕРІВНИКА -->
+<div class="sec who-conf">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">15</span>
+    <span class="sec-title">Оцінка керівника</span>
+    <span class="sec-who">Конфіденційно</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Конфіденційний блок. Заповнює безпосередній керівник після перших 2–4 тижнів або під час ревʼю. Не видимий для співробітника.</div>
+    <div style="margin-bottom:10px;font-size:12px;font-weight:600;color:var(--ink2)">Оцінка за критеріями (1–5)</div>
+    <div id="mgr-ratings"></div>
+    <div style="margin:14px 0 8px;font-size:12px;font-weight:600;color:var(--ink2)">Загальна оцінка</div>
+    <div class="field-row"><span class="field-label">Результативність</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="radio" name="res"> Низька</label><label class="check-item"><input type="radio" name="res"> Стабільна</label><label class="check-item"><input type="radio" name="res"> Висока</label><label class="check-item"><input type="radio" name="res"> Виняткова</label></div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Потенціал розвитку</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="radio" name="pot"> Низький</label><label class="check-item"><input type="radio" name="pot"> Середній</label><label class="check-item"><input type="radio" name="pot"> Високий</label></div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Готовність до підвищення</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="radio" name="ready"> Зараз</label>
+        <label class="check-item"><input type="radio" name="ready"> До 6 місяців</label>
+        <label class="check-item"><input type="radio" name="ready"> До 12 місяців</label>
+        <label class="check-item"><input type="radio" name="ready"> Не готовий/а</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Можлива наступна роль</span><div class="field-val"><input type="text"></div></div>
+    <div class="field-row"><span class="field-label">Ключовий співробітник</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="radio" name="key"> Так</label><label class="check-item"><input type="radio" name="key"> Ні</label><label class="check-item"><input type="radio" name="key"> Спостерігаємо</label></div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Ризик втрати</span><div class="field-val">
+      <div class="check-grid"><label class="check-item"><input type="radio" name="risk"> Низький</label><label class="check-item"><input type="radio" name="risk"> Середній</label><label class="check-item"><input type="radio" name="risk"> Високий</label></div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Рекомендація</span><div class="field-val">
+      <div class="check-grid">
+        <label class="check-item"><input type="radio" name="rec"> Залишити</label>
+        <label class="check-item"><input type="radio" name="rec"> Підняти грейд</label>
+        <label class="check-item"><input type="radio" name="rec"> Навчити</label>
+        <label class="check-item"><input type="radio" name="rec"> Перевести</label>
+        <label class="check-item"><input type="radio" name="rec"> Попередження</label>
+        <label class="check-item"><input type="radio" name="rec"> Інше</label>
+      </div>
+    </div></div>
+    <div class="field-row"><span class="field-label">Сильні сторони</span><div class="field-val"><textarea rows="3" placeholder="Що особливо добре у цього співробітника..."></textarea></div></div>
+    <div class="field-row"><span class="field-label">Зони розвитку</span><div class="field-val"><textarea rows="3" placeholder="Що і як потрібно розвинути, конкретні дії керівника..."></textarea></div></div>
+  </div>
+</div>
+
+<!-- БЛОК 16: ОНБОРДИНГ -->
+<div class="sec who-hr">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">16</span>
+    <span class="sec-title">Онбординг, обладнання та доступи</span>
+    <span class="sec-who">HR + IT + Керівник</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div style="margin-bottom:10px;font-size:12px;font-weight:600;color:var(--ink2)">Чекліст онбордингу</div>
+    <div id="onboard-list"></div>
+    <div style="margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--ink2)">Обладнання та майно</div>
+    <table class="data-table">
+      <thead><tr><th>Обладнання</th><th>Модель / номер</th><th>Дата видачі</th><th>Стан</th><th>Повернення</th></tr></thead>
+      <tbody>
+        <tr><td>Ноутбук</td><td><input type="text"></td><td><input type="date"></td><td><input type="text" placeholder="новий / б/в"></td><td><input type="date"></td></tr>
+        <tr><td>Телефон / SIM</td><td><input type="text"></td><td><input type="date"></td><td><input type="text"></td><td><input type="date"></td></tr>
+        <tr><td>Ключі / картка</td><td><input type="text"></td><td><input type="date"></td><td><input type="text"></td><td><input type="date"></td></tr>
+        <tr><td>Форма / ЗІЗ</td><td><input type="text"></td><td><input type="date"></td><td><input type="text"></td><td><input type="date"></td></tr>
+        <tr><td><input type="text" placeholder="Інше..."></td><td><input type="text"></td><td><input type="date"></td><td><input type="text"></td><td><input type="date"></td></tr>
+      </tbody>
+    </table>
+    <div style="margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--ink2)">Системи та доступи</div>
+    <table class="data-table">
+      <thead><tr><th>Система</th><th>Роль доступу</th><th>Надав</th><th>Дата</th><th>Відкликати</th></tr></thead>
+      <tbody>
+        <tr><td>Корпоративна пошта</td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--red)"></td></tr>
+        <tr><td>CRM / ERP</td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--red)"></td></tr>
+        <tr><td>Google Drive / M365</td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--red)"></td></tr>
+        <tr><td>Бухгалтерська система</td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--red)"></td></tr>
+        <tr><td><input type="text" placeholder="Інша..."></td><td><input type="text"></td><td><input type="text"></td><td><input type="date"></td><td><input type="checkbox" style="width:18px;height:18px;accent-color:var(--red)"></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- БЛОК 17: КАДРОВІ ДОКУМЕНТИ -->
+<div class="sec who-hr">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">17</span>
+    <span class="sec-title">Кадрові документи</span>
+    <span class="sec-who">HR</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Файли зберігаються у захищеному розділі. Доступ: HR, бухгалтерія і визначені керівники.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Паспорт / ID</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> РНОКПП</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Документ про освіту</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Трудові документи</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Військово-облікові</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Банківські реквізити</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Договір / наказ</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> NDA</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Посадова інструкція</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Матеріальна відповідальність</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Інструктажі ОП</label>
+      <label class="checklist-item" style="border:1px solid var(--paper3);border-radius:6px;padding:8px 10px"><input type="checkbox"> Інше: <input type="text" style="border-bottom:1px solid var(--paper3);font-size:12px;width:80px"></label>
+    </div>
+  </div>
+</div>
+
+<!-- БЛОК 18: ЗГОДИ -->
+<div class="sec who-emp">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">18</span>
+    <span class="sec-title">Згода та підписи</span>
+    <span class="sec-who">Всі</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Співробітник має право не заповнювати добровільні поля. Дані використовуються лише для HR-цілей.</div>
+    <label class="consent-item"><input type="checkbox"> Підтверджую, що надана інформація є актуальною на дату заповнення.</label>
+    <label class="consent-item"><input type="checkbox"> Погоджуюся на обробку даних для кадрових та внутрішніх HR-процесів відповідно до внутрішньої політики компанії.</label>
+    <label class="consent-item"><input type="checkbox"> Погоджуюся на використання фото у внутрішньому профілі People Core CRM.</label>
+    <label class="consent-item"><input type="checkbox"> Погоджуюся на корпоративні привітання з днем народження.</label>
+    <label class="consent-item"><input type="checkbox"> Погоджуюся отримувати внутрішні HR-повідомлення у вказаних каналах зв'язку.</label>
+    <div class="sign-row" style="margin-top:20px">
+      <div class="sign-cell">
+        <div class="sign-cell-label">Співробітник</div>
+        <input type="text" placeholder="ПІБ">
+        <input type="date" style="font-size:12px;margin-top:4px">
+      </div>
+      <div class="sign-cell">
+        <div class="sign-cell-label">Керівник</div>
+        <input type="text" placeholder="ПІБ">
+        <input type="date" style="font-size:12px;margin-top:4px">
+      </div>
+      <div class="sign-cell">
+        <div class="sign-cell-label">HR-відповідальний</div>
+        <input type="text" placeholder="ПІБ">
+        <input type="date" style="font-size:12px;margin-top:4px">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- БЛОК 19: КОНТРОЛЬ ВНЕСЕННЯ В CRM -->
+<div class="sec who-hr">
+  <div class="sec-head" onclick="toggle(this)">
+    <span class="sec-num">19</span>
+    <span class="sec-title">Контроль внесення в People Core CRM</span>
+    <span class="sec-who">HR</span>
+    <span class="sec-arrow">▶</span>
+  </div>
+  <div class="sec-body">
+    <div class="field-note">Заповнює HR після перенесення анкети в систему.</div>
+    <table class="data-table">
+      <thead><tr><th>Розділ</th><th>Статус</th><th>Хто вніс</th><th>Дата</th><th>Примітка</th></tr></thead>
+      <tbody>
+        <tr><td>Основні дані</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Частково</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+        <tr><td>Сім'я / дати</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Частково</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+        <tr><td>Робота / грейд</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Частково</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+        <tr><td>Досвід / освіта</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Частково</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+        <tr><td>Навички</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Частково</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+        <tr><td>Цілі / розвиток</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Частково</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+        <tr><td>Документи</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Частково</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+        <tr><td>Обладнання / доступи</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Частково</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+        <tr><td>Оцінка керівника</td><td><select class="status-select"><option>— Оберіть —</option><option>✅ Заповнено</option><option>⚠️ Очікується</option><option>❌ Не надано</option></select></td><td><input type="text" style="width:120px"></td><td><input type="date" style="width:120px"></td><td><input type="text"></td></tr>
+      </tbody>
+    </table>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+      <div class="meta-cell">
+        <div class="meta-label">Заповнення профілю (%)</div>
+        <input class="meta-input" type="number" placeholder="0–100" min="0" max="100" id="crm-pct">
+      </div>
+      <div class="meta-cell">
+        <div class="meta-label">Дата наступного оновлення</div>
+        <input class="meta-input" type="date">
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /shell -->
+
+<!-- ACTIONS -->
+<div class="actions">
+  <button class="btn btn-out" onclick="clearForm()">🗑 Очистити</button>
+  <button class="btn btn-out" onclick="saveLocal()">💾 Зберегти чернетку</button>
+  <button class="btn btn-out" onclick="window.print()">🖨 Друкувати / PDF</button>
+  <button class="btn btn-g" onclick="exportJSON()">⬇ Експорт JSON</button>
+</div>
+
+<script>
+// ─── НАВИЧКИ ───────────────────────────────────────────────
+const SKILLS = {
+  tech: ['Фасування / пакування','Контроль якості продукції','Робота з обладнанням','Пошиття / крій','Робота з лекалами','Складський облік','Інвентаризація','Логістика / доставка'],
+  beauty: ['Манікюр / педикюр','Гель-лак / покриття','Дизайн нігтів','Обслуговування клієнтів','Касова робота','Прийом дзвінків / адміністрування'],
+  office: ['Excel / Google Sheets','Word / Google Docs','1С / BAS','CRM-системи','Продажі B2B','Продажі B2C','Ведення переговорів','Підбір персоналу','Навчання інших','Управління командою','Фінансовий облік','SMM / маркетинг']
+};
+
+const MGR_RATINGS = ['Якість роботи','Швидкість роботи','Дисципліна','Самостійність','Відповідальність','Командна взаємодія','Комунікація','Ініціативність','Здатність навчатись','Управлінський потенціал'];
+
+const ONBOARD_ITEMS = [
+  ['Оформити документи','HR'],['Створити корпоративну пошту','HR / IT'],
+  ['Надати доступ до CRM / ERP','IT'],['Надати доступ до Google Drive / M365','IT'],
+  ['Видати ключі / картки доступу','HR'],['Видати обладнання та форму','HR'],
+  ['Провести інструктаж з безпеки','HR / Керівник'],['Познайомити з командою','Керівник'],
+  ['Пояснити роль, KPI та грейд','Керівник'],['Призначити наставника','Керівник'],
+  ['Оцінка день 3 / тиждень 1','Керівник'],['Рішення після випробувального терміну','HR + Керівник'],
+];
+
+function skillDotsHTML(id, n = 6) {
+  return Array.from({length: n}, (_, i) =>
+    `<button class="skill-dot" data-val="${i}" onclick="setSkill(this)">${i}</button>`
+  ).join('');
+}
+
+function setSkill(btn) {
+  const val = +btn.dataset.val;
+  const parent = btn.parentElement;
+  parent.querySelectorAll('.skill-dot').forEach((d, i) => d.classList.toggle('active', i <= val));
+}
+
+function buildSkills(containerId, skills) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = skills.map(s => `
+    <div class="skill-row">
+      <span class="skill-name">${s}</span>
+      <div class="skill-dots">${skillDotsHTML(s)}</div>
+    </div>`).join('');
+}
+
+function buildExtraDots(id) {
+  const el = document.getElementById(id);
+  el.innerHTML = skillDotsHTML(id);
+}
+
+function buildMgrRatings() {
+  const el = document.getElementById('mgr-ratings');
+  el.innerHTML = MGR_RATINGS.map(r => `
+    <div class="rating-row">
+      <span>${r}</span>
+      <div class="rating-stars">${[1,2,3,4,5].map(n => `<button class="rating-star" data-val="${n}" onclick="setRating(this)">${n}</button>`).join('')}</div>
+      <input type="text" style="border:none;border-bottom:1px solid var(--paper3);font-size:12px;width:180px;font-family:inherit;outline:none" placeholder="приклад / коментар">
+    </div>`).join('');
+}
+
+function setRating(btn) {
+  const val = +btn.dataset.val;
+  const parent = btn.parentElement;
+  parent.querySelectorAll('.rating-star').forEach((s, i) => s.classList.toggle('active', i < val));
+}
+
+function buildOnboard() {
+  const el = document.getElementById('onboard-list');
+  el.innerHTML = ONBOARD_ITEMS.map(([item, who]) => `
+    <div class="checklist-item">
+      <input type="checkbox">
+      <span class="ci-label">${item}</span>
+      <span class="ci-who">${who}</span>
+      <input type="date" class="ci-date">
+    </div>`).join('');
+}
+
+// ─── ПРОГРЕС ───────────────────────────────────────────────
+function updateProgress() {
+  const keys = ['f-surname','f-name','f-bday','f-phone','f-email','f-start','meta-pib','meta-pos'];
+  const filled = keys.filter(id => {
+    const el = document.getElementById(id);
+    return el && el.value.trim().length > 0;
+  }).length;
+  const pct = Math.round(filled / keys.length * 100);
+  document.getElementById('pbar').style.width = pct + '%';
+  document.getElementById('ppct').textContent = pct + '%';
+}
+
+// ─── ВІК ───────────────────────────────────────────────────
+function calcAge() {
+  const v = document.getElementById('f-bday').value;
+  if (!v) return;
+  const dob = new Date(v), today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  if (today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())) age--;
+  document.getElementById('age-label').textContent = age >= 0 ? `${age} років` : '';
+}
+
+function calcChildAge(input) {
+  if (!input.value) return;
+  const dob = new Date(input.value), today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  if (today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())) age--;
+  const td = input.closest('tr').querySelector('.age-cell');
+  if (td) td.textContent = age >= 0 ? `${age} р.` : '';
+}
+
+// ─── СЕКЦІЇ ────────────────────────────────────────────────
+function toggle(head) {
+  const isOpen = head.classList.contains('open');
+  head.classList.toggle('open', !isOpen);
+  head.querySelector('.sec-arrow').classList.toggle('open', !isOpen);
+  const body = head.nextElementSibling;
+  body.classList.toggle('open', !isOpen);
+}
+
+function toggleAll(open) {
+  document.querySelectorAll('.sec-head').forEach(h => {
+    h.classList.toggle('open', open);
+    h.querySelector('.sec-arrow').classList.toggle('open', open);
+  });
+  document.querySelectorAll('.sec-body').forEach(b => b.classList.toggle('open', open));
+}
+
+// ─── ЗБЕРЕЖЕННЯ ────────────────────────────────────────────
+function saveLocal() {
+  const data = {};
+  document.querySelectorAll('input:not([type=checkbox]):not([type=radio]),select,textarea').forEach((el, i) => {
+    if (el.id || el.name) data[el.id || el.name + '_' + i] = el.value;
+  });
+  localStorage.setItem('anketa_draft_' + (document.getElementById('meta-pib').value || 'draft'), JSON.stringify(data));
+  alert('✅ Чернетку збережено в браузері');
+}
+
+function clearForm() {
+  if (!confirm('Очистити всю форму?')) return;
+  document.querySelectorAll('input:not([type=checkbox]):not([type=radio]),select,textarea').forEach(el => el.value = '');
+  document.querySelectorAll('input[type=checkbox],input[type=radio]').forEach(el => el.checked = false);
+  document.querySelectorAll('.skill-dot,.rating-star').forEach(el => el.classList.remove('active'));
+  updateProgress();
+}
+
+function exportJSON() {
+  const pib = document.getElementById('meta-pib').value || 'anketa';
+  const data = {
+    meta: { pib, generated: new Date().toISOString() },
+    fields: {}
+  };
+  document.querySelectorAll('input,select,textarea').forEach((el, i) => {
+    const key = el.id || el.name || ('field_' + i);
+    if (el.type === 'checkbox' || el.type === 'radio') {
+      if (el.checked) data.fields[key] = (data.fields[key] ? data.fields[key] + ', ' : '') + (el.value || el.parentElement.textContent.trim());
+    } else if (el.value) {
+      data.fields[key] = el.value;
+    }
+  });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `anketa_${pib.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+// ─── ІНІЦІАЛІЗАЦІЯ ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  buildSkills('skills-tech', SKILLS.tech);
+  buildSkills('skills-beauty', SKILLS.beauty);
+  buildSkills('skills-office', SKILLS.office);
+  buildExtraDots('extra1');
+  buildExtraDots('extra2');
+  buildMgrRatings();
+  buildOnboard();
+
+  // Дата сьогодні
+  document.getElementById('meta-date').value = new Date().toISOString().slice(0, 10);
+
+  updateProgress();
+});
+</script>
+</body>
+</html>
