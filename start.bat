@@ -22,15 +22,48 @@ if not exist "node_modules\" (
   if errorlevel 1 goto :end
 )
 
+if not exist ".env" if exist ".env.example" (
+  echo Creating .env from .env.example...
+  copy /Y ".env.example" ".env" >nul
+)
+
 echo Migrations...
 call pnpm migration:run
 if errorlevel 1 goto :end
 
+REM Migrations only create schema. Demo data lives in data/app.snapshot.sql (PW-style).
+REM If users table is empty and snapshot exists, restore automatically unless skipped.
+if /I "%SKIP_SNAPSHOT_RESTORE%"=="1" goto :after_restore
+if not exist "data\app.snapshot.sql" (
+  echo WARNING: data\app.snapshot.sql missing — DB will stay empty of demo accounts.
+  goto :after_restore
+)
+where psql >nul 2>&1
+if errorlevel 1 (
+  echo NOTE: psql not in PATH — cannot auto-check empty DB.
+  echo If login fails, run: .\scripts\db-restore.ps1
+  goto :after_restore
+)
+for /f "usebackq delims=" %%C in (`psql --dbname="%DATABASE_URL%" -w -tAc "SELECT COUNT(*) FROM users" 2^>nul`) do set "USER_COUNT=%%C"
+set "USER_COUNT=%USER_COUNT: =%"
+if "%USER_COUNT%"=="0" (
+  echo.
+  echo users table is empty — restoring demo state from data\app.snapshot.sql
+  echo ^(same as ProjectWeekend: migrate != restore^)
+  echo To skip next time: set SKIP_SNAPSHOT_RESTORE=1
+  echo.
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\db-restore.ps1"
+  if errorlevel 1 goto :end
+) else if "%USER_COUNT%"=="" (
+  echo NOTE: could not count users — if login fails, run: .\scripts\db-restore.ps1
+)
+
+:after_restore
 echo Starting API + Web...
 echo   http://localhost:3000/api/v1/health/live
 echo   http://localhost:4200
-echo   After cutover: hr@tier.ua / (your PW password or reset)
-echo   Empty DB seed: admin@loom.local / Admin123!
+echo   After snapshot restore: accounts from data\app.snapshot.sql ^(e.g. hr@tier.ua^)
+echo   Empty DB seed only: admin@loom.local / Admin123!
 echo Building API...
 call pnpm --filter @loom/api build
 if errorlevel 1 goto :end

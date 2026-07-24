@@ -12,6 +12,8 @@
 
 Швидкий старт і стек — у кореневому [README.md](../README.md).
 
+**Новий ПК:** після `migration:run` обов’язково `.\scripts\db-restore.ps1` — інакше жива Postgres порожня (знімок `data/app.snapshot.sql` сам не підхоплюється). Деталі: [git-sync](dev/git-sync.md).
+
 ## Практичне
 
 - [Синхронізація через Git](dev/git-sync.md) — pull/push, новий ПК, `db-snapshot` / `db-restore`, типові проблеми

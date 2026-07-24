@@ -68,10 +68,13 @@
 
 | Файл / скрипт | Роль |
 | --- | --- |
-| Жива БД (volume / `DATABASE_URL`) | не в git |
+| Жива БД (volume / `DATABASE_URL`) | не в git; **не** файл `data/app.sqlite` (це лише PW) |
 | `data/app.snapshot.sql` | знімок у git |
+| `pnpm migration:run` | лише схема — **не** завантажує знімок |
 | `.\scripts\db-snapshot.ps1` | жива → знімок |
 | `.\scripts\db-restore.ps1` | знімок → жива (+ авто-бекап `data/app.live.bak-*.sql`) |
+
+Після clone / порожньої БД: **спочатку** migrate, **потім** `db-restore.ps1`. Інакше логін зі знімка неможливий. `start.bat` робить restore сам, якщо `users` порожня.
 
 Деталі щоденної роботи: [git-sync.md](git-sync.md).
 
@@ -149,7 +152,8 @@ docker compose logs -f postgres
 | `migrate` exit ≠ 0 | Postgres ще не готовий або помилка SQL — `logs migrate`, `pg_isready` |
 | `api` unhealthy | migrate не пройшов або ready-check fail — логи api, `DATABASE_URL` до сервісу `postgres` |
 | 502 на `/api/` через `:8080` | api ще не healthy або ім’я сервісу — `depends_on` + healthcheck |
-| Немає адміна | Seed не створив юзера — перевірте `SEED_ADMIN_*`, або відновіть демо: `.\scripts\db-restore.ps1` |
+| Немає адміна / «пуста» БД після clone | Зробили лише migrate — `.\scripts\db-restore.ps1` (або `start.bat` при порожніх `users`) |
+| Немає адміна на порожній БД без знімка | Seed — перевірте `SEED_ADMIN_*`; демо-стан: `.\scripts\db-restore.ps1` |
 | Потрібен спільний демо-стан між ПК | Оновіть знімок на джерелі (`db-snapshot.ps1` + commit), на приймачі — `db-restore.ps1` |
 | Після оновлення UI «старий» | Браузерний кеш / не перезібраний `web` — `docker compose up -d --build web` |
 | Випадкові зміни в `ProjectWeekend/` | Copy-source read-only — відкотити; `pnpm check:copy-source` |
