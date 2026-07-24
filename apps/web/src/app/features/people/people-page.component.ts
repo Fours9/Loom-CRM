@@ -1,18 +1,19 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
 import type { EmployeeSummary } from '@loom/contracts-employees';
 
 @Component({
   selector: 'loom-people-page',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   template: `
     <section class="page">
       <header class="page-head">
         <div>
           <h1>Працівники</h1>
-          <p>Список співробітників організації в Loom CRM</p>
+          <p>Кадровий список Loom CRM · профіль: /people/:id</p>
         </div>
         <button type="button" class="btn" (click)="create()" [disabled]="busy()">
           Додати
@@ -43,11 +44,11 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
         <ul class="card-list">
           @for (e of employees(); track e.id) {
             <li class="employee-card">
-              <div class="card-body">
+              <a class="card-body" [routerLink]="['/people', e.id]">
                 <strong class="card-title">{{ e.lastName }} {{ e.firstName }}</strong>
                 <span class="card-meta">{{ e.employeeNumber }}</span>
                 <span class="card-meta">{{ e.department?.name || '—' }}</span>
-              </div>
+              </a>
             </li>
           }
         </ul>
@@ -63,7 +64,7 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
             </thead>
             <tbody>
               @for (e of employees(); track e.id) {
-                <tr>
+                <tr class="clickable" (click)="open(e.id)">
                   <td>
                     <strong>{{ e.lastName }} {{ e.firstName }}</strong>
                   </td>
@@ -200,6 +201,18 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
         border-radius: 12px;
         background: var(--pw-surface-2);
       }
+      .card-body {
+        text-decoration: none;
+        color: inherit;
+        display: grid;
+        gap: 0.25rem;
+      }
+      tr.clickable {
+        cursor: pointer;
+      }
+      tr.clickable:hover {
+        background: color-mix(in srgb, var(--pw-accent) 8%, transparent);
+      }
       @media (min-width: 641px) {
         .form {
           grid-template-columns: 1fr 1fr;
@@ -220,6 +233,7 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
 })
 export class PeoplePageComponent implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
   readonly employees = signal<EmployeeSummary[]>([]);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -237,20 +251,24 @@ export class PeoplePageComponent implements OnInit {
     });
   }
 
+  open(id: string): void {
+    void this.router.navigate(['/people', id]);
+  }
+
   create(): void {
     if (!this.firstName.trim() || !this.lastName.trim()) return;
     this.busy.set(true);
     this.http
-      .post<EmployeeSummary>('/api/v1/employees', {
+      .post<{ id: string }>('/api/v1/employees', {
         firstName: this.firstName.trim(),
         lastName: this.lastName.trim(),
       })
       .subscribe({
-        next: () => {
+        next: (created) => {
           this.firstName = '';
           this.lastName = '';
           this.busy.set(false);
-          this.reload();
+          void this.router.navigate(['/people', created.id]);
         },
         error: () => {
           this.error.set('Створення не вдалося');

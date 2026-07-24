@@ -112,11 +112,21 @@ export class EmployeeAccessService {
     return this.isAdmin(viewer);
   }
 
-  canViewPersonalContacts(viewer: User): boolean {
-    return this.isAdmin(viewer);
+  canViewPersonalContacts(viewer: User, target?: Employee): boolean {
+    if (this.isAdmin(viewer)) return true;
+    if (target && this.isOwner(viewer, target)) return true;
+    return false;
   }
 
   canEditPersonalContacts(viewer: User): boolean {
+    return this.isAdmin(viewer);
+  }
+
+  canViewEmergencyContact(viewer: User): boolean {
+    return this.isAdmin(viewer);
+  }
+
+  canEditEmergencyContact(viewer: User): boolean {
     return this.isAdmin(viewer);
   }
 

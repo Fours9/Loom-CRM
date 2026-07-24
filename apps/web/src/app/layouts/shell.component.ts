@@ -5,6 +5,7 @@ import {
   OnInit,
   ViewChild,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -22,6 +23,7 @@ import { SessionStore } from '../core/auth/session.store';
 import { TranslatePipe } from '../core/i18n/translate.pipe';
 import { ThemeService } from '../core/theme/theme.service';
 import { OverlayScrollLockService } from '../core/overlay/overlay-scroll-lock.service';
+import { ViewportService } from '../core/viewport/viewport.service';
 import { NotificationsApi } from '../core/notifications/notifications.api';
 import { AppNotification } from '../core/notifications/notification.models';
 import { notificationFrameTone } from '../core/notifications/notification-frame';
@@ -189,7 +191,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
       </header>
 
       <div class="body">
-        @if (inAbsences() && isMobileNavOpen()) {
+        @if (!viewport.isTabletUp() && isMobileNavOpen()) {
           <div class="scrim" (click)="closeMobileNav('backdrop')" aria-hidden="true"></div>
         }
         <aside
@@ -207,7 +209,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
                 [routerLink]="item.path"
                 routerLinkActive="active"
                 [routerLinkActiveOptions]="{ exact: item.path === '/' }"
-                (click)="onNavLinkClick(item.path)"
+                (click)="onNavLinkClick()"
               >
                 {{ item.label }}
               </a>
@@ -217,28 +219,28 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
                     routerLink="/absences"
                     routerLinkActive="active"
                     [routerLinkActiveOptions]="{ exact: true }"
-                    (click)="onNavLinkClick('/absences')"
+                    (click)="onNavLinkClick()"
                   >
                     {{ 'nav.home' | t }}
                   </a>
                   <a
                     routerLink="/absences/employees"
                     routerLinkActive="active"
-                    (click)="onNavLinkClick('/absences/employees')"
+                    (click)="onNavLinkClick()"
                   >
                     {{ 'nav.employees' | t }}
                   </a>
                   <a
                     routerLink="/absences/requests"
                     routerLinkActive="active"
-                    (click)="onNavLinkClick('/absences/requests')"
+                    (click)="onNavLinkClick()"
                   >
                     {{ 'nav.requests' | t }}
                   </a>
                   <a
                     routerLink="/absences/calendar"
                     routerLinkActive="active"
-                    (click)="onNavLinkClick('/absences/calendar')"
+                    (click)="onNavLinkClick()"
                   >
                     {{ 'nav.calendar' | t }}
                   </a>
@@ -246,7 +248,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
                     <a
                       routerLink="/absences/admin"
                       routerLinkActive="active"
-                      (click)="onNavLinkClick('/absences/admin')"
+                      (click)="onNavLinkClick()"
                     >
                       {{ 'nav.admin' | t }}
                     </a>
@@ -515,7 +517,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         background: color-mix(in srgb, var(--pw-text-strong) 35%, transparent);
         z-index: var(--pw-z-scrim, 200);
       }
-      /* Absences flyout: below topbar (never above chrome) */
+      /* Phone (<641px): PW-style flyout. Tablet+: docked via .side-pinned. */
       .side-nav {
         position: fixed;
         top: var(--shell-topbar-h);
@@ -538,7 +540,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         transform: translateX(0);
         visibility: visible;
       }
-      /* Home / CRM: side always open (docked) */
+      /* Tablet+: docked rail pushes content (CRM home + Absences), no overlay. */
       .shell.side-pinned .side-nav {
         position: relative;
         top: auto;
@@ -681,6 +683,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   readonly nav = inject(NavigationService);
   readonly session = inject(SessionStore);
   readonly theme = inject(ThemeService);
+  readonly viewport = inject(ViewportService);
   readonly frameTone = notificationFrameTone;
   private readonly notificationsApi = inject(NotificationsApi);
   private readonly router = inject(Router);
@@ -692,19 +695,19 @@ export class ShellComponent implements OnInit, OnDestroy {
   unreadCount = 0;
   inboxOpen = false;
   notifications: AppNotification[] = [];
-  /** Absences flyout open state (must be a signal for sideExpanded). */
+  /** Phone flyout open (PW-style). Closed by default. */
   readonly isMobileNavOpen = signal(false);
-  /** CRM pages: docked sidebar open by default; ☰ toggles collapse. */
-  readonly crmSideOpen = signal(true);
-  /** Set when clicking a CRM nav item that routes into Absences — keep flyout open. */
-  private keepAbsencesSideOpen = false;
+  /** Tablet+: docked sidebar open by default; ☰ toggles collapse. */
+  readonly sideOpen = signal(true);
 
   private readonly url = signal(this.router.url);
   readonly inAbsences = computed(() => this.url().startsWith('/absences'));
-  /** Docked CRM rail (not Absences flyout). */
-  readonly sidePinned = computed(() => !this.inAbsences() && this.crmSideOpen());
+  /** Docked rail only on tablet+ when open — never overlays content. */
+  readonly sidePinned = computed(
+    () => this.viewport.isTabletUp() && this.sideOpen(),
+  );
   readonly sideExpanded = computed(() =>
-    this.inAbsences() ? this.isMobileNavOpen() : this.crmSideOpen(),
+    this.viewport.isTabletUp() ? this.sideOpen() : this.isMobileNavOpen(),
   );
   readonly accountEmail = computed(() => this.session.user()?.email ?? '');
   readonly isAdmin = computed(() => this.session.user()?.role === 'admin');
@@ -712,34 +715,26 @@ export class ShellComponent implements OnInit, OnDestroy {
   private hasScrollLock = false;
   private routerSub?: Subscription;
   private keyHandler = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && this.inAbsences() && this.isMobileNavOpen()) {
+    if (e.key === 'Escape' && this.isMobileNavOpen()) {
       this.closeMobileNav('escape');
     }
   };
+
+  constructor() {
+    effect(() => {
+      if (this.viewport.isTabletUp() && this.isMobileNavOpen()) {
+        this.closeMobileNav('viewport');
+      }
+    });
+  }
 
   ngOnInit(): void {
     this.refreshUnread();
     this.routerSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => {
-        const next = e.urlAfterRedirects;
-        this.url.set(next);
+        this.url.set(e.urlAfterRedirects);
         this.inboxOpen = false;
-
-        if (next.startsWith('/absences')) {
-          // Only force-open when user entered Absences via the Absences sidebar item.
-          if (this.keepAbsencesSideOpen) {
-            this.keepAbsencesSideOpen = false;
-            if (!this.isMobileNavOpen()) {
-              this.isMobileNavOpen.set(true);
-              this.acquireScrollLock();
-            }
-          }
-          // Otherwise leave flyout as-is (open stays open, closed stays closed).
-          return;
-        }
-
-        this.keepAbsencesSideOpen = false;
         if (this.isMobileNavOpen()) {
           this.closeMobileNav('navigation');
         }
@@ -753,21 +748,16 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.releaseScrollLock();
   }
 
-  onNavLinkClick(path: string): void {
-    // Keep flyout open only when entering Absences from the Absences CRM item.
-    this.keepAbsencesSideOpen = path === '/absences' && !this.inAbsences();
+  /** Phone: close flyout after choosing a link (PW). Tablet+: no-op. */
+  onNavLinkClick(): void {
+    if (!this.viewport.isTabletUp() && this.isMobileNavOpen()) {
+      this.closeMobileNav('navigation');
+    }
   }
 
   toggleSideNav(): void {
-    if (this.inAbsences()) {
-      this.toggleMobileNav();
-      return;
-    }
-    this.crmSideOpen.update((open) => !open);
-  }
-
-  toggleMobileNav(): void {
-    if (!this.inAbsences()) {
+    if (this.viewport.isTabletUp()) {
+      this.sideOpen.update((open) => !open);
       return;
     }
     if (this.isMobileNavOpen()) {
@@ -778,7 +768,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   }
 
   openMobileNav(): void {
-    if (!this.inAbsences() || this.isMobileNavOpen()) {
+    if (this.viewport.isTabletUp() || this.isMobileNavOpen()) {
       return;
     }
     this.isMobileNavOpen.set(true);

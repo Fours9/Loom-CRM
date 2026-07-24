@@ -37,6 +37,7 @@ import { CurrentUser } from '../../platform/auth/decorators/current-user.decorat
 import { User } from '../../platform/identity/user.entity';
 import { UserRole } from '../../platform/identity/user.enums';
 import { EmployeesService } from './employees.service';
+import { EmployeeProfileService } from './employee-profile.service';
 import { EmployeeProfileExportService } from './employee-profile-export.service';
 import { contentDisposition } from './employee-pdf-filename';
 
@@ -149,11 +150,68 @@ class AccountStatusDto {
   @IsString() status!: 'active' | 'deactivated';
 }
 
+class PatchBasicDto {
+  @IsOptional() @IsString() firstName?: string;
+  @IsOptional() @IsString() lastName?: string;
+  @IsOptional() @IsString() middleName?: string | null;
+  @IsOptional() @IsString() preferredName?: string | null;
+  @IsOptional() @IsString() photoUrl?: string | null;
+  @IsOptional() @IsString() employeeNumber?: string;
+}
+
+class PatchContactsDto {
+  @IsOptional() @IsString() workPhone?: string | null;
+  @IsOptional() @IsString() workEmail?: string | null;
+  @IsOptional() @IsString() workTelegram?: string | null;
+}
+
+class PatchPersonalDto {
+  @IsOptional() @IsString() birthDate?: string | null;
+  @IsOptional() @IsString() city?: string | null;
+  @IsOptional() @IsString() preferredLanguage?: string | null;
+  @IsOptional() @IsString() preferredName?: string | null;
+  @IsOptional() @IsString() personalPhone?: string | null;
+  @IsOptional() @IsString() personalEmail?: string | null;
+  @IsOptional() @IsString() personalTelegram?: string | null;
+}
+
+class EmergencyDto {
+  @IsString() @MinLength(1) fullName!: string;
+  @IsOptional() @IsString() relationship?: string | null;
+  @IsString() @MinLength(1) primaryPhone!: string;
+  @IsOptional() @IsString() secondaryPhone?: string | null;
+  @IsOptional() @IsString() notes?: string | null;
+}
+
+class CreateAssignmentDto {
+  @IsOptional() @IsUUID() companyId?: string | null;
+  @IsOptional() @IsUUID() directionId?: string | null;
+  @IsOptional() @IsUUID() departmentId?: string | null;
+  @IsOptional() @IsUUID() positionId?: string | null;
+  @IsOptional() @IsString() functionalRole?: string | null;
+  @IsOptional() @IsUUID() managerEmployeeId?: string | null;
+  @IsOptional() @IsUUID() mentorEmployeeId?: string | null;
+  @IsOptional() @IsUUID() hrResponsibleEmployeeId?: string | null;
+  @IsOptional() @IsString() workLocation?: string | null;
+  @IsOptional() @IsString() workFormat?: string | null;
+  @IsOptional() @IsString() employmentType?: string | null;
+  @IsOptional() @IsString() contractType?: string | null;
+  @IsOptional() @IsString() startDate?: string | null;
+  @IsOptional() @IsString() probationEndDate?: string | null;
+  @IsOptional() @IsString() changeReason?: string | null;
+}
+
+class StatusTransitionDto {
+  @IsString() status!: string;
+  @IsOptional() @IsString() reason?: string | null;
+}
+
 @Controller('employees')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class EmployeesController {
   constructor(
     private readonly employees: EmployeesService,
+    private readonly profile: EmployeeProfileService,
     private readonly exportService: EmployeeProfileExportService,
   ) {}
 
@@ -180,6 +238,12 @@ export class EmployeesController {
     });
   }
 
+  @Get('catalogs/org')
+  @RequirePermissions(Permission.EmployeesView)
+  orgCatalogs() {
+    return this.profile.listCatalogs();
+  }
+
   @Get('next-number')
   @RequirePermissions(Permission.EmployeesCreate)
   previewNextNumber(
@@ -190,6 +254,113 @@ export class EmployeesController {
       user,
       role ?? UserRole.Employee,
     );
+  }
+
+  @Get(':id/profile')
+  @RequirePermissions(Permission.EmployeesView)
+  getProfile(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.profile.getProfile(user, id);
+  }
+
+  @Get(':id/completeness')
+  @RequirePermissions(Permission.EmployeesView)
+  completeness(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.profile.completeness(user, id);
+  }
+
+  @Get(':id/history')
+  @RequirePermissions(Permission.EmployeesView)
+  history(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.profile.history(user, id, limit ? Number(limit) : 50);
+  }
+
+  @Get(':id/employment')
+  @RequirePermissions(Permission.EmployeesView)
+  async employment(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const p = await this.profile.getProfile(user, id);
+    return p.sections.employment;
+  }
+
+  @Get(':id/employment-history')
+  @RequirePermissions(Permission.EmployeesView)
+  employmentHistory(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.profile.employmentHistory(user, id);
+  }
+
+  @Post(':id/employment-assignments')
+  @RequirePermissions(Permission.EmployeesEdit)
+  createAssignment(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateAssignmentDto,
+  ) {
+    return this.profile.createAssignment(user, id, dto);
+  }
+
+  @Post(':id/status-transitions')
+  @RequirePermissions(Permission.EmployeesEdit)
+  statusTransition(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: StatusTransitionDto,
+  ) {
+    return this.profile.transitionStatus(user, id, dto);
+  }
+
+  @Patch(':id/basic')
+  @RequirePermissions(Permission.EmployeesEdit)
+  patchBasic(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PatchBasicDto,
+  ) {
+    return this.profile.patchBasic(user, id, dto);
+  }
+
+  @Patch(':id/contacts')
+  @RequirePermissions(Permission.EmployeesEdit)
+  patchContacts(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PatchContactsDto,
+  ) {
+    return this.profile.patchContacts(user, id, dto);
+  }
+
+  @Patch(':id/personal')
+  @RequirePermissions(Permission.EmployeesEdit)
+  patchPersonal(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PatchPersonalDto,
+  ) {
+    return this.profile.patchPersonal(user, id, dto);
+  }
+
+  @Put(':id/emergency-contact')
+  @RequirePermissions(Permission.EmployeesEdit)
+  putEmergency(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EmergencyDto,
+  ) {
+    return this.profile.replaceEmergency(user, id, dto);
   }
 
   @Get(':id/export.pdf')

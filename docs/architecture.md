@@ -17,8 +17,10 @@ Forbidden: Platform → Absences, Organization → Absences, frontend → backen
 ## Layers
 
 1. **Platform** — auth, identity, permissions, audit, notifications, settings, files, health, bootstrap, database.
-2. **Organization** — employees, departments, positions, schedules, access scope.
-3. **Business modules** — absences (first), later recruitment, documents, etc.
+2. **Organization** — employees (Profile Core: contacts, emergency, employment assignments), departments, positions, schedules, access scope.
+3. **Business modules** — absences (first); later questionnaires, onboarding, reviews, goals, skills, documents (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
+
+CRM employee profile UI: `/people/:id`. Absences PW-parity card: `/absences/employees/:id` (unchanged). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
 
 ## Code location (Variant A)
 

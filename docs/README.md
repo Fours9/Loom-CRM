@@ -29,6 +29,13 @@
 - [Absences API parity](absences-api-parity.md)
 - [Absences UI parity](absences-ui-parity.md)
 
+## Продукт / HR
+
+- [Employee Profile Core (спека)](product/employee-profile-core.md)
+- [HR profile roadmap](product/hr-profile-roadmap.md)
+- [Анкета 360° — reference only](product/references/README.md)
+- [ADR 0007: profile boundaries](adr/0007-employee-profile-boundaries.md)
+
 ## Агенти
 
 - [AGENTS.md](../AGENTS.md) — інваріанти репозиторію (ProjectWeekend read-only, межі модулів, migrations)
