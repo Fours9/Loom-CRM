@@ -40,9 +40,21 @@ export type EmployeeProfileCapabilities = {
   canAssignQuestionnaire: boolean;
 };
 
-export type ProfileCompleteness = {
+export type ProfileCompletenessSection = {
+  weight: number;
+  complete: boolean;
+};
+
+export type ProfileCompletenessLevel = {
   percent: number;
-  missingFields: string[];
+  incompleteSections: string[];
+  sections: Record<string, ProfileCompletenessSection>;
+};
+
+export type ProfileCompleteness = {
+  core: ProfileCompletenessLevel;
+  /** Owner + Admin only; null for managers viewing others (privacy). */
+  extended: ProfileCompletenessLevel | null;
 };
 
 export type EmployeeProfileHeader = {
@@ -73,9 +85,85 @@ export type ImportantDateItem = {
   priority: number;
 };
 
+export type NamedReference = {
+  id: EntityId;
+  name: string;
+};
+
+export type EmployeeOverviewSection = {
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
+  preferredName: string | null;
+  employmentStatus: string;
+  workFormat: string | null;
+  probationEndsAt: string | null;
+};
+
+export type EmployeeEmploymentSection = {
+  id: EntityId;
+  companyId: string | null;
+  directionId: string | null;
+  departmentId: string | null;
+  positionId: string | null;
+  functionalRole: string | null;
+  managerEmployeeId: string | null;
+  mentorEmployeeId: string | null;
+  hrResponsibleEmployeeId: string | null;
+  workLocation: string | null;
+  workFormat: string | null;
+  employmentType: string | null;
+  contractType: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  probationEndDate: string | null;
+  status: string;
+  company: NamedReference | null;
+  direction: NamedReference | null;
+  department: NamedReference | null;
+  position: NamedReference | null;
+};
+
+export type EmployeeContactItem = {
+  id: EntityId;
+  type: string;
+  value: string;
+  isPrimary: boolean;
+  visibility: string;
+};
+
+export type EmployeePersonalSection = {
+  birthDate: string | null;
+  city: string | null;
+  preferredLanguage: string | null;
+  preferredName: string | null;
+  personalPhone: string | null;
+  personalEmail: string | null;
+  personalTelegram: string | null;
+};
+
+export type EmployeeEmergencyContactItem = {
+  id: EntityId;
+  fullName: string;
+  relationship: string | null;
+  primaryPhone: string;
+  secondaryPhone: string | null;
+  priority: number;
+  notes: string | null;
+};
+
+export type EmployeeProfileSections = {
+  overview: EmployeeOverviewSection;
+  employment: EmployeeEmploymentSection | null;
+  contacts: EmployeeContactItem[];
+  personal: EmployeePersonalSection | null;
+  emergencyContact: EmployeeEmergencyContactItem[] | null;
+  importantDates: ImportantDateItem[] | null;
+};
+
 export type EmployeeProfileResponse = {
   header: EmployeeProfileHeader;
-  sections: Record<string, unknown>;
+  sections: EmployeeProfileSections;
   capabilities: EmployeeProfileCapabilities;
   completeness: ProfileCompleteness;
 };

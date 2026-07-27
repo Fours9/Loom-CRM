@@ -14,6 +14,27 @@
 
 **Новий ПК:** після `migration:run` обов’язково `.\scripts\db-restore.ps1` — інакше жива Postgres порожня (знімок `data/app.snapshot.sql` сам не підхоплюється). Деталі: [git-sync](dev/git-sync.md).
 
+## Зараз у коді
+
+| Шар / модуль | Стан |
+| --- | --- |
+| **Platform** | auth, identity, permissions, audit, notifications, settings, health, bootstrap, DB |
+| **Organization** | employees (Profile Core), departments, positions, schedules, access scope |
+| **Absences** | повний PW-паритетний модуль відсутностей |
+| **Documents** | MVP: `employee_documents`, People-вкладка + агрегат вкладень Absences (storage поки `content_base64`; Platform Files — planned) |
+
+**Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
+
+**Профіль UI:** `/people/:id` — вкладки Дані працівника, Відсутності, Документи, Показники (stub), Історія, Згодом (stub). PW-картка: `/absences/employees/:id`.
+
+| Тип документа | Призначення |
+| --- | --- |
+| **Living status** | цей hub, [roadmap](product/hr-profile-roadmap.md), [architecture](architecture.md), [AGENTS.md](../AGENTS.md) |
+| **Target / vision** | [employee-profile-core.md](product/employee-profile-core.md) — **не** статус імплементації |
+| **Frozen decisions** | [ADR](adr/) 0001–0006 (рішення зафіксовані) |
+
+Відкладено (код polish, не docs): Phase 1 gaps — збагачена Історія (actor), гейт вкладок за capabilities, completeness filter на списку People.
+
 ## Практичне
 
 - [Синхронізація через Git](dev/git-sync.md) — pull/push, новий ПК, `db-snapshot` / `db-restore`, типові проблеми
@@ -24,6 +45,7 @@
 - [ADR](adr/) — зафіксовані рішення
 - [Деплой (Docker Compose)](dev/deploy.md)
 - [Експлуатація (operations)](dev/operations.md)
+- [Production readiness checklist](dev/production-readiness.md)
 - [Cutover ProjectWeekend → LoomCRM](cutover.md)
 - [COPYMAP](COPYMAP.md)
 - [Absences API parity](absences-api-parity.md)
@@ -31,8 +53,8 @@
 
 ## Продукт / HR
 
-- [Employee Profile Core (спека)](product/employee-profile-core.md)
-- [HR profile roadmap](product/hr-profile-roadmap.md)
+- [HR profile roadmap](product/hr-profile-roadmap.md) — **living** статус фаз
+- [Employee Profile Core (target-спека)](product/employee-profile-core.md) — vision / Draft, не «що вже в коді»
 - [Анкета 360° — reference only](product/references/README.md)
 - [ADR 0007: profile boundaries](adr/0007-employee-profile-boundaries.md)
 
@@ -55,5 +77,7 @@
 ## Як читати
 
 - Локальна робота / новий ПК → [git-sync](dev/git-sync.md) + кореневий README
+- Що вже зроблено / що далі → [roadmap](product/hr-profile-roadmap.md) + блок «Зараз у коді» вище
 - Production / VPS → [deploy](dev/deploy.md) + [operations](dev/operations.md)
 - Межі модулів → [architecture](architecture.md) + [AGENTS.md](../AGENTS.md)
+- Цільове бачення профілю → [employee-profile-core.md](product/employee-profile-core.md) (після living docs)

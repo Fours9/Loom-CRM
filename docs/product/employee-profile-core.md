@@ -1,17 +1,42 @@
 ---
 title: "Loom-CRM — Employee Profile Core та система анкетування працівників"
 document_type: "Product & Technical Specification"
-status: "Draft for discussion"
-version: "1.0"
+status: "Target / Draft — not implementation status"
+version: "1.1"
 language: "uk"
 repository: "https://github.com/Fours9/Loom-CRM"
 source_questionnaire: "anketa_360.html"
-last_updated: "2026-07-24"
+last_updated: "2026-07-27"
 ---
 
 # Loom-CRM: Employee Profile Core та система анкетування працівників
 
+> **TARGET / DRAFT — не статус імплементації.**  
+> Це продуктові й технічне **бачення** (vision). Поточний стан коду: [hr-profile-roadmap.md](./hr-profile-roadmap.md) (living) і [architecture.md](../architecture.md). Hub: [docs/README.md](../README.md).  
+> Не використовуйте цей файл як єдине джерело правди про те, що вже змерджено в LoomCRM.
+
 > Продуктово-технічна специфікація розширеного профілю працівника, анкетування, онбордингу, оцінювання, розвитку та пов’язаних HR-процесів.
+
+---
+
+## Shipped in LoomCRM vs still planned
+
+Короткий зріз (деталь — у roadmap). Оновлюйте roadmap при зміні коду; цей розділ — орієнтир читача спеки.
+
+### Shipped (Phase 1 + Documents MVP)
+
+- Organization Profile Core: `/people/:id`, section APIs (basic/contacts/personal/emergency/important-dates/assignments), capabilities, completeness, audit history API, employment history.
+- UI вкладки зараз: **Дані працівника** (Основні · Контакти · Дати · Посада), **Відсутності**, **Документи**, **Показники** (stub), **Історія**, **Згодом** (stub).
+- Absences як окремий бізнес-модуль (повний PW UI під `/absences/*`).
+- Documents MVP: `employee_documents`, `documents.view` / `documents.manage`, People-вкладка + агрегат absence attachments; storage поки interim `content_base64`.
+- Runtime ролі: `employee` · `department_manager` · `admin` (**немає** окремої ролі `hr`).
+
+### Still planned (не плутати з «вже є»)
+
+- Phase 2+: `/me` self-service, change-request queue.
+- Questionnaires, Onboarding, Skills, Goals, Reviews як окремі модулі / вкладки з §8 цього документа.
+- Platform **Files** (заміна base64), verification, consents versions.
+- Окрема HR role у матрицях нижче — **продуктова** модель; у runtime її функції покриває Admin + permissions.
 
 ---
 
@@ -108,6 +133,8 @@ HR Business Modules
 
 ## 3. Поточний контекст Loom-CRM
 
+> Нижче — **цільовий** контекст для планування. Факт runtime і стрілки модулів: [architecture.md](../architecture.md) і [hr-profile-roadmap.md](./hr-profile-roadmap.md).
+
 ### 3.1. Архітектурний фундамент
 
 Loom-CRM уже має базу, придатну для розвитку повноцінної HR-системи:
@@ -119,22 +146,24 @@ Loom-CRM уже має базу, придатну для розвитку пов
 | Database | PostgreSQL 16 |
 | API | REST з префіксом `/api/v1` |
 | Shared contracts | `libs/contracts/*` |
-| Shared UI | `libs/frontend/ui` |
 | Архітектурний стиль | модульний моноліт |
 | Схема БД | міграції, без TypeORM `synchronize` |
-| Поточний бізнес-модуль | Absences |
+| Бізнес-модулі в коді | Absences; Documents (MVP) |
+| Profile Core | Organization (`/people/:id`) — Phase 1 Done |
 
-Цільова залежність модулів уже визначена:
+Цільова залежність модулів (актуально також Documents):
 
 ```text
 Organization → Platform
 Absences → Platform
 Absences → Organization
+Documents → Platform
+Documents → Organization
 Future modules → Platform
 Future modules → Organization
 ```
 
-Профіль працівника має розвиватися в межах `Organization`, а анкетування, онбординг, оцінювання та розвиток можуть бути окремими бізнес-модулями, які використовують публічний API `Organization`.
+Профіль працівника розвивається в межах `Organization`. Documents — окремий бізнес-модуль. Анкетування, онбординг, оцінювання та розвиток можуть бути подальшими бізнес-модулями з публічним API `Organization`.
 
 ### 3.2. Поточні архітектурні шари
 
@@ -148,11 +177,11 @@ Platform
 ├── settings;
 ├── database;
 ├── bootstrap;
-├── files;
-└── health.
+├── health;
+└── files (planned — не shipped; documents MVP використовує interim content_base64).
 
 Organization
-├── employees;
+├── employees (Profile Core);
 ├── departments;
 ├── positions;
 ├── schedules;
@@ -160,7 +189,8 @@ Organization
 
 Business modules
 ├── absences;
-└── майбутні HR-модулі.
+├── documents (MVP);
+└── майбутні HR-модулі (questionnaires, onboarding, …).
 ```
 
 ### 3.3. Наслідки для нового функціоналу
@@ -317,6 +347,8 @@ Backend повинен формувати відповідь відповідн�
 
 ## 7. Користувачі та ролі
 
+> **Runtime зараз:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає — кадрові сценарії нижче покриває **Admin** (+ permissions). Розділ «HR / Admin» — продуктова модель для майбутньої декомпозиції прав, не окремий enum у БД.
+
 ### 7.1. HR / Admin
 
 - створення профілю;
@@ -361,6 +393,8 @@ Backend повинен формувати відповідь відповідн�
 ---
 
 ## 8. Інформаційна архітектура профілю
+
+> **Цільова IA** нижче. **Фактичний UI `/people/:id` зараз:** Дані працівника · Відсутності · Документи · Показники (stub) · Історія · Згодом (stub). Див. [roadmap](./hr-profile-roadmap.md).
 
 ```text
 Employee Profile

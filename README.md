@@ -105,9 +105,11 @@ Compose **не** підставляє `data/app.snapshot.sql` автоматич
 Organization → Platform
 Absences → Platform
 Absences → Organization
+Documents → Platform
+Documents → Organization
 ```
 
-Заборонено: Platform → Absences; Organization → Absences; `apps/web` → вихідний код `apps/api`.
+Заборонено: Platform → Absences; Platform → Documents; Organization → Absences; Organization → Documents; `apps/web` → вихідний код `apps/api`.
 
 ```text
 apps/api          NestJS (platform / organization / modules)

@@ -14,17 +14,29 @@ Future modules → Platform
 Future modules → Organization
 ```
 
-Forbidden: Platform → Absences, Organization → Absences, Organization → Documents, frontend → backend source.
+Forbidden: Platform → Absences; Platform → Documents; Organization → Absences; Organization → Documents; frontend → backend source.
 
 ## Layers
 
-1. **Platform** — auth, identity, permissions, audit, notifications, settings, files (planned), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`).
+1. **Platform** — auth, identity, permissions, audit, notifications, settings, files (**planned**), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`, `normalizeUploadedFileName`).
 2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions, schedules, access scope.
 3. **Business modules** — absences; documents (MVP: employee file list/upload + People aggregate with absence attachments); later questionnaires, onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
 
+### Documents MVP
+
 Documents module owns `employee_documents` (interim `content_base64` storage until Platform Files). Sensitive document types (`questionnaire`, `identity`, `medical`, `consent`) are projected server-side: owner + admin only; department managers see only employment/education/certificate/other when viewing others. Upload/delete: `documents.manage` (Admin). View: `documents.view` (all roles) + `EmployeeAccessService` scope.
 
-CRM employee profile UI: `/people/:id` (tabs include Документи). Absences PW-parity card: `/absences/employees/:id` (unchanged). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
+### Identity roles (runtime)
+
+`employee` · `department_manager` · `admin`. No separate `hr` role — admin (+ permissions) covers HR-like actions.
+
+### People UI
+
+CRM employee profile: `/people/:id` — tabs Дані працівника, Відсутності, Документи, Показники (stub), Історія, Згодом (stub). Absences PW-parity card: `/absences/employees/:id` (unchanged). Living phase status: [hr-profile-roadmap.md](product/hr-profile-roadmap.md). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
+
+### Profile completeness
+
+Role-independent dual score (`core` / `extended`) via pure calculator; `header.completenessPercent` = core only; `extended` is `null` for managers viewing others. See [hr-profile-roadmap.md](product/hr-profile-roadmap.md).
 
 ## Code location (Variant A)
 
@@ -32,7 +44,7 @@ Backend modules live under `apps/api/src/{platform,organization,modules}` — no
 
 ## Contracts
 
-`libs/contracts/*` hold API shapes only. Entities and Nest DTOs stay in the API. Mappers convert domain → response.
+`libs/contracts/*` hold API shapes only (`@loom/contracts-auth`, `employees`, `absences`, `documents`, …). Entities and Nest DTOs stay in the API. Mappers convert domain → response.
 
 ## Data access
 
