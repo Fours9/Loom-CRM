@@ -82,6 +82,7 @@ export const ABSENCE_STATUS_LABELS: Record<string, string> = {
   pending: 'Подана',
   approved: 'Затверджена',
   rejected: 'Відхилена',
+  cancelled: 'Скасована',
   deletion_requested: 'Запит на видалення',
   completed: 'Завершена',
 };

@@ -670,7 +670,7 @@ import { PasswordVisibilityToggleComponent } from '../shared/password-visibility
                   }
                 } @else {
                   <div class="card-head req-actions">
-                    <a class="new-link" routerLink="/absences/requests/new">Нова</a>
+                    <a class="btn" routerLink="/absences/requests/new">Нова заявка</a>
                   </div>
                   @if (requests.length === 0) {
                     <p class="muted">Заявок ще немає</p>
@@ -1196,11 +1196,16 @@ import { PasswordVisibilityToggleComponent } from '../shared/password-visibility
         color: var(--pw-text);
         border: 1px solid var(--pw-border-strong);
       }
-      .new-link {
-        color: var(--pw-accent);
+      .btn {
+        background: var(--pw-accent);
+        color: var(--pw-on-accent);
         text-decoration: none;
+        padding: 0.65rem 1rem;
+        border-radius: 8px;
+        min-height: 2.75rem;
+        display: inline-flex;
+        align-items: center;
         font-weight: 600;
-        font-size: 0.9rem;
       }
       .req-list {
         list-style: none;

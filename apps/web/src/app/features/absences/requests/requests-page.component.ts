@@ -1,4 +1,4 @@
-﻿import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -54,6 +54,7 @@ type RequestSortKey =
             <option value="approved">Затверджена</option>
             <option value="completed">Завершена</option>
             <option value="rejected">Відхилена</option>
+            <option value="cancelled">Скасована</option>
             <option value="deletion_requested">Запит на видалення</option>
           </select>
         </label>

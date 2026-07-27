@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Not, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserRole } from '../../platform/identity/user.enums';
 import { AuditService } from '../../platform/audit/audit.service';
@@ -19,6 +19,9 @@ import { AbsenceRequestHistory } from './absence-request-history.entity';
 import { AbsenceAttachment } from './absence-attachment.entity';
 import { AbsenceRequestStatus, AbsenceType } from './absence.enums';
 import { pwPermissions, statusGroupOf } from './pw-permissions';
+import type { Employee } from '../../organization/employees/employee.entity';
+import { normalizeUploadedFileName } from '../../platform/http/normalize-uploaded-file-name';
+import { absenceHistoryActionLabel } from './absence-history-labels';
 
 export type ListQuery = {
   page?: number;
@@ -63,10 +66,10 @@ export class AbsenceRequestsService {
         { value: AbsenceType.PartTime, label: 'Неповний день' },
       ],
       statuses: [
-        { value: AbsenceRequestStatus.Pending, label: 'Очікує' },
-        { value: AbsenceRequestStatus.Approved, label: 'Схвалено' },
-        { value: AbsenceRequestStatus.Rejected, label: 'Відхилено' },
-        { value: AbsenceRequestStatus.Cancelled, label: 'Скасовано' },
+        { value: AbsenceRequestStatus.Pending, label: 'Подана' },
+        { value: AbsenceRequestStatus.Approved, label: 'Затверджена' },
+        { value: AbsenceRequestStatus.Rejected, label: 'Відхилена' },
+        { value: AbsenceRequestStatus.Cancelled, label: 'Скасована' },
         {
           value: AbsenceRequestStatus.DeletionRequested,
           label: 'Запит на видалення',
@@ -143,11 +146,13 @@ export class AbsenceRequestsService {
 
     const total = rows.length;
     const slice = rows.slice((page - 1) * pageSize, page * pageSize);
-    const items = slice.map((r) => {
-      const emp = empById.get(r.employeeId)!;
-      const perms = pwPermissions(actor, r, emp, this.permissions);
-      return this.toListItem(r, emp, deptName, posName, perms);
-    });
+    const items = await Promise.all(
+      slice.map(async (r) => {
+        const emp = empById.get(r.employeeId)!;
+        const perms = await this.permissionsFor(actor, r, emp);
+        return this.toListItem(r, emp, deptName, posName, perms);
+      }),
+    );
     return { items, page, pageSize, total };
   }
 
@@ -168,7 +173,10 @@ export class AbsenceRequestsService {
     await this.access.requireCanView(actor, employee);
 
     const requests = await this.requests.find({
-      where: { employeeId },
+      where: {
+        employeeId,
+        status: Not(In([AbsenceRequestStatus.Cancelled])),
+      },
       order: { createdAt: 'DESC' },
     });
     if (!requests.length) {
@@ -194,7 +202,7 @@ export class AbsenceRequestsService {
       .map((r) => {
         const files = (byRequest.get(r.id) ?? []).map((a) => ({
           id: a.id,
-          fileName: a.fileName,
+          fileName: normalizeUploadedFileName(a.fileName),
           mimeType: a.mimeType,
           sizeBytes: a.sizeBytes,
           createdAt:
@@ -234,7 +242,7 @@ export class AbsenceRequestsService {
     const deptName = new Map(depts.map((d) => [d.id, d.name]));
     const positions = await this.positions.findAll();
     const posName = new Map(positions.map((p) => [p.id, p.name]));
-    const perms = pwPermissions(actor, row, emp, this.permissions);
+    const perms = await this.permissionsFor(actor, row, emp);
     const history = await this.history.find({
       where: { requestId: id },
       order: { createdAt: 'ASC' },
@@ -260,13 +268,13 @@ export class AbsenceRequestsService {
         id: h.id,
         fromStatus: null,
         toStatus: null,
-        changeDescription: h.action,
+        changeDescription: absenceHistoryActionLabel(h.action),
         changedByUserId: h.actorUserId ?? '',
         createdAt: h.createdAt.toISOString(),
       })),
       attachments: attachments.map((a) => ({
         id: a.id,
-        originalFileName: a.fileName,
+        originalFileName: normalizeUploadedFileName(a.fileName),
         mimeType: a.mimeType ?? 'application/octet-stream',
         sizeBytes: a.sizeBytes,
         createdAt: a.createdAt.toISOString(),
@@ -401,25 +409,30 @@ export class AbsenceRequestsService {
     return this.decide(actor, id, AbsenceRequestStatus.Rejected, body);
   }
 
-  async cancel(actor: User, id: string, version?: number) {
+  /**
+   * Pending-only hard delete (PW `deletePending`).
+   * Approved/rejected absences must go through request-deletion → admin approve.
+   * Status `cancelled` is legacy only; new withdrawals from pending do not create it.
+   */
+  async deletePending(actor: User, id: string, version?: number) {
     const detail = await this.findOne(actor, id);
     if (!detail.permissions.canDelete) {
-      throw new ForbiddenException('Cannot cancel this request');
+      throw new ForbiddenException('Cannot delete this request');
     }
     const row = await this.getOrFail(id);
     this.assertVersion(row, version);
-    row.status = AbsenceRequestStatus.Cancelled;
-    row.version += 1;
-    await this.requests.save(row);
-    await this.history.save(
-      this.history.create({
-        requestId: id,
-        action: 'cancelled',
-        actorUserId: actor.id,
-        comment: null,
-      }),
-    );
+    if (row.status !== AbsenceRequestStatus.Pending) {
+      throw new BadRequestException(
+        'Видалити можна лише заявку в статусі «подана». Інакше подайте запит на видалення.',
+      );
+    }
+    await this.physicalDelete(actor, id, 'delete_pending');
     return { ok: true };
+  }
+
+  /** @deprecated Prefer deletePending — kept for POST /cancel alias. */
+  async cancel(actor: User, id: string, version?: number) {
+    return this.deletePending(actor, id, version);
   }
 
   async adjust(
@@ -507,15 +520,7 @@ export class AbsenceRequestsService {
     if (row.status !== AbsenceRequestStatus.DeletionRequested) {
       throw new BadRequestException('Deletion not requested');
     }
-    await this.attachments.delete({ requestId: id });
-    await this.history.delete({ requestId: id });
-    await this.requests.delete({ id });
-    await this.audit.record({
-      action: 'absence.request.deleted',
-      actorId: actor.id,
-      entityType: 'absence_request',
-      entityId: id,
-    });
+    await this.physicalDelete(actor, id, 'admin_approve_deletion');
     return { ok: true };
   }
 
@@ -564,7 +569,7 @@ export class AbsenceRequestsService {
     const saved = await this.attachments.save(
       this.attachments.create({
         requestId: id,
-        fileName: file.originalname,
+        fileName: normalizeUploadedFileName(file.originalname),
         storageKey: `db:${id}:${Date.now()}`,
         mimeType: file.mimetype,
         sizeBytes: file.size,
@@ -600,7 +605,7 @@ export class AbsenceRequestsService {
     return {
       buffer: Buffer.from(row.contentBase64, 'base64'),
       mimeType: row.mimeType ?? 'application/octet-stream',
-      fileName: row.fileName,
+      fileName: normalizeUploadedFileName(row.fileName),
     };
   }
 
@@ -673,10 +678,61 @@ export class AbsenceRequestsService {
     return this.findOne(actor, id);
   }
 
+  /** Single physical removal path for pending delete and admin-approved deletion. */
+  private async physicalDelete(
+    actor: User,
+    id: string,
+    reason: 'delete_pending' | 'admin_approve_deletion',
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      await manager.getRepository(AbsenceAttachment).delete({ requestId: id });
+      await manager.getRepository(AbsenceRequestHistory).delete({ requestId: id });
+      await manager.getRepository(AbsenceRequest).delete({ id });
+      await this.audit.record(
+        {
+          action: 'absence.request.deleted',
+          actorId: actor.id,
+          entityType: 'absence_request',
+          entityId: id,
+          metadata: { reason },
+        },
+        manager,
+      );
+    });
+  }
+
   private assertVersion(row: AbsenceRequest, version?: number) {
     if (version != null && version !== row.version) {
       throw new BadRequestException('Version conflict');
     }
+  }
+
+  private async permissionsFor(
+    actor: User,
+    request: AbsenceRequest,
+    employee: Employee,
+  ) {
+    return pwPermissions(actor, request, employee, this.permissions, {
+      canManageSubmissionDepartment: await this.canManageSubmissionDepartment(
+        actor,
+        request,
+        employee,
+      ),
+    });
+  }
+
+  /** PW `canModerateRequest` department leg (admin always true). */
+  private async canManageSubmissionDepartment(
+    actor: User,
+    request: AbsenceRequest,
+    employee: Employee,
+  ): Promise<boolean> {
+    if (this.access.isAdmin(actor)) return true;
+    const deptId =
+      request.departmentIdAtSubmission ?? employee.departmentId ?? null;
+    if (!deptId) return false;
+    const managed = await this.access.managedDepartmentIds(actor);
+    return managed.includes(deptId);
   }
 
   private async selfEmployeeId(actor: User): Promise<string | null> {

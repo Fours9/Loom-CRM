@@ -244,7 +244,7 @@ import { requestFrameTone } from '../shared/request-status-presentation';
                   }
                 } @else {
                   <div class="card-head req-actions">
-                    <a routerLink="/absences/requests/new">Нова заявка</a>
+                    <a class="btn" routerLink="/absences/requests/new">Нова заявка</a>
                   </div>
                   @if (requests.length === 0) {
                     <p class="muted">Заявок ще немає</p>
@@ -472,6 +472,17 @@ import { requestFrameTone } from '../shared/request-status-presentation';
         color: var(--pw-accent);
         text-decoration: none;
         font-size: 0.9rem;
+      }
+      .card-head a.btn {
+        background: var(--pw-accent);
+        color: var(--pw-on-accent);
+        padding: 0.65rem 1rem;
+        border-radius: 8px;
+        min-height: 2.75rem;
+        display: inline-flex;
+        align-items: center;
+        font-weight: 600;
+        font-size: inherit;
       }
       .req-actions {
         justify-content: flex-end;

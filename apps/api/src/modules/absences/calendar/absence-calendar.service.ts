@@ -75,7 +75,17 @@ export class AbsenceCalendarService {
       ],
       order: { startDate: 'ASC' },
     });
-    return rows.filter((r) => ids.has(r.employeeId));
+    return rows.filter((r) => {
+      if (!ids.has(r.employeeId)) return false;
+      // DeletionRequested after cancel must not reappear on the calendar.
+      if (
+        r.status === AbsenceRequestStatus.DeletionRequested &&
+        r.statusBeforeDeletionRequest === AbsenceRequestStatus.Cancelled
+      ) {
+        return false;
+      }
+      return true;
+    });
   }
 
   private covers(r: AbsenceRequest, date: string): boolean {

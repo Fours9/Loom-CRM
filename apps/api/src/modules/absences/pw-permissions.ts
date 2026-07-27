@@ -18,6 +18,11 @@ export type PwPermissions = {
   canManageAttachments: boolean;
 };
 
+export type PwPermissionContext = {
+  /** Viewer manages the request's submission department (or is admin). */
+  canManageSubmissionDepartment: boolean;
+};
+
 function todayKyiv(): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Kyiv',
@@ -35,36 +40,51 @@ export function statusGroupOf(row: AbsenceRequest): string {
   return row.status;
 }
 
+/**
+ * PW-parity capabilities for a request detail/list row.
+ *
+ * Moderation (approve/reject/adjust):
+ * - Admin may moderate own requests (solo-admin).
+ * - Managers may not moderate own requests.
+ * - Non-owners: admin or manager of submission department.
+ */
 export function pwPermissions(
   actor: User,
   request: AbsenceRequest,
   employee: Employee,
   permissions: PermissionService,
+  ctx: PwPermissionContext,
 ): PwPermissions {
   const isOwner = employee.userId === actor.id;
   const isCreator = request.createdByUserId === actor.id;
   const isAdmin = actor.role === UserRole.Admin;
   const pending = request.status === AbsenceRequestStatus.Pending;
   const approved = request.status === AbsenceRequestStatus.Approved;
+  const cancelled = request.status === AbsenceRequestStatus.Cancelled;
   const deletionRequested =
     request.status === AbsenceRequestStatus.DeletionRequested;
-  const canModerate =
-    permissions.has(actor.role, Permission.AbsencesApprove) && !isOwner;
+  const hasApprove = permissions.has(actor.role, Permission.AbsencesApprove);
+
+  const canModerateRequest =
+    hasApprove &&
+    (isOwner
+      ? isAdmin
+      : isAdmin || ctx.canManageSubmissionDepartment);
 
   return {
-    canApprove: pending && canModerate,
-    canReject: pending && canModerate,
-    canAdjust: approved && canModerate,
+    canApprove: pending && canModerateRequest,
+    canReject: pending && canModerateRequest,
+    canAdjust: approved && canModerateRequest,
     canEdit: pending && (isOwner || isAdmin || isCreator),
     canDelete:
       pending &&
       (isOwner || isAdmin || isCreator) &&
       permissions.has(actor.role, Permission.AbsencesCancel),
-    canRequestDeletion: approved && (isOwner || isAdmin),
+    canRequestDeletion: (approved || cancelled) && (isOwner || isAdmin),
     canApproveDeletion: deletionRequested && isAdmin,
     canRejectDeletion: deletionRequested && isAdmin,
     canManageAttachments:
       (pending && (isOwner || isAdmin || isCreator)) ||
-      (approved && canModerate),
+      (approved && canModerateRequest),
   };
 }

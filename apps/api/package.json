@@ -3,10 +3,11 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "tsc -p tsconfig.build.json && nest start --watch",
+    "dev": "node ./scripts/dev.mjs",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
+    "start:nest": "tsc -p tsconfig.build.json && nest start --watch",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "test": "jest --passWithNoTests",

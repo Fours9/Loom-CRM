@@ -49,8 +49,13 @@ export function detailCapabilities(
   const isAdmin = actor.role === UserRole.Admin;
   const pending = request.status === AbsenceRequestStatus.Pending;
   const approved = request.status === AbsenceRequestStatus.Approved;
+  const cancelled = request.status === AbsenceRequestStatus.Cancelled;
   const canModerate =
-    permissions.has(actor.role, Permission.AbsencesApprove) && !isOwner;
+    permissions.has(actor.role, Permission.AbsencesApprove) &&
+    (employee.userId === actor.id
+      ? actor.role === UserRole.Admin
+      : actor.role === UserRole.Admin ||
+        actor.role === UserRole.DepartmentManager);
 
   return {
     canEdit: pending && (isOwner || isAdmin),
@@ -61,7 +66,7 @@ export function detailCapabilities(
       (isOwner || isAdmin) &&
       permissions.has(actor.role, Permission.AbsencesCancel),
     canAdjust: approved && canModerate,
-    canRequestDeletion: approved && (isOwner || isAdmin),
+    canRequestDeletion: (approved || cancelled) && (isOwner || isAdmin),
     canManageAttachments:
       (pending && (isOwner || isAdmin)) ||
       (approved && canModerate),

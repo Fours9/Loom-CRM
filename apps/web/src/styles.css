@@ -41,6 +41,7 @@ button {
   border-radius: 12px;
   background: var(--pw-surface-2, var(--pw-surface));
 }
+
 .loom-absence-module .pw-request-frame[data-frame='pending'],
 .app-shell .pw-request-frame[data-frame='pending'] {
   border-color: #d97706;
@@ -48,6 +49,7 @@ button {
   border-width: 2px;
   background: color-mix(in srgb, #f59e0b 10%, var(--pw-surface));
 }
+
 .loom-absence-module .pw-request-frame[data-frame='approved'],
 .app-shell .pw-request-frame[data-frame='approved'] {
   border-color: #16a34a;
@@ -55,6 +57,7 @@ button {
   border-width: 2px;
   background: color-mix(in srgb, #22c55e 12%, var(--pw-surface));
 }
+
 .loom-absence-module .pw-request-frame[data-frame='completed'],
 .app-shell .pw-request-frame[data-frame='completed'] {
   border-color: #64748b;
@@ -62,6 +65,7 @@ button {
   border-width: 2px;
   background: color-mix(in srgb, #94a3b8 16%, var(--pw-surface));
 }
+
 .loom-absence-module .pw-request-frame[data-frame='rejected'],
 .app-shell .pw-request-frame[data-frame='rejected'] {
   border-color: #dc2626;
@@ -69,6 +73,8 @@ button {
   border-width: 2px;
   background: color-mix(in srgb, #ef4444 10%, var(--pw-surface));
 }
+
+/* Shared absence-request status badges (PW parity). Features only set data-status. */
 .loom-absence-module .pw-request-badge,
 .app-shell .pw-request-badge {
   display: inline-block;
@@ -81,24 +87,32 @@ button {
   white-space: nowrap;
   border: 1px solid color-mix(in srgb, var(--pw-accent) 28%, transparent);
 }
+
 .loom-absence-module .pw-request-badge[data-status='approved'],
 .app-shell .pw-request-badge[data-status='approved'] {
   background: var(--pw-success-soft);
   color: var(--pw-success);
   border-color: color-mix(in srgb, var(--pw-success) 35%, transparent);
 }
+
 .loom-absence-module .pw-request-badge[data-status='completed'],
-.app-shell .pw-request-badge[data-status='completed'] {
+.loom-absence-module .pw-request-badge[data-status='cancelled'],
+.app-shell .pw-request-badge[data-status='completed'],
+.app-shell .pw-request-badge[data-status='cancelled'] {
   background: color-mix(in srgb, #94a3b8 22%, var(--pw-surface));
   color: #475569;
   border-color: color-mix(in srgb, #64748b 45%, transparent);
 }
+
 html[data-theme='dark'] .loom-absence-module .pw-request-badge[data-status='completed'],
-html[data-theme='dark'] .app-shell .pw-request-badge[data-status='completed'] {
+html[data-theme='dark'] .loom-absence-module .pw-request-badge[data-status='cancelled'],
+html[data-theme='dark'] .app-shell .pw-request-badge[data-status='completed'],
+html[data-theme='dark'] .app-shell .pw-request-badge[data-status='cancelled'] {
   color: #cbd5e1;
   background: color-mix(in srgb, #64748b 28%, var(--pw-surface));
   border-color: color-mix(in srgb, #94a3b8 40%, transparent);
 }
+
 .loom-absence-module .pw-request-badge[data-status='rejected'],
 .loom-absence-module .pw-request-badge[data-status='deletion_requested'],
 .app-shell .pw-request-badge[data-status='rejected'],
@@ -106,6 +120,12 @@ html[data-theme='dark'] .app-shell .pw-request-badge[data-status='completed'] {
   background: var(--pw-danger-soft);
   color: var(--pw-danger);
   border-color: color-mix(in srgb, var(--pw-danger) 35%, transparent);
+}
+
+/* Detail header uses slightly larger badge padding (PW request-detail). */
+.loom-absence-module .pw-request-badge.pw-request-badge--lg,
+.app-shell .pw-request-badge.pw-request-badge--lg {
+  padding: 0.35rem 0.7rem;
 }
 .loom-absence-module .pw-visually-hidden {
   position: absolute;

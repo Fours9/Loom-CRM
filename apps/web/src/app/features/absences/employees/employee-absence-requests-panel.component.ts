@@ -17,7 +17,7 @@ import { requestFrameTone } from '../shared/request-status-presentation';
   template: `
     <div class="panel">
       <div class="card-head req-actions">
-        <a class="new-link" routerLink="/absences/requests/new">Нова</a>
+        <a class="btn" routerLink="/absences/requests/new">Нова заявка</a>
       </div>
 
       @if (loading) {
@@ -62,11 +62,16 @@ import { requestFrameTone } from '../shared/request-status-presentation';
         gap: 0.75rem;
         align-items: center;
       }
-      .new-link {
-        color: var(--pw-accent);
+      .btn {
+        background: var(--pw-accent);
+        color: var(--pw-on-accent);
         text-decoration: none;
+        padding: 0.65rem 1rem;
+        border-radius: 8px;
+        min-height: 2.75rem;
+        display: inline-flex;
+        align-items: center;
         font-weight: 600;
-        font-size: 0.9rem;
       }
       .req-scroll {
         min-height: 0;

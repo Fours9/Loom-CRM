@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import {
@@ -64,7 +65,7 @@ const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
 @Component({
   selector: 'app-employee-documents-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   template: `
     <div class="panel">
       @if (canUpload()) {
@@ -167,32 +168,84 @@ const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
             @for (row of visibleRows(); track row.source + ':' + row.id) {
               <li class="doc-row">
                 <div class="doc-head">
-                  <div>
+                  <div class="doc-title">
                     <strong>{{ row.title }}</strong>
                     <span class="badge">{{ typeLabel(row.documentType) }}</span>
+                    @if (row.source === 'absence') {
+                      <a
+                        class="icon-btn"
+                        [routerLink]="['/absences/requests', row.id]"
+                        title="Відкрити заявку на відсутність"
+                        aria-label="Відкрити заявку на відсутність"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3zM5 5h6v2H7v10h10v-4h2v6H5V5z"
+                          />
+                        </svg>
+                      </a>
+                    }
                   </div>
                   <span class="muted">{{ formatDate(row.createdAt) }}</span>
                 </div>
                 <ul class="files">
                   @for (file of row.files; track file.id) {
                     <li>
-                      <button type="button" class="link" (click)="download(row, file)">
-                        {{ file.fileName }}
-                      </button>
-                      <span class="muted">{{ formatSize(file.sizeBytes) }}</span>
+                      <div class="file-main">
+                        <span class="file-name" [title]="file.fileName">{{ file.fileName }}</span>
+                        <span class="muted">{{ formatSize(file.sizeBytes) }}</span>
+                      </div>
+                      <div class="file-actions">
+                        <button
+                          type="button"
+                          class="icon-btn"
+                          title="Переглянути"
+                          [attr.aria-label]="'Переглянути ' + file.fileName"
+                          (click)="preview(row, file)"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          class="icon-btn"
+                          title="Завантажити"
+                          [attr.aria-label]="'Завантажити ' + file.fileName"
+                          (click)="download(row, file)"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M12 3v10.17l3.59-3.58L17 11l-5 5-5-5 1.41-1.41L11 13.17V3h2zm-7 14h14v2H5v-2z"
+                            />
+                          </svg>
+                        </button>
+                        @if (row.canDelete) {
+                          <button
+                            type="button"
+                            class="icon-btn danger"
+                            title="Видалити"
+                            aria-label="Видалити документ"
+                            [disabled]="deleteBusyId() === row.id"
+                            (click)="deleteRow(row)"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M9 3h6l1 2h5v2H3V5h5l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9zm-1 12h12a1 1 0 0 0 1-1V8H5v12a1 1 0 0 0 1 1z"
+                              />
+                            </svg>
+                          </button>
+                        }
+                      </div>
                     </li>
                   }
                 </ul>
-                @if (row.canDelete) {
-                  <button
-                    type="button"
-                    class="btn danger"
-                    [disabled]="deleteBusyId() === row.id"
-                    (click)="deleteRow(row)"
-                  >
-                    Видалити
-                  </button>
-                }
               </li>
             }
           </ul>
@@ -219,24 +272,37 @@ const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
       }
       .upload-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
       .doc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
-      .doc-head { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+      .doc-head { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+      .doc-title { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; min-width: 0; }
       .badge {
-        display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem;
+        display: inline-block; padding: 0.1rem 0.45rem;
         border-radius: 999px; font-size: 0.75rem;
         background: color-mix(in srgb, var(--pw-accent) 15%, transparent);
       }
-      .files { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; }
-      .files li { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
-      .link {
-        border: 0; background: none; color: var(--pw-accent); cursor: pointer;
-        padding: 0; text-decoration: underline; font: inherit;
+      .files { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+      .files li {
+        display: flex; gap: 0.75rem; align-items: center; justify-content: space-between;
+        flex-wrap: wrap;
       }
+      .file-main { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; min-width: 0; }
+      .file-name { overflow-wrap: anywhere; }
+      .file-actions { display: flex; gap: 0.25rem; align-items: center; flex-shrink: 0; }
+      .icon-btn {
+        display: inline-grid; place-items: center;
+        width: 2rem; height: 2rem; padding: 0;
+        border: 1px solid var(--pw-border); border-radius: 8px;
+        background: var(--pw-bg); color: var(--pw-accent);
+        cursor: pointer; text-decoration: none;
+      }
+      .icon-btn:hover { background: color-mix(in srgb, var(--pw-accent) 12%, var(--pw-bg)); }
+      .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .icon-btn.danger { color: #b42318; }
+      .icon-btn svg { width: 1.05rem; height: 1.05rem; }
       .btn {
         border: 1px solid var(--pw-border); border-radius: 8px; padding: 0.4rem 0.75rem;
         background: var(--pw-bg); cursor: pointer; width: fit-content;
       }
       .btn.primary { background: var(--pw-accent); color: #fff; border-color: transparent; }
-      .btn.danger { color: #b42318; }
       .muted { color: var(--pw-muted); margin: 0; }
       .error { color: #b42318; margin: 0; }
       .warn { color: #b54708; margin: 0; }
@@ -444,14 +510,56 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
       });
   }
 
-  download(row: DocumentListRow, file: DocumentFileRow): void {
-    const req$ =
-      row.source === 'employee_document'
-        ? this.documentsApi.downloadDocument(row.id)
-        : this.absenceDocsApi.downloadAttachment(row.id, file.id);
+  preview(row: DocumentListRow, file: DocumentFileRow): void {
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      this.uploadError.set('Дозвольте спливаючі вікна, щоб переглянути файл');
+      return;
+    }
+    try {
+      previewWindow.document.write(
+        '<!doctype html><title>Завантаження…</title><p style="font-family:sans-serif;padding:1rem">Завантаження файлу…</p>',
+      );
+      previewWindow.document.close();
+    } catch {
+      /* ignore */
+    }
 
-    req$.subscribe({
-      next: (blob) => triggerBlobDownload(blob, file.fileName),
+    this.fetchBlob(row, file).subscribe({
+      next: (blob) => {
+        if (isErrorBlob(blob)) {
+          try {
+            previewWindow.close();
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+        const typed = typedBlob(blob, file.mimeType);
+        const url = URL.createObjectURL(typed);
+        try {
+          previewWindow.location.replace(url);
+        } catch {
+          previewWindow.location.href = url;
+        }
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: () => {
+        try {
+          previewWindow.close();
+        } catch {
+          /* ignore */
+        }
+      },
+    });
+  }
+
+  download(row: DocumentListRow, file: DocumentFileRow): void {
+    this.fetchBlob(row, file).subscribe({
+      next: (blob) => {
+        if (isErrorBlob(blob)) return;
+        triggerBlobDownload(typedBlob(blob, file.mimeType), file.fileName);
+      },
     });
   }
 
@@ -480,6 +588,12 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
+
+  private fetchBlob(row: DocumentListRow, file: DocumentFileRow) {
+    return row.source === 'employee_document'
+      ? this.documentsApi.downloadDocument(row.id)
+      : this.absenceDocsApi.downloadAttachment(row.id, file.id);
+  }
 }
 
 function formatAbsenceTitle(
@@ -500,6 +614,16 @@ function formatUaDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-');
   if (!y || !m || !d) return isoDate;
   return `${d}.${m}.${y}`;
+}
+
+function typedBlob(blob: Blob, mimeType: string | null): Blob {
+  return blob.type
+    ? blob
+    : new Blob([blob], { type: mimeType || 'application/octet-stream' });
+}
+
+function isErrorBlob(blob: Blob): boolean {
+  return blob.type.includes('application/json') || blob.type.includes('text/plain');
 }
 
 function triggerBlobDownload(blob: Blob, fileName: string): void {

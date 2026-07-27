@@ -118,6 +118,9 @@ function toneFromStatus(status: AbsenceRequestStatus | null | undefined): Histor
       return 'success';
     case 'rejected':
       return 'danger';
+    case 'cancelled':
+      // Soft-withdrawn — muted/neutral (same family as completed badge), not danger.
+      return 'neutral';
     case 'deletion_requested':
       return 'warning';
     case 'pending':
