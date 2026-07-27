@@ -1,4 +1,13 @@
-﻿import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+﻿import {
+  Component,
+  ElementRef,
+  HostListener,
+  Input,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  inject,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subject, Subscription, debounceTime, switchMap, of, catchError } from 'rxjs';
 import { ApiService } from '../core/api/api.service';
@@ -43,9 +52,11 @@ import {
     CalendarSegmentComponent,
   ],
   template: `
-    <section class="page">
-      <header class="top">
-        <h1>Календар відсутностей</h1>
+    <section class="page" [class.embedded]="embedded">
+      <header class="top" [class.embedded]="embedded">
+        @if (!embedded) {
+          <h1>Календар відсутностей</h1>
+        }
         <div class="nav-row">
           <button
             type="button"
@@ -77,24 +88,26 @@ import {
           }
         </div>
         <div class="filters">
-          <label>
-            {{ 'calendar.filters.department' | t }}
-            <select [(ngModel)]="filterDepartmentId" (ngModelChange)="onDepartmentFilterChanged()">
-              <option value="">{{ 'calendar.filters.all' | t }}</option>
-              @for (d of departments; track d.id) {
-                <option [value]="d.id">{{ d.name }}</option>
-              }
-            </select>
-          </label>
-          <label>
-            {{ 'calendar.filters.employee' | t }}
-            <select [(ngModel)]="filterEmployeeId" (ngModelChange)="onFiltersChanged()">
-              <option value="">{{ 'calendar.filters.all' | t }}</option>
-              @for (e of employees; track e.id) {
-                <option [value]="e.id">{{ e.lastName }} {{ e.firstName }}</option>
-              }
-            </select>
-          </label>
+          @if (!isEmployeeOnly) {
+            <label>
+              {{ 'calendar.filters.department' | t }}
+              <select [(ngModel)]="filterDepartmentId" (ngModelChange)="onDepartmentFilterChanged()">
+                <option value="">{{ 'calendar.filters.all' | t }}</option>
+                @for (d of departments; track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              {{ 'calendar.filters.employee' | t }}
+              <select [(ngModel)]="filterEmployeeId" (ngModelChange)="onFiltersChanged()">
+                <option value="">{{ 'calendar.filters.all' | t }}</option>
+                @for (e of employees; track e.id) {
+                  <option [value]="e.id">{{ e.lastName }} {{ e.firstName }}</option>
+                }
+              </select>
+            </label>
+          }
           <label>
             {{ 'calendar.filters.type' | t }}
             <select [(ngModel)]="filterType" (ngModelChange)="onFiltersChanged()">
@@ -268,6 +281,9 @@ import {
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
+      }
+      .top.embedded {
+        justify-content: flex-end;
       }
       h1 {
         margin: 0;
@@ -499,6 +515,10 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
   private readonly drawer$ = new Subject<string>();
   private subs = new Subscription();
 
+  @Input() presetEmployeeId: string | null = null;
+  @Input() employeeOnlyMode = false;
+  @Input() embedded = false;
+
   @ViewChild('modesEl') modesEl?: ElementRef<HTMLDivElement>;
 
   readonly modes: CalendarViewMode[] = ['month', 'week', 'day', 'list'];
@@ -523,6 +543,10 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
   drawerError = '';
 
   private drawerTriggerEl: HTMLElement | null = null;
+
+  get isEmployeeOnly(): boolean {
+    return this.employeeOnlyMode && Boolean(this.presetEmployeeId);
+  }
 
   get isTabletUp(): boolean {
     return this.viewport.isTabletUp();
@@ -567,12 +591,12 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.subs.add(
-      this.api.getDepartments().subscribe({
-        next: (d) => (this.departments = d),
-      }),
-    );
-    this.reloadEmployees();
+    if (this.employeeOnlyMode && !this.presetEmployeeId) {
+      this.rangeError = 'Не вказано працівника для персонального календаря';
+      return;
+    }
+
+    this.filterEmployeeId = this.presetEmployeeId ?? '';
 
     this.subs.add(
       this.range$
@@ -618,6 +642,15 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
           this.drawerLoading = false;
         }),
     );
+
+    if (!this.isEmployeeOnly) {
+      this.subs.add(
+        this.api.getDepartments().subscribe({
+          next: (d) => (this.departments = d),
+        }),
+      );
+      this.reloadEmployees();
+    }
 
     this.reloadRange();
   }
@@ -669,14 +702,20 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
       this.api
         .getEmployees({
           status: 'active',
-          departmentId: this.filterDepartmentId || undefined,
+          departmentId: this.isEmployeeOnly
+            ? undefined
+            : this.filterDepartmentId || undefined,
           sortBy: 'fullName',
           sortDir: 'asc',
         })
         .subscribe({
           next: (items) => {
             this.employees = items;
-            if (this.filterEmployeeId && !items.some((e) => e.id === this.filterEmployeeId)) {
+            if (
+              !this.presetEmployeeId &&
+              this.filterEmployeeId &&
+              !items.some((e) => e.id === this.filterEmployeeId)
+            ) {
               this.filterEmployeeId = '';
             }
             after?.();
@@ -764,9 +803,17 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
 
   private filters(): CalendarQueryFilters {
     const f: CalendarQueryFilters = {};
-    if (this.filterDepartmentId) f.departmentIds = [this.filterDepartmentId];
-    if (this.filterEmployeeId) f.employeeIds = [this.filterEmployeeId];
-    if (this.filterType) f.types = [this.filterType as AbsenceType];
+    const employeeId = this.presetEmployeeId || this.filterEmployeeId;
+
+    if (!this.isEmployeeOnly && this.filterDepartmentId) {
+      f.departmentIds = [this.filterDepartmentId];
+    }
+    if (employeeId) {
+      f.employeeIds = [employeeId];
+    }
+    if (this.filterType) {
+      f.types = [this.filterType as AbsenceType];
+    }
     if (this.filterStatus) {
       f.statusGroups = [this.filterStatus as CalendarStatusGroup];
     }
