@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { AuditService } from '../../platform/audit/audit.service';
 import { permissionsForRole } from '../../platform/permissions/role-permissions';
@@ -19,6 +19,11 @@ import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
 import { EmployeeSerializer } from './employee.serializer';
 import { AuditLog } from '../../platform/audit/audit-log.entity';
+import {
+  buildProfileCompletenessFacts,
+  computeProfileCompleteness,
+  projectProfileCompleteness,
+} from './employee-profile-completeness';
 
 type AssignmentWriteDto = {
   companyId?: string | null;
@@ -99,9 +104,13 @@ export class EmployeeProfileService {
       canEditPersonal:
         admin || this.hasPerm(actor, Permission.EmployeesWritePersonal),
       canViewEmergencyContact:
-        admin || this.hasPerm(actor, Permission.EmployeesReadEmergency),
+        admin ||
+        owner ||
+        this.hasPerm(actor, Permission.EmployeesReadEmergency),
       canEditEmergencyContact:
-        admin || this.hasPerm(actor, Permission.EmployeesWriteEmergency),
+        admin ||
+        owner ||
+        this.hasPerm(actor, Permission.EmployeesWriteEmergency),
       canChangeStatus:
         admin || this.hasPerm(actor, Permission.EmployeesChangeStatus),
       canExport: await this.access.canExportProfilePdf(actor, target),
@@ -114,84 +123,9 @@ export class EmployeeProfileService {
     };
   }
 
-  computeCompleteness(input: {
-    employee: Employee;
-    contacts: EmployeeContact[];
-    emergency: EmployeeEmergencyContact[];
-    assignment: EmploymentAssignment | null;
-  }): {
-    percent: number;
-    missingFields: string[];
-    sections: Record<string, { weight: number; complete: boolean }>;
-  } {
-    const { employee: e, contacts, emergency, assignment } = input;
-    const workPhone = contacts.some((c) => c.type === 'work_phone' && c.value);
-    const workEmail =
-      contacts.some((c) => c.type === 'work_email' && c.value) ||
-      Boolean(e.workEmail);
-    const personalPhone = contacts.some(
-      (c) => c.type === 'personal_phone' && c.value,
-    );
-    const sections = {
-      identity: {
-        weight: 15,
-        complete: Boolean(e.firstName && e.lastName && e.employeeNumber),
-      },
-      assignment: {
-        weight: 20,
-        complete: Boolean(
-          assignment && (assignment.departmentId || assignment.positionId),
-        ),
-      },
-      workContacts: {
-        weight: 10,
-        complete: workPhone || workEmail,
-      },
-      personalContacts: {
-        weight: 10,
-        complete: personalPhone || Boolean(e.personalPhoneNumber),
-      },
-      emergency: {
-        weight: 10,
-        complete: emergency.length > 0,
-      },
-      photo: {
-        weight: 5,
-        complete: Boolean(e.photoUrl),
-      },
-      personalCore: {
-        weight: 15,
-        complete: Boolean(e.birthDate && e.city),
-      },
-      employmentDates: {
-        weight: 15,
-        complete: Boolean(assignment?.startDate),
-      },
-    };
-
-    const missingFields: string[] = [];
-    if (!sections.identity.complete) missingFields.push('identity');
-    if (!sections.assignment.complete) missingFields.push('assignment');
-    if (!sections.workContacts.complete) missingFields.push('workContacts');
-    if (!sections.personalContacts.complete) {
-      missingFields.push('personalContacts');
-    }
-    if (!sections.emergency.complete) missingFields.push('emergency');
-    if (!sections.photo.complete) missingFields.push('photo');
-    if (!sections.personalCore.complete) missingFields.push('birthDate|city');
-    if (!sections.employmentDates.complete) missingFields.push('startDate');
-
-    let earned = 0;
-    let total = 0;
-    for (const s of Object.values(sections)) {
-      total += s.weight;
-      if (s.complete) earned += s.weight;
-    }
-    return {
-      percent: total === 0 ? 0 : Math.round((earned / total) * 100),
-      missingFields,
-      sections,
-    };
+  /** Owner + Admin may see extended completeness; managers on others get null. */
+  private canViewExtendedCompleteness(actor: User, target: Employee): boolean {
+    return this.access.isAdmin(actor) || this.access.isOwner(actor, target);
   }
 
   async getProfile(actor: User, id: string) {
@@ -201,38 +135,56 @@ export class EmployeeProfileService {
     }
 
     const caps = await this.capabilities(actor, employee);
-    const contacts = await this.contacts.find({
-      where: { employeeId: id },
-      order: { type: 'ASC' },
-    });
-    const emergency = caps.canViewEmergencyContact
-      ? await this.emergencies.find({
-          where: { employeeId: id, isActive: true },
-          order: { priority: 'ASC' },
-        })
-      : [];
-    const importantDates = caps.canViewPersonal
-      ? await this.importantDates.find({
-          where: { employeeId: id, isActive: true },
-          order: { priority: 'ASC' },
-        })
-      : [];
-    const assignment = employee.currentAssignmentId
-      ? await this.assignments.findOne({
-          where: { id: employee.currentAssignmentId },
-          relations: ['department', 'position', 'company', 'direction'],
-        })
-      : await this.assignments.findOne({
-          where: { employeeId: id, status: 'active' },
-          relations: ['department', 'position', 'company', 'direction'],
-        });
 
-    const completeness = this.computeCompleteness({
+    // Completeness facts: always load full rows (role-independent score).
+    const [contacts, emergencyAll, importantDatesAll, assignment] =
+      await Promise.all([
+        this.contacts.find({
+          where: { employeeId: id },
+          order: { type: 'ASC' },
+        }),
+        this.emergencies.find({
+          where: { employeeId: id, isActive: true },
+          order: { priority: 'ASC' },
+        }),
+        this.importantDates.find({
+          where: { employeeId: id, isActive: true },
+          order: { priority: 'ASC' },
+        }),
+        employee.currentAssignmentId
+          ? this.assignments.findOne({
+              where: { id: employee.currentAssignmentId },
+              relations: ['department', 'position', 'company', 'direction'],
+            })
+          : this.assignments.findOne({
+              where: { employeeId: id, status: 'active' },
+              relations: ['department', 'position', 'company', 'direction'],
+            }),
+      ]);
+
+    const facts = buildProfileCompletenessFacts({
       employee,
       contacts,
-      emergency,
-      assignment,
+      emergencyCount: emergencyAll.length,
+      importantDatesCount: importantDatesAll.length,
+      assignment: assignment
+        ? {
+            status: assignment.status,
+            departmentId: assignment.departmentId,
+            positionId: assignment.positionId,
+            startDate: assignment.startDate,
+          }
+        : null,
     });
+    const scored = computeProfileCompleteness(facts);
+    const completeness = projectProfileCompleteness(
+      scored,
+      this.canViewExtendedCompleteness(actor, employee),
+    );
+
+    // Permission-aware projection for response sections only.
+    const emergency = caps.canViewEmergencyContact ? emergencyAll : [];
+    const importantDates = caps.canViewPersonal ? importantDatesAll : [];
 
     const visibleContacts = contacts.filter((c) => {
       if (c.visibility === 'personal' || c.type.startsWith('personal_')) {
@@ -287,7 +239,7 @@ export class EmployeeProfileService {
         workEmail: employee.workEmail,
         workPhone: employee.phoneNumber,
         workTelegram: employee.telegram,
-        completenessPercent: completeness.percent,
+        completenessPercent: completeness.core.percent,
       },
       sections: {
         overview: {
@@ -399,26 +351,34 @@ export class EmployeeProfileService {
   ) {
     const employee = await this.access.getEmployeeOrFail(id);
     await this.access.requireCanEdit(actor, employee);
-    const before = { ...employee };
-    if (dto.firstName !== undefined) employee.firstName = dto.firstName.trim();
-    if (dto.lastName !== undefined) employee.lastName = dto.lastName.trim();
-    if (dto.middleName !== undefined) {
-      employee.middleName = dto.middleName?.trim() || null;
-    }
-    if (dto.preferredName !== undefined) {
-      employee.preferredName = dto.preferredName?.trim() || null;
-    }
-    if (dto.photoUrl !== undefined) employee.photoUrl = dto.photoUrl || null;
-    if (dto.employeeNumber !== undefined && this.access.isAdmin(actor)) {
-      employee.employeeNumber = dto.employeeNumber.trim();
-    }
-    await this.employees.save(employee);
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.basic_updated',
-      entityType: 'Employee',
-      entityId: employee.id,
-      metadata: { before: this.pickBasic(before), after: this.pickBasic(employee) },
+    const before = this.pickBasic(employee);
+
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Employee);
+      const row = await repo.findOneByOrFail({ id });
+      if (dto.firstName !== undefined) row.firstName = dto.firstName.trim();
+      if (dto.lastName !== undefined) row.lastName = dto.lastName.trim();
+      if (dto.middleName !== undefined) {
+        row.middleName = dto.middleName?.trim() || null;
+      }
+      if (dto.preferredName !== undefined) {
+        row.preferredName = dto.preferredName?.trim() || null;
+      }
+      if (dto.photoUrl !== undefined) row.photoUrl = dto.photoUrl || null;
+      if (dto.employeeNumber !== undefined && this.access.isAdmin(actor)) {
+        row.employeeNumber = dto.employeeNumber.trim();
+      }
+      await repo.save(row);
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.basic_updated',
+          entityType: 'Employee',
+          entityId: row.id,
+          metadata: { before, after: this.pickBasic(row) },
+        },
+        manager,
+      );
     });
     return this.getProfile(actor, id);
   }
@@ -441,38 +401,59 @@ export class EmployeeProfileService {
     if (!caps.canEditPersonal) {
       throw new BadRequestException('Cannot edit personal data');
     }
-    if (dto.birthDate !== undefined) employee.birthDate = dto.birthDate;
-    if (dto.city !== undefined) employee.city = dto.city?.trim() || null;
-    if (dto.preferredLanguage !== undefined) {
-      employee.preferredLanguage = dto.preferredLanguage?.trim() || null;
-    }
-    if (dto.preferredName !== undefined) {
-      employee.preferredName = dto.preferredName?.trim() || null;
-    }
-    if (dto.personalPhone !== undefined) {
-      employee.personalPhoneNumber = dto.personalPhone?.trim() || null;
-      await this.upsertContact(id, 'personal_phone', employee.personalPhoneNumber, 'personal');
-    }
-    if (dto.personalEmail !== undefined) {
-      employee.personalEmail = dto.personalEmail?.trim() || null;
-      await this.upsertContact(id, 'personal_email', employee.personalEmail, 'personal');
-    }
-    if (dto.personalTelegram !== undefined) {
-      employee.personalTelegram = dto.personalTelegram?.trim() || null;
-      await this.upsertContact(
-        id,
-        'personal_telegram',
-        employee.personalTelegram,
-        'personal',
+
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Employee);
+      const row = await repo.findOneByOrFail({ id });
+      if (dto.birthDate !== undefined) row.birthDate = dto.birthDate;
+      if (dto.city !== undefined) row.city = dto.city?.trim() || null;
+      if (dto.preferredLanguage !== undefined) {
+        row.preferredLanguage = dto.preferredLanguage?.trim() || null;
+      }
+      if (dto.preferredName !== undefined) {
+        row.preferredName = dto.preferredName?.trim() || null;
+      }
+      if (dto.personalPhone !== undefined) {
+        row.personalPhoneNumber = dto.personalPhone?.trim() || null;
+        await this.upsertContact(
+          id,
+          'personal_phone',
+          row.personalPhoneNumber,
+          'personal',
+          manager,
+        );
+      }
+      if (dto.personalEmail !== undefined) {
+        row.personalEmail = dto.personalEmail?.trim() || null;
+        await this.upsertContact(
+          id,
+          'personal_email',
+          row.personalEmail,
+          'personal',
+          manager,
+        );
+      }
+      if (dto.personalTelegram !== undefined) {
+        row.personalTelegram = dto.personalTelegram?.trim() || null;
+        await this.upsertContact(
+          id,
+          'personal_telegram',
+          row.personalTelegram,
+          'personal',
+          manager,
+        );
+      }
+      await repo.save(row);
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.personal_updated',
+          entityType: 'Employee',
+          entityId: row.id,
+          metadata: { fields: Object.keys(dto) },
+        },
+        manager,
       );
-    }
-    await this.employees.save(employee);
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.personal_updated',
-      entityType: 'Employee',
-      entityId: employee.id,
-      metadata: { fields: Object.keys(dto) },
     });
     return this.getProfile(actor, id);
   }
@@ -488,25 +469,33 @@ export class EmployeeProfileService {
   ) {
     const employee = await this.access.getEmployeeOrFail(id);
     await this.access.requireCanEdit(actor, employee);
-    if (dto.workPhone !== undefined) {
-      employee.phoneNumber = dto.workPhone?.trim() || null;
-      await this.upsertContact(id, 'work_phone', employee.phoneNumber, 'work');
-    }
-    if (dto.workEmail !== undefined) {
-      employee.workEmail = dto.workEmail?.trim() || null;
-      await this.upsertContact(id, 'work_email', employee.workEmail, 'work');
-    }
-    if (dto.workTelegram !== undefined) {
-      employee.telegram = dto.workTelegram?.trim() || null;
-      await this.upsertContact(id, 'work_telegram', employee.telegram, 'work');
-    }
-    await this.employees.save(employee);
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.contacts_updated',
-      entityType: 'Employee',
-      entityId: id,
-      metadata: { fields: Object.keys(dto) },
+
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Employee);
+      const row = await repo.findOneByOrFail({ id });
+      if (dto.workPhone !== undefined) {
+        row.phoneNumber = dto.workPhone?.trim() || null;
+        await this.upsertContact(id, 'work_phone', row.phoneNumber, 'work', manager);
+      }
+      if (dto.workEmail !== undefined) {
+        row.workEmail = dto.workEmail?.trim() || null;
+        await this.upsertContact(id, 'work_email', row.workEmail, 'work', manager);
+      }
+      if (dto.workTelegram !== undefined) {
+        row.telegram = dto.workTelegram?.trim() || null;
+        await this.upsertContact(id, 'work_telegram', row.telegram, 'work', manager);
+      }
+      await repo.save(row);
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.contacts_updated',
+          entityType: 'Employee',
+          entityId: id,
+          metadata: { fields: Object.keys(dto) },
+        },
+        manager,
+      );
     });
     return this.getProfile(actor, id);
   }
@@ -666,7 +655,7 @@ export class EmployeeProfileService {
       throw new BadRequestException('Manager cannot be the same employee');
     }
 
-    const assignmentId = await this.dataSource.transaction(async (manager) => {
+    await this.dataSource.transaction(async (manager) => {
       const employeeRepo = manager.getRepository(Employee);
       const assignmentRepo = manager.getRepository(EmploymentAssignment);
       const emp = await employeeRepo.findOneByOrFail({ id });
@@ -703,16 +692,19 @@ export class EmployeeProfileService {
       emp.departmentId = assignment.departmentId;
       emp.positionId = assignment.positionId;
       await employeeRepo.save(emp);
-      return assignment.id;
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.assignment_changed',
+          entityType: 'Employee',
+          entityId: id,
+          metadata: { assignmentId: assignment.id, changeReason: dto.changeReason },
+        },
+        manager,
+      );
     });
 
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.assignment_changed',
-      entityType: 'Employee',
-      entityId: id,
-      metadata: { assignmentId, changeReason: dto.changeReason },
-    });
     return this.getProfile(actor, id);
   }
 
@@ -803,15 +795,19 @@ export class EmployeeProfileService {
         emp.positionId = row.positionId;
         await employeeRepo.save(emp);
       }
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.assignment_updated',
+          entityType: 'Employee',
+          entityId: employeeId,
+          metadata: { assignmentId },
+        },
+        manager,
+      );
     });
 
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.assignment_updated',
-      entityType: 'Employee',
-      entityId: employeeId,
-      metadata: { assignmentId },
-    });
     return this.getProfile(actor, employeeId);
   }
 
@@ -837,15 +833,18 @@ export class EmployeeProfileService {
     await this.dataSource.transaction(async (manager) => {
       const assignmentRepo = manager.getRepository(EmploymentAssignment);
       await assignmentRepo.delete({ id: assignmentId, employeeId });
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.assignment_deleted',
+          entityType: 'Employee',
+          entityId: employeeId,
+          metadata: { assignmentId, status: existing.status },
+        },
+        manager,
+      );
     });
 
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.assignment_deleted',
-      entityType: 'Employee',
-      entityId: employeeId,
-      metadata: { assignmentId, status: existing.status },
-    });
     return this.getProfile(actor, employeeId);
   }
 
@@ -921,20 +920,24 @@ export class EmployeeProfileService {
       throw new BadRequestException('Cannot change employment status');
     }
     const before = employee.employmentStatus;
-    employee.employmentStatus = dto.status;
-    employee.isActive = ![
-      'dismissed',
-      'archived',
-      'suspended',
-    ].includes(dto.status);
-    employee.archivedAt = employee.isActive ? null : new Date();
-    await this.employees.save(employee);
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.status_changed',
-      entityType: 'Employee',
-      entityId: id,
-      metadata: { before, after: dto.status, reason: dto.reason ?? null },
+
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Employee);
+      const row = await repo.findOneByOrFail({ id });
+      row.employmentStatus = dto.status;
+      row.isActive = !['dismissed', 'archived', 'suspended'].includes(dto.status);
+      row.archivedAt = row.isActive ? null : new Date();
+      await repo.save(row);
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.status_changed',
+          entityType: 'Employee',
+          entityId: id,
+          metadata: { before, after: dto.status, reason: dto.reason ?? null },
+        },
+        manager,
+      );
     });
     return this.getProfile(actor, id);
   }
@@ -984,23 +987,27 @@ export class EmployeeProfileService {
     type: EmployeeContact['type'],
     value: string | null,
     visibility: EmployeeContact['visibility'],
+    manager?: EntityManager,
   ) {
-    const existing = await this.contacts.findOne({
+    const contacts = manager
+      ? manager.getRepository(EmployeeContact)
+      : this.contacts;
+    const existing = await contacts.findOne({
       where: { employeeId, type },
     });
     if (!value) {
-      if (existing) await this.contacts.remove(existing);
+      if (existing) await contacts.remove(existing);
       return;
     }
     if (existing) {
       existing.value = value;
       existing.visibility = visibility;
       existing.isPrimary = true;
-      await this.contacts.save(existing);
+      await contacts.save(existing);
       return;
     }
-    await this.contacts.save(
-      this.contacts.create({
+    await contacts.save(
+      contacts.create({
         employeeId,
         type,
         value,

@@ -14,8 +14,8 @@ alwaysApply: true
 ## Architecture
 
 - Arrow `A → B` = A may import B’s public API.
-- Allowed: Organization → Platform; Absences → Platform; Absences → Organization.
-- Forbidden: Platform → Absences; Organization → Absences; frontend → `apps/api` source.
+- Allowed: Organization → Platform; Absences → Platform; Absences → Organization; Documents → Platform; Documents → Organization.
+- Forbidden: Platform → Absences; Platform → Documents; Organization → Absences; Organization → Documents; frontend → `apps/api` source.
 - Backend: `apps/api/src/{platform,organization,modules}` (Variant A).
 - Never enable TypeORM `synchronize: true`. Schema via migrations only.
 
@@ -31,3 +31,4 @@ alwaysApply: true
 ## Docs
 
 - Ops/onboarding docs live in `docs/dev/` (UA).
+- Living status: `docs/README.md`, `docs/architecture.md`, `docs/product/hr-profile-roadmap.md`. Target vision: `docs/product/employee-profile-core.md` (not implementation status).

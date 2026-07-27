@@ -300,9 +300,18 @@ const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
       .icon-btn svg { width: 1.05rem; height: 1.05rem; }
       .btn {
         border: 1px solid var(--pw-border); border-radius: 8px; padding: 0.4rem 0.75rem;
-        background: var(--pw-bg); cursor: pointer; width: fit-content;
+        background: var(--pw-bg); color: var(--pw-text); cursor: pointer; width: fit-content;
       }
-      .btn.primary { background: var(--pw-accent); color: #fff; border-color: transparent; }
+      .btn.primary {
+        background: var(--pw-accent);
+        color: var(--pw-on-accent);
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .btn.primary:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
       .muted { color: var(--pw-muted); margin: 0; }
       .error { color: #b42318; margin: 0; }
       .warn { color: #b54708; margin: 0; }

@@ -10,7 +10,7 @@
     "start:nest": "tsc -p tsconfig.build.json && nest start --watch",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "jest --passWithNoTests",
+    "test": "jest",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/platform/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/platform/database/data-source.ts",
     "migration:show": "typeorm-ts-node-commonjs migration:show -d src/platform/database/data-source.ts",
