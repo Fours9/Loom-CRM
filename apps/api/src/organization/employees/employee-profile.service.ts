@@ -13,6 +13,7 @@ import { EmployeeAccessService } from '../access/employee-access.service';
 import { Employee } from './employee.entity';
 import { EmployeeContact } from './employee-contact.entity';
 import { EmployeeEmergencyContact } from './employee-emergency-contact.entity';
+import { EmployeeImportantDate } from './employee-important-date.entity';
 import { EmploymentAssignment } from './employment-assignment.entity';
 import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
@@ -61,6 +62,8 @@ export class EmployeeProfileService {
     private readonly contacts: Repository<EmployeeContact>,
     @InjectRepository(EmployeeEmergencyContact)
     private readonly emergencies: Repository<EmployeeEmergencyContact>,
+    @InjectRepository(EmployeeImportantDate)
+    private readonly importantDates: Repository<EmployeeImportantDate>,
     @InjectRepository(EmploymentAssignment)
     private readonly assignments: Repository<EmploymentAssignment>,
     @InjectRepository(Company)
@@ -208,6 +211,12 @@ export class EmployeeProfileService {
           order: { priority: 'ASC' },
         })
       : [];
+    const importantDates = caps.canViewPersonal
+      ? await this.importantDates.find({
+          where: { employeeId: id, isActive: true },
+          order: { priority: 'ASC' },
+        })
+      : [];
     const assignment = employee.currentAssignmentId
       ? await this.assignments.findOne({
           where: { id: employee.currentAssignmentId },
@@ -272,6 +281,9 @@ export class EmployeeProfileService {
             }
           : null,
         hiredAt: assignment?.startDate ?? null,
+        accountCreatedAt: employee.user?.createdAt
+          ? employee.user.createdAt.toISOString()
+          : null,
         workEmail: employee.workEmail,
         workPhone: employee.phoneNumber,
         workTelegram: employee.telegram,
@@ -356,6 +368,15 @@ export class EmployeeProfileService {
               secondaryPhone: e.secondaryPhone,
               priority: e.priority,
               notes: e.notes,
+            }))
+          : null,
+        importantDates: caps.canViewPersonal
+          ? importantDates.map((d) => ({
+              id: d.id,
+              title: d.title,
+              startDate: d.startDate,
+              endDate: d.endDate,
+              priority: d.priority,
             }))
           : null,
       },
@@ -544,6 +565,80 @@ export class EmployeeProfileService {
         {
           actorId: actor.id,
           action: 'employee.emergency_updated',
+          entityType: 'Employee',
+          entityId: employeeId,
+          metadata: {
+            previousCount: previous.length,
+            count: saved.length,
+            deactivatedIds: previous.map((row) => row.id),
+            createdIds: saved.map((row) => row.id),
+          },
+        },
+        manager,
+      );
+    });
+
+    return this.getProfile(actor, employeeId);
+  }
+
+  async replaceImportantDates(
+    actor: User,
+    employeeId: string,
+    dates: Array<{
+      title: string;
+      startDate: string;
+      endDate?: string | null;
+    }>,
+  ) {
+    const employee = await this.access.getEmployeeOrFail(employeeId);
+    const capabilities = await this.capabilities(actor, employee);
+    if (!capabilities.canEditPersonal) {
+      throw new BadRequestException('Cannot edit important dates');
+    }
+
+    for (const date of dates) {
+      const start = date.startDate.trim();
+      const end = date.endDate?.trim() || null;
+      if (end && end < start) {
+        throw new BadRequestException('endDate must be >= startDate');
+      }
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      const employeeRepository = manager.getRepository(Employee);
+      const datesRepository = manager.getRepository(EmployeeImportantDate);
+
+      await employeeRepository.findOneOrFail({
+        where: { id: employeeId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      const previous = await datesRepository.find({
+        where: { employeeId, isActive: true },
+      });
+
+      await datesRepository.update(
+        { employeeId, isActive: true },
+        { isActive: false },
+      );
+
+      const rows = dates.map((date, index) =>
+        datesRepository.create({
+          employeeId,
+          title: date.title.trim(),
+          startDate: date.startDate.trim(),
+          endDate: date.endDate?.trim() || null,
+          priority: index + 1,
+          isActive: true,
+        }),
+      );
+
+      const saved = rows.length ? await datesRepository.save(rows) : [];
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.important_dates_updated',
           entityType: 'Employee',
           entityId: employeeId,
           metadata: {

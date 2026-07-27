@@ -16,6 +16,8 @@ export const Permission = {
   AbsencesApprove: 'absences.approve',
   AbsencesCancel: 'absences.cancel',
   AbsencesCalendarView: 'absences.calendar.view',
+  DocumentsView: 'documents.view',
+  DocumentsManage: 'documents.manage',
   SettingsManage: 'settings.manage',
   AuditView: 'audit.view',
 } as const;

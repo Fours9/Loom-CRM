@@ -92,3 +92,29 @@ export type CreateAbsenceRequest = {
   endDate?: string | null;
   reason?: string | null;
 };
+
+export type AbsenceDocumentFileItem = {
+  id: EntityId;
+  fileName: string;
+  mimeType: string | null;
+  sizeBytes: number;
+  createdAt: string;
+};
+
+/** Absence request with ≥1 attachment, for People Documents aggregation. */
+export type AbsenceDocumentListItem = {
+  source: 'absence';
+  id: EntityId;
+  employeeId: EntityId;
+  documentType: 'absence';
+  /** Neutral fallback; UA title is built on the frontend from absenceType + dates. */
+  title: string;
+  absenceType: AbsenceType;
+  createdAt: string;
+  relatedStartDate: string;
+  relatedEndDate: string | null;
+  files: AbsenceDocumentFileItem[];
+  permissions: {
+    canDelete: false;
+  };
+};

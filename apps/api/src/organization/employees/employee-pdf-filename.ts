@@ -1,4 +1,5 @@
 import { Employee } from './employee.entity';
+import { attachmentContentDisposition } from '../../platform/http/content-disposition';
 
 const UA_TO_LATIN: Record<string, string> = {
   а: 'a',
@@ -83,8 +84,17 @@ export function buildEmployeePdfFilenames(employee: Employee): {
 
 export function contentDisposition(asciiFilename: string, utf8Filename: string): string {
   const encoded = encodeURIComponent(utf8Filename).replace(/['()]/g, escape);
-  return `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encoded}`;
+  const safeAscii = asciiFilename.replace(/["\\\r\n]/g, '_') || `download${safeExt(utf8Filename)}`;
+  return `attachment; filename="${safeAscii}"; filename*=UTF-8''${encoded}`;
 }
+
+function safeExt(filename: string): string {
+  const match = /\.([a-zA-Z0-9]{1,16})$/.exec(filename.trim());
+  return match ? `.${match[1].toLowerCase()}` : '';
+}
+
+/** Prefer platform helper for generic downloads without a prepared ASCII name. */
+export { attachmentContentDisposition };
 
 /** Kyiv wall clock as DD.MM.YYYY HH:mm */
 export function formatKyivDateTime(date: Date): string {

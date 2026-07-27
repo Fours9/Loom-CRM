@@ -23,6 +23,7 @@ import {
   CalendarPageComponent,
   EmployeeAbsenceRequestsPanelComponent,
 } from '../absences/public-api';
+import { EmployeeDocumentsPanelComponent } from './employee-documents-panel.component';
 
 type ProfileResponse = {
   header: EmployeeProfileHeader;
@@ -32,13 +33,14 @@ type ProfileResponse = {
     contacts?: Array<{ id: string; type: string; value: string }>;
     personal?: Record<string, unknown> | null;
     emergencyContact?: Array<Record<string, unknown>> | null;
+    importantDates?: Array<Record<string, unknown>> | null;
   };
   capabilities: EmployeeProfileCapabilities;
   completeness: ProfileCompleteness;
 };
 
-type TabId = 'data' | 'absences' | 'history' | 'later';
-type DataTabId = 'basics' | 'contacts' | 'position';
+type TabId = 'data' | 'absences' | 'documents' | 'history' | 'later';
+type DataTabId = 'basics' | 'contacts' | 'dates' | 'position';
 type AbsenceTabId = 'requests' | 'calendar';
 
 type EmergencyContactDraft = {
@@ -48,6 +50,13 @@ type EmergencyContactDraft = {
   primaryPhone: string;
   secondaryPhone: string;
   notes: string;
+};
+
+type ImportantDateDraft = {
+  key: string;
+  title: string;
+  startDate: string;
+  endDate: string;
 };
 
 type AssignmentHistoryItem = {
@@ -84,6 +93,7 @@ type AssignmentHistoryItem = {
     FormsModule,
     CalendarPageComponent,
     EmployeeAbsenceRequestsPanelComponent,
+    EmployeeDocumentsPanelComponent,
   ],
   template: `
     @if (loading()) {
@@ -181,6 +191,17 @@ type AssignmentHistoryItem = {
                   type="button"
                   class="tab"
                   role="tab"
+                  [attr.aria-selected]="dataTab() === 'dates'"
+                  [class.active]="dataTab() === 'dates'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setDataTab('dates')"
+                >
+                  Дати
+                </button>
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
                   [attr.aria-selected]="dataTab() === 'position'"
                   [class.active]="dataTab() === 'position'"
                   (mousedown)="$event.preventDefault()"
@@ -213,14 +234,12 @@ type AssignmentHistoryItem = {
                 <dl class="grid">
                   <div><dt>Статус</dt><dd>{{ statusLabel(profile()!.header.employmentStatus) }}</dd></div>
                   <div><dt>Керівник</dt><dd>{{ profile()!.header.manager?.displayName || '—' }}</dd></div>
-                  <div><dt>Дата виходу</dt><dd>{{ profile()!.header.hiredAt || '—' }}</dd></div>
                   <div><dt>Ім'я для звернення</dt><dd>{{ profile()!.header.preferredName || '—' }}</dd></div>
                 </dl>
 
                 @if (profile()!.capabilities.canViewPersonal) {
                   <h3>Персональна інформація</h3>
                   <dl class="grid">
-                    <div><dt>Дата народження</dt><dd>{{ profile()!.sections.personal?.['birthDate'] || '—' }}</dd></div>
                     <div><dt>Місто</dt><dd>{{ profile()!.sections.personal?.['city'] || '—' }}</dd></div>
                     <div><dt>Бажана мова</dt><dd>{{ profile()!.sections.personal?.['preferredLanguage'] || '—' }}</dd></div>
                   </dl>
@@ -236,7 +255,6 @@ type AssignmentHistoryItem = {
                 }
                 @if (editingBasics() && profile()!.capabilities.canEditPersonal) {
                   <div class="edit">
-                    <label>Дата народження <input type="date" [(ngModel)]="personalCoreForm.birthDate" name="bd" /></label>
                     <label>Місто <input [(ngModel)]="personalCoreForm.city" name="city" /></label>
                     <label>Мова <input [(ngModel)]="personalCoreForm.preferredLanguage" name="lang" /></label>
                   </div>
@@ -493,6 +511,175 @@ type AssignmentHistoryItem = {
                 </div>
               }
 
+              @if (dataTab() === 'dates') {
+                <div class="section-head">
+                  <h2>Дати</h2>
+                  @if (
+                    profile()!.capabilities.canEditPersonal ||
+                    profile()!.capabilities.canEditEmployment
+                  ) {
+                    <div class="section-actions">
+                      @if (editingDates()) {
+                        <button type="button" class="btn" (click)="saveDates()" [disabled]="busy()">
+                          Зберегти
+                        </button>
+                        <button type="button" class="btn ghost" (click)="cancelDatesEditing()">
+                          Скасувати
+                        </button>
+                      } @else {
+                        <button type="button" class="btn ghost" (click)="startDatesEditing()">
+                          Редагувати
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <dl class="grid">
+                  @if (profile()!.capabilities.canViewPersonal) {
+                    <div>
+                      <dt>Дата народження</dt>
+                      <dd>{{ profile()!.sections.personal?.['birthDate'] || '—' }}</dd>
+                    </div>
+                  } @else {
+                    <div>
+                      <dt>Дата народження</dt>
+                      <dd class="muted">Немає доступу</dd>
+                    </div>
+                  }
+                  <div>
+                    <dt>Дата реєстрації акаунту</dt>
+                    <dd>{{ formatDateOnly(profile()!.header.accountCreatedAt) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Дата початку роботи</dt>
+                    <dd>{{ profile()!.header.hiredAt || '—' }}</dd>
+                  </div>
+                </dl>
+
+                @if (
+                  editingDates() &&
+                  (profile()!.capabilities.canEditPersonal ||
+                    profile()!.capabilities.canEditEmployment)
+                ) {
+                  <div class="edit">
+                    @if (profile()!.capabilities.canEditPersonal) {
+                      <label>
+                        Дата народження
+                        <input type="date" [(ngModel)]="personalCoreForm.birthDate" name="bd" />
+                      </label>
+                    }
+                    @if (profile()!.capabilities.canEditEmployment) {
+                      @if (profile()!.sections.employment?.['id']) {
+                        <label>
+                          Дата початку роботи
+                          <input type="date" [(ngModel)]="hiredAtForm" name="workStart" />
+                        </label>
+                      } @else {
+                        <p class="muted">
+                          Немає активного призначення — спочатку створіть його у вкладці «Посада».
+                        </p>
+                      }
+                    }
+                  </div>
+                }
+
+                @if (!profile()!.capabilities.canViewPersonal) {
+                  <p class="muted">Немає доступу до важливих дат.</p>
+                } @else {
+                  <h3>Важливі дати</h3>
+                  @if (editingDates() && profile()!.capabilities.canEditPersonal) {
+                    <div class="dates-list">
+                      @for (
+                        item of importantDateForms;
+                        track item.key;
+                        let index = $index
+                      ) {
+                        <fieldset class="dates-row">
+                          <legend>Дата {{ index + 1 }}</legend>
+                          <button
+                            type="button"
+                            class="icon-btn danger dates-remove"
+                            title="Прибрати дату"
+                            [attr.aria-label]="'Прибрати дату ' + (index + 1)"
+                            (click)="removeImportantDate(item.key)"
+                          >
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
+                              />
+                            </svg>
+                          </button>
+                          <div class="dates-fields">
+                            <label class="dates-title">
+                              Назва
+                              <input
+                                [(ngModel)]="item.title"
+                                [name]="'importantDateTitle_' + item.key"
+                                required
+                                maxlength="255"
+                              />
+                            </label>
+                            <label>
+                              З
+                              <input
+                                type="date"
+                                [(ngModel)]="item.startDate"
+                                [name]="'importantDateStart_' + item.key"
+                                required
+                              />
+                            </label>
+                            <label>
+                              По
+                              <input
+                                type="date"
+                                [(ngModel)]="item.endDate"
+                                [name]="'importantDateEnd_' + item.key"
+                              />
+                            </label>
+                          </div>
+                        </fieldset>
+                      }
+                    </div>
+                    <div class="dates-actions">
+                      <button
+                        type="button"
+                        class="btn ghost"
+                        [disabled]="importantDateForms.length >= 20"
+                        (click)="addImportantDate()"
+                      >
+                        + Додати дату
+                      </button>
+                    </div>
+                  } @else if ((profile()!.sections.importantDates?.length ?? 0) > 0) {
+                    <div class="dates-list">
+                      @for (
+                        d of profile()!.sections.importantDates!;
+                        track d['id'] ?? $index;
+                        let index = $index
+                      ) {
+                        <div class="dates-row view">
+                          <h4>{{ d['title'] || 'Дата ' + (index + 1) }}</h4>
+                          <div class="dates-fields">
+                            <label>
+                              З
+                              <div class="value">{{ d['startDate'] || '—' }}</div>
+                            </label>
+                            <label>
+                              По
+                              <div class="value">{{ d['endDate'] || '—' }}</div>
+                            </label>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="muted">Важливих дат ще немає.</p>
+                  }
+                }
+              }
+
               @if (dataTab() === 'position') {
                 <div class="section-head">
                   <h2>Посада</h2>
@@ -662,6 +849,17 @@ type AssignmentHistoryItem = {
                 }
               }
             }
+            @case ('documents') {
+              @defer (on immediate) {
+                <app-employee-documents-panel [employeeId]="profile()!.header.id" />
+              } @placeholder {
+                <p class="muted">Підготовка документів…</p>
+              } @loading (after 100ms) {
+                <p class="muted">Завантаження документів…</p>
+              } @error {
+                <p class="error">Не вдалося завантажити документи.</p>
+              }
+            }
             @case ('history') {
               <h2>Історія</h2>
               @if (!profile()!.capabilities.canViewHistory) {
@@ -682,7 +880,7 @@ type AssignmentHistoryItem = {
             @default {
               <h2>Наступні модулі</h2>
               <p class="muted">
-                Onboarding, Skills, Goals, Reviews, Documents, Questionnaires —
+                Onboarding, Skills, Goals, Reviews, Questionnaires —
                 див. roadmap (Phases 2–9). Не змішуємо з Profile Core.
               </p>
             }
@@ -852,7 +1050,10 @@ type AssignmentHistoryItem = {
       }
       .disclose-body input,
       .disclose-body textarea,
-      .section-block input {
+      .section-block input,
+      .dates-row input,
+      .emergency-row input,
+      .emergency-row textarea {
         border: 1px solid var(--pw-border);
         border-radius: 8px;
         padding: 0.5rem 0.65rem;
@@ -939,8 +1140,62 @@ type AssignmentHistoryItem = {
         flex-wrap: wrap;
         gap: 0.5rem;
       }
+      .dates-list {
+        display: grid;
+        gap: 0.75rem;
+      }
+      .dates-row {
+        position: relative;
+        min-width: 0;
+        margin: 0;
+        padding: 0.85rem;
+        padding-right: 3rem;
+        border: 1px solid var(--pw-border);
+        border-radius: 10px;
+        background: var(--pw-surface-2, color-mix(in srgb, var(--pw-muted) 8%, var(--pw-surface)));
+      }
+      .dates-row.view {
+        padding-right: 0.85rem;
+      }
+      .dates-row legend,
+      .dates-row h4 {
+        margin: 0 0 0.5rem;
+        padding-inline: 0.35rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--pw-accent);
+      }
+      .dates-fields {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.65rem;
+      }
+      .dates-fields > label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+        color: var(--pw-muted);
+        min-width: 0;
+      }
+      .dates-title {
+        grid-column: 1 / -1;
+      }
+      .dates-remove {
+        position: absolute;
+        top: 0.55rem;
+        right: 0.55rem;
+      }
+      .dates-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
       @media (min-width: 641px) {
         .emergency-fields {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .dates-fields {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
@@ -984,6 +1239,20 @@ type AssignmentHistoryItem = {
         min-height: 2.1rem;
         padding: 0.35rem 0.7rem;
         font-size: 0.9rem;
+        border-width: 1.5px;
+        border-color: var(--pw-border-strong, var(--pw-border));
+        background: var(--pw-surface-2, color-mix(in srgb, var(--pw-muted) 8%, var(--pw-surface)));
+        color: var(--pw-text);
+      }
+      .subtabs .tab:hover {
+        border-color: var(--pw-accent);
+        color: var(--pw-accent);
+      }
+      .subtabs .tab.active {
+        border-color: var(--pw-accent);
+        background: var(--pw-accent-soft);
+        color: var(--pw-accent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pw-accent) 35%, transparent);
       }
       .panel {
         padding: 1rem; border: 1px solid var(--pw-border); border-radius: 12px; background: var(--pw-surface);
@@ -1069,6 +1338,7 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly absenceTab = signal<AbsenceTabId>('requests');
   readonly editingBasics = signal(false);
   readonly editingContacts = signal(false);
+  readonly editingDates = signal(false);
   readonly creatingAssignment = signal(false);
   readonly editingAssignmentId = signal<string | null>(null);
   readonly deletingAssignmentId = signal<string | null>(null);
@@ -1079,6 +1349,7 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly tabs: Array<{ id: TabId; label: string }> = [
     { id: 'data', label: 'Дані' },
     { id: 'absences', label: 'Відсутності' },
+    { id: 'documents', label: 'Документи' },
     { id: 'history', label: 'Історія' },
     { id: 'later', label: 'Згодом' },
   ];
@@ -1094,6 +1365,7 @@ export class PeopleProfilePageComponent implements OnInit {
     city: '',
     preferredLanguage: '',
   };
+  hiredAtForm = '';
   personalContactsForm = {
     personalPhone: '',
     personalEmail: '',
@@ -1105,6 +1377,7 @@ export class PeopleProfilePageComponent implements OnInit {
     workTelegram: '',
   };
   emergencyForms: EmergencyContactDraft[] = [];
+  importantDateForms: ImportantDateDraft[] = [];
   assignmentForm = {
     workFormat: '',
     workLocation: '',
@@ -1180,6 +1453,7 @@ export class PeopleProfilePageComponent implements OnInit {
 
   startBasicsEditing(): void {
     this.editingContacts.set(false);
+    this.editingDates.set(false);
     this.emergencyForms = [];
     this.resetEmploymentEditing();
     const p = this.profile();
@@ -1195,6 +1469,7 @@ export class PeopleProfilePageComponent implements OnInit {
 
   startContactsEditing(): void {
     this.editingBasics.set(false);
+    this.editingDates.set(false);
     this.resetEmploymentEditing();
     const p = this.profile();
     if (p) this.applyProfile(p);
@@ -1211,6 +1486,41 @@ export class PeopleProfilePageComponent implements OnInit {
     this.editingContacts.set(false);
   }
 
+  startDatesEditing(): void {
+    this.editingBasics.set(false);
+    this.editingContacts.set(false);
+    this.emergencyForms = [];
+    this.resetEmploymentEditing();
+    const p = this.profile();
+    if (p) this.applyProfile(p);
+    if (p?.capabilities.canEditPersonal) {
+      this.hydrateImportantDateDrafts();
+    } else {
+      this.importantDateForms = [];
+    }
+    this.error.set(null);
+    this.editingDates.set(true);
+  }
+
+  cancelDatesEditing(): void {
+    const p = this.profile();
+    if (p) this.applyProfile(p);
+    this.importantDateForms = [];
+    this.error.set(null);
+    this.editingDates.set(false);
+  }
+
+  addImportantDate(): void {
+    if (this.importantDateForms.length >= 20) {
+      return;
+    }
+    this.importantDateForms = [...this.importantDateForms, this.createImportantDateDraft()];
+  }
+
+  removeImportantDate(key: string): void {
+    this.importantDateForms = this.importantDateForms.filter((item) => item.key !== key);
+  }
+
   addEmergencyContact(): void {
     if (this.emergencyForms.length >= 5) {
       return;
@@ -1225,7 +1535,9 @@ export class PeopleProfilePageComponent implements OnInit {
   startCreatingAssignment(): void {
     this.editingBasics.set(false);
     this.editingContacts.set(false);
+    this.editingDates.set(false);
     this.emergencyForms = [];
+    this.importantDateForms = [];
     this.editingAssignmentId.set(null);
     this.creatingAssignment.set(true);
   }
@@ -1291,6 +1603,15 @@ export class PeopleProfilePageComponent implements OnInit {
     }
   }
 
+  formatDateOnly(value: string | null | undefined): string {
+    if (!value) return '—';
+    try {
+      return new Date(value).toLocaleDateString('uk-UA');
+    } catch {
+      return value;
+    }
+  }
+
   private resetProfileState(): void {
     this.profile.set(null);
     this.audit.set([]);
@@ -1305,7 +1626,9 @@ export class PeopleProfilePageComponent implements OnInit {
   private resetEditingModes(): void {
     this.editingBasics.set(false);
     this.editingContacts.set(false);
+    this.editingDates.set(false);
     this.emergencyForms = [];
+    this.importantDateForms = [];
     this.resetEmploymentEditing();
   }
 
@@ -1340,6 +1663,7 @@ export class PeopleProfilePageComponent implements OnInit {
       city: String(pers['city'] ?? ''),
       preferredLanguage: String(pers['preferredLanguage'] ?? ''),
     };
+    this.hiredAtForm = String(p.header.hiredAt ?? '');
     this.personalContactsForm = {
       personalPhone: String(pers['personalPhone'] ?? ''),
       personalEmail: String(pers['personalEmail'] ?? ''),
@@ -1402,7 +1726,6 @@ export class PeopleProfilePageComponent implements OnInit {
     if (caps.canEditPersonal) {
       requests.push(
         this.http.patch(`/api/v1/employees/${this.employeeId}/personal`, {
-          birthDate: this.personalCoreForm.birthDate || null,
           city: this.personalCoreForm.city || null,
           preferredLanguage: this.personalCoreForm.preferredLanguage || null,
         }),
@@ -1422,6 +1745,89 @@ export class PeopleProfilePageComponent implements OnInit {
         this.busy.set(false);
       },
       error: () => this.busy.set(false),
+    });
+  }
+
+  saveDates(): void {
+    const caps = this.profile()?.capabilities;
+    const profile = this.profile();
+    if (!caps || !profile) return;
+    if (!caps.canEditPersonal && !caps.canEditEmployment) return;
+
+    const requests = [];
+
+    if (caps.canEditPersonal) {
+      const dates = this.importantDateForms
+        .filter((item) => !this.isImportantDateCompletelyEmpty(item))
+        .map((item) => ({
+          title: item.title.trim(),
+          startDate: item.startDate.trim(),
+          endDate: item.endDate.trim() || null,
+        }));
+
+      const invalid = dates.some((item) => !item.title || !item.startDate);
+      if (invalid) {
+        this.error.set('Для кожної важливої дати вкажіть назву і дату «з».');
+        return;
+      }
+
+      const rangeInvalid = dates.some(
+        (item) => item.endDate && item.endDate < item.startDate,
+      );
+      if (rangeInvalid) {
+        this.error.set('Дата «по» не може бути раніше дати «з».');
+        return;
+      }
+
+      requests.push(
+        this.http.patch(`/api/v1/employees/${this.employeeId}/personal`, {
+          birthDate: this.personalCoreForm.birthDate || null,
+        }),
+      );
+      requests.push(
+        this.http.put(`/api/v1/employees/${this.employeeId}/important-dates`, {
+          dates,
+        }),
+      );
+    }
+
+    if (caps.canEditEmployment) {
+      const assignmentId = profile.sections.employment?.['id'];
+      if (typeof assignmentId === 'string' && assignmentId) {
+        requests.push(
+          this.http.patch(
+            `/api/v1/employees/${this.employeeId}/employment-assignments/${assignmentId}`,
+            { startDate: this.hiredAtForm.trim() || null },
+          ),
+        );
+      } else if (this.hiredAtForm.trim()) {
+        this.error.set(
+          'Немає активного призначення для дати початку роботи. Створіть його у вкладці «Посада».',
+        );
+        return;
+      }
+    }
+
+    if (!requests.length) {
+      return;
+    }
+
+    this.error.set(null);
+    this.busy.set(true);
+
+    forkJoin(requests).subscribe({
+      next: (results) => {
+        const last = results[results.length - 1] as ProfileResponse;
+        this.applyProfile(last);
+        this.importantDateForms = [];
+        this.editingDates.set(false);
+        this.busy.set(false);
+        this.reloadAssignments();
+      },
+      error: () => {
+        this.error.set('Не вдалося зберегти дати');
+        this.busy.set(false);
+      },
     });
   }
 
@@ -1521,6 +1927,14 @@ export class PeopleProfilePageComponent implements OnInit {
     }
   }
 
+  private hydrateImportantDateDrafts(): void {
+    const source = this.profile()?.sections.importantDates ?? [];
+    this.importantDateForms = source.map((item) => this.createImportantDateDraft(item));
+    if (!this.importantDateForms.length) {
+      this.addImportantDate();
+    }
+  }
+
   private createEmergencyDraft(
     source?: Record<string, unknown>,
   ): EmergencyContactDraft {
@@ -1534,6 +1948,17 @@ export class PeopleProfilePageComponent implements OnInit {
     };
   }
 
+  private createImportantDateDraft(
+    source?: Record<string, unknown>,
+  ): ImportantDateDraft {
+    return {
+      key: String(source?.['id'] ?? '') || crypto.randomUUID(),
+      title: String(source?.['title'] ?? ''),
+      startDate: String(source?.['startDate'] ?? ''),
+      endDate: String(source?.['endDate'] ?? ''),
+    };
+  }
+
   private isEmergencyContactCompletelyEmpty(contact: EmergencyContactDraft): boolean {
     return [
       contact.fullName,
@@ -1542,6 +1967,10 @@ export class PeopleProfilePageComponent implements OnInit {
       contact.secondaryPhone,
       contact.notes,
     ].every((value) => !value.trim());
+  }
+
+  private isImportantDateCompletelyEmpty(item: ImportantDateDraft): boolean {
+    return [item.title, item.startDate, item.endDate].every((value) => !value.trim());
   }
 
   saveAssignment(): void {

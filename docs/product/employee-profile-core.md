@@ -789,6 +789,30 @@ employee_emergency_contacts
 - updated_at
 ```
 
+### 12.3.1. Important dates
+
+Повторювані добровільні записи (назва + період). Не JSON у `employees`. Права — як personal (`canViewPersonal` / `canEditPersonal`). Write — єдиний replace-all:
+
+```http
+PUT /api/v1/employees/:id/important-dates
+{ "dates": [{ "title": "...", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" | null }] }
+```
+
+```text
+employee_important_dates
+- id
+- employee_id
+- title
+- start_date
+- end_date nullable
+- priority integer
+- is_active
+- created_at
+- updated_at
+```
+
+UI: `/people/:id` → Дані → Дати (під фіксованими датами народження / акаунту / початку роботи).
+
 ### 12.4. Employment Assignment
 
 ```text
@@ -1447,9 +1471,12 @@ EmployeeProfileMapper
 GET    /api/v1/employees
 POST   /api/v1/employees
 GET    /api/v1/employees/:id
+GET    /api/v1/employees/:id/profile
 PATCH  /api/v1/employees/:id/basic
 PATCH  /api/v1/employees/:id/contacts
 PATCH  /api/v1/employees/:id/personal
+PUT    /api/v1/employees/:id/emergency-contact
+PUT    /api/v1/employees/:id/important-dates
 GET    /api/v1/employees/:id/history
 GET    /api/v1/employees/:id/completeness
 ```
@@ -1532,11 +1559,14 @@ type EmployeeProfileResponse = {
     contacts?: ContactsSection;
     personal?: PersonalSection;
     emergencyContact?: EmergencyContactSection;
+    importantDates?: ImportantDateItem[];
   };
   capabilities: EmployeeProfileCapabilities;
   completeness: ProfileCompleteness;
 };
 ```
+
+`ImportantDateItem`: `{ id, title, startDate, endDate, priority }`.
 
 ### 26.3. Capabilities
 
@@ -2318,6 +2348,8 @@ Scope:
 ### 44.2. Блок 2 — Сім’я та важливі дати
 
 Не робити обов’язковим. Інформація про дітей повинна бути повторюваною сутністю лише якщо компанія реально її використовує. Інакше залишити в questionnaire response і не переносити в profile.
+
+**Важливі дати** — окрема таблиця `employee_important_dates` (title, start_date, optional end_date), API `PUT .../important-dates` (replace-all), проекція в `GET .../profile` → `sections.importantDates`. UI на вкладці «Дати» профілю `/people/:id`.
 
 ### 44.3. Блок 3 — Екстрений контакт
 

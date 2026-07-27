@@ -6,6 +6,7 @@ const EMPLOYEE: Permission[] = [
   Permission.AbsencesCreate,
   Permission.AbsencesCancel,
   Permission.AbsencesCalendarView,
+  Permission.DocumentsView,
 ];
 
 const DEPARTMENT_MANAGER: Permission[] = [
@@ -24,6 +25,7 @@ const ADMIN: Permission[] = [
   Permission.EmployeesChangeAssignment,
   Permission.EmployeesChangeStatus,
   Permission.EmployeesViewHistory,
+  Permission.DocumentsManage,
   Permission.DepartmentsManage,
   Permission.PositionsManage,
   Permission.SettingsManage,

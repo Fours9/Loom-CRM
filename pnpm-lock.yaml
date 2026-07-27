@@ -165,6 +165,9 @@ importers:
       '@loom/contracts-common':
         specifier: workspace:*
         version: link:../../libs/contracts/common
+      '@loom/contracts-documents':
+        specifier: workspace:*
+        version: link:../../libs/contracts/documents
       '@loom/contracts-employees':
         specifier: workspace:*
         version: link:../../libs/contracts/employees
@@ -227,6 +230,16 @@ importers:
         version: 5.7.3
 
   libs/contracts/common:
+    devDependencies:
+      typescript:
+        specifier: ~5.7.2
+        version: 5.7.3
+
+  libs/contracts/documents:
+    dependencies:
+      '@loom/contracts-common':
+        specifier: workspace:*
+        version: link:../common
     devDependencies:
       typescript:
         specifier: ~5.7.2

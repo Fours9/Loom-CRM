@@ -13,6 +13,7 @@ import { WorkScheduleDay } from '../../organization/employees/work-schedule-day.
 import { EmployeeManagedDepartment } from '../../organization/employees/employee-managed-department.entity';
 import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
 import { EmployeeEmergencyContact } from '../../organization/employees/employee-emergency-contact.entity';
+import { EmployeeImportantDate } from '../../organization/employees/employee-important-date.entity';
 import { EmploymentAssignment } from '../../organization/employees/employment-assignment.entity';
 import { Company } from '../../organization/companies/company.entity';
 import { Direction } from '../../organization/companies/direction.entity';
@@ -24,6 +25,8 @@ import { AbsencesPwParity1730000004000 } from './migrations/1730000004000-Absenc
 import { EmployeeProfilePwParity1730000005000 } from './migrations/1730000005000-EmployeeProfilePwParity';
 import { WorkSchedulePwParity1730000006000 } from './migrations/1730000006000-WorkSchedulePwParity';
 import { EmployeeProfileCore1730000007000 } from './migrations/1730000007000-EmployeeProfileCore';
+import { EmployeeImportantDates1730000008000 } from './migrations/1730000008000-EmployeeImportantDates';
+import { EmployeeDocuments1730000009000 } from './migrations/1730000009000-EmployeeDocuments';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -45,6 +48,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeManagedDepartment,
       EmployeeContact,
       EmployeeEmergencyContact,
+      EmployeeImportantDate,
       EmploymentAssignment,
       Company,
       Direction,
@@ -58,6 +62,8 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeProfilePwParity1730000005000,
       WorkSchedulePwParity1730000006000,
       EmployeeProfileCore1730000007000,
+      EmployeeImportantDates1730000008000,
+      EmployeeDocuments1730000009000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

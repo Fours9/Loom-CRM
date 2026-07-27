@@ -1,0 +1,512 @@
+import {
+  Component,
+  Input,
+  OnChanges,
+  SimpleChanges,
+  inject,
+  signal,
+} from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+import {
+  EMPLOYEE_DOCUMENT_TYPES,
+  type EmployeeDocumentType,
+} from '@loom/contracts-documents';
+import type { AbsenceType } from '@loom/contracts-absences';
+import { DocumentsApiService } from '../documents/public-api';
+import { EmployeeAbsenceDocumentsService } from '../absences/public-api';
+
+type DocumentType = 'absence' | EmployeeDocumentType;
+
+type DocumentFileRow = {
+  id: string;
+  fileName: string;
+  mimeType: string | null;
+  sizeBytes: number;
+  createdAt: string;
+};
+
+type DocumentListRow = {
+  source: 'employee_document' | 'absence';
+  id: string;
+  employeeId: string;
+  documentType: DocumentType;
+  title: string;
+  createdAt: string;
+  relatedStartDate: string | null;
+  relatedEndDate: string | null;
+  files: DocumentFileRow[];
+  canDelete: boolean;
+};
+
+type SortKey = 'date_desc' | 'date_asc' | 'title_asc' | 'title_desc';
+
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  absence: 'Відсутність',
+  employment: 'Працевлаштування',
+  questionnaire: 'Анкета',
+  identity: 'Ідентифікація',
+  education: 'Освіта',
+  certificate: 'Сертифікат',
+  medical: 'Медичні',
+  consent: 'Згода',
+  other: 'Інше',
+};
+
+const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
+  day_off: 'Вихідний',
+  vacation: 'Відпустка',
+  sick_leave: 'Лікарняний',
+  part_time: 'Неповний день',
+};
+
+@Component({
+  selector: 'app-employee-documents-panel',
+  standalone: true,
+  imports: [FormsModule],
+  template: `
+    <div class="panel">
+      @if (canUpload()) {
+        <form class="upload" (ngSubmit)="submitUpload()">
+          <h3>Завантажити документ</h3>
+          <label>
+            Заголовок
+            <input
+              type="text"
+              name="title"
+              [(ngModel)]="uploadTitle"
+              maxlength="255"
+              required
+            />
+          </label>
+          <label>
+            Тип
+            <select name="documentType" [(ngModel)]="uploadType">
+              @for (t of uploadTypes; track t) {
+                <option [value]="t">{{ typeLabel(t) }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            Файл
+            <input
+              #fileInput
+              type="file"
+              name="file"
+              accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+              (change)="onFileSelected($event)"
+            />
+          </label>
+          <div class="upload-actions">
+            <button type="submit" class="btn primary" [disabled]="uploadBusy() || !uploadFile">
+              {{ uploadBusy() ? 'Завантаження…' : 'Завантажити' }}
+            </button>
+            @if (uploadSuccess()) {
+              <span class="ok">Завантажено</span>
+            }
+            @if (uploadError()) {
+              <span class="error">{{ uploadError() }}</span>
+            }
+          </div>
+        </form>
+      }
+
+      <div class="filters">
+        <label>
+          Тип
+          <select [(ngModel)]="filterType" (ngModelChange)="applyFilters()">
+            <option value="">Усі типи</option>
+            @for (t of allFilterTypes; track t) {
+              <option [value]="t">{{ typeLabel(t) }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Пошук
+          <input
+            type="search"
+            [(ngModel)]="filterQuery"
+            (ngModelChange)="applyFilters()"
+            placeholder="Заголовок або файл"
+          />
+        </label>
+        <label>
+          Від
+          <input type="date" [(ngModel)]="filterFrom" (ngModelChange)="applyFilters()" />
+        </label>
+        <label>
+          До
+          <input type="date" [(ngModel)]="filterTo" (ngModelChange)="applyFilters()" />
+        </label>
+        <label>
+          Сортування
+          <select [(ngModel)]="sortKey" (ngModelChange)="applyFilters()">
+            <option value="date_desc">Дата (новіші)</option>
+            <option value="date_asc">Дата (старіші)</option>
+            <option value="title_asc">Заголовок А→Я</option>
+            <option value="title_desc">Заголовок Я→А</option>
+          </select>
+        </label>
+      </div>
+
+      @if (loading()) {
+        <p class="muted">Завантаження документів…</p>
+      } @else {
+        @if (documentsFailed()) {
+          <p class="warn">Не вдалося завантажити документи профілю.</p>
+        }
+        @if (absencesFailed()) {
+          <p class="warn">Не вдалося завантажити вкладення заявок на відсутність.</p>
+        }
+
+        @if (!visibleRows().length) {
+          <p class="muted">Документів ще немає.</p>
+        } @else {
+          <ul class="doc-list">
+            @for (row of visibleRows(); track row.source + ':' + row.id) {
+              <li class="doc-row">
+                <div class="doc-head">
+                  <div>
+                    <strong>{{ row.title }}</strong>
+                    <span class="badge">{{ typeLabel(row.documentType) }}</span>
+                  </div>
+                  <span class="muted">{{ formatDate(row.createdAt) }}</span>
+                </div>
+                <ul class="files">
+                  @for (file of row.files; track file.id) {
+                    <li>
+                      <button type="button" class="link" (click)="download(row, file)">
+                        {{ file.fileName }}
+                      </button>
+                      <span class="muted">{{ formatSize(file.sizeBytes) }}</span>
+                    </li>
+                  }
+                </ul>
+                @if (row.canDelete) {
+                  <button
+                    type="button"
+                    class="btn danger"
+                    [disabled]="deleteBusyId() === row.id"
+                    (click)="deleteRow(row)"
+                  >
+                    Видалити
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        }
+      }
+    </div>
+  `,
+  styles: [
+    `
+      .panel { display: grid; gap: 1rem; }
+      .upload, .filters, .doc-row {
+        display: grid; gap: 0.6rem;
+        padding: 0.85rem; border: 1px solid var(--pw-border);
+        border-radius: 10px; background: var(--pw-surface);
+      }
+      .filters {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        align-items: end;
+      }
+      label { display: grid; gap: 0.25rem; font-size: 0.85rem; }
+      input, select {
+        padding: 0.45rem 0.55rem; border: 1px solid var(--pw-border);
+        border-radius: 8px; background: var(--pw-bg); color: inherit;
+      }
+      .upload-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+      .doc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+      .doc-head { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+      .badge {
+        display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem;
+        border-radius: 999px; font-size: 0.75rem;
+        background: color-mix(in srgb, var(--pw-accent) 15%, transparent);
+      }
+      .files { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; }
+      .files li { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+      .link {
+        border: 0; background: none; color: var(--pw-accent); cursor: pointer;
+        padding: 0; text-decoration: underline; font: inherit;
+      }
+      .btn {
+        border: 1px solid var(--pw-border); border-radius: 8px; padding: 0.4rem 0.75rem;
+        background: var(--pw-bg); cursor: pointer; width: fit-content;
+      }
+      .btn.primary { background: var(--pw-accent); color: #fff; border-color: transparent; }
+      .btn.danger { color: #b42318; }
+      .muted { color: var(--pw-muted); margin: 0; }
+      .error { color: #b42318; margin: 0; }
+      .warn { color: #b54708; margin: 0; }
+      .ok { color: #067647; }
+      h3 { margin: 0; font-size: 0.95rem; }
+    `,
+  ],
+})
+export class EmployeeDocumentsPanelComponent implements OnChanges {
+  private readonly documentsApi = inject(DocumentsApiService);
+  private readonly absenceDocsApi = inject(EmployeeAbsenceDocumentsService);
+
+  @Input({ required: true }) employeeId!: string;
+
+  readonly uploadTypes = [...EMPLOYEE_DOCUMENT_TYPES];
+  readonly allFilterTypes: DocumentType[] = ['absence', ...EMPLOYEE_DOCUMENT_TYPES];
+
+  readonly loading = signal(false);
+  readonly documentsFailed = signal(false);
+  readonly absencesFailed = signal(false);
+  readonly canUpload = signal(false);
+  readonly visibleRows = signal<DocumentListRow[]>([]);
+  readonly uploadBusy = signal(false);
+  readonly uploadSuccess = signal(false);
+  readonly uploadError = signal<string | null>(null);
+  readonly deleteBusyId = signal<string | null>(null);
+
+  private allRows: DocumentListRow[] = [];
+  private fileInputEl: HTMLInputElement | null = null;
+
+  uploadTitle = '';
+  uploadType: EmployeeDocumentType = 'employment';
+  uploadFile: File | null = null;
+
+  filterType = '';
+  filterQuery = '';
+  filterFrom = '';
+  filterTo = '';
+  sortKey: SortKey = 'date_desc';
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['employeeId'] && this.employeeId) {
+      this.reload();
+    }
+  }
+
+  typeLabel(type: DocumentType | string): string {
+    return DOCUMENT_TYPE_LABELS[type as DocumentType] ?? type;
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.fileInputEl = input;
+    this.uploadFile = input.files?.[0] ?? null;
+    this.uploadSuccess.set(false);
+    this.uploadError.set(null);
+  }
+
+  reload(): void {
+    if (!this.employeeId) return;
+    this.loading.set(true);
+    forkJoin({
+      documents: this.documentsApi.getEmployeeDocuments(this.employeeId).pipe(
+        map((res) => ({ items: res.items, canUpload: res.capabilities.canUpload, failed: false })),
+        catchError(() => of({ items: [], canUpload: false, failed: true })),
+      ),
+      absences: this.absenceDocsApi.getEmployeeDocumentItems(this.employeeId).pipe(
+        map((items) => ({ items, failed: false })),
+        catchError(() => of({ items: [], failed: true })),
+      ),
+    }).subscribe({
+      next: ({ documents, absences }) => {
+        this.documentsFailed.set(documents.failed);
+        this.absencesFailed.set(absences.failed);
+        this.canUpload.set(documents.canUpload);
+        const docRows: DocumentListRow[] = documents.items.map((item) => ({
+          source: 'employee_document',
+          id: item.id,
+          employeeId: item.employeeId,
+          documentType: item.documentType,
+          title: item.title,
+          createdAt: item.createdAt,
+          relatedStartDate: null,
+          relatedEndDate: null,
+          files: [...item.files],
+          canDelete: item.permissions.canDelete,
+        }));
+        const absRows: DocumentListRow[] = absences.items.map((item) => ({
+          source: 'absence',
+          id: item.id,
+          employeeId: item.employeeId,
+          documentType: 'absence',
+          title: formatAbsenceTitle(item.absenceType, item.relatedStartDate, item.relatedEndDate),
+          createdAt: item.createdAt,
+          relatedStartDate: item.relatedStartDate,
+          relatedEndDate: item.relatedEndDate,
+          files: item.files.map((f) => ({ ...f })),
+          canDelete: false,
+        }));
+        this.allRows = [...docRows, ...absRows];
+        this.applyFilters();
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.documentsFailed.set(true);
+        this.absencesFailed.set(true);
+        this.allRows = [];
+        this.visibleRows.set([]);
+      },
+    });
+  }
+
+  reloadDocumentsOnly(): void {
+    this.documentsApi.getEmployeeDocuments(this.employeeId).subscribe({
+      next: (res) => {
+        this.canUpload.set(res.capabilities.canUpload);
+        const docRows: DocumentListRow[] = res.items.map((item) => ({
+          source: 'employee_document' as const,
+          id: item.id,
+          employeeId: item.employeeId,
+          documentType: item.documentType,
+          title: item.title,
+          createdAt: item.createdAt,
+          relatedStartDate: null,
+          relatedEndDate: null,
+          files: [...item.files],
+          canDelete: item.permissions.canDelete,
+        }));
+        this.allRows = [
+          ...docRows,
+          ...this.allRows.filter((r) => r.source === 'absence'),
+        ];
+        this.applyFilters();
+        this.documentsFailed.set(false);
+      },
+      error: () => {
+        this.documentsFailed.set(true);
+      },
+    });
+  }
+
+  applyFilters(): void {
+    const q = this.filterQuery.trim().toLocaleLowerCase('uk-UA');
+    let rows = this.allRows.filter((row) => {
+      if (this.filterType && row.documentType !== this.filterType) return false;
+      if (q) {
+        const haystack = [row.title, ...row.files.map((f) => f.fileName)]
+          .join(' ')
+          .toLocaleLowerCase('uk-UA');
+        if (!haystack.includes(q)) return false;
+      }
+      const day = row.createdAt.slice(0, 10);
+      if (this.filterFrom && day < this.filterFrom) return false;
+      if (this.filterTo && day > this.filterTo) return false;
+      return true;
+    });
+
+    rows = [...rows].sort((a, b) => {
+      switch (this.sortKey) {
+        case 'date_asc':
+          return a.createdAt.localeCompare(b.createdAt);
+        case 'title_asc':
+          return a.title.localeCompare(b.title, 'uk-UA', { sensitivity: 'base' });
+        case 'title_desc':
+          return b.title.localeCompare(a.title, 'uk-UA', { sensitivity: 'base' });
+        case 'date_desc':
+        default:
+          return b.createdAt.localeCompare(a.createdAt);
+      }
+    });
+
+    this.visibleRows.set(rows);
+  }
+
+  submitUpload(): void {
+    if (!this.uploadFile || !this.uploadTitle.trim()) {
+      this.uploadError.set('Вкажіть заголовок і файл');
+      return;
+    }
+    this.uploadBusy.set(true);
+    this.uploadError.set(null);
+    this.uploadSuccess.set(false);
+    this.documentsApi
+      .uploadEmployeeDocument(this.employeeId, {
+        title: this.uploadTitle.trim(),
+        documentType: this.uploadType,
+        file: this.uploadFile,
+      })
+      .subscribe({
+        next: () => {
+          this.uploadBusy.set(false);
+          this.uploadSuccess.set(true);
+          this.uploadTitle = '';
+          this.uploadFile = null;
+          if (this.fileInputEl) this.fileInputEl.value = '';
+          this.reloadDocumentsOnly();
+        },
+        error: (err) => {
+          this.uploadBusy.set(false);
+          this.uploadError.set(
+            err?.error?.message ?? 'Не вдалося завантажити документ',
+          );
+        },
+      });
+  }
+
+  download(row: DocumentListRow, file: DocumentFileRow): void {
+    const req$ =
+      row.source === 'employee_document'
+        ? this.documentsApi.downloadDocument(row.id)
+        : this.absenceDocsApi.downloadAttachment(row.id, file.id);
+
+    req$.subscribe({
+      next: (blob) => triggerBlobDownload(blob, file.fileName),
+    });
+  }
+
+  deleteRow(row: DocumentListRow): void {
+    if (row.source !== 'employee_document' || !row.canDelete) return;
+    this.deleteBusyId.set(row.id);
+    this.documentsApi.deleteDocument(row.id).subscribe({
+      next: () => {
+        this.deleteBusyId.set(null);
+        this.reloadDocumentsOnly();
+      },
+      error: () => {
+        this.deleteBusyId.set(null);
+      },
+    });
+  }
+
+  formatDate(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('uk-UA');
+  }
+
+  formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+}
+
+function formatAbsenceTitle(
+  absenceType: AbsenceType | string,
+  start: string,
+  end: string | null,
+): string {
+  const label =
+    ABSENCE_TYPE_LABELS[absenceType as AbsenceType] ?? String(absenceType);
+  const startFmt = formatUaDate(start);
+  if (!end || end === start) {
+    return `${label} · ${startFmt}`;
+  }
+  return `${label} · ${startFmt}–${formatUaDate(end)}`;
+}
+
+function formatUaDate(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-');
+  if (!y || !m || !d) return isoDate;
+  return `${d}.${m}.${y}`;
+}
+
+function triggerBlobDownload(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
