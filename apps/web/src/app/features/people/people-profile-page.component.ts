@@ -39,7 +39,7 @@ type ProfileResponse = {
   completeness: ProfileCompleteness;
 };
 
-type TabId = 'data' | 'absences' | 'documents' | 'history' | 'later';
+type TabId = 'data' | 'absences' | 'documents' | 'metrics' | 'history' | 'later';
 type DataTabId = 'basics' | 'contacts' | 'dates' | 'position';
 type AbsenceTabId = 'requests' | 'calendar';
 
@@ -860,6 +860,10 @@ type AssignmentHistoryItem = {
                 <p class="error">Не вдалося завантажити документи.</p>
               }
             }
+            @case ('metrics') {
+              <h2>Показники</h2>
+              <p class="muted">Розділ у розробці. Тут з’являться KPI, цілі та метрики працівника.</p>
+            }
             @case ('history') {
               <h2>Історія</h2>
               @if (!profile()!.capabilities.canViewHistory) {
@@ -1347,9 +1351,10 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
 
   readonly tabs: Array<{ id: TabId; label: string }> = [
-    { id: 'data', label: 'Дані' },
+    { id: 'data', label: 'Дані працівника' },
     { id: 'absences', label: 'Відсутності' },
     { id: 'documents', label: 'Документи' },
+    { id: 'metrics', label: 'Показники' },
     { id: 'history', label: 'Історія' },
     { id: 'later', label: 'Згодом' },
   ];
