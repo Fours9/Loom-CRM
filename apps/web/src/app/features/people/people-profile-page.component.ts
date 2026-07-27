@@ -1,12 +1,28 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import {
+  catchError,
+  distinctUntilChanged,
+  EMPTY,
+  filter,
+  forkJoin,
+  map,
+  of,
+  switchMap,
+  tap,
+} from 'rxjs';
 import type {
   EmployeeProfileCapabilities,
   EmployeeProfileHeader,
   ProfileCompleteness,
 } from '@loom/contracts-employees';
+import {
+  CalendarPageComponent,
+  EmployeeAbsenceRequestsPanelComponent,
+} from '../absences/public-api';
 
 type ProfileResponse = {
   header: EmployeeProfileHeader;
@@ -21,18 +37,54 @@ type ProfileResponse = {
   completeness: ProfileCompleteness;
 };
 
-type TabId =
-  | 'overview'
-  | 'employment'
-  | 'personal'
-  | 'absences'
-  | 'history'
-  | 'later';
+type TabId = 'data' | 'absences' | 'history' | 'later';
+type DataTabId = 'basics' | 'contacts' | 'position';
+type AbsenceTabId = 'requests' | 'calendar';
+
+type EmergencyContactDraft = {
+  key: string;
+  fullName: string;
+  relationship: string;
+  primaryPhone: string;
+  secondaryPhone: string;
+  notes: string;
+};
+
+type AssignmentHistoryItem = {
+  id: string;
+  status: string;
+  companyId: string | null;
+  directionId: string | null;
+  departmentId: string | null;
+  positionId: string | null;
+  functionalRole: string | null;
+  managerEmployeeId: string | null;
+  mentorEmployeeId: string | null;
+  hrResponsibleEmployeeId: string | null;
+  workLocation: string | null;
+  workFormat: string | null;
+  employmentType: string | null;
+  contractType: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  probationEndDate: string | null;
+  changeReason: string | null;
+  updatedAt?: string;
+  department?: { id: string; name: string } | null;
+  position?: { id: string; name: string } | null;
+  company?: { id: string; name: string } | null;
+  direction?: { id: string; name: string } | null;
+};
 
 @Component({
   selector: 'loom-people-profile-page',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [
+    RouterLink,
+    FormsModule,
+    CalendarPageComponent,
+    EmployeeAbsenceRequestsPanelComponent,
+  ],
   template: `
     @if (loading()) {
       <p class="muted">Завантаження профілю…</p>
@@ -61,19 +113,14 @@ type TabId =
                 }
               </p>
               <div class="badges">
-                <span class="badge">{{ statusLabel(profile()!.header.employmentStatus) }}</span>
+                <span class="badge" [attr.data-status]="profile()!.header.employmentStatus">
+                  {{ statusLabel(profile()!.header.employmentStatus) }}
+                </span>
                 <span class="badge accent">Профіль {{ profile()!.header.completenessPercent }}%</span>
               </div>
             </div>
           </div>
           <div class="actions">
-            @if (profile()!.capabilities.canEditBasic) {
-              <button type="button" class="btn" (click)="editing.set(!editing())">
-                {{ editing() ? 'Скасувати' : 'Редагувати основні' }}
-              </button>
-            }
-            <a class="btn ghost" [routerLink]="['/absences/requests/new']">Створити відсутність</a>
-            <a class="btn ghost" [routerLink]="['/absences/calendar']">Календар</a>
             <a class="btn ghost" [routerLink]="['/absences/employees', profile()!.header.id]">
               Анкета Absences
             </a>
@@ -96,7 +143,8 @@ type TabId =
               type="button"
               class="tab"
               [class.active]="tab() === t.id"
-              (click)="tab.set(t.id)"
+              (mousedown)="$event.preventDefault()"
+              (click)="setTab(t.id)"
             >
               {{ t.label }}
             </button>
@@ -105,47 +153,385 @@ type TabId =
 
         <section class="panel">
           @switch (tab()) {
-            @case ('overview') {
-              <h2>Огляд</h2>
-              <dl class="grid">
-                <div><dt>Статус</dt><dd>{{ statusLabel(profile()!.header.employmentStatus) }}</dd></div>
-                <div><dt>Керівник</dt><dd>{{ profile()!.header.manager?.displayName || '—' }}</dd></div>
-                <div><dt>Дата виходу</dt><dd>{{ profile()!.header.hiredAt || '—' }}</dd></div>
-                <div><dt>Email</dt><dd>{{ profile()!.header.workEmail || '—' }}</dd></div>
-                <div><dt>Телефон</dt><dd>{{ profile()!.header.workPhone || '—' }}</dd></div>
-                <div><dt>Telegram</dt><dd>{{ profile()!.header.workTelegram || '—' }}</dd></div>
-              </dl>
-              @if (editing() && profile()!.capabilities.canEditBasic) {
-                <form class="edit" (ngSubmit)="saveBasic()">
-                  <label>Ім'я <input [(ngModel)]="basicForm.firstName" name="fn" /></label>
-                  <label>Прізвище <input [(ngModel)]="basicForm.lastName" name="ln" /></label>
-                  <label>По батькові <input [(ngModel)]="basicForm.middleName" name="mn" /></label>
-                  <label>Ім'я для звернення <input [(ngModel)]="basicForm.preferredName" name="pn" /></label>
-                  <button class="btn" type="submit" [disabled]="busy()">Зберегти</button>
-                </form>
-              }
-            }
-            @case ('employment') {
-              <h2>Робота</h2>
-              @if (profile()!.sections.employment) {
+            @case ('data') {
+              <nav class="tabs subtabs" role="tablist" aria-label="Дані працівника">
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
+                  [attr.aria-selected]="dataTab() === 'basics'"
+                  [class.active]="dataTab() === 'basics'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setDataTab('basics')"
+                >
+                  Основні
+                </button>
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
+                  [attr.aria-selected]="dataTab() === 'contacts'"
+                  [class.active]="dataTab() === 'contacts'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setDataTab('contacts')"
+                >
+                  Контакти
+                </button>
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
+                  [attr.aria-selected]="dataTab() === 'position'"
+                  [class.active]="dataTab() === 'position'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setDataTab('position')"
+                >
+                  Посада
+                </button>
+              </nav>
+
+              @if (dataTab() === 'basics') {
+                <div class="section-head">
+                  <h2>Основні</h2>
+                  @if (profile()!.capabilities.canEditBasic || profile()!.capabilities.canEditPersonal) {
+                    <div class="section-actions">
+                      @if (editingBasics()) {
+                        <button type="button" class="btn" (click)="saveBasics()" [disabled]="busy()">
+                          Зберегти
+                        </button>
+                        <button type="button" class="btn ghost" (click)="cancelBasicsEditing()">
+                          Скасувати
+                        </button>
+                      } @else {
+                        <button type="button" class="btn ghost" (click)="startBasicsEditing()">
+                          Редагувати
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
                 <dl class="grid">
-                  <div><dt>Компанія</dt><dd>{{ refName(profile()!.sections.employment!['company']) }}</dd></div>
-                  <div><dt>Напрямок</dt><dd>{{ refName(profile()!.sections.employment!['direction']) }}</dd></div>
-                  <div><dt>Відділ</dt><dd>{{ refName(profile()!.sections.employment!['department']) }}</dd></div>
-                  <div><dt>Посада</dt><dd>{{ refName(profile()!.sections.employment!['position']) }}</dd></div>
-                  <div><dt>Формат</dt><dd>{{ profile()!.sections.employment!['workFormat'] || '—' }}</dd></div>
-                  <div><dt>Локація</dt><dd>{{ profile()!.sections.employment!['workLocation'] || '—' }}</dd></div>
-                  <div><dt>Тип зайнятості</dt><dd>{{ profile()!.sections.employment!['employmentType'] || '—' }}</dd></div>
-                  <div><dt>Початок</dt><dd>{{ profile()!.sections.employment!['startDate'] || '—' }}</dd></div>
-                  <div><dt>Кінець випроб.</dt><dd>{{ profile()!.sections.employment!['probationEndDate'] || '—' }}</dd></div>
+                  <div><dt>Статус</dt><dd>{{ statusLabel(profile()!.header.employmentStatus) }}</dd></div>
+                  <div><dt>Керівник</dt><dd>{{ profile()!.header.manager?.displayName || '—' }}</dd></div>
+                  <div><dt>Дата виходу</dt><dd>{{ profile()!.header.hiredAt || '—' }}</dd></div>
+                  <div><dt>Ім'я для звернення</dt><dd>{{ profile()!.header.preferredName || '—' }}</dd></div>
                 </dl>
-              } @else {
-                <p class="muted">Призначення ще не задано.</p>
+
+                @if (profile()!.capabilities.canViewPersonal) {
+                  <h3>Персональна інформація</h3>
+                  <dl class="grid">
+                    <div><dt>Дата народження</dt><dd>{{ profile()!.sections.personal?.['birthDate'] || '—' }}</dd></div>
+                    <div><dt>Місто</dt><dd>{{ profile()!.sections.personal?.['city'] || '—' }}</dd></div>
+                    <div><dt>Бажана мова</dt><dd>{{ profile()!.sections.personal?.['preferredLanguage'] || '—' }}</dd></div>
+                  </dl>
+                }
+
+                @if (editingBasics() && profile()!.capabilities.canEditBasic) {
+                  <div class="edit">
+                    <label>Ім'я <input [(ngModel)]="basicForm.firstName" name="fn" /></label>
+                    <label>Прізвище <input [(ngModel)]="basicForm.lastName" name="ln" /></label>
+                    <label>По батькові <input [(ngModel)]="basicForm.middleName" name="mn" /></label>
+                    <label>Ім'я для звернення <input [(ngModel)]="basicForm.preferredName" name="pn" /></label>
+                  </div>
+                }
+                @if (editingBasics() && profile()!.capabilities.canEditPersonal) {
+                  <div class="edit">
+                    <label>Дата народження <input type="date" [(ngModel)]="personalCoreForm.birthDate" name="bd" /></label>
+                    <label>Місто <input [(ngModel)]="personalCoreForm.city" name="city" /></label>
+                    <label>Мова <input [(ngModel)]="personalCoreForm.preferredLanguage" name="lang" /></label>
+                  </div>
+                }
               }
-              @if (profile()!.capabilities.canEditEmployment) {
-                <details class="edit-block">
-                  <summary>Нове призначення</summary>
-                  <form class="edit" (ngSubmit)="saveAssignment()">
+
+              @if (dataTab() === 'contacts') {
+                <div class="section-head">
+                  <h2>Контакти</h2>
+                  @if (
+                    profile()!.capabilities.canEditBasic ||
+                    profile()!.capabilities.canEditPersonal ||
+                    profile()!.capabilities.canEditEmergencyContact
+                  ) {
+                    <div class="section-actions">
+                      @if (editingContacts()) {
+                        <button type="button" class="btn" (click)="saveContacts()" [disabled]="busy()">
+                          Зберегти
+                        </button>
+                        <button type="button" class="btn ghost" (click)="cancelContactsEditing()">
+                          Скасувати
+                        </button>
+                      } @else {
+                        <button type="button" class="btn ghost" (click)="startContactsEditing()">
+                          Редагувати
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <div class="contacts-stack">
+                  <div class="section-block">
+                    <h3>Робочі контакти</h3>
+                    @if (editingContacts() && profile()!.capabilities.canEditBasic) {
+                      <label>
+                        Email
+                        <input [(ngModel)]="workContactsForm.workEmail" name="wem" />
+                      </label>
+                      <div class="field-row">
+                        <label>
+                          Телефон
+                          <input [(ngModel)]="workContactsForm.workPhone" name="wph" />
+                        </label>
+                        <label>
+                          Telegram
+                          <input [(ngModel)]="workContactsForm.workTelegram" name="wtg" />
+                        </label>
+                      </div>
+                    } @else {
+                      <label>
+                        Email
+                        <div class="value">{{ profile()!.header.workEmail || '—' }}</div>
+                      </label>
+                      <div class="field-row">
+                        <label>
+                          Телефон
+                          <div class="value">{{ profile()!.header.workPhone || '—' }}</div>
+                        </label>
+                        <label>
+                          Telegram
+                          <div class="value">{{ profile()!.header.workTelegram || '—' }}</div>
+                        </label>
+                      </div>
+                    }
+                  </div>
+
+                  @if (!profile()!.capabilities.canViewPersonal) {
+                    <div class="section-block">
+                      <h3>Особисті контакти</h3>
+                      <p class="muted">Немає доступу до особистих контактів.</p>
+                    </div>
+                  } @else {
+                    <details
+                      class="section-block disclose"
+                      [attr.open]="editingContacts() ? '' : null"
+                    >
+                      <summary>Особисті контакти</summary>
+                      <div class="disclose-body">
+                        @if (editingContacts() && profile()!.capabilities.canEditPersonal) {
+                          <label>
+                            Email
+                            <input [(ngModel)]="personalContactsForm.personalEmail" name="pem" />
+                          </label>
+                          <div class="field-row">
+                            <label>
+                              Телефон
+                              <input [(ngModel)]="personalContactsForm.personalPhone" name="pph" />
+                            </label>
+                            <label>
+                              Telegram
+                              <input [(ngModel)]="personalContactsForm.personalTelegram" name="ptg" />
+                            </label>
+                          </div>
+                        } @else {
+                          <label>
+                            Email
+                            <div class="value">{{ profile()!.sections.personal?.['personalEmail'] || '—' }}</div>
+                          </label>
+                          <div class="field-row">
+                            <label>
+                              Телефон
+                              <div class="value">{{ profile()!.sections.personal?.['personalPhone'] || '—' }}</div>
+                            </label>
+                            <label>
+                              Telegram
+                              <div class="value">{{ profile()!.sections.personal?.['personalTelegram'] || '—' }}</div>
+                            </label>
+                          </div>
+                        }
+                      </div>
+                    </details>
+                  }
+
+                  @if (!profile()!.capabilities.canViewEmergencyContact) {
+                    <div class="section-block">
+                      <h3>Екстрений контакт</h3>
+                      <p class="muted">Немає доступу.</p>
+                    </div>
+                  } @else {
+                    <details
+                      class="section-block disclose"
+                      [attr.open]="editingContacts() ? '' : null"
+                    >
+                      <summary>Екстрені контакти</summary>
+                      <div class="disclose-body">
+                        @if (editingContacts() && profile()!.capabilities.canEditEmergencyContact) {
+                          <div class="emergency-list">
+                            @for (
+                              contact of emergencyForms;
+                              track contact.key;
+                              let index = $index
+                            ) {
+                              <fieldset class="emergency-row">
+                                <legend>Екстрений контакт {{ index + 1 }}</legend>
+                                <button
+                                  type="button"
+                                  class="icon-btn danger emergency-remove"
+                                  title="Прибрати контакт"
+                                  [attr.aria-label]="'Прибрати екстрений контакт ' + (index + 1)"
+                                  (click)="removeEmergencyContact(contact.key)"
+                                >
+                                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                    <path
+                                      fill="currentColor"
+                                      d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
+                                    />
+                                  </svg>
+                                </button>
+                                <div class="emergency-fields">
+                                  <label>
+                                    ПІБ
+                                    <input
+                                      [(ngModel)]="contact.fullName"
+                                      [name]="'emergencyFullName_' + contact.key"
+                                      required
+                                      maxlength="255"
+                                    />
+                                  </label>
+                                  <label>
+                                    Зв'язок
+                                    <input
+                                      [(ngModel)]="contact.relationship"
+                                      [name]="'emergencyRelationship_' + contact.key"
+                                      maxlength="120"
+                                    />
+                                  </label>
+                                  <label>
+                                    Основний телефон
+                                    <input
+                                      [(ngModel)]="contact.primaryPhone"
+                                      [name]="'emergencyPrimaryPhone_' + contact.key"
+                                      inputmode="tel"
+                                      required
+                                      maxlength="64"
+                                    />
+                                  </label>
+                                  <label>
+                                    Додатковий телефон
+                                    <input
+                                      [(ngModel)]="contact.secondaryPhone"
+                                      [name]="'emergencySecondaryPhone_' + contact.key"
+                                      inputmode="tel"
+                                      maxlength="64"
+                                    />
+                                  </label>
+                                  <label class="emergency-notes">
+                                    Примітки
+                                    <textarea
+                                      [(ngModel)]="contact.notes"
+                                      [name]="'emergencyNotes_' + contact.key"
+                                      rows="2"
+                                      maxlength="5000"
+                                    ></textarea>
+                                  </label>
+                                </div>
+                              </fieldset>
+                            }
+                          </div>
+                          <div class="emergency-actions">
+                            <button
+                              type="button"
+                              class="btn ghost"
+                              [disabled]="emergencyForms.length >= 5"
+                              (click)="addEmergencyContact()"
+                            >
+                              + Додати контакт
+                            </button>
+                          </div>
+                        } @else if ((profile()!.sections.emergencyContact?.length ?? 0) > 0) {
+                          <div class="emergency-list">
+                            @for (
+                              e of profile()!.sections.emergencyContact!;
+                              track e['id'] ?? $index;
+                              let index = $index
+                            ) {
+                              <div class="emergency-row view">
+                                <h4>Екстрений контакт {{ index + 1 }}</h4>
+                                <div class="emergency-fields">
+                                  <label>
+                                    ПІБ
+                                    <div class="value">{{ e['fullName'] || '—' }}</div>
+                                  </label>
+                                  <label>
+                                    Зв'язок
+                                    <div class="value">{{ e['relationship'] || '—' }}</div>
+                                  </label>
+                                  <label>
+                                    Основний телефон
+                                    <div class="value">{{ e['primaryPhone'] || '—' }}</div>
+                                  </label>
+                                  @if (e['secondaryPhone']) {
+                                    <label>
+                                      Додатковий телефон
+                                      <div class="value">{{ e['secondaryPhone'] }}</div>
+                                    </label>
+                                  }
+                                  @if (e['notes']) {
+                                    <label class="emergency-notes">
+                                      Примітки
+                                      <div class="value">{{ e['notes'] }}</div>
+                                    </label>
+                                  }
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="muted">Не вказано.</p>
+                        }
+                      </div>
+                    </details>
+                  }
+                </div>
+              }
+
+              @if (dataTab() === 'position') {
+                <div class="section-head">
+                  <h2>Посада</h2>
+                  @if (profile()!.capabilities.canEditEmployment) {
+                    <div class="section-actions">
+                      @if (creatingAssignment()) {
+                        <button type="button" class="btn" (click)="saveAssignment()" [disabled]="busy()">
+                          Зберегти
+                        </button>
+                        <button type="button" class="btn ghost" (click)="cancelCreatingAssignment()">
+                          Скасувати
+                        </button>
+                      } @else {
+                        <button type="button" class="btn ghost" (click)="startCreatingAssignment()">
+                          Нове призначення
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+
+                @if (profile()!.sections.employment) {
+                  <dl class="grid">
+                    <div><dt>Компанія</dt><dd>{{ refName(profile()!.sections.employment!['company']) }}</dd></div>
+                    <div><dt>Напрямок</dt><dd>{{ refName(profile()!.sections.employment!['direction']) }}</dd></div>
+                    <div><dt>Відділ</dt><dd>{{ refName(profile()!.sections.employment!['department']) }}</dd></div>
+                    <div><dt>Посада</dt><dd>{{ refName(profile()!.sections.employment!['position']) }}</dd></div>
+                    <div><dt>Формат</dt><dd>{{ profile()!.sections.employment!['workFormat'] || '—' }}</dd></div>
+                    <div><dt>Локація</dt><dd>{{ profile()!.sections.employment!['workLocation'] || '—' }}</dd></div>
+                    <div><dt>Тип зайнятості</dt><dd>{{ profile()!.sections.employment!['employmentType'] || '—' }}</dd></div>
+                    <div><dt>Початок</dt><dd>{{ profile()!.sections.employment!['startDate'] || '—' }}</dd></div>
+                    <div><dt>Кінець випроб.</dt><dd>{{ profile()!.sections.employment!['probationEndDate'] || '—' }}</dd></div>
+                  </dl>
+                } @else {
+                  <p class="muted">Призначення ще не задано.</p>
+                }
+
+                @if (creatingAssignment() && profile()!.capabilities.canEditEmployment) {
+                  <div class="edit">
                     <label>Формат роботи
                       <select [(ngModel)]="assignmentForm.workFormat" name="wf">
                         <option value="">—</option>
@@ -155,82 +541,126 @@ type TabId =
                       </select>
                     </label>
                     <label>Локація <input [(ngModel)]="assignmentForm.workLocation" name="wl" /></label>
+                    <label>Тип зайнятості <input [(ngModel)]="assignmentForm.employmentType" name="et" /></label>
                     <label>Дата початку <input type="date" [(ngModel)]="assignmentForm.startDate" name="sd" /></label>
                     <label>Кінець випроб. <input type="date" [(ngModel)]="assignmentForm.probationEndDate" name="pe" /></label>
                     <label>Причина зміни <input [(ngModel)]="assignmentForm.changeReason" name="cr" /></label>
-                    <button class="btn" type="submit" [disabled]="busy()">Зберегти призначення</button>
-                  </form>
-                </details>
-              }
-              @if (historyAssign().length) {
-                <h3>Історія призначень</h3>
-                <ul class="timeline">
-                  @for (h of historyAssign(); track h.id) {
-                    <li>
-                      <strong>{{ h.status }}</strong>
-                      {{ h.startDate || '?' }} → {{ h.endDate || 'зараз' }}
-                      · {{ h.department?.name || '—' }} / {{ h.position?.name || '—' }}
-                    </li>
-                  }
-                </ul>
-              }
-            }
-            @case ('personal') {
-              <h2>Особисті дані</h2>
-              @if (!profile()!.capabilities.canViewPersonal) {
-                <p class="muted">Немає доступу до особистих даних.</p>
-              } @else {
-                <dl class="grid">
-                  <div><dt>Дата народження</dt><dd>{{ profile()!.sections.personal?.['birthDate'] || '—' }}</dd></div>
-                  <div><dt>Місто</dt><dd>{{ profile()!.sections.personal?.['city'] || '—' }}</dd></div>
-                  <div><dt>Мова</dt><dd>{{ profile()!.sections.personal?.['preferredLanguage'] || '—' }}</dd></div>
-                  <div><dt>Ос. телефон</dt><dd>{{ profile()!.sections.personal?.['personalPhone'] || '—' }}</dd></div>
-                  <div><dt>Ос. email</dt><dd>{{ profile()!.sections.personal?.['personalEmail'] || '—' }}</dd></div>
-                  <div><dt>Ос. Telegram</dt><dd>{{ profile()!.sections.personal?.['personalTelegram'] || '—' }}</dd></div>
-                </dl>
-                @if (profile()!.capabilities.canEditPersonal) {
-                  <form class="edit" (ngSubmit)="savePersonal()">
-                    <label>Дата народження <input type="date" [(ngModel)]="personalForm.birthDate" name="bd" /></label>
-                    <label>Місто <input [(ngModel)]="personalForm.city" name="city" /></label>
-                    <label>Мова <input [(ngModel)]="personalForm.preferredLanguage" name="lang" /></label>
-                    <label>Ос. телефон <input [(ngModel)]="personalForm.personalPhone" name="pph" /></label>
-                    <label>Ос. email <input [(ngModel)]="personalForm.personalEmail" name="pem" /></label>
-                    <label>Ос. Telegram <input [(ngModel)]="personalForm.personalTelegram" name="ptg" /></label>
-                    <button class="btn" type="submit" [disabled]="busy()">Зберегти особисті</button>
-                  </form>
+                  </div>
                 }
-              }
-              <h3>Екстрений контакт</h3>
-              @if (!profile()!.capabilities.canViewEmergencyContact) {
-                <p class="muted">Немає доступу.</p>
-              } @else if ((profile()!.sections.emergencyContact?.length ?? 0) > 0) {
-                <ul>
-                  @for (e of profile()!.sections.emergencyContact!; track $index) {
-                    <li>{{ e['fullName'] }} · {{ e['primaryPhone'] }} · {{ e['relationship'] || '' }}</li>
-                  }
-                </ul>
-              } @else {
-                <p class="muted">Не вказано.</p>
-              }
-              @if (profile()!.capabilities.canEditEmergencyContact) {
-                <form class="edit" (ngSubmit)="saveEmergency()">
-                  <label>ПІБ <input [(ngModel)]="emergencyForm.fullName" name="efn" required /></label>
-                  <label>Зв'язок <input [(ngModel)]="emergencyForm.relationship" name="er" /></label>
-                  <label>Телефон <input [(ngModel)]="emergencyForm.primaryPhone" name="epp" required /></label>
-                  <button class="btn" type="submit" [disabled]="busy()">Зберегти екстрений</button>
-                </form>
+
+                @if (historyAssign().length) {
+                  <h3>Історія призначень</h3>
+                  <ul class="timeline assignments">
+                    @for (h of historyAssign(); track h.id) {
+                      <li class="history-row">
+                        <div class="history-top">
+                          <div class="history-main">
+                            <span class="badge" [attr.data-status]="h.status">{{ statusLabel(h.status) }}</span>
+                            {{ h.startDate || '?' }} → {{ h.endDate || 'зараз' }}
+                            · {{ h.department?.name || '—' }} / {{ h.position?.name || '—' }}
+                            @if (h.workFormat) {
+                              · {{ h.workFormat }}
+                            }
+                          </div>
+                          @if (profile()!.capabilities.canEditEmployment) {
+                            <div class="history-actions">
+                              @if (editingAssignmentId() === h.id) {
+                                <button
+                                  type="button"
+                                  class="btn sm"
+                                  (click)="saveEditedAssignment(h)"
+                                  [disabled]="busy()"
+                                >
+                                  Зберегти
+                                </button>
+                                <button type="button" class="btn ghost sm" (click)="cancelEditAssignment()">
+                                  Скасувати
+                                </button>
+                              } @else {
+                                <button type="button" class="btn ghost sm" (click)="startEditAssignment(h)">
+                                  Редагувати
+                                </button>
+                                @if (h.status !== 'active') {
+                                  <button
+                                    type="button"
+                                    class="btn ghost sm danger"
+                                    (click)="deleteAssignment(h)"
+                                    [disabled]="busy() || deletingAssignmentId() === h.id"
+                                  >
+                                    Видалити
+                                  </button>
+                                }
+                              }
+                            </div>
+                          }
+                        </div>
+                        @if (editingAssignmentId() === h.id) {
+                          <div class="edit">
+                            <label>Формат роботи
+                              <select [(ngModel)]="editAssignmentForm.workFormat" name="ewf">
+                                <option value="">—</option>
+                                <option value="office">Офіс</option>
+                                <option value="remote">Remote</option>
+                                <option value="hybrid">Hybrid</option>
+                              </select>
+                            </label>
+                            <label>Локація <input [(ngModel)]="editAssignmentForm.workLocation" name="ewl" /></label>
+                            <label>Тип зайнятості <input [(ngModel)]="editAssignmentForm.employmentType" name="eet" /></label>
+                            <label>Початок <input type="date" [(ngModel)]="editAssignmentForm.startDate" name="esd" /></label>
+                            <label>Кінець <input type="date" [(ngModel)]="editAssignmentForm.endDate" name="eed" /></label>
+                            <label>Кінець випроб. <input type="date" [(ngModel)]="editAssignmentForm.probationEndDate" name="epe" /></label>
+                            <label>Причина <input [(ngModel)]="editAssignmentForm.changeReason" name="ecr" /></label>
+                          </div>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
               }
             }
             @case ('absences') {
-              <h2>Відсутності</h2>
-              <p>Дані ведуться в модулі Absences (кадровий статус не змінюється на «відпустка»).</p>
-              <p>
-                <a [routerLink]="['/absences/employees', profile()!.header.id]">Відкрити картку Absences</a>
-                ·
-                <a [routerLink]="['/absences/requests']">Заявки</a>
-                ·
-                <a [routerLink]="['/absences/calendar']">Календар</a>
-              </p>
+              <nav class="tabs subtabs" role="tablist" aria-label="Відсутності працівника">
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
+                  [attr.aria-selected]="absenceTab() === 'requests'"
+                  [class.active]="absenceTab() === 'requests'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setAbsenceTab('requests')"
+                >
+                  Заявки
+                </button>
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
+                  [attr.aria-selected]="absenceTab() === 'calendar'"
+                  [class.active]="absenceTab() === 'calendar'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setAbsenceTab('calendar')"
+                >
+                  Календар
+                </button>
+              </nav>
+
+              @if (absenceTab() === 'requests') {
+                <app-employee-absence-requests-panel [employeeId]="profile()!.header.id" />
+              } @else {
+                @defer (on immediate) {
+                  <app-calendar-page
+                    [presetEmployeeId]="profile()!.header.id"
+                    [employeeOnlyMode]="true"
+                    [embedded]="true"
+                  />
+                } @placeholder {
+                  <p class="muted">Підготовка календаря…</p>
+                } @loading (after 100ms) {
+                  <p class="muted">Завантаження календаря…</p>
+                } @error {
+                  <p class="error">Не вдалося завантажити календар.</p>
+                }
+              }
             }
             @case ('history') {
               <h2>Історія</h2>
@@ -276,46 +706,346 @@ type TabId =
       }
       .avatar img { width: 100%; height: 100%; object-fit: cover; }
       h1 { margin: 0; font-size: 1.5rem; }
+      h2 { margin: 0; }
+      h3 { margin: 0.75rem 0 0.35rem; font-size: 0.95rem; color: var(--pw-accent); }
       .eyebrow { margin: 0; color: var(--pw-muted); font-size: 0.85rem; }
       .meta { margin: 0.25rem 0; color: var(--pw-muted); }
       .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
       .badge {
-        border-radius: 999px; padding: 0.2rem 0.65rem; font-size: 0.78rem; font-weight: 600;
-        background: var(--pw-paper-2, #f4f2ec); color: var(--pw-text);
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.2rem 0.65rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        border: 1px solid var(--pw-border);
+        background: var(--pw-surface-2);
+        color: var(--pw-text-strong);
       }
-      .badge.accent { background: color-mix(in srgb, var(--pw-accent) 18%, transparent); color: var(--pw-accent); }
+      .badge.accent {
+        background: var(--pw-accent-soft);
+        color: var(--pw-accent);
+        border-color: color-mix(in srgb, var(--pw-accent) 28%, transparent);
+      }
+      .badge[data-status='active'] {
+        background: var(--pw-success-soft);
+        color: var(--pw-success);
+        border-color: color-mix(in srgb, var(--pw-success) 40%, transparent);
+      }
+      .badge[data-status='suspended'],
+      .badge[data-status='draft'],
+      .badge[data-status='candidate'],
+      .badge[data-status='preboarding'],
+      .badge[data-status='probation'],
+      .badge[data-status='maternity_leave'],
+      .badge[data-status='military_leave'] {
+        background: var(--pw-accent-soft);
+        color: var(--pw-accent);
+        border-color: color-mix(in srgb, var(--pw-accent) 35%, transparent);
+      }
+      .badge[data-status='dismissed'],
+      .badge[data-status='archived'] {
+        background: var(--pw-danger-soft);
+        color: var(--pw-danger);
+        border-color: color-mix(in srgb, var(--pw-danger) 35%, transparent);
+      }
       .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: start; }
+      .section-head {
+        display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; align-items: center;
+      }
+      .section-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+      .contacts-stack {
+        display: grid;
+        gap: 0.85rem;
+      }
+      .section-block {
+        margin: 0;
+        padding: 0.85rem 0.9rem;
+        border: 1px solid color-mix(in srgb, var(--pw-muted) 40%, transparent);
+        border-radius: 10px;
+        background: var(--pw-surface);
+        display: grid;
+        gap: 0.6rem;
+      }
+      .section-block h3 {
+        margin: 0;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--pw-accent);
+      }
+      .disclose > summary {
+        list-style: none;
+        cursor: pointer;
+        margin: -0.35rem -0.45rem;
+        padding: 0.35rem 0.45rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--pw-accent);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        user-select: none;
+        border-radius: 8px;
+      }
+      .disclose > summary:hover {
+        background: var(--pw-accent-soft);
+      }
+      .disclose > summary::-webkit-details-marker {
+        display: none;
+      }
+      .disclose > summary::after {
+        content: '▾';
+        flex: 0 0 auto;
+        width: 1.6rem;
+        height: 1.6rem;
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        border: 1px solid color-mix(in srgb, var(--pw-muted) 55%, transparent);
+        background: var(--pw-surface-2, color-mix(in srgb, var(--pw-muted) 8%, var(--pw-surface)));
+        color: var(--pw-text-strong, inherit);
+        font-size: 1.05rem;
+        line-height: 1;
+        transform: rotate(-90deg);
+        transition: transform 0.15s ease, background 0.15s ease;
+      }
+      .disclose[open] > summary::after {
+        transform: rotate(0deg);
+        background: var(--pw-accent-soft);
+        border-color: var(--pw-accent);
+        color: var(--pw-accent);
+      }
+      .disclose-body {
+        display: grid;
+        gap: 0.6rem;
+        margin-top: 0.35rem;
+      }
+      .section-block > label,
+      .disclose-body > label,
+      .field-row > label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+        color: var(--pw-muted);
+        min-width: 0;
+      }
+      .value {
+        color: var(--pw-text);
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .field-row {
+        display: grid;
+        gap: 0.6rem;
+        grid-template-columns: minmax(0, 1fr);
+      }
+      @media (min-width: 641px) {
+        .field-row {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      .disclose-body input,
+      .disclose-body textarea,
+      .section-block input {
+        border: 1px solid var(--pw-border);
+        border-radius: 8px;
+        padding: 0.5rem 0.65rem;
+        min-height: 2.5rem;
+        background: var(--pw-surface);
+        color: inherit;
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+      }
+      .disclose-body textarea {
+        min-height: 4rem;
+        resize: vertical;
+      }
+      .emergency-list {
+        display: grid;
+        gap: 0.75rem;
+      }
+      .emergency-row {
+        position: relative;
+        min-width: 0;
+        margin: 0;
+        padding: 0.85rem;
+        padding-right: 3rem;
+        border: 1px solid var(--pw-border);
+        border-radius: 10px;
+        background: var(--pw-surface-2, color-mix(in srgb, var(--pw-muted) 8%, var(--pw-surface)));
+      }
+      .emergency-row.view {
+        padding-right: 0.85rem;
+      }
+      .emergency-row legend,
+      .emergency-row h4 {
+        margin: 0 0 0.5rem;
+        padding-inline: 0.35rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--pw-accent);
+      }
+      .emergency-fields {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.65rem;
+      }
+      .emergency-fields > label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+        color: var(--pw-muted);
+        min-width: 0;
+      }
+      .emergency-notes {
+        grid-column: 1 / -1;
+      }
+      .emergency-remove {
+        position: absolute;
+        top: 0.55rem;
+        right: 0.55rem;
+      }
+      .icon-btn {
+        width: 2rem;
+        height: 2rem;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid var(--pw-border);
+        border-radius: 8px;
+        background: var(--pw-surface);
+        color: var(--pw-muted);
+        cursor: pointer;
+      }
+      .icon-btn.danger {
+        color: var(--pw-danger, #a32d2d);
+      }
+      .icon-btn:hover {
+        border-color: var(--pw-border-strong, var(--pw-border));
+      }
+      .icon-btn svg {
+        display: block;
+      }
+      .emergency-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      @media (min-width: 641px) {
+        .emergency-fields {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
       .btn {
         border: 0; border-radius: 8px; background: var(--pw-accent); color: var(--pw-on-accent);
         padding: 0.55rem 0.9rem; min-height: 2.5rem; font-weight: 600; cursor: pointer; text-decoration: none;
         display: inline-flex; align-items: center;
       }
       .btn.ghost { background: transparent; border: 1px solid var(--pw-border); color: var(--pw-text); }
+      .btn.sm { min-height: 2.1rem; padding: 0.35rem 0.65rem; font-size: 0.85rem; }
+      .btn.danger { color: var(--pw-danger, #a32d2d); border-color: color-mix(in srgb, var(--pw-danger, #a32d2d) 40%, var(--pw-border)); }
       .completeness { display: grid; gap: 0.35rem; }
       .bar { height: 8px; background: var(--pw-border); border-radius: 99px; overflow: hidden; }
       .bar span { display: block; height: 100%; background: var(--pw-accent); }
-      .tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        align-items: center;
+        align-self: start;
+        width: 100%;
+      }
       .tab {
-        border: 1px solid var(--pw-border); background: var(--pw-surface); border-radius: 999px;
-        padding: 0.45rem 0.85rem; cursor: pointer; min-height: 2.4rem;
+        border: 1px solid var(--pw-border);
+        background: var(--pw-surface);
+        border-radius: 999px;
+        padding: 0.45rem 0.85rem;
+        cursor: pointer;
+        min-height: 2.4rem;
+        height: auto;
+        flex: 0 0 auto;
+        align-self: center;
       }
       .tab.active { border-color: var(--pw-accent); color: var(--pw-accent); font-weight: 700; }
+      .subtabs {
+        margin-bottom: 0.25rem;
+        padding-bottom: 0.65rem;
+        border-bottom: 1px solid var(--pw-border);
+      }
+      .subtabs .tab {
+        min-height: 2.1rem;
+        padding: 0.35rem 0.7rem;
+        font-size: 0.9rem;
+      }
       .panel {
         padding: 1rem; border: 1px solid var(--pw-border); border-radius: 12px; background: var(--pw-surface);
         display: grid; gap: 0.75rem;
+        min-height: 28rem;
+        align-content: start;
+        align-items: start;
       }
       .grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin: 0; }
       .grid div { display: grid; gap: 0.15rem; }
       dt { color: var(--pw-muted); font-size: 0.8rem; }
       dd { margin: 0; font-weight: 600; }
-      .edit, .edit-block { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
+      .edit { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
       .edit label { display: grid; gap: 0.25rem; font-size: 0.9rem; }
       .edit input, .edit select {
         border: 1px solid var(--pw-border); border-radius: 8px; padding: 0.5rem 0.65rem; min-height: 2.5rem;
         background: var(--pw-surface); color: inherit;
       }
+      .row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
       .timeline { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
       .timeline li { padding: 0.55rem 0; border-bottom: 1px solid var(--pw-border); }
+      .timeline.assignments {
+        gap: 0.75rem;
+      }
+      .timeline.assignments > li {
+        padding: 0;
+        border-bottom: 0;
+      }
+      .history-row {
+        display: grid;
+        gap: 0.65rem;
+        margin: 0;
+        padding: 0.85rem 0.9rem;
+        border: 1px solid color-mix(in srgb, var(--pw-muted) 40%, transparent);
+        border-radius: 10px;
+        background: var(--pw-surface);
+      }
+      .history-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.65rem 1rem;
+      }
+      .history-main {
+        min-width: 0;
+        flex: 1 1 12rem;
+        overflow-wrap: anywhere;
+        line-height: 1.45;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.45rem 0.55rem;
+      }
+      .history-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        flex: 0 0 auto;
+        margin-left: auto;
+        align-items: center;
+      }
       .muted { color: var(--pw-muted); }
       .error { color: var(--pw-danger, #a32d2d); }
       @media (max-width: 640px) {
@@ -329,29 +1059,25 @@ type TabId =
 export class PeopleProfilePageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly http = inject(HttpClient);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly profile = signal<ProfileResponse | null>(null);
-  readonly tab = signal<TabId>('overview');
-  readonly editing = signal(false);
+  readonly tab = signal<TabId>('data');
+  readonly dataTab = signal<DataTabId>('basics');
+  readonly absenceTab = signal<AbsenceTabId>('requests');
+  readonly editingBasics = signal(false);
+  readonly editingContacts = signal(false);
+  readonly creatingAssignment = signal(false);
+  readonly editingAssignmentId = signal<string | null>(null);
+  readonly deletingAssignmentId = signal<string | null>(null);
   readonly busy = signal(false);
   readonly audit = signal<Array<{ id: string; action: string; createdAt: string }>>([]);
-  readonly historyAssign = signal<
-    Array<{
-      id: string;
-      status: string;
-      startDate: string | null;
-      endDate: string | null;
-      department?: { name: string } | null;
-      position?: { name: string } | null;
-    }>
-  >([]);
+  readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
 
   readonly tabs: Array<{ id: TabId; label: string }> = [
-    { id: 'overview', label: 'Огляд' },
-    { id: 'employment', label: 'Робота' },
-    { id: 'personal', label: 'Особисті' },
+    { id: 'data', label: 'Дані' },
     { id: 'absences', label: 'Відсутності' },
     { id: 'history', label: 'Історія' },
     { id: 'later', label: 'Згодом' },
@@ -363,23 +1089,36 @@ export class PeopleProfilePageComponent implements OnInit {
     middleName: '',
     preferredName: '',
   };
-  personalForm = {
+  personalCoreForm = {
     birthDate: '',
     city: '',
     preferredLanguage: '',
+  };
+  personalContactsForm = {
     personalPhone: '',
     personalEmail: '',
     personalTelegram: '',
   };
-  emergencyForm = {
-    fullName: '',
-    relationship: '',
-    primaryPhone: '',
+  workContactsForm = {
+    workEmail: '',
+    workPhone: '',
+    workTelegram: '',
   };
+  emergencyForms: EmergencyContactDraft[] = [];
   assignmentForm = {
     workFormat: '',
     workLocation: '',
+    employmentType: '',
     startDate: '',
+    probationEndDate: '',
+    changeReason: '',
+  };
+  editAssignmentForm = {
+    workFormat: '',
+    workLocation: '',
+    employmentType: '',
+    startDate: '',
+    endDate: '',
     probationEndDate: '',
     changeReason: '',
   };
@@ -387,8 +1126,130 @@ export class PeopleProfilePageComponent implements OnInit {
   private employeeId = '';
 
   ngOnInit(): void {
-    this.employeeId = this.route.snapshot.paramMap.get('id') ?? '';
-    this.reload();
+    this.route.paramMap
+      .pipe(
+        map((params) => params.get('id')),
+        filter((id): id is string => Boolean(id)),
+        distinctUntilChanged(),
+        tap((employeeId) => {
+          this.employeeId = employeeId;
+          this.resetProfileState();
+          this.loading.set(true);
+        }),
+        switchMap((employeeId) =>
+          this.http.get<ProfileResponse>(`/api/v1/employees/${employeeId}/profile`).pipe(
+            map((profile) => ({ employeeId, profile })),
+            catchError(() => {
+              this.error.set('Не вдалося завантажити профіль');
+              this.loading.set(false);
+              return EMPTY;
+            }),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(({ employeeId, profile }) => {
+        this.applyProfile(profile);
+        this.loading.set(false);
+        this.loadSecondaryData(employeeId, profile);
+      });
+  }
+
+  setTab(id: TabId): void {
+    if (this.tab() === id) return;
+    this.withPreservedScroll(() => {
+      this.tab.set(id);
+      this.resetEditingModes();
+    });
+  }
+
+  setDataTab(id: DataTabId): void {
+    if (this.dataTab() === id) return;
+    this.withPreservedScroll(() => {
+      this.dataTab.set(id);
+      this.resetEditingModes();
+    });
+  }
+
+  setAbsenceTab(id: AbsenceTabId): void {
+    if (this.absenceTab() === id) return;
+    this.withPreservedScroll(() => {
+      this.absenceTab.set(id);
+    });
+  }
+
+  startBasicsEditing(): void {
+    this.editingContacts.set(false);
+    this.emergencyForms = [];
+    this.resetEmploymentEditing();
+    const p = this.profile();
+    if (p) this.applyProfile(p);
+    this.editingBasics.set(true);
+  }
+
+  cancelBasicsEditing(): void {
+    const p = this.profile();
+    if (p) this.applyProfile(p);
+    this.editingBasics.set(false);
+  }
+
+  startContactsEditing(): void {
+    this.editingBasics.set(false);
+    this.resetEmploymentEditing();
+    const p = this.profile();
+    if (p) this.applyProfile(p);
+    this.hydrateEmergencyDrafts();
+    this.error.set(null);
+    this.editingContacts.set(true);
+  }
+
+  cancelContactsEditing(): void {
+    const p = this.profile();
+    if (p) this.applyProfile(p);
+    this.emergencyForms = [];
+    this.error.set(null);
+    this.editingContacts.set(false);
+  }
+
+  addEmergencyContact(): void {
+    if (this.emergencyForms.length >= 5) {
+      return;
+    }
+    this.emergencyForms = [...this.emergencyForms, this.createEmergencyDraft()];
+  }
+
+  removeEmergencyContact(key: string): void {
+    this.emergencyForms = this.emergencyForms.filter((contact) => contact.key !== key);
+  }
+
+  startCreatingAssignment(): void {
+    this.editingBasics.set(false);
+    this.editingContacts.set(false);
+    this.emergencyForms = [];
+    this.editingAssignmentId.set(null);
+    this.creatingAssignment.set(true);
+  }
+
+  cancelCreatingAssignment(): void {
+    this.creatingAssignment.set(false);
+  }
+
+  startEditAssignment(h: AssignmentHistoryItem): void {
+    this.creatingAssignment.set(false);
+    this.editingAssignmentId.set(h.id);
+    this.editAssignmentForm = {
+      workFormat: h.workFormat || '',
+      workLocation: h.workLocation || '',
+      employmentType: h.employmentType || '',
+      startDate: h.startDate || '',
+      endDate: h.endDate || '',
+      probationEndDate: h.probationEndDate || '',
+      changeReason: h.changeReason || '',
+    };
+  }
+
+  cancelEditAssignment(): void {
+    this.editingAssignmentId.set(null);
   }
 
   initials(name: string): string {
@@ -422,55 +1283,6 @@ export class PeopleProfilePageComponent implements OnInit {
     return '—';
   }
 
-  reload(): void {
-    this.loading.set(true);
-    this.error.set(null);
-    this.http.get<ProfileResponse>(`/api/v1/employees/${this.employeeId}/profile`).subscribe({
-      next: (p) => {
-        this.profile.set(p);
-        this.basicForm = {
-          firstName: String(p.sections.overview?.['firstName'] ?? ''),
-          lastName: String(p.sections.overview?.['lastName'] ?? ''),
-          middleName: String(p.sections.overview?.['middleName'] ?? ''),
-          preferredName: String(p.header.preferredName ?? ''),
-        };
-        const pers = p.sections.personal ?? {};
-        this.personalForm = {
-          birthDate: String(pers['birthDate'] ?? ''),
-          city: String(pers['city'] ?? ''),
-          preferredLanguage: String(pers['preferredLanguage'] ?? ''),
-          personalPhone: String(pers['personalPhone'] ?? ''),
-          personalEmail: String(pers['personalEmail'] ?? ''),
-          personalTelegram: String(pers['personalTelegram'] ?? ''),
-        };
-        this.loading.set(false);
-        if (p.capabilities.canViewHistory) {
-          this.http
-            .get<Array<{ id: string; action: string; createdAt: string }>>(
-              `/api/v1/employees/${this.employeeId}/history`,
-            )
-            .subscribe({ next: (rows) => this.audit.set(rows) });
-        }
-        this.http
-          .get<
-            Array<{
-              id: string;
-              status: string;
-              startDate: string | null;
-              endDate: string | null;
-              department?: { name: string } | null;
-              position?: { name: string } | null;
-            }>
-          >(`/api/v1/employees/${this.employeeId}/employment-history`)
-          .subscribe({ next: (rows) => this.historyAssign.set(rows) });
-      },
-      error: () => {
-        this.error.set('Не вдалося завантажити профіль');
-        this.loading.set(false);
-      },
-    });
-  }
-
   formatDate(value: string): string {
     try {
       return new Date(value).toLocaleString('uk-UA');
@@ -479,56 +1291,257 @@ export class PeopleProfilePageComponent implements OnInit {
     }
   }
 
-  saveBasic(): void {
-    this.busy.set(true);
-    this.http
-      .patch(`/api/v1/employees/${this.employeeId}/basic`, {
-        firstName: this.basicForm.firstName,
-        lastName: this.basicForm.lastName,
-        middleName: this.basicForm.middleName || null,
-        preferredName: this.basicForm.preferredName || null,
-      })
-      .subscribe({
-        next: (p) => {
-          this.profile.set(p as ProfileResponse);
-          this.editing.set(false);
-          this.busy.set(false);
-        },
-        error: () => this.busy.set(false),
-      });
+  private resetProfileState(): void {
+    this.profile.set(null);
+    this.audit.set([]);
+    this.historyAssign.set([]);
+    this.error.set(null);
+    this.resetEditingModes();
+    this.tab.set('data');
+    this.dataTab.set('basics');
+    this.absenceTab.set('requests');
   }
 
-  savePersonal(): void {
-    this.busy.set(true);
-    this.http
-      .patch(`/api/v1/employees/${this.employeeId}/personal`, {
-        birthDate: this.personalForm.birthDate || null,
-        city: this.personalForm.city || null,
-        preferredLanguage: this.personalForm.preferredLanguage || null,
-        personalPhone: this.personalForm.personalPhone || null,
-        personalEmail: this.personalForm.personalEmail || null,
-        personalTelegram: this.personalForm.personalTelegram || null,
-      })
-      .subscribe({
-        next: (p) => {
-          this.profile.set(p as ProfileResponse);
-          this.busy.set(false);
-        },
-        error: () => this.busy.set(false),
-      });
+  private resetEditingModes(): void {
+    this.editingBasics.set(false);
+    this.editingContacts.set(false);
+    this.emergencyForms = [];
+    this.resetEmploymentEditing();
   }
 
-  saveEmergency(): void {
-    this.busy.set(true);
-    this.http
-      .put(`/api/v1/employees/${this.employeeId}/emergency-contact`, this.emergencyForm)
-      .subscribe({
-        next: (p) => {
-          this.profile.set(p as ProfileResponse);
-          this.busy.set(false);
-        },
-        error: () => this.busy.set(false),
+  private withPreservedScroll(action: () => void): void {
+    const y = window.scrollY;
+    action();
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: y, left: 0, behavior: 'auto' });
       });
+    });
+  }
+
+  private resetEmploymentEditing(): void {
+    this.creatingAssignment.set(false);
+    this.editingAssignmentId.set(null);
+    this.deletingAssignmentId.set(null);
+  }
+
+  private applyProfile(p: ProfileResponse): void {
+    this.profile.set(p);
+    this.basicForm = {
+      firstName: String(p.sections.overview?.['firstName'] ?? ''),
+      lastName: String(p.sections.overview?.['lastName'] ?? ''),
+      middleName: String(p.sections.overview?.['middleName'] ?? ''),
+      preferredName: String(p.header.preferredName ?? ''),
+    };
+    const pers = p.sections.personal ?? {};
+    this.personalCoreForm = {
+      birthDate: String(pers['birthDate'] ?? ''),
+      city: String(pers['city'] ?? ''),
+      preferredLanguage: String(pers['preferredLanguage'] ?? ''),
+    };
+    this.personalContactsForm = {
+      personalPhone: String(pers['personalPhone'] ?? ''),
+      personalEmail: String(pers['personalEmail'] ?? ''),
+      personalTelegram: String(pers['personalTelegram'] ?? ''),
+    };
+    this.workContactsForm = {
+      workEmail: String(p.header.workEmail ?? ''),
+      workPhone: String(p.header.workPhone ?? ''),
+      workTelegram: String(p.header.workTelegram ?? ''),
+    };
+    const emp = p.sections.employment;
+    this.assignmentForm = {
+      workFormat: String(emp?.['workFormat'] ?? ''),
+      workLocation: String(emp?.['workLocation'] ?? ''),
+      employmentType: String(emp?.['employmentType'] ?? ''),
+      startDate: '',
+      probationEndDate: '',
+      changeReason: '',
+    };
+  }
+
+  private loadSecondaryData(employeeId: string, profile: ProfileResponse): void {
+    const history$ = profile.capabilities.canViewHistory
+      ? this.http
+          .get<Array<{ id: string; action: string; createdAt: string }>>(
+            `/api/v1/employees/${employeeId}/history`,
+          )
+          .pipe(catchError(() => of([])))
+      : of([]);
+
+    const assignments$ = this.http
+      .get<AssignmentHistoryItem[]>(`/api/v1/employees/${employeeId}/employment-history`)
+      .pipe(catchError(() => of([] as AssignmentHistoryItem[])));
+
+    forkJoin({ history: history$, assignments: assignments$ }).subscribe({
+      next: ({ history, assignments }) => {
+        if (employeeId !== this.employeeId) return;
+        this.audit.set(history);
+        this.historyAssign.set(assignments);
+      },
+    });
+  }
+
+  saveBasics(): void {
+    const caps = this.profile()?.capabilities;
+    if (!caps) return;
+    this.busy.set(true);
+
+    const requests = [];
+    if (caps.canEditBasic) {
+      requests.push(
+        this.http.patch(`/api/v1/employees/${this.employeeId}/basic`, {
+          firstName: this.basicForm.firstName,
+          lastName: this.basicForm.lastName,
+          middleName: this.basicForm.middleName || null,
+          preferredName: this.basicForm.preferredName || null,
+        }),
+      );
+    }
+    if (caps.canEditPersonal) {
+      requests.push(
+        this.http.patch(`/api/v1/employees/${this.employeeId}/personal`, {
+          birthDate: this.personalCoreForm.birthDate || null,
+          city: this.personalCoreForm.city || null,
+          preferredLanguage: this.personalCoreForm.preferredLanguage || null,
+        }),
+      );
+    }
+
+    if (!requests.length) {
+      this.busy.set(false);
+      return;
+    }
+
+    forkJoin(requests).subscribe({
+      next: (results) => {
+        const last = results[results.length - 1] as ProfileResponse;
+        this.applyProfile(last);
+        this.editingBasics.set(false);
+        this.busy.set(false);
+      },
+      error: () => this.busy.set(false),
+    });
+  }
+
+  saveContacts(): void {
+    const caps = this.profile()?.capabilities;
+    if (!caps) return;
+
+    let emergencyContacts:
+      | Array<{
+          fullName: string;
+          relationship: string | null;
+          primaryPhone: string;
+          secondaryPhone: string | null;
+          notes: string | null;
+        }>
+      | null = null;
+
+    if (caps.canEditEmergencyContact) {
+      const contacts = this.emergencyForms
+        .filter((contact) => !this.isEmergencyContactCompletelyEmpty(contact))
+        .map((contact) => ({
+          fullName: contact.fullName.trim(),
+          relationship: contact.relationship.trim() || null,
+          primaryPhone: contact.primaryPhone.trim(),
+          secondaryPhone: contact.secondaryPhone.trim() || null,
+          notes: contact.notes.trim() || null,
+        }));
+
+      const invalid = contacts.some(
+        (contact) => !contact.fullName || !contact.primaryPhone,
+      );
+      if (invalid) {
+        this.error.set(
+          'Для кожного екстреного контакту вкажіть ПІБ і основний телефон.',
+        );
+        return;
+      }
+
+      emergencyContacts = contacts;
+    }
+
+    this.error.set(null);
+    this.busy.set(true);
+
+    const requests = [];
+    if (caps.canEditBasic) {
+      requests.push(
+        this.http.patch(`/api/v1/employees/${this.employeeId}/contacts`, {
+          workEmail: this.workContactsForm.workEmail || null,
+          workPhone: this.workContactsForm.workPhone || null,
+          workTelegram: this.workContactsForm.workTelegram || null,
+        }),
+      );
+    }
+    if (caps.canEditPersonal) {
+      requests.push(
+        this.http.patch(`/api/v1/employees/${this.employeeId}/personal`, {
+          personalPhone: this.personalContactsForm.personalPhone || null,
+          personalEmail: this.personalContactsForm.personalEmail || null,
+          personalTelegram: this.personalContactsForm.personalTelegram || null,
+        }),
+      );
+    }
+    if (emergencyContacts !== null) {
+      requests.push(
+        this.http.put(`/api/v1/employees/${this.employeeId}/emergency-contact`, {
+          contacts: emergencyContacts,
+        }),
+      );
+    }
+
+    if (!requests.length) {
+      this.busy.set(false);
+      return;
+    }
+
+    forkJoin(requests).subscribe({
+      next: (results) => {
+        const last = results[results.length - 1] as ProfileResponse;
+        this.applyProfile(last);
+        this.emergencyForms = [];
+        this.editingContacts.set(false);
+        this.busy.set(false);
+      },
+      error: () => {
+        this.error.set('Не вдалося зберегти контакти');
+        this.busy.set(false);
+      },
+    });
+  }
+
+  private hydrateEmergencyDrafts(): void {
+    const source = this.profile()?.sections.emergencyContact ?? [];
+    this.emergencyForms = source.map((contact) => this.createEmergencyDraft(contact));
+    if (!this.emergencyForms.length) {
+      this.addEmergencyContact();
+    }
+  }
+
+  private createEmergencyDraft(
+    source?: Record<string, unknown>,
+  ): EmergencyContactDraft {
+    return {
+      key: String(source?.['id'] ?? '') || crypto.randomUUID(),
+      fullName: String(source?.['fullName'] ?? ''),
+      relationship: String(source?.['relationship'] ?? ''),
+      primaryPhone: String(source?.['primaryPhone'] ?? ''),
+      secondaryPhone: String(source?.['secondaryPhone'] ?? ''),
+      notes: String(source?.['notes'] ?? ''),
+    };
+  }
+
+  private isEmergencyContactCompletelyEmpty(contact: EmergencyContactDraft): boolean {
+    return [
+      contact.fullName,
+      contact.relationship,
+      contact.primaryPhone,
+      contact.secondaryPhone,
+      contact.notes,
+    ].every((value) => !value.trim());
   }
 
   saveAssignment(): void {
@@ -538,20 +1551,77 @@ export class PeopleProfilePageComponent implements OnInit {
       .post(`/api/v1/employees/${this.employeeId}/employment-assignments`, {
         departmentId: p?.sections.employment?.['departmentId'] ?? null,
         positionId: p?.sections.employment?.['positionId'] ?? null,
+        companyId: p?.sections.employment?.['companyId'] ?? null,
+        directionId: p?.sections.employment?.['directionId'] ?? null,
         workFormat: this.assignmentForm.workFormat || null,
         workLocation: this.assignmentForm.workLocation || null,
+        employmentType: this.assignmentForm.employmentType || null,
         startDate: this.assignmentForm.startDate || null,
         probationEndDate: this.assignmentForm.probationEndDate || null,
         changeReason: this.assignmentForm.changeReason || null,
       })
       .subscribe({
         next: (res) => {
-          this.profile.set(res as ProfileResponse);
+          this.applyProfile(res as ProfileResponse);
+          this.creatingAssignment.set(false);
           this.busy.set(false);
-          this.reload();
+          this.reloadAssignments();
         },
         error: () => this.busy.set(false),
       });
   }
-}
 
+  saveEditedAssignment(h: AssignmentHistoryItem): void {
+    this.busy.set(true);
+    this.http
+      .patch(`/api/v1/employees/${this.employeeId}/employment-assignments/${h.id}`, {
+        workFormat: this.editAssignmentForm.workFormat || null,
+        workLocation: this.editAssignmentForm.workLocation || null,
+        employmentType: this.editAssignmentForm.employmentType || null,
+        startDate: this.editAssignmentForm.startDate || null,
+        endDate: this.editAssignmentForm.endDate || null,
+        probationEndDate: this.editAssignmentForm.probationEndDate || null,
+        changeReason: this.editAssignmentForm.changeReason || null,
+      })
+      .subscribe({
+        next: (res) => {
+          this.applyProfile(res as ProfileResponse);
+          this.editingAssignmentId.set(null);
+          this.busy.set(false);
+          this.reloadAssignments();
+        },
+        error: () => this.busy.set(false),
+      });
+  }
+
+  deleteAssignment(h: AssignmentHistoryItem): void {
+    if (!confirm('Видалити це призначення з історії?')) return;
+    this.deletingAssignmentId.set(h.id);
+    this.busy.set(true);
+    this.http
+      .delete(`/api/v1/employees/${this.employeeId}/employment-assignments/${h.id}`)
+      .subscribe({
+        next: (res) => {
+          this.applyProfile(res as ProfileResponse);
+          this.deletingAssignmentId.set(null);
+          this.busy.set(false);
+          this.reloadAssignments();
+        },
+        error: () => {
+          this.deletingAssignmentId.set(null);
+          this.busy.set(false);
+        },
+      });
+  }
+
+  private reloadAssignments(): void {
+    const employeeId = this.employeeId;
+    this.http
+      .get<AssignmentHistoryItem[]>(`/api/v1/employees/${employeeId}/employment-history`)
+      .subscribe({
+        next: (rows) => {
+          if (employeeId === this.employeeId) this.historyAssign.set(rows);
+        },
+      });
+  }
+}

@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsEmail,
@@ -24,6 +25,7 @@ import {
   IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
   MinLength,
   ValidateNested,
@@ -175,12 +177,39 @@ class PatchPersonalDto {
   @IsOptional() @IsString() personalTelegram?: string | null;
 }
 
-class EmergencyDto {
-  @IsString() @MinLength(1) fullName!: string;
-  @IsOptional() @IsString() relationship?: string | null;
-  @IsString() @MinLength(1) primaryPhone!: string;
-  @IsOptional() @IsString() secondaryPhone?: string | null;
-  @IsOptional() @IsString() notes?: string | null;
+class EmergencyContactItemDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  fullName!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  relationship?: string | null;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  primaryPhone!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  secondaryPhone?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  notes?: string | null;
+}
+
+class ReplaceEmergencyContactsDto {
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => EmergencyContactItemDto)
+  contacts!: EmergencyContactItemDto[];
 }
 
 class CreateAssignmentDto {
@@ -197,6 +226,26 @@ class CreateAssignmentDto {
   @IsOptional() @IsString() employmentType?: string | null;
   @IsOptional() @IsString() contractType?: string | null;
   @IsOptional() @IsString() startDate?: string | null;
+  @IsOptional() @IsString() endDate?: string | null;
+  @IsOptional() @IsString() probationEndDate?: string | null;
+  @IsOptional() @IsString() changeReason?: string | null;
+}
+
+class UpdateAssignmentDto {
+  @IsOptional() @IsUUID() companyId?: string | null;
+  @IsOptional() @IsUUID() directionId?: string | null;
+  @IsOptional() @IsUUID() departmentId?: string | null;
+  @IsOptional() @IsUUID() positionId?: string | null;
+  @IsOptional() @IsString() functionalRole?: string | null;
+  @IsOptional() @IsUUID() managerEmployeeId?: string | null;
+  @IsOptional() @IsUUID() mentorEmployeeId?: string | null;
+  @IsOptional() @IsUUID() hrResponsibleEmployeeId?: string | null;
+  @IsOptional() @IsString() workLocation?: string | null;
+  @IsOptional() @IsString() workFormat?: string | null;
+  @IsOptional() @IsString() employmentType?: string | null;
+  @IsOptional() @IsString() contractType?: string | null;
+  @IsOptional() @IsString() startDate?: string | null;
+  @IsOptional() @IsString() endDate?: string | null;
   @IsOptional() @IsString() probationEndDate?: string | null;
   @IsOptional() @IsString() changeReason?: string | null;
 }
@@ -313,6 +362,27 @@ export class EmployeesController {
     return this.profile.createAssignment(user, id, dto);
   }
 
+  @Patch(':id/employment-assignments/:assignmentId')
+  @RequirePermissions(Permission.EmployeesEdit)
+  updateAssignment(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @Body() dto: UpdateAssignmentDto,
+  ) {
+    return this.profile.updateAssignment(user, id, assignmentId, dto);
+  }
+
+  @Delete(':id/employment-assignments/:assignmentId')
+  @RequirePermissions(Permission.EmployeesEdit)
+  deleteAssignment(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+  ) {
+    return this.profile.deleteAssignment(user, id, assignmentId);
+  }
+
   @Post(':id/status-transitions')
   @RequirePermissions(Permission.EmployeesEdit)
   statusTransition(
@@ -358,9 +428,9 @@ export class EmployeesController {
   putEmergency(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: EmergencyDto,
+    @Body() dto: ReplaceEmergencyContactsDto,
   ) {
-    return this.profile.replaceEmergency(user, id, dto);
+    return this.profile.replaceEmergencyContacts(user, id, dto.contacts);
   }
 
   @Get(':id/export.pdf')

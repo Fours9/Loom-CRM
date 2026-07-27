@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { AuditService } from '../../platform/audit/audit.service';
 import { permissionsForRole } from '../../platform/permissions/role-permissions';
@@ -18,6 +18,25 @@ import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
 import { EmployeeSerializer } from './employee.serializer';
 import { AuditLog } from '../../platform/audit/audit-log.entity';
+
+type AssignmentWriteDto = {
+  companyId?: string | null;
+  directionId?: string | null;
+  departmentId?: string | null;
+  positionId?: string | null;
+  functionalRole?: string | null;
+  managerEmployeeId?: string | null;
+  mentorEmployeeId?: string | null;
+  hrResponsibleEmployeeId?: string | null;
+  workLocation?: string | null;
+  workFormat?: string | null;
+  employmentType?: string | null;
+  contractType?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  probationEndDate?: string | null;
+  changeReason?: string | null;
+};
 
 export type ProfileCapabilities = {
   canEditBasic: boolean;
@@ -53,6 +72,7 @@ export class EmployeeProfileService {
     private readonly access: EmployeeAccessService,
     private readonly serializer: EmployeeSerializer,
     private readonly audit: AuditService,
+    private readonly dataSource: DataSource,
   ) {}
 
   private hasPerm(user: User, perm: Permission): boolean {
@@ -470,117 +490,286 @@ export class EmployeeProfileService {
     return this.getProfile(actor, id);
   }
 
-  async replaceEmergency(
+  async replaceEmergencyContacts(
     actor: User,
-    id: string,
-    dto: {
+    employeeId: string,
+    contacts: Array<{
       fullName: string;
       relationship?: string | null;
       primaryPhone: string;
       secondaryPhone?: string | null;
       notes?: string | null;
-    },
+    }>,
   ) {
-    const employee = await this.access.getEmployeeOrFail(id);
-    const caps = await this.capabilities(actor, employee);
-    if (!caps.canEditEmergencyContact) {
-      throw new BadRequestException('Cannot edit emergency contact');
+    const employee = await this.access.getEmployeeOrFail(employeeId);
+    const capabilities = await this.capabilities(actor, employee);
+    if (!capabilities.canEditEmergencyContact) {
+      throw new BadRequestException('Cannot edit emergency contacts');
     }
-    await this.emergencies.update(
-      { employeeId: id, isActive: true },
-      { isActive: false },
-    );
-    const row = this.emergencies.create({
-      employeeId: id,
-      fullName: dto.fullName.trim(),
-      relationship: dto.relationship?.trim() || null,
-      primaryPhone: dto.primaryPhone.trim(),
-      secondaryPhone: dto.secondaryPhone?.trim() || null,
-      notes: dto.notes?.trim() || null,
-      priority: 1,
-      isActive: true,
+
+    await this.dataSource.transaction(async (manager) => {
+      const employeeRepository = manager.getRepository(Employee);
+      const emergencyRepository = manager.getRepository(EmployeeEmergencyContact);
+
+      await employeeRepository.findOneOrFail({
+        where: { id: employeeId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      const previous = await emergencyRepository.find({
+        where: { employeeId, isActive: true },
+      });
+
+      await emergencyRepository.update(
+        { employeeId, isActive: true },
+        { isActive: false },
+      );
+
+      const rows = contacts.map((contact, index) =>
+        emergencyRepository.create({
+          employeeId,
+          fullName: contact.fullName.trim(),
+          relationship: contact.relationship?.trim() || null,
+          primaryPhone: contact.primaryPhone.trim(),
+          secondaryPhone: contact.secondaryPhone?.trim() || null,
+          notes: contact.notes?.trim() || null,
+          priority: index + 1,
+          isActive: true,
+        }),
+      );
+
+      const saved = rows.length ? await emergencyRepository.save(rows) : [];
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.emergency_updated',
+          entityType: 'Employee',
+          entityId: employeeId,
+          metadata: {
+            previousCount: previous.length,
+            count: saved.length,
+            deactivatedIds: previous.map((row) => row.id),
+            createdIds: saved.map((row) => row.id),
+          },
+        },
+        manager,
+      );
     });
-    await this.emergencies.save(row);
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.emergency_updated',
-      entityType: 'Employee',
-      entityId: id,
-      metadata: { emergencyContactId: row.id },
-    });
-    return this.getProfile(actor, id);
+
+    return this.getProfile(actor, employeeId);
   }
 
-  async createAssignment(
-    actor: User,
-    id: string,
-    dto: {
-      companyId?: string | null;
-      directionId?: string | null;
-      departmentId?: string | null;
-      positionId?: string | null;
-      functionalRole?: string | null;
-      managerEmployeeId?: string | null;
-      mentorEmployeeId?: string | null;
-      hrResponsibleEmployeeId?: string | null;
-      workLocation?: string | null;
-      workFormat?: string | null;
-      employmentType?: string | null;
-      contractType?: string | null;
-      startDate?: string | null;
-      probationEndDate?: string | null;
-      changeReason?: string | null;
-    },
-  ) {
+  async createAssignment(actor: User, id: string, dto: AssignmentWriteDto) {
     const employee = await this.access.getEmployeeOrFail(id);
     const caps = await this.capabilities(actor, employee);
     if (!caps.canEditEmployment) {
       throw new BadRequestException('Cannot change assignment');
     }
+    this.assertAssignmentDates(dto, 'active');
     if (dto.managerEmployeeId && dto.managerEmployeeId === id) {
       throw new BadRequestException('Manager cannot be the same employee');
     }
 
-    await this.assignments.update(
-      { employeeId: id, status: 'active' },
-      { status: 'ended', endDate: dto.startDate ?? new Date().toISOString().slice(0, 10) },
-    );
+    const assignmentId = await this.dataSource.transaction(async (manager) => {
+      const employeeRepo = manager.getRepository(Employee);
+      const assignmentRepo = manager.getRepository(EmploymentAssignment);
+      const emp = await employeeRepo.findOneByOrFail({ id });
 
-    const assignment = this.assignments.create({
-      employeeId: id,
-      companyId: dto.companyId ?? null,
-      directionId: dto.directionId ?? null,
-      departmentId: dto.departmentId ?? null,
-      positionId: dto.positionId ?? null,
-      functionalRole: dto.functionalRole ?? null,
-      managerEmployeeId: dto.managerEmployeeId ?? null,
-      mentorEmployeeId: dto.mentorEmployeeId ?? null,
-      hrResponsibleEmployeeId: dto.hrResponsibleEmployeeId ?? null,
-      workLocation: dto.workLocation ?? null,
-      workFormat: dto.workFormat ?? null,
-      employmentType: dto.employmentType ?? null,
-      contractType: dto.contractType ?? null,
-      startDate: dto.startDate ?? null,
-      probationEndDate: dto.probationEndDate ?? null,
-      changeReason: dto.changeReason ?? null,
-      status: 'active',
-      createdByUserId: actor.id,
+      await assignmentRepo.update(
+        { employeeId: id, status: 'active' },
+        { status: 'ended', endDate: dto.startDate ?? new Date().toISOString().slice(0, 10) },
+      );
+
+      const assignment = assignmentRepo.create({
+        employeeId: id,
+        companyId: dto.companyId ?? null,
+        directionId: dto.directionId ?? null,
+        departmentId: dto.departmentId ?? null,
+        positionId: dto.positionId ?? null,
+        functionalRole: dto.functionalRole ?? null,
+        managerEmployeeId: dto.managerEmployeeId ?? null,
+        mentorEmployeeId: dto.mentorEmployeeId ?? null,
+        hrResponsibleEmployeeId: dto.hrResponsibleEmployeeId ?? null,
+        workLocation: dto.workLocation ?? null,
+        workFormat: dto.workFormat ?? null,
+        employmentType: dto.employmentType ?? null,
+        contractType: dto.contractType ?? null,
+        startDate: dto.startDate ?? null,
+        endDate: null,
+        probationEndDate: dto.probationEndDate ?? null,
+        changeReason: dto.changeReason ?? null,
+        status: 'active',
+        createdByUserId: actor.id,
+      });
+      await assignmentRepo.save(assignment);
+
+      emp.currentAssignmentId = assignment.id;
+      emp.departmentId = assignment.departmentId;
+      emp.positionId = assignment.positionId;
+      await employeeRepo.save(emp);
+      return assignment.id;
     });
-    await this.assignments.save(assignment);
-
-    employee.currentAssignmentId = assignment.id;
-    employee.departmentId = assignment.departmentId;
-    employee.positionId = assignment.positionId;
-    await this.employees.save(employee);
 
     await this.audit.record({
       actorId: actor.id,
       action: 'employee.assignment_changed',
       entityType: 'Employee',
       entityId: id,
-      metadata: { assignmentId: assignment.id, changeReason: dto.changeReason },
+      metadata: { assignmentId, changeReason: dto.changeReason },
     });
     return this.getProfile(actor, id);
+  }
+
+  async updateAssignment(
+    actor: User,
+    employeeId: string,
+    assignmentId: string,
+    dto: AssignmentWriteDto,
+  ) {
+    const employee = await this.access.getEmployeeOrFail(employeeId);
+    const caps = await this.capabilities(actor, employee);
+    if (!caps.canEditEmployment) {
+      throw new BadRequestException('Cannot change assignment');
+    }
+
+    const existing = await this.assignments.findOne({
+      where: { id: assignmentId, employeeId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    const nextManager =
+      dto.managerEmployeeId !== undefined
+        ? dto.managerEmployeeId
+        : existing.managerEmployeeId;
+    if (nextManager && nextManager === employeeId) {
+      throw new BadRequestException('Manager cannot be the same employee');
+    }
+
+    const merged: AssignmentWriteDto = {
+      startDate: dto.startDate !== undefined ? dto.startDate : existing.startDate,
+      endDate: dto.endDate !== undefined ? dto.endDate : existing.endDate,
+      probationEndDate:
+        dto.probationEndDate !== undefined
+          ? dto.probationEndDate
+          : existing.probationEndDate,
+    };
+    this.assertAssignmentDates(merged, existing.status);
+
+    await this.dataSource.transaction(async (manager) => {
+      const employeeRepo = manager.getRepository(Employee);
+      const assignmentRepo = manager.getRepository(EmploymentAssignment);
+      const row = await assignmentRepo.findOneByOrFail({
+        id: assignmentId,
+        employeeId,
+      });
+
+      if (dto.companyId !== undefined) row.companyId = dto.companyId;
+      if (dto.directionId !== undefined) row.directionId = dto.directionId;
+      if (dto.departmentId !== undefined) row.departmentId = dto.departmentId;
+      if (dto.positionId !== undefined) row.positionId = dto.positionId;
+      if (dto.functionalRole !== undefined) row.functionalRole = dto.functionalRole;
+      if (dto.managerEmployeeId !== undefined) {
+        row.managerEmployeeId = dto.managerEmployeeId;
+      }
+      if (dto.mentorEmployeeId !== undefined) row.mentorEmployeeId = dto.mentorEmployeeId;
+      if (dto.hrResponsibleEmployeeId !== undefined) {
+        row.hrResponsibleEmployeeId = dto.hrResponsibleEmployeeId;
+      }
+      if (dto.workLocation !== undefined) row.workLocation = dto.workLocation;
+      if (dto.workFormat !== undefined) row.workFormat = dto.workFormat;
+      if (dto.employmentType !== undefined) row.employmentType = dto.employmentType;
+      if (dto.contractType !== undefined) row.contractType = dto.contractType;
+      if (dto.startDate !== undefined) row.startDate = dto.startDate;
+      if (dto.endDate !== undefined) row.endDate = dto.endDate;
+      if (dto.probationEndDate !== undefined) {
+        row.probationEndDate = dto.probationEndDate;
+      }
+      if (dto.changeReason !== undefined) row.changeReason = dto.changeReason;
+
+      if (row.status === 'ended' && !row.endDate) {
+        throw new BadRequestException('Ended assignment must have endDate');
+      }
+      if (row.status === 'active' && row.endDate) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (row.endDate < today) {
+          throw new BadRequestException('Active assignment cannot have a past endDate');
+        }
+      }
+
+      await assignmentRepo.save(row);
+
+      if (row.status === 'active') {
+        const emp = await employeeRepo.findOneByOrFail({ id: employeeId });
+        emp.currentAssignmentId = row.id;
+        emp.departmentId = row.departmentId;
+        emp.positionId = row.positionId;
+        await employeeRepo.save(emp);
+      }
+    });
+
+    await this.audit.record({
+      actorId: actor.id,
+      action: 'employee.assignment_updated',
+      entityType: 'Employee',
+      entityId: employeeId,
+      metadata: { assignmentId },
+    });
+    return this.getProfile(actor, employeeId);
+  }
+
+  async deleteAssignment(actor: User, employeeId: string, assignmentId: string) {
+    const employee = await this.access.getEmployeeOrFail(employeeId);
+    const caps = await this.capabilities(actor, employee);
+    if (!caps.canEditEmployment) {
+      throw new BadRequestException('Cannot change assignment');
+    }
+
+    const existing = await this.assignments.findOne({
+      where: { id: assignmentId, employeeId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Assignment not found');
+    }
+    if (existing.status === 'active') {
+      throw new BadRequestException(
+        'Cannot delete active assignment; create a new assignment instead',
+      );
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      const assignmentRepo = manager.getRepository(EmploymentAssignment);
+      await assignmentRepo.delete({ id: assignmentId, employeeId });
+    });
+
+    await this.audit.record({
+      actorId: actor.id,
+      action: 'employee.assignment_deleted',
+      entityType: 'Employee',
+      entityId: employeeId,
+      metadata: { assignmentId, status: existing.status },
+    });
+    return this.getProfile(actor, employeeId);
+  }
+
+  private assertAssignmentDates(
+    dto: AssignmentWriteDto,
+    status: string,
+  ): void {
+    const start = dto.startDate ?? null;
+    const end = dto.endDate ?? null;
+    const probation = dto.probationEndDate ?? null;
+    if (start && end && end < start) {
+      throw new BadRequestException('endDate must be >= startDate');
+    }
+    if (start && probation && probation < start) {
+      throw new BadRequestException('probationEndDate must be >= startDate');
+    }
+    if (status === 'ended' && end === null && dto.endDate === null) {
+      // only enforce when explicitly clearing or creating as ended
+    }
   }
 
   async employmentHistory(actor: User, id: string) {
@@ -596,9 +785,23 @@ export class EmployeeProfileService {
     return rows.map((a) => ({
       id: a.id,
       status: a.status,
+      companyId: a.companyId,
+      directionId: a.directionId,
+      departmentId: a.departmentId,
+      positionId: a.positionId,
+      functionalRole: a.functionalRole,
+      managerEmployeeId: a.managerEmployeeId,
+      mentorEmployeeId: a.mentorEmployeeId,
+      hrResponsibleEmployeeId: a.hrResponsibleEmployeeId,
+      workLocation: a.workLocation,
+      workFormat: a.workFormat,
+      employmentType: a.employmentType,
+      contractType: a.contractType,
       startDate: a.startDate,
       endDate: a.endDate,
+      probationEndDate: a.probationEndDate,
       changeReason: a.changeReason,
+      updatedAt: a.updatedAt.toISOString(),
       department: a.department
         ? { id: a.department.id, name: a.department.name }
         : null,
@@ -609,8 +812,6 @@ export class EmployeeProfileService {
       direction: a.direction
         ? { id: a.direction.id, name: a.direction.name }
         : null,
-      workFormat: a.workFormat,
-      managerEmployeeId: a.managerEmployeeId,
     }));
   }
 
