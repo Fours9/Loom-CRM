@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -240,6 +241,15 @@ export class AbsencesController {
     @Param('employeeId') employeeId: string,
   ) {
     return this.requests.findForEmployee(user, employeeId);
+  }
+
+  @Get('employees/:employeeId/document-items')
+  @RequirePermissions(Permission.AbsencesCalendarView)
+  employeeDocumentItems(
+    @CurrentUser() user: User,
+    @Param('employeeId', ParseUUIDPipe) employeeId: string,
+  ) {
+    return this.requests.documentItemsForEmployee(user, employeeId);
   }
 
   @Post('requests')

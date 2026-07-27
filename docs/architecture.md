@@ -8,19 +8,23 @@
 Organization → Platform
 Absences → Platform
 Absences → Organization
+Documents → Platform
+Documents → Organization
 Future modules → Platform
 Future modules → Organization
 ```
 
-Forbidden: Platform → Absences, Organization → Absences, frontend → backend source.
+Forbidden: Platform → Absences, Organization → Absences, Organization → Documents, frontend → backend source.
 
 ## Layers
 
-1. **Platform** — auth, identity, permissions, audit, notifications, settings, files, health, bootstrap, database.
-2. **Organization** — employees (Profile Core: contacts, emergency, employment assignments), departments, positions, schedules, access scope.
-3. **Business modules** — absences (first); later questionnaires, onboarding, reviews, goals, skills, documents (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
+1. **Platform** — auth, identity, permissions, audit, notifications, settings, files (planned), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`).
+2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions, schedules, access scope.
+3. **Business modules** — absences; documents (MVP: employee file list/upload + People aggregate with absence attachments); later questionnaires, onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
 
-CRM employee profile UI: `/people/:id`. Absences PW-parity card: `/absences/employees/:id` (unchanged). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
+Documents module owns `employee_documents` (interim `content_base64` storage until Platform Files). Sensitive document types (`questionnaire`, `identity`, `medical`, `consent`) are projected server-side: owner + admin only; department managers see only employment/education/certificate/other when viewing others. Upload/delete: `documents.manage` (Admin). View: `documents.view` (all roles) + `EmployeeAccessService` scope.
+
+CRM employee profile UI: `/people/:id` (tabs include Документи). Absences PW-parity card: `/absences/employees/:id` (unchanged). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
 
 ## Code location (Variant A)
 

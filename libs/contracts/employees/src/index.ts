@@ -58,10 +58,19 @@ export type EmployeeProfileHeader = {
   direction: { id: EntityId; name: string } | null;
   manager: { id: EntityId; displayName: string } | null;
   hiredAt: string | null;
+  accountCreatedAt: string | null;
   workEmail: string | null;
   workPhone: string | null;
   workTelegram: string | null;
   completenessPercent: number;
+};
+
+export type ImportantDateItem = {
+  id: EntityId;
+  title: string;
+  startDate: string;
+  endDate: string | null;
+  priority: number;
 };
 
 export type EmployeeProfileResponse = {

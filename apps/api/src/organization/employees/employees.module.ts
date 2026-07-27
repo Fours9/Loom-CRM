@@ -11,6 +11,7 @@ import { WorkScheduleDay } from './work-schedule-day.entity';
 import { EmployeeManagedDepartment } from './employee-managed-department.entity';
 import { EmployeeContact } from './employee-contact.entity';
 import { EmployeeEmergencyContact } from './employee-emergency-contact.entity';
+import { EmployeeImportantDate } from './employee-important-date.entity';
 import { EmploymentAssignment } from './employment-assignment.entity';
 import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
@@ -31,6 +32,7 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
       EmployeeManagedDepartment,
       EmployeeContact,
       EmployeeEmergencyContact,
+      EmployeeImportantDate,
       EmploymentAssignment,
       Company,
       Direction,

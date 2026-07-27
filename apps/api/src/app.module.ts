@@ -15,6 +15,7 @@ import { AuthModule } from './platform/auth/auth.module';
 import { SeedModule } from './platform/seed/seed.module';
 import { OrganizationModule } from './organization/organization.module';
 import { AbsencesModule } from './modules/absences/absences.module';
+import { DocumentsModule } from './modules/documents/documents.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AbsencesModule } from './modules/absences/absences.module';
     AuthModule,
     SeedModule,
     AbsencesModule,
+    DocumentsModule,
     ApplicationBootstrapModule,
     HealthModule,
   ],

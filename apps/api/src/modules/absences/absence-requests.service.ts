@@ -159,6 +159,69 @@ export class AbsenceRequestsService {
     return this.findAll(actor, { employeeId, pageSize: 100 });
   }
 
+  /**
+   * Dedicated aggregation for People Documents tab.
+   * Only requests that have ≥1 attachment; no pageSize cap from findAll.
+   */
+  async documentItemsForEmployee(actor: User, employeeId: string) {
+    const employee = await this.access.getEmployeeOrFail(employeeId);
+    await this.access.requireCanView(actor, employee);
+
+    const requests = await this.requests.find({
+      where: { employeeId },
+      order: { createdAt: 'DESC' },
+    });
+    if (!requests.length) {
+      return [];
+    }
+
+    const requestIds = requests.map((r) => r.id);
+    const attachmentRows = await this.attachments
+      .createQueryBuilder('attachment')
+      .where('attachment.request_id IN (:...requestIds)', { requestIds })
+      .orderBy('attachment.created_at', 'ASC')
+      .getMany();
+
+    const byRequest = new Map<string, AbsenceAttachment[]>();
+    for (const a of attachmentRows) {
+      const list = byRequest.get(a.requestId) ?? [];
+      list.push(a);
+      byRequest.set(a.requestId, list);
+    }
+
+    return requests
+      .filter((r) => (byRequest.get(r.id)?.length ?? 0) > 0)
+      .map((r) => {
+        const files = (byRequest.get(r.id) ?? []).map((a) => ({
+          id: a.id,
+          fileName: a.fileName,
+          mimeType: a.mimeType,
+          sizeBytes: a.sizeBytes,
+          createdAt:
+            a.createdAt instanceof Date
+              ? a.createdAt.toISOString()
+              : String(a.createdAt),
+        }));
+        const end = r.endDate ?? null;
+        return {
+          source: 'absence' as const,
+          id: r.id,
+          employeeId: r.employeeId,
+          documentType: 'absence' as const,
+          title: `${r.type} ${r.startDate}${end ? `–${end}` : ''}`,
+          absenceType: r.type,
+          createdAt:
+            r.createdAt instanceof Date
+              ? r.createdAt.toISOString()
+              : String(r.createdAt),
+          relatedStartDate: r.startDate,
+          relatedEndDate: end,
+          files,
+          permissions: { canDelete: false as const },
+        };
+      });
+  }
+
   async findOne(actor: User, id: string) {
     const row = await this.getOrFail(id);
     const emp = await this.access.getEmployeeOrFail(row.employeeId);

@@ -22,6 +22,7 @@
     "@loom/contracts-common": "workspace:*",
     "@loom/contracts-employees": "workspace:*",
     "@loom/contracts-absences": "workspace:*",
+    "@loom/contracts-documents": "workspace:*",
     "@loom/ui": "workspace:*",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",

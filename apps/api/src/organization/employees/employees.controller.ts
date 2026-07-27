@@ -212,6 +212,29 @@ class ReplaceEmergencyContactsDto {
   contacts!: EmergencyContactItemDto[];
 }
 
+class ImportantDateItemDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  title!: string;
+
+  @IsString()
+  @MinLength(1)
+  startDate!: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string | null;
+}
+
+class ReplaceImportantDatesDto {
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ImportantDateItemDto)
+  dates!: ImportantDateItemDto[];
+}
+
 class CreateAssignmentDto {
   @IsOptional() @IsUUID() companyId?: string | null;
   @IsOptional() @IsUUID() directionId?: string | null;
@@ -431,6 +454,16 @@ export class EmployeesController {
     @Body() dto: ReplaceEmergencyContactsDto,
   ) {
     return this.profile.replaceEmergencyContacts(user, id, dto.contacts);
+  }
+
+  @Put(':id/important-dates')
+  @RequirePermissions(Permission.EmployeesEdit)
+  putImportantDates(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReplaceImportantDatesDto,
+  ) {
+    return this.profile.replaceImportantDates(user, id, dto.dates);
   }
 
   @Get(':id/export.pdf')

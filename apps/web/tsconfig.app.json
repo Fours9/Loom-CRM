@@ -8,6 +8,7 @@
       "@loom/contracts-auth": ["../../libs/contracts/auth/src/index.ts"],
       "@loom/contracts-employees": ["../../libs/contracts/employees/src/index.ts"],
       "@loom/contracts-absences": ["../../libs/contracts/absences/src/index.ts"],
+      "@loom/contracts-documents": ["../../libs/contracts/documents/src/index.ts"],
       "@loom/ui": ["../../libs/frontend/ui/src/index.ts"]
     }
   },
