@@ -51,6 +51,9 @@ export function requestFrameTone(
       return 'approved';
     case 'rejected':
       return 'rejected';
+    case 'cancelled':
+      // Withdrawn before/after lifecycle — muted like completed (not danger rejected).
+      return 'completed';
     default:
       return 'neutral';
   }

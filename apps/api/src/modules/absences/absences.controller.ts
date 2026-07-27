@@ -281,7 +281,7 @@ export class AbsencesController {
     @Param('id') id: string,
     @Query('version') version?: string,
   ) {
-    return this.requests.cancel(
+    return this.requests.deletePending(
       user,
       id,
       version ? Number(version) : undefined,
@@ -311,7 +311,7 @@ export class AbsencesController {
   @Post('requests/:id/cancel')
   @RequirePermissions(Permission.AbsencesCancel)
   cancel(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.requests.cancel(user, id);
+    return this.requests.deletePending(user, id);
   }
 
   @Post('requests/:id/adjust')

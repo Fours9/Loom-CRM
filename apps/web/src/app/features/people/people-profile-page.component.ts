@@ -231,11 +231,11 @@ type AssignmentHistoryItem = {
                     </div>
                   }
                 </div>
-                <dl class="grid">
-                  <div><dt>Статус</dt><dd>{{ statusLabel(profile()!.header.employmentStatus) }}</dd></div>
-                  <div><dt>Керівник</dt><dd>{{ profile()!.header.manager?.displayName || '—' }}</dd></div>
+              <dl class="grid">
+                <div><dt>Статус</dt><dd>{{ statusLabel(profile()!.header.employmentStatus) }}</dd></div>
+                <div><dt>Керівник</dt><dd>{{ profile()!.header.manager?.displayName || '—' }}</dd></div>
                   <div><dt>Ім'я для звернення</dt><dd>{{ profile()!.header.preferredName || '—' }}</dd></div>
-                </dl>
+              </dl>
 
                 @if (profile()!.capabilities.canViewPersonal) {
                   <h3>Персональна інформація</h3>
@@ -247,10 +247,10 @@ type AssignmentHistoryItem = {
 
                 @if (editingBasics() && profile()!.capabilities.canEditBasic) {
                   <div class="edit">
-                    <label>Ім'я <input [(ngModel)]="basicForm.firstName" name="fn" /></label>
-                    <label>Прізвище <input [(ngModel)]="basicForm.lastName" name="ln" /></label>
-                    <label>По батькові <input [(ngModel)]="basicForm.middleName" name="mn" /></label>
-                    <label>Ім'я для звернення <input [(ngModel)]="basicForm.preferredName" name="pn" /></label>
+                  <label>Ім'я <input [(ngModel)]="basicForm.firstName" name="fn" /></label>
+                  <label>Прізвище <input [(ngModel)]="basicForm.lastName" name="ln" /></label>
+                  <label>По батькові <input [(ngModel)]="basicForm.middleName" name="mn" /></label>
+                  <label>Ім'я для звернення <input [(ngModel)]="basicForm.preferredName" name="pn" /></label>
                   </div>
                 }
                 @if (editingBasics() && profile()!.capabilities.canEditPersonal) {
@@ -701,21 +701,21 @@ type AssignmentHistoryItem = {
                   }
                 </div>
 
-                @if (profile()!.sections.employment) {
-                  <dl class="grid">
-                    <div><dt>Компанія</dt><dd>{{ refName(profile()!.sections.employment!['company']) }}</dd></div>
-                    <div><dt>Напрямок</dt><dd>{{ refName(profile()!.sections.employment!['direction']) }}</dd></div>
-                    <div><dt>Відділ</dt><dd>{{ refName(profile()!.sections.employment!['department']) }}</dd></div>
-                    <div><dt>Посада</dt><dd>{{ refName(profile()!.sections.employment!['position']) }}</dd></div>
-                    <div><dt>Формат</dt><dd>{{ profile()!.sections.employment!['workFormat'] || '—' }}</dd></div>
-                    <div><dt>Локація</dt><dd>{{ profile()!.sections.employment!['workLocation'] || '—' }}</dd></div>
-                    <div><dt>Тип зайнятості</dt><dd>{{ profile()!.sections.employment!['employmentType'] || '—' }}</dd></div>
-                    <div><dt>Початок</dt><dd>{{ profile()!.sections.employment!['startDate'] || '—' }}</dd></div>
-                    <div><dt>Кінець випроб.</dt><dd>{{ profile()!.sections.employment!['probationEndDate'] || '—' }}</dd></div>
-                  </dl>
-                } @else {
-                  <p class="muted">Призначення ще не задано.</p>
-                }
+              @if (profile()!.sections.employment) {
+                <dl class="grid">
+                  <div><dt>Компанія</dt><dd>{{ refName(profile()!.sections.employment!['company']) }}</dd></div>
+                  <div><dt>Напрямок</dt><dd>{{ refName(profile()!.sections.employment!['direction']) }}</dd></div>
+                  <div><dt>Відділ</dt><dd>{{ refName(profile()!.sections.employment!['department']) }}</dd></div>
+                  <div><dt>Посада</dt><dd>{{ refName(profile()!.sections.employment!['position']) }}</dd></div>
+                  <div><dt>Формат</dt><dd>{{ profile()!.sections.employment!['workFormat'] || '—' }}</dd></div>
+                  <div><dt>Локація</dt><dd>{{ profile()!.sections.employment!['workLocation'] || '—' }}</dd></div>
+                  <div><dt>Тип зайнятості</dt><dd>{{ profile()!.sections.employment!['employmentType'] || '—' }}</dd></div>
+                  <div><dt>Початок</dt><dd>{{ profile()!.sections.employment!['startDate'] || '—' }}</dd></div>
+                  <div><dt>Кінець випроб.</dt><dd>{{ profile()!.sections.employment!['probationEndDate'] || '—' }}</dd></div>
+                </dl>
+              } @else {
+                <p class="muted">Призначення ще не задано.</p>
+              }
 
                 @if (creatingAssignment() && profile()!.capabilities.canEditEmployment) {
                   <div class="edit">
@@ -733,18 +733,18 @@ type AssignmentHistoryItem = {
                     <label>Кінець випроб. <input type="date" [(ngModel)]="assignmentForm.probationEndDate" name="pe" /></label>
                     <label>Причина зміни <input [(ngModel)]="assignmentForm.changeReason" name="cr" /></label>
                   </div>
-                }
+              }
 
-                @if (historyAssign().length) {
-                  <h3>Історія призначень</h3>
+              @if (historyAssign().length) {
+                <h3>Історія призначень</h3>
                   <ul class="timeline assignments">
-                    @for (h of historyAssign(); track h.id) {
+                  @for (h of historyAssign(); track h.id) {
                       <li class="history-row">
                         <div class="history-top">
                           <div class="history-main">
                             <span class="badge" [attr.data-status]="h.status">{{ statusLabel(h.status) }}</span>
-                            {{ h.startDate || '?' }} → {{ h.endDate || 'зараз' }}
-                            · {{ h.department?.name || '—' }} / {{ h.position?.name || '—' }}
+                      {{ h.startDate || '?' }} → {{ h.endDate || 'зараз' }}
+                      · {{ h.department?.name || '—' }} / {{ h.position?.name || '—' }}
                             @if (h.workFormat) {
                               · {{ h.workFormat }}
                             }
@@ -800,8 +800,8 @@ type AssignmentHistoryItem = {
                           </div>
                         }
                       </li>
-                    }
-                  </ul>
+                  }
+                </ul>
                 }
               }
             }
@@ -1650,25 +1650,25 @@ export class PeopleProfilePageComponent implements OnInit {
   }
 
   private applyProfile(p: ProfileResponse): void {
-    this.profile.set(p);
-    this.basicForm = {
-      firstName: String(p.sections.overview?.['firstName'] ?? ''),
-      lastName: String(p.sections.overview?.['lastName'] ?? ''),
-      middleName: String(p.sections.overview?.['middleName'] ?? ''),
-      preferredName: String(p.header.preferredName ?? ''),
-    };
-    const pers = p.sections.personal ?? {};
+        this.profile.set(p);
+        this.basicForm = {
+          firstName: String(p.sections.overview?.['firstName'] ?? ''),
+          lastName: String(p.sections.overview?.['lastName'] ?? ''),
+          middleName: String(p.sections.overview?.['middleName'] ?? ''),
+          preferredName: String(p.header.preferredName ?? ''),
+        };
+        const pers = p.sections.personal ?? {};
     this.personalCoreForm = {
-      birthDate: String(pers['birthDate'] ?? ''),
-      city: String(pers['city'] ?? ''),
-      preferredLanguage: String(pers['preferredLanguage'] ?? ''),
+          birthDate: String(pers['birthDate'] ?? ''),
+          city: String(pers['city'] ?? ''),
+          preferredLanguage: String(pers['preferredLanguage'] ?? ''),
     };
     this.hiredAtForm = String(p.header.hiredAt ?? '');
     this.personalContactsForm = {
-      personalPhone: String(pers['personalPhone'] ?? ''),
-      personalEmail: String(pers['personalEmail'] ?? ''),
-      personalTelegram: String(pers['personalTelegram'] ?? ''),
-    };
+          personalPhone: String(pers['personalPhone'] ?? ''),
+          personalEmail: String(pers['personalEmail'] ?? ''),
+          personalTelegram: String(pers['personalTelegram'] ?? ''),
+        };
     this.workContactsForm = {
       workEmail: String(p.header.workEmail ?? ''),
       workPhone: String(p.header.workPhone ?? ''),
@@ -1688,7 +1688,7 @@ export class PeopleProfilePageComponent implements OnInit {
   private loadSecondaryData(employeeId: string, profile: ProfileResponse): void {
     const history$ = profile.capabilities.canViewHistory
       ? this.http
-          .get<Array<{ id: string; action: string; createdAt: string }>>(
+            .get<Array<{ id: string; action: string; createdAt: string }>>(
             `/api/v1/employees/${employeeId}/history`,
           )
           .pipe(catchError(() => of([])))
@@ -1716,10 +1716,10 @@ export class PeopleProfilePageComponent implements OnInit {
     if (caps.canEditBasic) {
       requests.push(
         this.http.patch(`/api/v1/employees/${this.employeeId}/basic`, {
-          firstName: this.basicForm.firstName,
-          lastName: this.basicForm.lastName,
-          middleName: this.basicForm.middleName || null,
-          preferredName: this.basicForm.preferredName || null,
+        firstName: this.basicForm.firstName,
+        lastName: this.basicForm.lastName,
+        middleName: this.basicForm.middleName || null,
+        preferredName: this.basicForm.preferredName || null,
         }),
       );
     }
@@ -1742,10 +1742,10 @@ export class PeopleProfilePageComponent implements OnInit {
         const last = results[results.length - 1] as ProfileResponse;
         this.applyProfile(last);
         this.editingBasics.set(false);
-        this.busy.set(false);
-      },
-      error: () => this.busy.set(false),
-    });
+          this.busy.set(false);
+        },
+        error: () => this.busy.set(false),
+      });
   }
 
   saveDates(): void {
@@ -1821,7 +1821,7 @@ export class PeopleProfilePageComponent implements OnInit {
         this.applyProfile(last);
         this.importantDateForms = [];
         this.editingDates.set(false);
-        this.busy.set(false);
+          this.busy.set(false);
         this.reloadAssignments();
       },
       error: () => {
@@ -1910,8 +1910,8 @@ export class PeopleProfilePageComponent implements OnInit {
         this.applyProfile(last);
         this.emergencyForms = [];
         this.editingContacts.set(false);
-        this.busy.set(false);
-      },
+          this.busy.set(false);
+        },
       error: () => {
         this.error.set('Не вдалося зберегти контакти');
         this.busy.set(false);

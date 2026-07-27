@@ -37,7 +37,7 @@ import {
               <h1>{{ requestTypeLabel(request.type) }}</h1>
               <span class="req-code">#{{ shortRequestId(request.id) }}</span>
             </div>
-            <span class="badge" [attr.data-status]="request.statusGroup">{{ requestStatusLabel(request.statusGroup) }}</span>
+            <span class="pw-request-badge pw-request-badge--lg" [attr.data-status]="request.statusGroup">{{ requestStatusLabel(request.statusGroup) }}</span>
           </header>
 
           <header class="hero">
@@ -97,7 +97,7 @@ import {
               <article class="card">
                 <div class="card-head">
                 <h2>Деталі заявки</h2>
-                  <span class="badge" [attr.data-status]="request.statusGroup">{{ requestStatusLabel(request.statusGroup) }}</span>
+                  <span class="pw-request-badge pw-request-badge--lg" [attr.data-status]="request.statusGroup">{{ requestStatusLabel(request.statusGroup) }}</span>
                 </div>
 
                 @if (!editing) {
@@ -576,31 +576,6 @@ import {
         font-weight: 600;
         letter-spacing: 0.04em;
         font-variant-numeric: tabular-nums;
-      }
-      .badge {
-        background: var(--pw-accent-soft);
-        color: var(--pw-accent);
-        padding: 0.35rem 0.7rem;
-        border-radius: 999px;
-        font-weight: 600;
-        white-space: nowrap;
-        border: 1px solid color-mix(in srgb, var(--pw-accent) 28%, transparent);
-      }
-      .badge[data-status='approved'] {
-        background: var(--pw-success-soft);
-        color: var(--pw-success);
-        border-color: color-mix(in srgb, var(--pw-success) 35%, transparent);
-      }
-      .badge[data-status='completed'] {
-        background: color-mix(in srgb, #94a3b8 22%, var(--pw-surface));
-        color: #475569;
-        border-color: color-mix(in srgb, #64748b 45%, transparent);
-      }
-      .badge[data-status='rejected'],
-      .badge[data-status='deletion_requested'] {
-        background: var(--pw-danger-soft);
-        color: var(--pw-danger);
-        border-color: color-mix(in srgb, var(--pw-danger) 35%, transparent);
       }
       .grid {
         display: grid;

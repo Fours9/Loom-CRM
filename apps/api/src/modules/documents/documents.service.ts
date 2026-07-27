@@ -21,6 +21,7 @@ import {
   DOCUMENT_ALLOWED_MIME_TYPES,
   DOCUMENT_MAX_FILE_SIZE,
 } from './document-limits';
+import { normalizeUploadedFileName } from '../../platform/http/normalize-uploaded-file-name';
 
 export type EmployeeDocumentFileDto = {
   id: string;
@@ -111,7 +112,7 @@ export class DocumentsService {
     const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
 
-    const fileName = truncateFileName(file.originalname || 'file');
+    const fileName = normalizeUploadedFileName(file.originalname || 'file');
     const id = uuidv4();
     const storageKey = `db:employee-document:${id}`;
 
@@ -180,7 +181,7 @@ export class DocumentsService {
     return {
       buffer: Buffer.from(document.contentBase64, 'base64'),
       mimeType: document.mimeType ?? 'application/octet-stream',
-      fileName: document.fileName,
+      fileName: normalizeUploadedFileName(document.fileName),
     };
   }
 
@@ -252,7 +253,7 @@ export class DocumentsService {
         : String(row.createdAt);
     const file: EmployeeDocumentFileDto = {
       id: row.id,
-      fileName: row.fileName,
+      fileName: normalizeUploadedFileName(row.fileName),
       mimeType: row.mimeType,
       sizeBytes: row.sizeBytes,
       createdAt,
@@ -270,9 +271,4 @@ export class DocumentsService {
       permissions: { canDelete },
     };
   }
-}
-
-function truncateFileName(name: string): string {
-  const trimmed = name.trim() || 'file';
-  return trimmed.length > 255 ? trimmed.slice(0, 255) : trimmed;
 }

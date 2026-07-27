@@ -144,6 +144,7 @@ export type AbsenceRequestStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
+  | 'cancelled'
   | 'deletion_requested';
 
 export type AbsenceRequestStatusGroup = AbsenceRequestStatus | 'completed';
