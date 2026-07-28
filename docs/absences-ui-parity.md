@@ -16,3 +16,14 @@ Side-by-side vs ProjectWeekend. Values: **pass** | **fail** only.
 | CRM Home entry | — | `/` CTA → `/absences` | pass | pass | — | pass | — |
 
 Engineering wiring done: full PW Absences UI under CRM shell (one host); Postgres via Loom API. Visual/behavior cells stay **fail** until human side-by-side pass.
+
+## Create request navigation contract
+
+- Єдина FE-точка формування переходу: `apps/web/src/app/features/absences/requests/create-request-navigation.ts`.
+- Create screen підтримує:
+  - `startDate=YYYY-MM-DD`;
+  - `employeeId=<id>` для Admin/Manager.
+- Невалідні query params ігноруються.
+- CTA day drawer передає дату відкритого дня.
+- У персональному або звуженому календарі drawer також передає `employeeId`.
+- Route definition у `absences.routes.ts` лишає literal `requests/new` (виняток для route config).

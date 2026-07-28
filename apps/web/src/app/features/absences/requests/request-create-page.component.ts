@@ -1,6 +1,6 @@
 ﻿import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { concatMap, from, of, catchError, finalize, toArray } from 'rxjs';
 import { ApiService } from '../core/api/api.service';
 import { AuthService } from '../core/auth/auth.service';
@@ -15,6 +15,10 @@ import {
   shiftBoundsForDate,
   timeOptionsInShift,
 } from '../core/schedule/work-time.util';
+import {
+  parseCreateAbsenceRequestPrefill,
+  type CreateAbsenceRequestPrefill,
+} from './create-request-navigation';
 
 const MAX_PENDING_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -699,6 +703,7 @@ export class RequestCreatePageComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   readonly requestTypeLabel = requestTypeLabel;
   readonly typeKeys = Object.keys(ABSENCE_TYPE_LABELS);
@@ -784,12 +789,34 @@ export class RequestCreatePageComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    const prefill = parseCreateAbsenceRequestPrefill(this.route.snapshot.queryParamMap);
+
     if (this.canPickEmployee) {
-      this.targetMode = 'self';
-      this.api.getDepartments(true).subscribe((d) => (this.departments = d.filter((x) => x.isActive)));
+      this.api
+        .getDepartments(true)
+        .subscribe((d) => (this.departments = d.filter((x) => x.isActive)));
       this.reloadPositions();
     }
+
+    this.applyNavigationPrefill(prefill);
     this.reloadSchedule();
+  }
+
+  private applyNavigationPrefill(prefill: CreateAbsenceRequestPrefill): void {
+    if (prefill.startDate) {
+      this.startDate = prefill.startDate;
+      this.onStartDateChange();
+    }
+
+    if (
+      prefill.employeeId &&
+      prefill.employeeId !== this.auth.user()?.employeeId &&
+      this.canPickEmployee
+    ) {
+      this.targetMode = 'other';
+      this.employeeId = prefill.employeeId;
+      this.loadEmployees();
+    }
   }
 
   onTargetModeChange(): void {

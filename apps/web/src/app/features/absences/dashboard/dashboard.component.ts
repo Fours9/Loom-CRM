@@ -11,6 +11,7 @@ import {
 import { AuthService } from '../core/auth/auth.service';
 import { RequestStatusBadgeComponent } from '../shared/request-status-badge.component';
 import { requestFrameTone } from '../shared/request-status-presentation';
+import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
 
 @Component({
   selector: 'app-dashboard',
@@ -244,7 +245,13 @@ import { requestFrameTone } from '../shared/request-status-presentation';
                   }
                 } @else {
                   <div class="card-head req-actions">
-                    <a class="btn" routerLink="/absences/requests/new">Нова заявка</a>
+                    <a
+                      class="btn"
+                      [routerLink]="createRequestLink.routerLink"
+                      [queryParams]="createRequestLink.queryParams"
+                    >
+                      Нова заявка
+                    </a>
                   </div>
                   @if (requests.length === 0) {
                     <p class="muted">Заявок ще немає</p>
@@ -795,6 +802,7 @@ export class DashboardComponent implements OnInit {
   private readonly api = inject(ApiService);
   readonly auth = inject(AuthService);
 
+  readonly createRequestLink = buildCreateAbsenceRequestLink();
   readonly requestTypeLabel = requestTypeLabel;
   readonly requestPeriod = requestPeriod;
   readonly requestEventLabel = requestEventLabel;

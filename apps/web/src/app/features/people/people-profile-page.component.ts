@@ -318,7 +318,29 @@ type AbsenceTabId = 'requests' | 'calendar';
         background: var(--pw-surface);
       }
       .subtabs {
-        margin-bottom: 0.85rem;
+        margin-bottom: 0.25rem;
+        padding-bottom: 0.65rem;
+        border-bottom: 1px solid var(--pw-border);
+      }
+      .subtabs .tab {
+        min-height: 2.1rem;
+        padding: 0.35rem 0.7rem;
+        font-size: 0.9rem;
+        border-width: 1.5px;
+        border-color: var(--pw-border-strong, var(--pw-border));
+        background: var(--pw-surface-2, color-mix(in srgb, var(--pw-muted) 8%, var(--pw-surface)));
+        color: var(--pw-text);
+      }
+      .subtabs .tab:hover {
+        border-color: var(--pw-accent);
+        color: var(--pw-accent);
+      }
+      .subtabs .tab.active {
+        border-color: var(--pw-accent);
+        background: var(--pw-accent-soft);
+        color: var(--pw-accent);
+        font-weight: 700;
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pw-accent) 35%, transparent);
       }
       .muted {
         color: var(--pw-muted);
