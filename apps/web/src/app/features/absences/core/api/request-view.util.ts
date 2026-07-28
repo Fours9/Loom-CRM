@@ -16,7 +16,7 @@ export function shortRequestId(id: string | null | undefined): string {
 
 export function requestTypeLabel(type: AbsenceType | string | null | undefined): string {
   if (!type) {
-    return 'Відсутність';
+    return 'Заявка';
   }
   return ABSENCE_TYPE_LABELS[type] ?? type;
 }

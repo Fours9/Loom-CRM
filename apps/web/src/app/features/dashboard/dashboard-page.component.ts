@@ -20,7 +20,7 @@ import { PLATFORM_TAGLINE } from '../../core/brand/platform';
           <div>
             <h1>Головна</h1>
             <p class="lede">
-              Центр Loom. Модулі підключаються звідси: працівники, відсутності та
+              Центр Loom. Модулі підключаються звідси: працівники, робочий календар та
               інші сервіси.
             </p>
           </div>
@@ -32,8 +32,8 @@ import { PLATFORM_TAGLINE } from '../../core/brand/platform';
 
       <div class="grid">
         <a class="tile" routerLink="/absences">
-          <strong>Absences</strong>
-          <span>Заявки, календар і команда відсутностей</span>
+          <strong>Робочий календар</strong>
+          <span>Заявки, календар і командні події часу</span>
         </a>
         <a class="tile" routerLink="/people">
           <strong>Працівники</strong>
@@ -46,7 +46,7 @@ import { PLATFORM_TAGLINE } from '../../core/brand/platform';
       </div>
 
       <div class="actions">
-        <a class="btn" routerLink="/absences">Відкрити Absences</a>
+        <a class="btn" routerLink="/absences">Робочий календар</a>
         <a class="btn ghost" routerLink="/people">Працівники</a>
       </div>
     </section>

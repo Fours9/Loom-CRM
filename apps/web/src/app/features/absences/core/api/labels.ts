@@ -72,10 +72,13 @@ export const ABSENCE_OVERRIDE_UI = {
 } as const;
 
 export const ABSENCE_TYPE_LABELS: Record<string, string> = {
-  day_off: 'DayOff',
+  day_off: 'Відгул',
   vacation: 'Відпустка',
   sick_leave: 'Лікарняний',
   part_time: 'Неповний день',
+  overtime: 'Понаднормові',
+  business_trip: 'Відрядження',
+  extra_work_day: 'Робочий день поза графіком',
 };
 
 export const ABSENCE_STATUS_LABELS: Record<string, string> = {

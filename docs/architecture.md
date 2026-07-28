@@ -20,7 +20,7 @@ Forbidden: Platform → Absences; Platform → Documents; Organization → Absen
 
 1. **Platform** — auth, identity, permissions, audit, notifications, settings, files (**planned**), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`, `normalizeUploadedFileName`).
 2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions, schedules, access scope.
-3. **Business modules** — absences; documents (MVP: employee file list/upload + People aggregate with absence attachments); later questionnaires, onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
+3. **Business modules** — absences (product UI: **Робочий календар** / TimeEvent domain — [ADR 0008](adr/0008-work-calendar-via-absences.md)); documents (MVP: employee file list/upload + People aggregate with time-event attachments); later questionnaires, onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
 
 ### Documents MVP
 
@@ -32,7 +32,7 @@ Documents module owns `employee_documents` (interim `content_base64` storage unt
 
 ### People UI
 
-CRM employee profile: `/people/:id` — tabs Дані працівника, Відсутності, Документи, Показники (stub), Історія, Згодом (stub). Absences PW-parity card: `/absences/employees/:id` (unchanged). Living phase status: [hr-profile-roadmap.md](product/hr-profile-roadmap.md). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
+CRM employee profile: `/people/:id` — tabs Дані працівника, Робочий календар, Документи, Показники (stub), Історія, Згодом (stub). Absences PW-parity card: `/absences/employees/:id` (unchanged). Living phase status: [hr-profile-roadmap.md](product/hr-profile-roadmap.md). Work calendar intent: [work-calendar-roadmap.md](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
 
 ### Profile completeness
 

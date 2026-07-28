@@ -214,7 +214,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
                 {{ item.label }}
               </a>
               @if (item.path === '/absences' && inAbsences()) {
-                <div class="side-nav-children" role="group" aria-label="Absences">
+                <div class="side-nav-children" role="group" aria-label="Робочий календар">
                   <a
                     routerLink="/absences"
                     routerLinkActive="active"

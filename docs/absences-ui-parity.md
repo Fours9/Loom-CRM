@@ -1,5 +1,7 @@
 # Full PW in CRM — UI parity checklist
 
+> Product UI label: **«Робочий календар»** (compat routes remain `/absences/*`). See [work-calendar-roadmap](product/work-calendar-roadmap.md) and [ADR 0008](adr/0008-work-calendar-via-absences.md).
+
 Side-by-side vs ProjectWeekend. Values: **pass** | **fail** only.
 
 | Screen | PW | Loom | visual | behavior | API data | responsive | role matrix |

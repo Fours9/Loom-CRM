@@ -36,7 +36,7 @@ Use the exact `packageManager` from root `package.json` (`pnpm@10.15.0`) via Cor
 
 - **Live** PostgreSQL is never in git (Compose volume / local `DATABASE_URL`). There is **no** `data/app.sqlite` — unlike ProjectWeekend, the live DB is a server, not a file in the repo.
 - **Tracked snapshot:** `data/app.snapshot.sql` via `scripts/db-snapshot.ps1` (live → snapshot) and `scripts/db-restore.ps1` (snapshot → live, with `data/app.live.bak-*.sql` auto-backup).
-- **`pnpm migration:run` is schema only.** It does **not** load demo data. After clone / empty DB, always run `.\scripts\db-restore.ps1` (or rely on `start.bat`, which restores when `users` count is 0).
+- **`pnpm migration:run` is schema only.** It does **not** load demo data. After clone / empty DB, always run `.\scripts\db-restore.ps1` explicitly (`start.bat` does **not** auto-restore).
 - Do not commit live dumps or `.bak` files; only update the snapshot when the demo/shared state should move between machines.
 - After `git pull` of a new snapshot, restore is explicit (`db-restore.ps1`) — pull alone does not overwrite the live DB.
 - When onboarding a machine or debugging “empty DB / can’t log in”, check restore before inventing other fixes.

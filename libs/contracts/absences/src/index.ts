@@ -7,11 +7,42 @@ export type AbsenceRequestStatus =
   | 'cancelled'
   | 'deletion_requested';
 
+/** Compatibility alias — product domain: TimeEventType. */
 export type AbsenceType =
   | 'day_off'
   | 'vacation'
   | 'sick_leave'
-  | 'part_time';
+  | 'part_time'
+  | 'overtime'
+  | 'business_trip'
+  | 'extra_work_day';
+
+export type TimeEventType = AbsenceType;
+
+export type TimeEventCategory = 'absence' | 'work';
+
+export type TimeEventDateMode = 'single_day' | 'date_range';
+
+export type TimeEventTimeMode = 'none' | 'optional' | 'required';
+
+export type TimeEventVisualKind =
+  | 'absence'
+  | 'partial_absence'
+  | 'overtime'
+  | 'business_trip'
+  | 'extra_work_day';
+
+/** Response shape only — invariants live in API TypeCatalog. */
+export type TimeEventTypeMetadata = {
+  value: TimeEventType;
+  label: string;
+  category: TimeEventCategory;
+  dateMode: TimeEventDateMode;
+  timeMode: TimeEventTimeMode;
+  supportsUnpaid: boolean;
+  visualKind: TimeEventVisualKind;
+  schedulePolicy?: 'any' | 'scheduled_work_day' | 'scheduled_day_off';
+};
 
 export type EmployeeReference = {
   id: EntityId;
@@ -46,6 +77,8 @@ export type AbsenceRequestListItem = {
   employee: EmployeeReference;
   period: DateRangeResponse;
   capabilities: AbsenceListCapabilities;
+  /** Computed for timed types (overtime); not persisted. */
+  durationMinutes?: number | null;
 };
 
 export type AbsenceRequestView = {
@@ -59,6 +92,7 @@ export type AbsenceRequestView = {
   decisionComment: string | null;
   createdByUserId: EntityId;
   createdAt: string;
+  durationMinutes?: number | null;
 };
 
 export type AbsenceRequestDetailResponse = {
@@ -74,7 +108,7 @@ export type AbsenceRequestDetailResponse = {
 };
 
 export type AbsenceMetadataResponse = {
-  types: Array<{ value: AbsenceType; label: string }>;
+  types: TimeEventTypeMetadata[];
   statuses: Array<{ value: AbsenceRequestStatus; label: string }>;
   departments: Array<{ id: EntityId; name: string }>;
   requestScopes: Array<{ value: string; label: string }>;
@@ -91,6 +125,9 @@ export type CreateAbsenceRequest = {
   startDate: string;
   endDate?: string | null;
   reason?: string | null;
+  absenceStartTime?: string | null;
+  absenceEndTime?: string | null;
+  isUnpaid?: boolean;
 };
 
 export type AbsenceDocumentFileItem = {
@@ -101,15 +138,20 @@ export type AbsenceDocumentFileItem = {
   createdAt: string;
 };
 
-/** Absence request with ≥1 attachment, for People Documents aggregation. */
+/**
+ * Time-event request with ≥1 attachment, for People Documents aggregation.
+ * Atomic remap (ADR 0008): neutral source/eventType — no dual source in one field.
+ */
 export type AbsenceDocumentListItem = {
-  source: 'absence';
+  source: 'time_event';
   id: EntityId;
   employeeId: EntityId;
-  documentType: 'absence';
-  /** Neutral fallback; UA title is built on the frontend from absenceType + dates. */
+  documentType: 'time_event';
+  /** Neutral fallback; UA title is built on the frontend from eventType + dates. */
   title: string;
-  absenceType: AbsenceType;
+  eventType: TimeEventType;
+  /** @deprecated Use eventType — kept briefly for type migration clarity; omit in payloads. */
+  absenceType?: never;
   createdAt: string;
   relatedStartDate: string;
   relatedEndDate: string | null;

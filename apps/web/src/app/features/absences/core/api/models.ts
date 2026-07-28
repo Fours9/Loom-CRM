@@ -139,7 +139,48 @@ export interface CreateEmployeePayload {
   positionId?: string | null;
 }
 
-export type AbsenceType = 'day_off' | 'vacation' | 'sick_leave' | 'part_time';
+export type AbsenceType =
+  | 'day_off'
+  | 'vacation'
+  | 'sick_leave'
+  | 'part_time'
+  | 'overtime'
+  | 'business_trip'
+  | 'extra_work_day';
+
+export type TimeEventType = AbsenceType;
+export type TimeEventCategory = 'absence' | 'work';
+export type TimeEventDateMode = 'single_day' | 'date_range';
+export type TimeEventTimeMode = 'none' | 'optional' | 'required';
+export type TimeEventVisualKind =
+  | 'absence'
+  | 'partial_absence'
+  | 'overtime'
+  | 'business_trip'
+  | 'extra_work_day';
+
+export type TimeEventTypeMetadata = {
+  value: TimeEventType;
+  label: string;
+  category: TimeEventCategory;
+  dateMode: TimeEventDateMode;
+  timeMode: TimeEventTimeMode;
+  supportsUnpaid: boolean;
+  visualKind: TimeEventVisualKind;
+  schedulePolicy?: 'any' | 'scheduled_work_day' | 'scheduled_day_off';
+};
+
+export type AbsenceMetadataResponse = {
+  types: TimeEventTypeMetadata[];
+  statuses: Array<{ value: string; label: string }>;
+  departments: Array<{ id: string; name: string }>;
+  requestScopes: Array<{ value: string; label: string }>;
+  scheduleConstraints: {
+    minimumDate: string | null;
+    maximumDate: string | null;
+    supportsPartialDay: boolean;
+  };
+};
 
 export type AbsenceRequestStatus =
   | 'pending'
@@ -164,6 +205,8 @@ export interface AbsenceRequestListItem {
   endDate: string | null;
   absenceStartTime: string | null;
   absenceEndTime: string | null;
+  /** Computed for timed types (e.g. overtime); not persisted. */
+  durationMinutes?: number | null;
   isUnpaid: boolean | null;
   reason: string | null;
   version: number;
@@ -273,10 +316,20 @@ export interface CalendarSegmentSummary {
   endTime?: string;
   requestId?: string;
   ariaLabel: string;
+  visualKind?: TimeEventVisualKind;
+  category?: TimeEventCategory;
   deletionRequested?: true;
   /** Approved absence whose inclusive period already ended (server Kyiv today). */
   periodEnded?: true;
 }
+
+export type CalendarLegendItem = {
+  value: TimeEventType;
+  label: string;
+  category: TimeEventCategory;
+  visualKind: TimeEventVisualKind;
+  pattern: CalendarPattern;
+};
 
 export interface CalendarDaySummary {
   date: string;
@@ -289,17 +342,20 @@ export interface CalendarDayItem extends CalendarSegmentSummary {
   departmentName?: string;
   positionName?: string;
   absenceTypeLabel?: string;
+  eventTypeLabel?: string;
   periodStart?: string;
   periodEnd?: string;
 }
 
 export interface CalendarRangeResponse {
   days: CalendarDaySummary[];
+  legend?: CalendarLegendItem[];
 }
 
 export interface CalendarDayResponse {
   date: string;
   items: CalendarDayItem[];
+  legend?: CalendarLegendItem[];
 }
 
 export interface CalendarQueryFilters {
