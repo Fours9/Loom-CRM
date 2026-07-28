@@ -9,6 +9,7 @@ import {
 } from '../core/api/request-view.util';
 import { RequestStatusBadgeComponent } from '../shared/request-status-badge.component';
 import { requestFrameTone } from '../shared/request-status-presentation';
+import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
 
 @Component({
   selector: 'app-employee-absence-requests-panel',
@@ -17,7 +18,13 @@ import { requestFrameTone } from '../shared/request-status-presentation';
   template: `
     <div class="panel">
       <div class="card-head req-actions">
-        <a class="btn" routerLink="/absences/requests/new">Нова заявка</a>
+        <a
+          class="btn"
+          [routerLink]="createRequestLink.routerLink"
+          [queryParams]="createRequestLink.queryParams"
+        >
+          Нова заявка
+        </a>
       </div>
 
       @if (loading) {
@@ -163,6 +170,7 @@ export class EmployeeAbsenceRequestsPanelComponent implements OnChanges {
 
   @Input({ required: true }) employeeId!: string;
 
+  readonly createRequestLink = buildCreateAbsenceRequestLink();
   readonly requestTypeLabel = requestTypeLabel;
   readonly requestEventLabel = requestEventLabel;
   readonly requestPeriod = requestPeriod;

@@ -261,6 +261,7 @@ import {
       @if (drawerDate) {
         <app-calendar-day-drawer
           [date]="drawerDate"
+          [employeeId]="presetEmployeeId || filterEmployeeId || null"
           [items]="drawerItems"
           [loading]="drawerLoading"
           [error]="drawerError"

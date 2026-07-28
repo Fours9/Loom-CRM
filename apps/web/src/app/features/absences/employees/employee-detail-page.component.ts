@@ -22,6 +22,8 @@ import { RequestStatusBadgeComponent } from '../shared/request-status-badge.comp
 import { requestFrameTone } from '../shared/request-status-presentation';
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { PasswordVisibilityToggleComponent } from '../shared/password-visibility-toggle.component';
+import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
+import { optionalOrgAssignmentIds } from './employee-org-assignment';
 
 @Component({
   selector: 'app-employee-detail-page',
@@ -356,6 +358,7 @@ import { PasswordVisibilityToggleComponent } from '../shared/password-visibility
                       <label>
                         Відділ
                         <select [(ngModel)]="edit.departmentId" (ngModelChange)="onDepartmentChange($event)">
+                          <option value="">Не вказано</option>
                           @for (d of departments; track d.id) {
                             <option [value]="d.id">{{ d.name }}</option>
                           }
@@ -364,7 +367,7 @@ import { PasswordVisibilityToggleComponent } from '../shared/password-visibility
                       <label>
                         Посада
                         <select [(ngModel)]="edit.positionId">
-                          <option value="">Оберіть</option>
+                          <option value="">Не вказано</option>
                           @for (p of positions; track p.id) {
                             <option [value]="p.id">{{ p.name }}</option>
                           }
@@ -670,7 +673,13 @@ import { PasswordVisibilityToggleComponent } from '../shared/password-visibility
                   }
                 } @else {
                   <div class="card-head req-actions">
-                    <a class="btn" routerLink="/absences/requests/new">Нова заявка</a>
+                    <a
+                      class="btn"
+                      [routerLink]="createRequestLink.routerLink"
+                      [queryParams]="createRequestLink.queryParams"
+                    >
+                      Нова заявка
+                    </a>
                   </div>
                   @if (requests.length === 0) {
                     <p class="muted">Заявок ще немає</p>
@@ -1260,6 +1269,7 @@ export class EmployeeDetailPageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
+  readonly createRequestLink = buildCreateAbsenceRequestLink();
   readonly requestTypeLabel = requestTypeLabel;
   readonly requestPeriod = requestPeriod;
   readonly requestEventLabel = requestEventLabel;
@@ -1549,14 +1559,18 @@ export class EmployeeDetailPageComponent implements OnInit {
     this.error = '';
     this.message = '';
     const baseline = this.editBaseline;
+    const org = optionalOrgAssignmentIds({
+      departmentId: this.edit.departmentId,
+      positionId: this.edit.positionId,
+    });
     const body: Record<string, unknown> = {
       lastName: this.edit.lastName,
       firstName: this.edit.firstName,
       middleName: this.edit.middleName || null,
       phoneNumber: this.edit.phoneNumber || null,
       telegram: this.edit.telegram || null,
-      departmentId: this.edit.departmentId,
-      positionId: this.edit.positionId,
+      departmentId: org.departmentId,
+      positionId: org.positionId,
     };
     if (this.isAdmin) {
       body['employeeNumber'] = this.edit.employeeNumber;

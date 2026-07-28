@@ -13,6 +13,7 @@ import {
 } from '../shared/multi-select-list.component';
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { PasswordVisibilityToggleComponent } from '../shared/password-visibility-toggle.component';
+import { optionalOrgAssignmentIds } from './employee-org-assignment';
 
 @Component({
   selector: 'app-employee-create-page',
@@ -185,10 +186,9 @@ import { PasswordVisibilityToggleComponent } from '../shared/password-visibility
                   <select
                     [(ngModel)]="form.departmentId"
                     name="departmentId"
-                    required
                     (ngModelChange)="onDepartmentChange($event)"
                   >
-                    <option value="">Оберіть</option>
+                    <option value="">Не вказано</option>
                     @for (d of departments; track d.id) {
                       <option [value]="d.id">{{ d.name }}</option>
                     }
@@ -196,8 +196,8 @@ import { PasswordVisibilityToggleComponent } from '../shared/password-visibility
                 </label>
                 <label>
                   Посада
-                  <select [(ngModel)]="form.positionId" name="positionId" required>
-                    <option value="">Оберіть</option>
+                  <select [(ngModel)]="form.positionId" name="positionId">
+                    <option value="">Не вказано</option>
                     @for (p of positions; track p.id) {
                       <option [value]="p.id">{{ p.name }}</option>
                     }
@@ -652,10 +652,6 @@ export class EmployeeCreatePageComponent implements OnInit {
 
   submit(): void {
     this.error = '';
-    if (!this.form.departmentId || !this.form.positionId) {
-      this.error = 'Оберіть власний відділ і посаду';
-      return;
-    }
     this.loading = true;
     const canOverride =
       this.form.role === 'employee' || this.form.role === 'department_manager';
@@ -665,6 +661,10 @@ export class EmployeeCreatePageComponent implements OnInit {
         : this.form.role === 'admin'
           ? this.form.isDepartmentManager
           : false;
+    const org = optionalOrgAssignmentIds({
+      departmentId: this.form.departmentId,
+      positionId: this.form.positionId,
+    });
     const body: CreateEmployeePayload = {
       createAccount: this.form.createAccount,
       lastName: this.form.lastName,
@@ -678,8 +678,8 @@ export class EmployeeCreatePageComponent implements OnInit {
       personalTelegram: this.form.personalTelegram || undefined,
       role: this.form.role,
       isDepartmentManager: isDeptMgr,
-      departmentId: this.form.departmentId,
-      positionId: this.form.positionId,
+      departmentId: org.departmentId,
+      positionId: org.positionId,
       calendarColor: this.form.calendarColor,
       managedDepartmentIds: this.showManagedDepartments ? this.managedIds : undefined,
       profileVisibilityOverride: canOverride

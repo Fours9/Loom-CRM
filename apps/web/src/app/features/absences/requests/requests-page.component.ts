@@ -15,6 +15,7 @@ import {
   RequestListItemViewModel,
   toRequestListItemVm,
 } from './request-list-item.vm';
+import { buildCreateAbsenceRequestLink } from './create-request-navigation';
 
 type RequestSortKey =
   | 'createdAt'
@@ -42,7 +43,13 @@ type RequestSortKey =
           <h1>Заявки</h1>
           <p>Список заявок на відсутність</p>
         </div>
-        <a class="btn" routerLink="/absences/requests/new">Нова заявка</a>
+        <a
+          class="btn"
+          [routerLink]="createRequestLink.routerLink"
+          [queryParams]="createRequestLink.queryParams"
+        >
+          Нова заявка
+        </a>
       </header>
 
       <div class="filters">
@@ -426,6 +433,7 @@ type RequestSortKey =
 export class RequestsPageComponent implements OnInit {
   private readonly api = inject(ApiService);
 
+  readonly createRequestLink = buildCreateAbsenceRequestLink();
   readonly requestTypeLabel = requestTypeLabel;
 
   items: RequestListItemViewModel[] = [];

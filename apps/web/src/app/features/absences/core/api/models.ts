@@ -128,14 +128,15 @@ export interface CreateEmployeePayload {
   personalEmail?: string;
   comment?: string;
   adminComment?: string;
-  departmentId: string;
-  positionId: string;
   calendarColor: string;
   managedDepartmentIds?: string[];
   profileVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
   absenceVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
   showAbsenceTypeToPeersOverride?: boolean | null;
   schedule?: ScheduleDay[];
+  /** Optional — omit or null when unset. */
+  departmentId?: string | null;
+  positionId?: string | null;
 }
 
 export type AbsenceType = 'day_off' | 'vacation' | 'sick_leave' | 'part_time';

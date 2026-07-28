@@ -233,8 +233,8 @@ export class EmployeesService {
         firstName: dto.firstName.trim(),
         lastName: dto.lastName.trim(),
         middleName: dto.middleName?.trim() || null,
-        departmentId: dto.departmentId ?? null,
-        positionId: dto.positionId ?? null,
+        departmentId: this.optionalUuid(dto.departmentId),
+        positionId: this.optionalUuid(dto.positionId),
         employeeNumber,
         role,
         userId,
@@ -277,13 +277,14 @@ export class EmployeesService {
       employee.employeeNumber = dto.employeeNumber.trim();
     }
     if (dto.departmentId !== undefined) {
-      if (dto.departmentId)
-        await this.departments.getOrFail(dto.departmentId);
-      employee.departmentId = dto.departmentId;
+      const departmentId = this.optionalUuid(dto.departmentId);
+      if (departmentId) await this.departments.getOrFail(departmentId);
+      employee.departmentId = departmentId;
     }
     if (dto.positionId !== undefined) {
-      if (dto.positionId) await this.positions.getOrFail(dto.positionId);
-      employee.positionId = dto.positionId;
+      const positionId = this.optionalUuid(dto.positionId);
+      if (positionId) await this.positions.getOrFail(positionId);
+      employee.positionId = positionId;
     }
     if (dto.calendarColor !== undefined)
       employee.calendarColor = dto.calendarColor;
@@ -538,5 +539,11 @@ export class EmployeesService {
       default:
         return this.serializer.fullName(e).toLowerCase();
     }
+  }
+
+  /** Empty / whitespace optional UUID fields → null (department & position are optional). */
+  private optionalUuid(value?: string | null): string | null {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
   }
 }

@@ -7,6 +7,10 @@ import { OverlayScrollLockService } from '../core/overlay/overlay-scroll-lock.se
 import { ViewportService } from '../core/viewport/viewport.service';
 import { CalendarListEventsComponent } from './calendar-list-events.component';
 import { formatUkDayLabel, todayIsoLocal } from './calendar-date.util';
+import {
+  buildCreateAbsenceRequestLink,
+  type CreateAbsenceRequestLink,
+} from '../requests/create-request-navigation';
 
 @Component({
   selector: 'app-calendar-day-drawer',
@@ -29,14 +33,23 @@ import { formatUkDayLabel, todayIsoLocal } from './calendar-date.util';
           <h2>{{ title }}</h2>
           <p class="muted">{{ date }}</p>
         </div>
-        <button
-          type="button"
-          class="ghost"
-          [attr.aria-label]="'calendar.drawer.closeAria' | t"
-          (click)="closed.emit()"
-        >
-          {{ 'calendar.drawer.close' | t }}
-        </button>
+        <div class="head-actions">
+          <a
+            class="primary"
+            [routerLink]="createRequestLink.routerLink"
+            [queryParams]="createRequestLink.queryParams"
+          >
+            Нова заявка
+          </a>
+          <button
+            type="button"
+            class="ghost"
+            [attr.aria-label]="'calendar.drawer.closeAria' | t"
+            (click)="closed.emit()"
+          >
+            {{ 'calendar.drawer.close' | t }}
+          </button>
+        </div>
       </header>
       @if (loading) {
         <p class="muted">{{ 'calendar.drawer.loading' | t }}</p>
@@ -152,12 +165,14 @@ import { formatUkDayLabel, todayIsoLocal } from './calendar-date.util';
       }
       @media (min-width: 641px) {
         .drawer {
-          top: 0;
+          /* Sit below CRM sticky topbar (topbar z-index is above drawer). */
+          top: var(--shell-topbar-h, 4.05rem);
           right: 0;
           left: auto;
           bottom: auto;
           width: min(480px, 100vw);
-          height: 100vh;
+          height: calc(100vh - var(--shell-topbar-h, 4.05rem));
+          height: calc(100dvh - var(--shell-topbar-h, 4.05rem));
           max-height: none;
           border-radius: 0;
           border: 0;
@@ -173,6 +188,12 @@ import { formatUkDayLabel, todayIsoLocal } from './calendar-date.util';
         align-items: flex-start;
         margin-bottom: 1rem;
       }
+      .head-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.5rem;
+      }
       h2 {
         margin: 0;
         font-size: 1.1rem;
@@ -180,6 +201,18 @@ import { formatUkDayLabel, todayIsoLocal } from './calendar-date.util';
       .muted {
         color: var(--pw-muted);
         margin: 0.2rem 0 0;
+      }
+      .primary {
+        display: inline-flex;
+        align-items: center;
+        text-decoration: none;
+        background: var(--pw-accent);
+        color: var(--pw-on-accent, #fff);
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 0.45rem 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
       }
       .ghost {
         width: auto;
@@ -342,12 +375,20 @@ import { formatUkDayLabel, todayIsoLocal } from './calendar-date.util';
 })
 export class CalendarDayDrawerComponent implements OnDestroy {
   @Input({ required: true }) date!: string;
+  @Input() employeeId: string | null = null;
   @Input() items: CalendarDayItem[] = [];
   @Input() loading = false;
   @Input() error = '';
   @Output() closed = new EventEmitter<void>();
 
   readonly frameTone = requestFrameTone;
+
+  get createRequestLink(): CreateAbsenceRequestLink {
+    return buildCreateAbsenceRequestLink({
+      startDate: this.date,
+      employeeId: this.employeeId || undefined,
+    });
+  }
 
   private readonly viewport = inject(ViewportService);
   private readonly scrollLock = inject(OverlayScrollLockService);
