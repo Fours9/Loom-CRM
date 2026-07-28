@@ -19,6 +19,46 @@ export type EmployeeSummary = {
   position: PositionReference | null;
 };
 
+/**
+ * Full flat HTTP list/detail base for GET /employees.
+ * Matches Organization serializer projection (+ completenessPercent on list).
+ */
+export type EmployeeListItem = {
+  id: EntityId;
+  userId: EntityId | null;
+  hasAccount: boolean;
+
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
+  fullName: string;
+  photoUrl: string | null;
+
+  phoneNumber: string | null;
+  telegram: string | null;
+  workEmail: string | null;
+
+  departmentId: EntityId | null;
+  departmentName: string | null;
+  positionId: EntityId | null;
+  positionName: string | null;
+
+  calendarColor: string | null;
+  role: 'employee' | 'department_manager' | 'admin';
+  isDepartmentManager: boolean;
+
+  accountStatus?: 'active' | 'deactivated';
+  accountEmail?: string;
+  mustChangePassword: boolean | null;
+
+  /** Core profile completeness percent (list enrichment). */
+  completenessPercent: number;
+
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CreateEmployeeRequest = {
   firstName: string;
   lastName: string;
@@ -166,4 +206,19 @@ export type EmployeeProfileResponse = {
   sections: EmployeeProfileSections;
   capabilities: EmployeeProfileCapabilities;
   completeness: ProfileCompleteness;
+};
+
+/** Author of an audit timeline row (null actor = system event). */
+export type EmployeeProfileHistoryActor = {
+  userId: EntityId;
+  label: string;
+};
+
+export type EmployeeProfileHistoryItem = {
+  id: EntityId;
+  action: string;
+  summary: string;
+  actor: EmployeeProfileHistoryActor | null;
+  createdAt: string;
+  metadata: Record<string, unknown> | null;
 };

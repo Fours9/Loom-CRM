@@ -53,6 +53,8 @@ export interface EmployeeListItem {
   workEmail?: string | null;
   phoneNumber: string | null;
   telegram: string | null;
+  /** Present on Organization list responses after Phase 1 polish. */
+  completenessPercent?: number;
   createdAt: string;
 }
 

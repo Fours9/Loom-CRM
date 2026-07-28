@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserRole, UserStatus } from '../../platform/identity/user.enums';
 import { UsersService } from '../../platform/identity/users.service';
@@ -17,8 +17,15 @@ import { EmployeeAccessService } from '../access/employee-access.service';
 import { Employee } from './employee.entity';
 import { WorkScheduleDay } from './work-schedule-day.entity';
 import { EmployeeManagedDepartment } from './employee-managed-department.entity';
+import { EmployeeContact } from './employee-contact.entity';
+import { EmploymentAssignment } from './employment-assignment.entity';
 import { EmployeeSerializer } from './employee.serializer';
 import { AuditService } from '../../platform/audit/audit.service';
+import {
+  buildProfileCompletenessFacts,
+  computeProfileCompleteness,
+} from './employee-profile-completeness';
+import type { EmployeeListQueryDto } from './employee-list-query.dto';
 
 export type ScheduleDayInput = {
   weekday: number;
@@ -64,6 +71,10 @@ export class EmployeesService {
     private readonly schedules: Repository<WorkScheduleDay>,
     @InjectRepository(EmployeeManagedDepartment)
     private readonly managed: Repository<EmployeeManagedDepartment>,
+    @InjectRepository(EmployeeContact)
+    private readonly contacts: Repository<EmployeeContact>,
+    @InjectRepository(EmploymentAssignment)
+    private readonly assignments: Repository<EmploymentAssignment>,
     private readonly access: EmployeeAccessService,
     private readonly departments: DepartmentsService,
     private readonly positions: PositionsService,
@@ -72,18 +83,7 @@ export class EmployeesService {
     private readonly audit: AuditService,
   ) {}
 
-  async findAll(
-    actor: User,
-    query: {
-      q?: string;
-      departmentId?: string;
-      departmentIds?: string[];
-      positionId?: string;
-      status?: string;
-      sortBy?: string;
-      sortDir?: string;
-    } = {},
-  ) {
+  async findAll(actor: User, query: EmployeeListQueryDto = {}) {
     let rows = await this.access.listVisibleEmployees(actor);
 
     const deptIds = [
@@ -129,15 +129,129 @@ export class EmployeesService {
       rows = rows.filter((e) => !e.userId);
     }
 
+    const scoreById = await this.batchCoreCompleteness(rows);
+
+    if (query.maxCompleteness != null) {
+      const max = query.maxCompleteness;
+      rows = rows.filter((e) => (scoreById.get(e.id) ?? 0) <= max);
+    }
+
     const dir = query.sortDir?.toLowerCase() === 'desc' ? -1 : 1;
     const key = (query.sortBy ?? 'fullName').toLowerCase();
-    rows.sort((a, b) => {
-      const av = this.sortValue(a, key);
-      const bv = this.sortValue(b, key);
-      return av < bv ? -dir : av > bv ? dir : 0;
-    });
+    if (key === 'completeness') {
+      rows.sort((a, b) => {
+        const scoreDiff =
+          (scoreById.get(a.id) ?? 0) - (scoreById.get(b.id) ?? 0);
+        if (scoreDiff !== 0) return scoreDiff * dir;
+        const nameDiff = this.serializer
+          .fullName(a)
+          .localeCompare(this.serializer.fullName(b), 'uk-UA');
+        if (nameDiff !== 0) return nameDiff;
+        return a.employeeNumber.localeCompare(b.employeeNumber);
+      });
+    } else {
+      rows.sort((a, b) => {
+        const av = this.sortValue(a, key);
+        const bv = this.sortValue(b, key);
+        return av < bv ? -dir : av > bv ? dir : 0;
+      });
+    }
 
-    return Promise.all(rows.map((e) => this.serializer.toListDto(e, actor)));
+    // After listVisibleEmployees, every row is in-scope → work contacts OK without per-row DB.
+    return Promise.all(
+      rows.map((e) =>
+        this.serializer.toListDto(e, actor, {
+          canViewWorkContacts: true,
+          completenessPercent: scoreById.get(e.id) ?? 0,
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Core completeness only (parity with profile assignment resolution).
+   * currentAssignmentId wins; active-by-employee only when currentAssignmentId is absent.
+   */
+  private async batchCoreCompleteness(
+    rows: Employee[],
+  ): Promise<Map<string, number>> {
+    const scoreById = new Map<string, number>();
+    if (rows.length === 0) return scoreById;
+
+    const employeeIds = rows.map((e) => e.id);
+    const currentIds = rows
+      .map((e) => e.currentAssignmentId)
+      .filter((id): id is string => Boolean(id));
+    const withoutCurrent = rows
+      .filter((e) => !e.currentAssignmentId)
+      .map((e) => e.id);
+
+    const [workContacts, currentAssignments, activeAssignments] =
+      await Promise.all([
+        this.contacts.find({
+          where: {
+            employeeId: In(employeeIds),
+            type: In(['work_phone', 'work_email']),
+          },
+        }),
+        currentIds.length
+          ? this.assignments.find({ where: { id: In(currentIds) } })
+          : Promise.resolve([] as EmploymentAssignment[]),
+        withoutCurrent.length
+          ? this.assignments.find({
+              where: {
+                employeeId: In(withoutCurrent),
+                status: 'active',
+              },
+            })
+          : Promise.resolve([] as EmploymentAssignment[]),
+      ]);
+
+    const contactsByEmployee = new Map<string, EmployeeContact[]>();
+    for (const c of workContacts) {
+      const list = contactsByEmployee.get(c.employeeId) ?? [];
+      list.push(c);
+      contactsByEmployee.set(c.employeeId, list);
+    }
+
+    const assignmentByEmployee = new Map<string, EmploymentAssignment | null>();
+    const currentById = new Map(currentAssignments.map((a) => [a.id, a]));
+    for (const e of rows) {
+      if (e.currentAssignmentId) {
+        assignmentByEmployee.set(
+          e.id,
+          currentById.get(e.currentAssignmentId) ?? null,
+        );
+      }
+    }
+    for (const a of activeAssignments) {
+      if (!assignmentByEmployee.has(a.employeeId)) {
+        assignmentByEmployee.set(a.employeeId, a);
+      }
+    }
+
+    for (const e of rows) {
+      const assignment = assignmentByEmployee.get(e.id) ?? null;
+      const scored = computeProfileCompleteness(
+        buildProfileCompletenessFacts({
+          employee: e,
+          contacts: contactsByEmployee.get(e.id) ?? [],
+          emergencyCount: 0,
+          importantDatesCount: 0,
+          assignment: assignment
+            ? {
+                status: assignment.status,
+                departmentId: assignment.departmentId,
+                positionId: assignment.positionId,
+                startDate: assignment.startDate,
+              }
+            : null,
+        }),
+      );
+      scoreById.set(e.id, scored.core.percent);
+    }
+
+    return scoreById;
   }
 
   async findOne(actor: User, id: string) {

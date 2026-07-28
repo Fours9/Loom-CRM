@@ -81,6 +81,7 @@ describe('EmployeeProfileService transactional audit', () => {
       access,
       {} as never,
       audit,
+      {} as never,
       dataSource,
     );
 

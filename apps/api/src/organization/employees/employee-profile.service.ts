@@ -4,8 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
+import { UsersService } from '../../platform/identity/users.service';
 import { AuditService } from '../../platform/audit/audit.service';
 import { permissionsForRole } from '../../platform/permissions/role-permissions';
 import { Permission } from '../../platform/permissions/permission.names';
@@ -24,6 +25,10 @@ import {
   computeProfileCompleteness,
   projectProfileCompleteness,
 } from './employee-profile-completeness';
+import {
+  projectEmployeeHistoryItem,
+  resolveHistoryActorLabel,
+} from './employee-history.projector';
 
 type AssignmentWriteDto = {
   companyId?: string | null;
@@ -80,6 +85,7 @@ export class EmployeeProfileService {
     private readonly access: EmployeeAccessService,
     private readonly serializer: EmployeeSerializer,
     private readonly audit: AuditService,
+    private readonly users: UsersService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -948,18 +954,56 @@ export class EmployeeProfileService {
     if (!caps.canViewHistory) {
       throw new NotFoundException('Employee not found');
     }
+    const take = Math.min(Math.max(1, limit), 100);
     const rows = await this.auditLogs.find({
       where: { entityType: 'Employee', entityId: id },
       order: { createdAt: 'DESC' },
-      take: Math.min(limit, 100),
+      take,
     });
-    return rows.map((r) => ({
-      id: r.id,
-      action: r.action,
-      actorUserId: r.actorUserId,
-      createdAt: r.createdAt,
-      metadata: this.redactMetadata(r.metadata, caps),
-    }));
+
+    const actorIds = [
+      ...new Set(
+        rows
+          .map((r) => r.actorUserId)
+          .filter((uid): uid is string => Boolean(uid)),
+      ),
+    ];
+    const users = await this.users.findByIds(actorIds);
+    const usersById = new Map(users.map((u) => [u.id, { email: u.email }]));
+
+    const linkedEmployees =
+      actorIds.length === 0
+        ? []
+        : await this.employees.find({
+            where: { userId: In(actorIds) },
+          });
+    const employeesByUserId = new Map(
+      linkedEmployees
+        .filter((e) => e.userId)
+        .map((e) => [
+          e.userId as string,
+          { fullName: this.serializer.fullName(e) },
+        ]),
+    );
+
+    return rows.map((r) => {
+      const redacted = this.redactMetadata(r.metadata, caps);
+      const actorResolved = resolveHistoryActorLabel({
+        actorUserId: r.actorUserId,
+        usersById,
+        employeesByUserId,
+      });
+      return projectEmployeeHistoryItem({
+        auditLog: {
+          id: r.id,
+          action: r.action,
+          actorUserId: r.actorUserId,
+          createdAt: r.createdAt,
+        },
+        actor: actorResolved,
+        redactedMetadata: redacted,
+      });
+    });
   }
 
   async completeness(actor: User, id: string) {
