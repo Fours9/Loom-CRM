@@ -30,7 +30,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 | Вкладка | Стан | Видимість |
 | --- | --- | --- |
 | Дані працівника | Основні · Контакти · Дати · Посада (редагування за capabilities) | завжди |
-| Робочий календар | Заявки + календар (compat Absences / TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)) | `absences.calendar.view` |
+| Робочий графік | **Графік роботи** + Заявки + Календар (Absences `public-api`: schedule panel через `getEmployee` + `PUT .../schedule`; UI = `ScheduleEditor`. Empty API schedule ≠ default Пн–Пт — дефолт лише в draft при редагуванні. Compat TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)) | `absences.calendar.view` |
 | Документи | Documents MVP + агрегат вкладень time-event (Absences) | `documents.view` |
 | Показники | Stub (roadmap Phase 5 / 8) | завжди |
 | Історія | Audit timeline: дата · актор · UA summary (`EmployeeProfileHistoryItem`) | `capabilities.canViewHistory` |

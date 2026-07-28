@@ -39,6 +39,10 @@ import { PLATFORM_TAGLINE } from '../../core/brand/platform';
           <strong>Працівники</strong>
           <span>Список і швидке додавання співробітників</span>
         </a>
+        <a class="tile" routerLink="/statistics">
+          <strong>Статистика</strong>
+          <span>Звіти та аналітика</span>
+        </a>
         <a class="tile" routerLink="/settings">
           <strong>Налаштування</strong>
           <span>Платформені параметри CRM</span>

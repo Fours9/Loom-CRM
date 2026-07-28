@@ -25,6 +25,11 @@ body {
   color: var(--loom-text);
 }
 
+html {
+  /* Avoid horizontal reflow of profile completeness when scrollbar appears. */
+  scrollbar-gutter: stable;
+}
+
 a {
   color: inherit;
   text-decoration: none;

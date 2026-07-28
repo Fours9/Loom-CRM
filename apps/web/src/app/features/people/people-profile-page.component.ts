@@ -1,7 +1,9 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   OnInit,
+  ViewChild,
   computed,
   effect,
   inject,
@@ -29,6 +31,7 @@ import { SessionStore } from '../../core/auth/session.store';
 import {
   CalendarPageComponent,
   EmployeeAbsenceRequestsPanelComponent,
+  EmployeeWorkSchedulePanelComponent,
 } from '../absences/public-api';
 import { EmployeeDocumentsPanelComponent } from './employee-documents-panel.component';
 import { EmployeeProfileCompletenessComponent } from './employee-profile-completeness.component';
@@ -43,7 +46,7 @@ import {
   type PeopleProfileTabId,
 } from './people-profile-tabs';
 
-type AbsenceTabId = 'requests' | 'calendar';
+type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
 
 @Component({
   selector: 'loom-people-profile-page',
@@ -52,6 +55,7 @@ type AbsenceTabId = 'requests' | 'calendar';
     RouterLink,
     CalendarPageComponent,
     EmployeeAbsenceRequestsPanelComponent,
+    EmployeeWorkSchedulePanelComponent,
     EmployeeDocumentsPanelComponent,
     EmployeeProfileCompletenessComponent,
     EmployeeHistoryPanelComponent,
@@ -105,7 +109,10 @@ type AbsenceTabId = 'requests' | 'calendar';
           <p class="error">{{ error() }}</p>
         }
 
-        <loom-employee-profile-completeness [completeness]="profile()!.completeness" />
+        <loom-employee-profile-completeness
+          #completenessAnchor
+          [completeness]="profile()!.completeness"
+        />
 
         <nav class="tabs" aria-label="Розділи профілю">
           @for (t of visibleTabs(); track t.id) {
@@ -134,7 +141,18 @@ type AbsenceTabId = 'requests' | 'calendar';
               />
             }
             @case ('absences') {
-              <nav class="tabs subtabs" role="tablist" aria-label="Робочий календар працівника">
+              <nav class="tabs subtabs" role="tablist" aria-label="Робочий графік працівника">
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
+                  [attr.aria-selected]="absenceTab() === 'schedule'"
+                  [class.active]="absenceTab() === 'schedule'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setAbsenceTab('schedule')"
+                >
+                  Графік роботи
+                </button>
                 <button
                   type="button"
                   class="tab"
@@ -159,7 +177,9 @@ type AbsenceTabId = 'requests' | 'calendar';
                 </button>
               </nav>
 
-              @if (absenceTab() === 'requests') {
+              @if (absenceTab() === 'schedule') {
+                <app-employee-work-schedule-panel [employeeId]="profile()!.header.id" />
+              } @else if (absenceTab() === 'requests') {
                 <app-employee-absence-requests-panel [employeeId]="profile()!.header.id" />
               } @else {
                 @defer (on immediate) {
@@ -329,6 +349,8 @@ type AbsenceTabId = 'requests' | 'calendar';
         border: 1px solid var(--pw-border);
         border-radius: 12px;
         background: var(--pw-surface);
+        /* Keep header/completeness stable when tab body height changes. */
+        overflow-anchor: none;
       }
       .subtabs {
         margin-bottom: 0.25rem;
@@ -386,9 +408,12 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly profile = signal<EmployeeProfileResponse | null>(null);
   readonly tab = signal<PeopleProfileTabId>('data');
-  readonly absenceTab = signal<AbsenceTabId>('requests');
+  readonly absenceTab = signal<AbsenceTabId>('schedule');
   readonly audit = signal<EmployeeProfileHistoryItem[]>([]);
   readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
+
+  @ViewChild('completenessAnchor', { read: ElementRef })
+  private completenessAnchor?: ElementRef<HTMLElement>;
 
   employeeId = '';
 
@@ -486,17 +511,28 @@ export class PeopleProfilePageComponent implements OnInit {
     this.historyAssign.set([]);
     this.error.set(null);
     this.tab.set('data');
-    this.absenceTab.set('requests');
+    this.absenceTab.set('schedule');
   }
 
+  /** Keep completeness bar at the same viewport Y when tab body reflows. */
   private withPreservedScroll(action: () => void): void {
+    const anchor = this.completenessAnchor?.nativeElement ?? null;
+    const beforeTop = anchor?.getBoundingClientRect().top ?? null;
     const y = window.scrollY;
     action();
-    requestAnimationFrame(() => {
+    const restore = () => {
+      if (anchor && beforeTop != null) {
+        const delta = anchor.getBoundingClientRect().top - beforeTop;
+        if (Math.abs(delta) > 0.5) {
+          window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+          return;
+        }
+      }
       window.scrollTo({ top: y, left: 0, behavior: 'auto' });
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: y, left: 0, behavior: 'auto' });
-      });
+    };
+    requestAnimationFrame(() => {
+      restore();
+      requestAnimationFrame(restore);
     });
   }
 
