@@ -25,7 +25,7 @@
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
-**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий календар** (compat Absences), Документи, Показники (stub), Історія, Згодом (stub). PW-картка: `/absences/employees/:id`.
+**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий календар** (compat Absences), Документи, Показники (stub), Історія, Згодом (stub); visibility gated by permissions/capabilities. Історія: актор + UA summary. Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 
@@ -35,7 +35,7 @@
 | **Target / vision** | [employee-profile-core.md](product/employee-profile-core.md) — **не** статус імплементації |
 | **Frozen decisions** | [ADR](adr/) 0001–0008 (рішення зафіксовані) |
 
-Відкладено (код polish, не docs): Phase 1 gaps — збагачена Історія (actor), гейт вкладок за capabilities, completeness filter на списку People.
+Відкладено (Phase 1 polish): photo upload у профілі (потрібен Platform Files). History cursor pagination — поза поточним polish.
 
 ## Практичне
 

@@ -26,16 +26,18 @@ last_updated: "2026-07-27"
 ### Shipped (Phase 1 + Documents MVP)
 
 - Organization Profile Core: `/people/:id`, section APIs (basic/contacts/personal/emergency/important-dates/assignments), capabilities, completeness, audit history API, employment history.
-- UI вкладки зараз: **Дані працівника** (Основні · Контакти · Дати · Посада), **Відсутності**, **Документи**, **Показники** (stub), **Історія**, **Згодом** (stub).
-- Absences як окремий бізнес-модуль (повний PW UI під `/absences/*`).
-- Documents MVP: `employee_documents`, `documents.view` / `documents.manage`, People-вкладка + агрегат absence attachments; storage поки interim `content_base64`.
+- UI вкладки: **Дані працівника** (Основні · Контакти · Дати · Посада), **Робочий календар**, **Документи**, **Показники** (stub), **Історія**, **Згодом** (stub). Visibility gated (calendar/documents permissions, `canViewHistory`); history UI = actor + UA summary.
+- People list: flat `EmployeeListItem` + core `completenessPercent`, server `sortBy=completeness` / `maxCompleteness`.
+- Absences як окремий бізнес-модуль (повний PW UI під `/absences/*`; product UI «Робочий календар» / TimeEvent).
+- Documents MVP: `employee_documents`, `documents.view` / `documents.manage`, People-вкладка + агрегат absence/time-event attachments; storage поки interim `content_base64`.
 - Runtime ролі: `employee` · `department_manager` · `admin` (**немає** окремої ролі `hr`).
 
 ### Still planned (не плутати з «вже є»)
 
 - Phase 2+: `/me` self-service, change-request queue.
 - Questionnaires, Onboarding, Skills, Goals, Reviews як окремі модулі / вкладки з §8 цього документа.
-- Platform **Files** (заміна base64), verification, consents versions.
+- Platform **Files** (заміна base64), photo upload у профілі, verification, consents versions.
+- History **cursor pagination** (зараз лише `limit` ≤100).
 - Окрема HR role у матрицях нижче — **продуктова** модель; у runtime її функції покриває Admin + permissions.
 
 ---
