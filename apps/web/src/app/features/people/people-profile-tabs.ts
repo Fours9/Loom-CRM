@@ -17,7 +17,7 @@ export type PeopleProfileTab = {
 
 const ALL_TABS: readonly PeopleProfileTab[] = [
   { id: 'data', label: 'Дані працівника' },
-  { id: 'absences', label: 'Робочий календар' },
+  { id: 'absences', label: 'Робочий графік' },
   { id: 'documents', label: 'Документи' },
   { id: 'metrics', label: 'Показники' },
   { id: 'history', label: 'Історія' },

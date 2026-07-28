@@ -35,6 +35,13 @@ export const routes: Routes = [
             (m) => m.ABSENCE_ROUTES,
           ),
       },
+      {
+        path: 'statistics',
+        loadChildren: () =>
+          import('./features/statistics/statistics.routes').then(
+            (m) => m.STATISTICS_ROUTES,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

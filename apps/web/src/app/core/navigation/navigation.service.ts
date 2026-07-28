@@ -17,6 +17,7 @@ const NAV_TREE: NavNode[] = [
     label: 'Робочий календар',
     permission: Permission.AbsencesCalendarView,
   },
+  { path: '/statistics', label: 'Статистика' },
   {
     path: '/settings',
     label: 'Налаштування',

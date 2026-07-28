@@ -2,7 +2,7 @@
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
 import { AbsenceRequestListItem, EmployeeProfile } from '../core/api/models';
-import { roleDisplayLabel, WEEKDAY_LABELS } from '../core/api/labels';
+import { roleDisplayLabel } from '../core/api/labels';
 import {
   requestEventLabel,
   requestPeriod,
@@ -10,13 +10,14 @@ import {
 } from '../core/api/request-view.util';
 import { AuthService } from '../core/auth/auth.service';
 import { RequestStatusBadgeComponent } from '../shared/request-status-badge.component';
+import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { requestFrameTone } from '../shared/request-status-presentation';
 import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, RequestStatusBadgeComponent],
+  imports: [RouterLink, RequestStatusBadgeComponent, ScheduleEditorComponent],
   template: `
     <section class="page">
       @if (loading) {
@@ -213,25 +214,10 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
               </summary>
               <div class="side-tools-body" [attr.data-panel]="sidePanel">
                 @if (sidePanel === 'schedule') {
-                  <ul class="schedule">
-                    @for (day of employee.schedule; track day.weekday) {
-                      <li>
-                        <strong>{{ weekday(day.weekday) }}</strong>
-                        @if (day.isWorkingDay) {
-                          <div class="day-meta">
-                            <span>{{ day.startTime }}–{{ day.endTime }}</span>
-                            @if (day.breakStart && day.breakEnd) {
-                              <span class="muted break-line">перерва {{ day.breakStart }}–{{ day.breakEnd }}</span>
-                            } @else {
-                              <span class="muted break-line">без перерви</span>
-                            }
-                          </div>
-                        } @else {
-                          <span>вихідний</span>
-                        }
-                      </li>
-                    }
-                  </ul>
+                  <app-schedule-editor
+                    [days]="employee.schedule"
+                    [readonly]="true"
+                  />
                 } @else if (sidePanel === 'comment' && employee.permissions?.canViewComment) {
                   <h3>Коментар</h3>
                   <div class="value pre">{{ employee.comment || '—' }}</div>
@@ -443,7 +429,7 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
         min-height: 0;
         overflow: hidden;
       }
-      .side-tools-body[data-panel='schedule'] > .schedule {
+      .side-tools-body[data-panel='schedule'] > app-schedule-editor {
         flex: 1 1 auto;
         min-height: 0;
         overflow-x: hidden;
@@ -682,43 +668,12 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
       .error {
         color: var(--pw-danger);
       }
-      .schedule {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: 0;
-      }
       .list {
         list-style: none;
         padding: 0;
         margin: 0;
         display: grid;
         gap: 0.4rem;
-      }
-      .schedule li {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        padding: 0.55rem 0;
-        border-bottom: 1px solid color-mix(in srgb, var(--pw-muted) 55%, transparent);
-      }
-      .schedule li:last-child {
-        border-bottom: 0;
-        padding-bottom: 0;
-      }
-      .schedule li:first-child {
-        padding-top: 0;
-      }
-      .day-meta {
-        display: grid;
-        justify-items: end;
-        gap: 0.15rem;
-        text-align: right;
-      }
-      .break-line {
-        font-size: 0.85rem;
       }
       .list li {
         display: flex;
@@ -853,10 +808,6 @@ export class DashboardComponent implements OnInit {
     return employee.accountStatus === 'deactivated'
       ? 'Акаунт: деактивований'
       : 'Акаунт: активний';
-  }
-
-  weekday(day: number): string {
-    return WEEKDAY_LABELS[day] ?? String(day);
   }
 
   downloadPdf(): void {

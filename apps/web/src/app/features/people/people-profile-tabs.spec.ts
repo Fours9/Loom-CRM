@@ -70,6 +70,14 @@ describe('visiblePeopleProfileTabs', () => {
     });
     expect(tabs.some((t) => t.id === 'absences')).toBe(false);
   });
+
+  it('labels absences tab as Робочий графік', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsViewHistory,
+      permissions: [Permission.AbsencesCalendarView],
+    });
+    expect(tabs.find((t) => t.id === 'absences')?.label).toBe('Робочий графік');
+  });
 });
 
 describe('resolvePeopleProfileTab', () => {

@@ -32,7 +32,7 @@ Documents module owns `employee_documents` (interim `content_base64` storage unt
 
 ### People UI
 
-CRM employee profile: `/people/:id` — tabs Дані працівника, Робочий календар, Документи, Показники (stub), Історія, Згодом (stub). Visibility gated by session permissions (`absences.calendar.view`, `documents.view`) and `capabilities.canViewHistory` (hide, not empty-state). History timeline: actor label + UA summary. People list `/people`: core `completenessPercent`, `sortBy=completeness`, `maxCompleteness`. Absences PW-parity card: `/absences/employees/:id` (unchanged). Living phase status: [hr-profile-roadmap.md](product/hr-profile-roadmap.md). Work calendar intent: [work-calendar-roadmap.md](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
+CRM employee profile: `/people/:id` — tabs Дані працівника, Робочий графік (Графік роботи · Заявки · Календар), Документи, Показники (stub), Історія, Згодом (stub). Visibility gated by session permissions (`absences.calendar.view`, `documents.view`) and `capabilities.canViewHistory` (hide, not empty-state). History timeline: actor label + UA summary. People list `/people`: core `completenessPercent`, `sortBy=completeness`, `maxCompleteness`. Absences PW-parity card: `/absences/employees/:id` (unchanged). Living phase status: [hr-profile-roadmap.md](product/hr-profile-roadmap.md). Work calendar intent: [work-calendar-roadmap.md](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
 
 ### Profile completeness
 
