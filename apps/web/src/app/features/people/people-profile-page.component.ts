@@ -1,4 +1,12 @@
-import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -13,7 +21,11 @@ import {
   switchMap,
   tap,
 } from 'rxjs';
-import type { EmployeeProfileResponse } from '@loom/contracts-employees';
+import type {
+  EmployeeProfileHistoryItem,
+  EmployeeProfileResponse,
+} from '@loom/contracts-employees';
+import { SessionStore } from '../../core/auth/session.store';
 import {
   CalendarPageComponent,
   EmployeeAbsenceRequestsPanelComponent,
@@ -25,8 +37,12 @@ import {
   AssignmentHistoryItem,
   EmployeeDataPanelComponent,
 } from './employee-data-panel.component';
+import {
+  resolvePeopleProfileTab,
+  visiblePeopleProfileTabs,
+  type PeopleProfileTabId,
+} from './people-profile-tabs';
 
-type TabId = 'data' | 'absences' | 'documents' | 'metrics' | 'history' | 'later';
 type AbsenceTabId = 'requests' | 'calendar';
 
 @Component({
@@ -92,7 +108,7 @@ type AbsenceTabId = 'requests' | 'calendar';
         <loom-employee-profile-completeness [completeness]="profile()!.completeness" />
 
         <nav class="tabs" aria-label="Розділи профілю">
-          @for (t of tabs; track t.id) {
+          @for (t of visibleTabs(); track t.id) {
             <button
               type="button"
               class="tab"
@@ -177,10 +193,7 @@ type AbsenceTabId = 'requests' | 'calendar';
               <p class="muted">Розділ у розробці. Тут з’являться KPI, цілі та метрики працівника.</p>
             }
             @case ('history') {
-              <loom-employee-history-panel
-                [canViewHistory]="profile()!.capabilities.canViewHistory"
-                [items]="audit()"
-              />
+              <loom-employee-history-panel [items]="audit()" />
             }
             @default {
               <h2>Наступні модулі</h2>
@@ -367,25 +380,35 @@ export class PeopleProfilePageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly http = inject(HttpClient);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly session = inject(SessionStore);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly profile = signal<EmployeeProfileResponse | null>(null);
-  readonly tab = signal<TabId>('data');
+  readonly tab = signal<PeopleProfileTabId>('data');
   readonly absenceTab = signal<AbsenceTabId>('requests');
-  readonly audit = signal<Array<{ id: string; action: string; createdAt: string }>>([]);
+  readonly audit = signal<EmployeeProfileHistoryItem[]>([]);
   readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
 
   employeeId = '';
 
-  readonly tabs: Array<{ id: TabId; label: string }> = [
-    { id: 'data', label: 'Дані працівника' },
-    { id: 'absences', label: 'Робочий календар' },
-    { id: 'documents', label: 'Документи' },
-    { id: 'metrics', label: 'Показники' },
-    { id: 'history', label: 'Історія' },
-    { id: 'later', label: 'Згодом' },
-  ];
+  readonly visibleTabs = computed(() =>
+    visiblePeopleProfileTabs({
+      capabilities: this.profile()?.capabilities,
+      permissions: this.session.user()?.permissions ?? [],
+    }),
+  );
+
+  constructor() {
+    effect(() => {
+      const visible = this.visibleTabs();
+      const current = this.tab();
+      const resolved = resolvePeopleProfileTab(current, visible);
+      if (resolved !== current) {
+        this.tab.set(resolved);
+      }
+    });
+  }
 
   ngOnInit(): void {
     this.route.paramMap
@@ -417,9 +440,10 @@ export class PeopleProfilePageComponent implements OnInit {
       });
   }
 
-  setTab(id: TabId): void {
-    if (this.tab() === id) return;
-    this.withPreservedScroll(() => this.tab.set(id));
+  setTab(requested: PeopleProfileTabId): void {
+    const resolved = resolvePeopleProfileTab(requested, this.visibleTabs());
+    if (this.tab() === resolved) return;
+    this.withPreservedScroll(() => this.tab.set(resolved));
   }
 
   setAbsenceTab(id: AbsenceTabId): void {
@@ -479,7 +503,7 @@ export class PeopleProfilePageComponent implements OnInit {
   private loadSecondaryData(employeeId: string, profile: EmployeeProfileResponse): void {
     const history$ = profile.capabilities.canViewHistory
       ? this.http
-          .get<Array<{ id: string; action: string; createdAt: string }>>(
+          .get<EmployeeProfileHistoryItem[]>(
             `/api/v1/employees/${employeeId}/history`,
           )
           .pipe(catchError(() => of([])))

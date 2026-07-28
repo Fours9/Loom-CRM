@@ -42,6 +42,8 @@ import { EmployeesService } from './employees.service';
 import { EmployeeProfileService } from './employee-profile.service';
 import { EmployeeProfileExportService } from './employee-profile-export.service';
 import { contentDisposition } from './employee-pdf-filename';
+import { EmployeeHistoryQueryDto } from './employee-history-query.dto';
+import { EmployeeListQueryDto } from './employee-list-query.dto';
 
 class CreateEmployeeDto {
   @IsString()
@@ -291,23 +293,9 @@ export class EmployeesController {
   @RequirePermissions(Permission.EmployeesView)
   findAll(
     @CurrentUser() user: User,
-    @Query('q') q?: string,
-    @Query('departmentId') departmentId?: string,
-    @Query('departmentIds') departmentIds?: string | string[],
-    @Query('positionId') positionId?: string,
-    @Query('status') status?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('sortDir') sortDir?: string,
+    @Query() query: EmployeeListQueryDto,
   ) {
-    return this.employees.findAll(user, {
-      q,
-      departmentId,
-      departmentIds: this.parseIdList(departmentIds),
-      positionId,
-      status,
-      sortBy,
-      sortDir,
-    });
+    return this.employees.findAll(user, query);
   }
 
   @Get('catalogs/org')
@@ -351,9 +339,9 @@ export class EmployeesController {
   history(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('limit') limit?: string,
+    @Query() query: EmployeeHistoryQueryDto,
   ) {
-    return this.profile.history(user, id, limit ? Number(limit) : 50);
+    return this.profile.history(user, id, query.limit);
   }
 
   @Get(':id/employment')

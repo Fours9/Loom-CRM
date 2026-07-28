@@ -29,16 +29,26 @@ export type EmployeeListDto = {
   accountStatus?: AccountStatus;
   accountEmail?: string;
   mustChangePassword: boolean | null;
-  createdAt: Date;
-  updatedAt: Date;
+  completenessPercent: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
-export type EmployeeDetailDto = EmployeeListDto & {
+export type EmployeeDetailDto = Omit<EmployeeListDto, 'completenessPercent'> & {
+  completenessPercent?: number;
   comment?: string | null;
   adminComment?: string | null;
   personalPhoneNumber?: string | null;
   personalTelegram?: string | null;
   personalEmail?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Avoid per-row DB after listVisibleEmployees. */
+export type EmployeeListProjectionContext = {
+  canViewWorkContacts: boolean;
+  completenessPercent: number;
 };
 
 @Injectable()
@@ -51,11 +61,14 @@ export class EmployeeSerializer {
       .join(' ');
   }
 
-  async toListDto(employee: Employee, viewer: User): Promise<EmployeeListDto> {
-    const showWorkContacts = await this.access.canViewWorkContacts(
-      viewer,
-      employee,
-    );
+  async toListDto(
+    employee: Employee,
+    viewer: User,
+    ctx?: EmployeeListProjectionContext,
+  ): Promise<EmployeeListDto> {
+    const showWorkContacts =
+      ctx?.canViewWorkContacts ??
+      (await this.access.canViewWorkContacts(viewer, employee));
     const canViewAccount = this.access.canViewAccountDetails(viewer, employee);
     const isOwner = this.access.isOwner(viewer, employee);
     const showMustChange = this.access.isAdmin(viewer) || isOwner;
@@ -82,8 +95,9 @@ export class EmployeeSerializer {
       role: employee.role,
       isDepartmentManager: Boolean(employee.isDepartmentManager),
       mustChangePassword: null,
-      createdAt: employee.createdAt,
-      updatedAt: employee.updatedAt,
+      completenessPercent: ctx?.completenessPercent ?? 0,
+      createdAt: employee.createdAt.toISOString(),
+      updatedAt: employee.updatedAt.toISOString(),
     };
 
     if (hasAccount) {
@@ -110,8 +124,15 @@ export class EmployeeSerializer {
     employee: Employee,
     viewer: User,
   ): Promise<EmployeeDetailDto> {
-    const base = await this.toListDto(employee, viewer);
-    const dto: EmployeeDetailDto = { ...base };
+    const base = await this.toListDto(employee, viewer, {
+      canViewWorkContacts: await this.access.canViewWorkContacts(
+        viewer,
+        employee,
+      ),
+      completenessPercent: 0,
+    });
+    const { completenessPercent: _drop, ...rest } = base;
+    const dto: EmployeeDetailDto = { ...rest };
 
     if (this.access.canViewComment(viewer, employee)) {
       dto.comment = employee.comment;

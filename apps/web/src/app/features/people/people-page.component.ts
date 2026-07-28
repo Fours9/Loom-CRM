@@ -1,8 +1,11 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import type { EmployeeSummary } from '@loom/contracts-employees';
+import type { EmployeeListItem } from '@loom/contracts-employees';
+
+type CompletenessFilter = '' | '25' | '50' | '75' | '99';
+type SortBy = 'fullName' | 'completeness';
 
 @Component({
   selector: 'loom-people-page',
@@ -23,6 +26,45 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
       @if (error()) {
         <p class="error">{{ error() }}</p>
       }
+
+      <div class="filters">
+        <label>
+          Повнота профілю
+          <select
+            [ngModel]="maxCompleteness()"
+            (ngModelChange)="onMaxCompleteness($event)"
+            name="maxCompleteness"
+          >
+            <option value="">Усі</option>
+            <option value="25">До 25%</option>
+            <option value="50">До 50%</option>
+            <option value="75">До 75%</option>
+            <option value="99">Менше 100%</option>
+          </select>
+        </label>
+        <label>
+          Сортування
+          <select
+            [ngModel]="sortBy()"
+            (ngModelChange)="onSortBy($event)"
+            name="sortBy"
+          >
+            <option value="fullName">ПІБ</option>
+            <option value="completeness">Повнота профілю</option>
+          </select>
+        </label>
+        <label>
+          Напрямок
+          <select
+            [ngModel]="sortDir()"
+            (ngModelChange)="onSortDir($event)"
+            name="sortDir"
+          >
+            <option value="asc">За зростанням</option>
+            <option value="desc">За спаданням</option>
+          </select>
+        </label>
+      </div>
 
       <div class="create-card">
         <h2>Новий працівник</h2>
@@ -45,9 +87,10 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
           @for (e of employees(); track e.id) {
             <li class="employee-card">
               <a class="card-body" [routerLink]="['/people', e.id]">
-                <strong class="card-title">{{ e.lastName }} {{ e.firstName }}</strong>
+                <strong class="card-title">{{ e.fullName }}</strong>
                 <span class="card-meta">{{ e.employeeNumber }}</span>
-                <span class="card-meta">{{ e.department?.name || '—' }}</span>
+                <span class="card-meta">{{ e.departmentName || '—' }}</span>
+                <span class="badge">Профіль {{ e.completenessPercent }}%</span>
               </a>
             </li>
           }
@@ -60,16 +103,18 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
                 <th>ПІБ</th>
                 <th>Номер</th>
                 <th>Відділ</th>
+                <th>Повнота</th>
               </tr>
             </thead>
             <tbody>
               @for (e of employees(); track e.id) {
                 <tr class="clickable" (click)="open(e.id)">
                   <td>
-                    <strong>{{ e.lastName }} {{ e.firstName }}</strong>
+                    <strong>{{ e.fullName }}</strong>
                   </td>
                   <td>{{ e.employeeNumber }}</td>
-                  <td>{{ e.department?.name || '—' }}</td>
+                  <td>{{ e.departmentName || '—' }}</td>
+                  <td>{{ e.completenessPercent }}%</td>
                 </tr>
               }
             </tbody>
@@ -99,6 +144,26 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
       .page-head p {
         margin: 0.25rem 0 0;
         color: var(--pw-muted);
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      .filters label {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+        color: var(--pw-muted);
+        min-width: 10rem;
+      }
+      .filters select {
+        padding: 0.45rem 0.6rem;
+        border: 1px solid var(--pw-border-strong);
+        border-radius: 8px;
+        background: var(--pw-input-bg);
+        color: var(--pw-text);
+        min-height: 2.5rem;
       }
       .btn {
         border: 0;
@@ -161,8 +226,10 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
         padding: 0.85rem 1rem;
       }
       .card-body {
+        text-decoration: none;
+        color: inherit;
         display: grid;
-        gap: 0.2rem;
+        gap: 0.25rem;
       }
       .card-title {
         color: var(--pw-text-strong);
@@ -170,6 +237,15 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
       .card-meta {
         color: var(--pw-muted);
         font-size: 0.9rem;
+      }
+      .badge {
+        display: inline-flex;
+        width: fit-content;
+        border-radius: 999px;
+        padding: 0.15rem 0.55rem;
+        font-size: 0.8rem;
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 40%, var(--pw-border));
+        color: var(--pw-accent);
       }
       .table-wrap {
         display: none;
@@ -201,12 +277,6 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
         border-radius: 12px;
         background: var(--pw-surface-2);
       }
-      .card-body {
-        text-decoration: none;
-        color: inherit;
-        display: grid;
-        gap: 0.25rem;
-      }
       tr.clickable {
         cursor: pointer;
       }
@@ -234,9 +304,12 @@ import type { EmployeeSummary } from '@loom/contracts-employees';
 export class PeoplePageComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
-  readonly employees = signal<EmployeeSummary[]>([]);
+  readonly employees = signal<EmployeeListItem[]>([]);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+  readonly maxCompleteness = signal<CompletenessFilter>('');
+  readonly sortBy = signal<SortBy>('fullName');
+  readonly sortDir = signal<'asc' | 'desc'>('asc');
   firstName = '';
   lastName = '';
 
@@ -244,10 +317,33 @@ export class PeoplePageComponent implements OnInit {
     this.reload();
   }
 
+  onMaxCompleteness(value: CompletenessFilter): void {
+    this.maxCompleteness.set(value);
+    this.reload();
+  }
+
+  onSortBy(value: SortBy): void {
+    this.sortBy.set(value);
+    this.reload();
+  }
+
+  onSortDir(value: 'asc' | 'desc'): void {
+    this.sortDir.set(value);
+    this.reload();
+  }
+
   reload(): void {
-    this.http.get<EmployeeSummary[]>('/api/v1/employees').subscribe({
+    let params = new HttpParams()
+      .set('sortBy', this.sortBy())
+      .set('sortDir', this.sortDir());
+    const max = this.maxCompleteness();
+    if (max) {
+      params = params.set('maxCompleteness', max);
+    }
+    this.http.get<EmployeeListItem[]>('/api/v1/employees', { params }).subscribe({
       next: (rows) => this.employees.set(rows),
-      error: () => this.error.set('Не вдалося завантажити працівників (потрібен вхід)'),
+      error: () =>
+        this.error.set('Не вдалося завантажити працівників (потрібен вхід)'),
     });
   }
 

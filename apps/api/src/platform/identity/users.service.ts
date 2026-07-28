@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { User } from './user.entity';
 import { UserRole, UserStatus } from './user.enums';
 
@@ -24,6 +24,13 @@ export class UsersService {
 
   findById(id: string): Promise<User | null> {
     return this.users.findOne({ where: { id } });
+  }
+
+  /** Batch load users by id (no N+1). Empty input → []. */
+  async findByIds(ids: string[]): Promise<User[]> {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return [];
+    return this.users.find({ where: { id: In(unique) } });
   }
 
   findByEmail(email: string): Promise<User | null> {
