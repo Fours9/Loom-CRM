@@ -444,10 +444,29 @@ export class EmployeesService {
   async getSchedule(actor: User, employeeId: string) {
     const emp = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, emp);
+    return this.getScheduleDaysInternal(employeeId);
+  }
+
+  /**
+   * Internal schedule flags for Absences/TimeEvent SchedulePolicy.
+   * Does not enforce viewer ACL — caller must already authorize the employee.
+   */
+  async getScheduleDaysInternal(employeeId: string) {
     const days = await this.schedules.find({
       where: { employeeId },
       order: { weekday: 'ASC' },
     });
+    if (days.length === 0) {
+      return this.defaultSchedule().map((d) => ({
+        weekday: d.weekday,
+        isWorkingDay: Boolean(d.isWorkingDay),
+        startTime: d.startTime ?? null,
+        endTime: d.endTime ?? null,
+        breakStart: d.breakStart ?? null,
+        breakEnd: d.breakEnd ?? null,
+        note: d.note ?? null,
+      }));
+    }
     return days.map((d) => this.toScheduleDto(d));
   }
 

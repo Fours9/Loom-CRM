@@ -29,8 +29,8 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 | Вкладка | Стан |
 | --- | --- |
 | Дані працівника | Основні · Контакти · Дати · Посада (редагування за capabilities) |
-| Відсутності | Заявки + календар (embedded Absences) |
-| Документи | Documents MVP + агрегат вкладень Absences |
+| Робочий календар | Заявки + календар (compat Absences / TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)) |
+| Документи | Documents MVP + агрегат вкладень time-event (Absences) |
 | Показники | Stub (roadmap Phase 5 / 8) |
 | Історія | Audit timeline (базовий) |
 | Згодом | Stub (майбутні модулі) |

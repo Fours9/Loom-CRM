@@ -25,13 +25,15 @@
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
-**Профіль UI:** `/people/:id` — вкладки Дані працівника, Відсутності, Документи, Показники (stub), Історія, Згодом (stub). PW-картка: `/absences/employees/:id`.
+**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий календар** (compat Absences), Документи, Показники (stub), Історія, Згодом (stub). PW-картка: `/absences/employees/:id`.
+
+**Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 
 | Тип документа | Призначення |
 | --- | --- |
-| **Living status** | цей hub, [roadmap](product/hr-profile-roadmap.md), [architecture](architecture.md), [AGENTS.md](../AGENTS.md) |
+| **Living status** | цей hub, [roadmap](product/hr-profile-roadmap.md), [work calendar](product/work-calendar-roadmap.md), [architecture](architecture.md), [AGENTS.md](../AGENTS.md) |
 | **Target / vision** | [employee-profile-core.md](product/employee-profile-core.md) — **не** статус імплементації |
-| **Frozen decisions** | [ADR](adr/) 0001–0006 (рішення зафіксовані) |
+| **Frozen decisions** | [ADR](adr/) 0001–0008 (рішення зафіксовані) |
 
 Відкладено (код polish, не docs): Phase 1 gaps — збагачена Історія (actor), гейт вкладок за capabilities, completeness filter на списку People.
 
@@ -54,9 +56,11 @@
 ## Продукт / HR
 
 - [HR profile roadmap](product/hr-profile-roadmap.md) — **living** статус фаз
+- [Work calendar roadmap](product/work-calendar-roadmap.md) — expand Absences → TimeEvent (MVP)
 - [Employee Profile Core (target-спека)](product/employee-profile-core.md) — vision / Draft, не «що вже в коді»
 - [Анкета 360° — reference only](product/references/README.md)
 - [ADR 0007: profile boundaries](adr/0007-employee-profile-boundaries.md)
+- [ADR 0008: work calendar via Absences](adr/0008-work-calendar-via-absences.md)
 
 ## Агенти
 

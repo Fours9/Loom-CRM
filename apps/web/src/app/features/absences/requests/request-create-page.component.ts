@@ -1,10 +1,10 @@
-﻿import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { concatMap, from, of, catchError, finalize, toArray } from 'rxjs';
 import { ApiService } from '../core/api/api.service';
 import { AuthService } from '../core/auth/auth.service';
-import { AbsenceType, Department, EmployeeListItem, Position, ScheduleDay } from '../core/api/models';
+import { AbsenceType, Department, EmployeeListItem, Position, ScheduleDay, TimeEventTypeMetadata } from '../core/api/models';
 import { ABSENCE_TYPE_LABELS, roleDisplayLabel } from '../core/api/labels';
 import { requestTypeLabel } from '../core/api/request-view.util';
 import {
@@ -228,8 +228,12 @@ type EmployeeSortKey =
           <label>
             <span>Тип</span>
             <select [(ngModel)]="type" name="type" (ngModelChange)="onTypeChange()">
-              @for (t of typeKeys; track t) {
-                <option [value]="t">{{ requestTypeLabel(t) }}</option>
+              @for (group of typeGroups; track group.category) {
+                <optgroup [label]="group.label">
+                  @for (t of group.types; track t.value) {
+                    <option [value]="t.value">{{ t.label }}</option>
+                  }
+                </optgroup>
               }
             </select>
           </label>
@@ -246,7 +250,7 @@ type EmployeeSortKey =
                   (ngModelChange)="onStartDateChange()"
                 />
               </label>
-              @if (isFullDay) {
+              @if (showsEndDate) {
                 <label>
                   <span>Дата кінця</span>
                   <input type="date" [(ngModel)]="endDate" name="endDate" required />
@@ -285,47 +289,77 @@ type EmployeeSortKey =
             }
           </div>
 
-          @if (type === 'part_time') {
+          @if (showsTimeFields) {
             <div class="row">
               <label>
                 <span>Час з</span>
-                <select
-                  [(ngModel)]="absenceStartTime"
-                  name="absenceStartTime"
-                  required
-                  [disabled]="!shiftBounds"
-                  (ngModelChange)="onStartTimeChange()"
-                >
-                  <option value="">Оберіть</option>
-                  @for (t of startTimeOptions; track t) {
-                    <option [value]="t">{{ t }}</option>
-                  }
-                </select>
+                @if (usesShiftTimeOptions) {
+                  <select
+                    [(ngModel)]="absenceStartTime"
+                    name="absenceStartTime"
+                    [required]="timeRequired"
+                    [disabled]="!shiftBounds"
+                    (ngModelChange)="onStartTimeChange()"
+                  >
+                    <option value="">Оберіть</option>
+                    @for (t of startTimeOptions; track t) {
+                      <option [value]="t">{{ t }}</option>
+                    }
+                  </select>
+                } @else {
+                  <select
+                    [(ngModel)]="absenceStartTime"
+                    name="absenceStartTime"
+                    [required]="timeRequired"
+                    (ngModelChange)="onStartTimeChange()"
+                  >
+                    <option value="">Оберіть</option>
+                    @for (t of freeTimeOptions; track t) {
+                      <option [value]="t">{{ t }}</option>
+                    }
+                  </select>
+                }
               </label>
               <label>
                 <span>Час по</span>
-                <select
-                  [(ngModel)]="absenceEndTime"
-                  name="absenceEndTime"
-                  required
-                  [disabled]="!shiftBounds || !absenceStartTime"
-                >
-                  <option value="">Оберіть</option>
-                  @for (t of endTimeOptions; track t) {
-                    <option [value]="t">{{ t }}</option>
-                  }
-                </select>
+                @if (usesShiftTimeOptions) {
+                  <select
+                    [(ngModel)]="absenceEndTime"
+                    name="absenceEndTime"
+                    [required]="timeRequired"
+                    [disabled]="!shiftBounds || !absenceStartTime"
+                  >
+                    <option value="">Оберіть</option>
+                    @for (t of endTimeOptions; track t) {
+                      <option [value]="t">{{ t }}</option>
+                    }
+                  </select>
+                } @else {
+                  <select
+                    [(ngModel)]="absenceEndTime"
+                    name="absenceEndTime"
+                    [required]="timeRequired"
+                    [disabled]="!absenceStartTime"
+                  >
+                    <option value="">Оберіть</option>
+                    @for (t of freeEndTimeOptions; track t) {
+                      <option [value]="t">{{ t }}</option>
+                    }
+                  </select>
+                }
               </label>
             </div>
-            @if (startDate && !scheduleLoading && !shiftBounds) {
+            @if (usesShiftTimeOptions && startDate && !scheduleLoading && !shiftBounds) {
               <p class="error">Обрана дата не є робочим днем у графіку працівника — оберіть іншу дату.</p>
-            } @else if (shiftBounds) {
+            } @else if (usesShiftTimeOptions && shiftBounds) {
               <p class="hint">
                 Доступний час зміни: {{ shiftBounds.start }}–{{ shiftBounds.end }}.
                 Оберіть вікно всередині графіка (не всю зміну).
               </p>
-            } @else {
-              <p class="hint">Спочатку оберіть дату (і працівника, якщо подаєте за іншого).</p>
+            } @else if (type === 'extra_work_day') {
+              <p class="hint">Лише у запланований вихідний. Час — за бажанням.</p>
+            } @else if (type === 'overtime') {
+              <p class="hint">Вкажіть інтервал у межах одного дня (без переходу через північ).</p>
             }
           }
 
@@ -334,10 +368,12 @@ type EmployeeSortKey =
             <textarea [(ngModel)]="reason" name="reason" rows="3"></textarea>
           </label>
 
-          <label class="check">
-            <input type="checkbox" [(ngModel)]="isUnpaid" name="isUnpaid" />
-            За власний рахунок
-          </label>
+          @if (supportsUnpaid) {
+            <label class="check">
+              <input type="checkbox" [(ngModel)]="isUnpaid" name="isUnpaid" />
+              За власний рахунок
+            </label>
+          }
 
           <label>
             <span>Коментар</span>
@@ -706,7 +742,7 @@ export class RequestCreatePageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
 
   readonly requestTypeLabel = requestTypeLabel;
-  readonly typeKeys = Object.keys(ABSENCE_TYPE_LABELS);
+  typeMetadata: TimeEventTypeMetadata[] = [];
   employees: EmployeeListItem[] = [];
   departments: Department[] = [];
   positions: Position[] = [];
@@ -733,6 +769,7 @@ export class RequestCreatePageComponent implements OnInit {
   error = '';
   schedule: ScheduleDay[] = [];
   scheduleLoading = false;
+  readonly freeTimeOptions = buildQuarterHourOptions();
   readonly weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
   private readonly monthNames = [
     'січень',
@@ -749,12 +786,66 @@ export class RequestCreatePageComponent implements OnInit {
     'грудень',
   ];
 
+  get typeGroups(): Array<{ category: string; label: string; types: TimeEventTypeMetadata[] }> {
+    const types =
+      this.typeMetadata.length > 0
+        ? this.typeMetadata
+        : fallbackTypeMetadata();
+    return [
+      {
+        category: 'absence',
+        label: 'Відсутності',
+        types: types.filter((t) => t.category === 'absence'),
+      },
+      {
+        category: 'work',
+        label: 'Робота',
+        types: types.filter((t) => t.category === 'work'),
+      },
+    ].filter((g) => g.types.length > 0);
+  }
+
+  get selectedTypeMeta(): TimeEventTypeMetadata | null {
+    const types =
+      this.typeMetadata.length > 0
+        ? this.typeMetadata
+        : fallbackTypeMetadata();
+    return types.find((t) => t.value === this.type) ?? null;
+  }
+
   get canPickEmployee(): boolean {
     return this.auth.isAdmin() || this.auth.isManager();
   }
 
+  /** @deprecated Prefer showsEndDate from metadata.dateMode */
   get isFullDay(): boolean {
-    return this.type === 'day_off' || this.type === 'vacation' || this.type === 'sick_leave';
+    return this.showsEndDate;
+  }
+
+  get showsEndDate(): boolean {
+    return (this.selectedTypeMeta?.dateMode ?? 'date_range') === 'date_range';
+  }
+
+  get showsTimeFields(): boolean {
+    const mode = this.selectedTypeMeta?.timeMode ?? 'none';
+    return mode === 'required' || mode === 'optional';
+  }
+
+  get timeRequired(): boolean {
+    return this.selectedTypeMeta?.timeMode === 'required';
+  }
+
+  get usesShiftTimeOptions(): boolean {
+    return this.type === 'part_time';
+  }
+
+  get supportsUnpaid(): boolean {
+    return this.selectedTypeMeta?.supportsUnpaid === true;
+  }
+
+  get freeEndTimeOptions(): string[] {
+    if (!this.absenceStartTime) return this.freeTimeOptions;
+    return this.freeTimeOptions.filter((t) => t > this.absenceStartTime);
   }
 
   get departmentItems(): MultiSelectItem[] {
@@ -790,6 +881,15 @@ export class RequestCreatePageComponent implements OnInit {
 
   ngOnInit(): void {
     const prefill = parseCreateAbsenceRequestPrefill(this.route.snapshot.queryParamMap);
+
+    this.api.getAbsenceMetadata().subscribe({
+      next: (meta) => {
+        this.typeMetadata = meta.types ?? [];
+        if (!this.typeMetadata.some((t) => t.value === this.type) && this.typeMetadata[0]) {
+          this.type = this.typeMetadata[0].value;
+        }
+      },
+    });
 
     if (this.canPickEmployee) {
       this.api
@@ -905,15 +1005,19 @@ export class RequestCreatePageComponent implements OnInit {
   }
 
   onTypeChange(): void {
-    if (!this.isFullDay) {
+    if (!this.showsEndDate) {
       this.endDate = this.startDate;
-    } else {
+    }
+    if (!this.showsTimeFields) {
       this.clearTimes();
+    }
+    if (!this.supportsUnpaid) {
+      this.isUnpaid = false;
     }
   }
 
   onStartDateChange(): void {
-    if (!this.isFullDay) {
+    if (!this.showsEndDate) {
       this.endDate = this.startDate;
     }
     this.sanitizeTimesForShift();
@@ -948,6 +1052,9 @@ export class RequestCreatePageComponent implements OnInit {
   }
 
   private sanitizeTimesForShift(): void {
+    if (!this.usesShiftTimeOptions) {
+      return;
+    }
     const bounds = this.shiftBounds;
     if (!bounds) {
       this.clearTimes();
@@ -978,7 +1085,7 @@ export class RequestCreatePageComponent implements OnInit {
     if (!this.startDate) {
       return '';
     }
-    const end = this.isFullDay ? this.endDate || this.startDate : this.startDate;
+    const end = this.showsEndDate ? this.endDate || this.startDate : this.startDate;
     let text = this.startDate === end ? this.startDate : `${this.startDate} — ${end}`;
     if (this.type === 'part_time' && (this.absenceStartTime || this.absenceEndTime)) {
       text += ` (${this.absenceStartTime || '…'}–${this.absenceEndTime || '…'})`;
@@ -994,7 +1101,7 @@ export class RequestCreatePageComponent implements OnInit {
     if (!this.startDate) {
       return [];
     }
-    const endValue = this.isFullDay ? this.endDate || this.startDate : this.startDate;
+    const endValue = this.showsEndDate ? this.endDate || this.startDate : this.startDate;
     const start = this.parseYmd(this.startDate);
     const end = this.parseYmd(endValue);
     if (!start || !end) {
@@ -1121,6 +1228,18 @@ export class RequestCreatePageComponent implements OnInit {
         return;
       }
     }
+    if (this.timeRequired && (!this.absenceStartTime || !this.absenceEndTime)) {
+      this.error = 'Оберіть час з і час по';
+      return;
+    }
+    if (
+      this.showsTimeFields &&
+      ((this.absenceStartTime && !this.absenceEndTime) ||
+        (!this.absenceStartTime && this.absenceEndTime))
+    ) {
+      this.error = 'Вкажіть обидва значення часу або залиште порожнім';
+      return;
+    }
 
     this.saving = true;
     this.error = '';
@@ -1131,11 +1250,11 @@ export class RequestCreatePageComponent implements OnInit {
         employeeId: this.targetMode === 'other' ? this.employeeId : undefined,
         type: this.type,
         startDate: this.startDate,
-        endDate: this.isFullDay ? this.endDate || this.startDate : this.startDate,
-        absenceStartTime: this.absenceStartTime || null,
-        absenceEndTime: this.absenceEndTime || null,
+        endDate: this.showsEndDate ? this.endDate || this.startDate : this.startDate,
+        absenceStartTime: this.showsTimeFields ? this.absenceStartTime || null : null,
+        absenceEndTime: this.showsTimeFields ? this.absenceEndTime || null : null,
         ...(reason ? { reason } : {}),
-        isUnpaid: this.isUnpaid,
+        isUnpaid: this.supportsUnpaid ? this.isUnpaid : false,
         ...(employeeComment ? { employeeComment } : {}),
       })
       .subscribe({
@@ -1194,8 +1313,21 @@ export class RequestCreatePageComponent implements OnInit {
       }>;
     };
 
-    if (err.code === 'OVERLAP' || this.isOverlapMessage(err.message)) {
+    if (
+      err.code === 'TIME_EVENT_OVERLAP' ||
+      err.code === 'OVERLAP' ||
+      this.isOverlapMessage(err.message)
+    ) {
       return this.formatOverlapError(err);
+    }
+    if (
+      err.code === 'TIME_EVENT_SCHEDULE_REJECT' ||
+      err.code === 'TIME_EVENT_TIME_REQUIRED' ||
+      err.code === 'TIME_EVENT_UNPAID_UNSUPPORTED'
+    ) {
+      return typeof err.message === 'string'
+        ? err.message
+        : this.translateValidationMessage(String(err.code));
     }
 
     const raw = err.message;
@@ -1287,4 +1419,48 @@ export class RequestCreatePageComponent implements OnInit {
     }
     return message;
   }
+}
+
+function buildQuarterHourOptions(): string[] {
+  const out: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 15, 30, 45]) {
+      out.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    }
+  }
+  return out;
+}
+
+function fallbackTypeMetadata(): TimeEventTypeMetadata[] {
+  return (Object.keys(ABSENCE_TYPE_LABELS) as AbsenceType[]).map((value) => {
+    const absence =
+      value === 'day_off' ||
+      value === 'vacation' ||
+      value === 'sick_leave' ||
+      value === 'part_time';
+    return {
+      value,
+      label: ABSENCE_TYPE_LABELS[value] ?? value,
+      category: absence ? 'absence' : 'work',
+      dateMode:
+        value === 'part_time' || value === 'overtime' || value === 'extra_work_day'
+          ? 'single_day'
+          : 'date_range',
+      timeMode:
+        value === 'part_time' || value === 'overtime'
+          ? 'required'
+          : value === 'extra_work_day'
+            ? 'optional'
+            : 'none',
+      supportsUnpaid: value === 'day_off' || value === 'vacation',
+      visualKind:
+        value === 'part_time'
+          ? 'partial_absence'
+          : value === 'overtime' ||
+              value === 'business_trip' ||
+              value === 'extra_work_day'
+            ? value
+            : 'absence',
+    };
+  });
 }

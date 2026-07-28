@@ -1,7 +1,8 @@
-﻿import { Injectable, inject } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map, of, catchError } from 'rxjs';
 import {
+  AbsenceMetadataResponse,
   AbsenceRequestAttachment,
   AbsenceRequestDetail,
   AbsenceRequestListItem,
@@ -25,6 +26,10 @@ import {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
+
+  getAbsenceMetadata(): Observable<AbsenceMetadataResponse> {
+    return this.http.get<AbsenceMetadataResponse>('/api/v1/absences/metadata');
+  }
 
   getDepartments(all = false): Observable<Department[]> {
     const params = all ? new HttpParams().set('all', '1') : undefined;

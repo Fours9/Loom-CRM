@@ -35,6 +35,8 @@ import {
             <div
               class="bar"
               [class.hatch]="isHatch(s)"
+              [class.work]="s.category === 'work'"
+              [class.partial]="s.visualKind === 'partial_absence'"
               [style.left.%]="barLeft(s)"
               [style.width.%]="barWidth(s)"
               [style.--seg-color]="safeColor(s)"
@@ -128,8 +130,27 @@ import {
       .bar.hatch {
         background-image: repeating-linear-gradient(
           -45deg,
-          var(--seg-color) 0 3px,
-          transparent 3px 7px
+          var(--seg-color) 0 8px,
+          transparent 8px 18px
+        );
+        background-color: color-mix(in srgb, var(--seg-color) 42%, transparent);
+      }
+      .bar.work {
+        border-width: 4px;
+        border-color: #dc2626;
+        box-shadow: inset 0 0 0 3px #dc2626;
+      }
+      .bar.partial {
+        border-width: 4px;
+        border-color: #16a34a;
+        box-shadow: inset 0 0 0 3px #16a34a;
+      }
+      .bar.work.hatch,
+      .bar.work {
+        background-image: repeating-linear-gradient(
+          45deg,
+          var(--seg-color) 0 8px,
+          transparent 8px 18px
         );
         background-color: color-mix(in srgb, var(--seg-color) 42%, transparent);
       }
@@ -179,6 +200,7 @@ export class CalendarListEventsComponent {
   }
 
   isHatch(segment: CalendarSegmentSummary): boolean {
+    if (segment.category === 'work') return true;
     return (
       segment.pattern === 'hatch_left' ||
       segment.pattern === 'hatch_mid' ||

@@ -18,12 +18,14 @@ import {
   AbsenceType,
   CalendarDayItem,
   CalendarDaySummary,
+  CalendarLegendItem,
   CalendarQueryFilters,
   CalendarStatusGroup,
   CalendarViewMode,
   Department,
   EmployeeListItem,
 } from '../core/api/models';
+import { ABSENCE_TYPE_LABELS } from '../core/api/labels';
 import { CalendarDayCellComponent } from './calendar-day-cell.component';
 import { CalendarDayDrawerComponent } from './calendar-day-drawer.component';
 import { CalendarListEventsComponent } from './calendar-list-events.component';
@@ -55,7 +57,7 @@ import {
     <section class="page" [class.embedded]="embedded">
       <header class="top" [class.embedded]="embedded">
         @if (!embedded) {
-          <h1>Календар відсутностей</h1>
+          <h1>Робочий календар</h1>
         }
         <div class="nav-row">
           <button
@@ -77,6 +79,16 @@ import {
           </button>
           <button type="button" class="ghost" (click)="goToday()">{{ 'calendar.today' | t }}</button>
         </div>
+        @if (legend.length) {
+          <ul class="legend" aria-label="Легенда типів">
+            @for (item of legend; track item.value) {
+              <li>
+                <span class="legend-swatch" [attr.data-kind]="item.visualKind"></span>
+                {{ item.label }}
+              </li>
+            }
+          </ul>
+        }
       </header>
 
       <div class="toolbar">
@@ -112,10 +124,9 @@ import {
             {{ 'calendar.filters.type' | t }}
             <select [(ngModel)]="filterType" (ngModelChange)="onFiltersChanged()">
               <option value="">{{ 'calendar.filters.all' | t }}</option>
-              <option value="day_off">DayOff</option>
-              <option value="vacation">Відпустка</option>
-              <option value="sick_leave">Лікарняний</option>
-              <option value="part_time">Частковий день</option>
+              @for (t of typeFilterOptions; track t.value) {
+                <option [value]="t.value">{{ t.label }}</option>
+              }
             </select>
           </label>
           <label>
@@ -477,6 +488,50 @@ import {
         pointer-events: none;
         display: block;
       }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem 1rem;
+        list-style: none;
+        margin: 0.5rem 0 0;
+        padding: 0;
+        font-size: 0.8rem;
+        color: var(--pw-muted);
+      }
+      .legend li {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .legend-swatch {
+        width: 0.85rem;
+        height: 0.85rem;
+        border-radius: 2px;
+        background: var(--pw-accent);
+        border: 1px solid var(--pw-border);
+      }
+      .legend-swatch[data-kind='partial_absence'] {
+        box-shadow: inset 0 0 0 2px #16a34a;
+        background: repeating-linear-gradient(
+          -45deg,
+          var(--pw-accent),
+          var(--pw-accent) 4px,
+          transparent 4px,
+          transparent 9px
+        );
+      }
+      .legend-swatch[data-kind='overtime'],
+      .legend-swatch[data-kind='extra_work_day'],
+      .legend-swatch[data-kind='business_trip'] {
+        box-shadow: inset 0 0 0 2px #dc2626;
+        background: repeating-linear-gradient(
+          45deg,
+          var(--pw-accent),
+          var(--pw-accent) 4px,
+          transparent 4px,
+          transparent 9px
+        );
+      }
       .muted {
         color: var(--pw-muted);
       }
@@ -524,10 +579,14 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
 
   readonly modes: CalendarViewMode[] = ['month', 'week', 'day', 'list'];
   readonly weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+  readonly typeFilterOptions = Object.entries(ABSENCE_TYPE_LABELS).map(
+    ([value, label]) => ({ value, label }),
+  );
 
   viewMode: CalendarViewMode = 'month';
   anchor = todayIsoLocal();
   days: CalendarDaySummary[] = [];
+  legend: CalendarLegendItem[] = [];
   rangeLoading = false;
   rangeError = '';
 
@@ -611,13 +670,16 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
               catchError((err) => {
                 this.rangeError = err?.error?.message || err?.message || this.i18n.t('calendar.error');
                 this.rangeLoading = false;
-                return of({ days: [] as CalendarDaySummary[], _key: key });
+                return of({ days: [] as CalendarDaySummary[], legend: [] as CalendarLegendItem[], _key: key });
               }),
             );
           }),
         )
         .subscribe((res) => {
           this.days = res.days ?? [];
+          if (res.legend?.length) {
+            this.legend = res.legend;
+          }
           this.rangeLoading = false;
         }),
     );

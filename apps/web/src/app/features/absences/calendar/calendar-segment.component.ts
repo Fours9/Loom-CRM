@@ -12,7 +12,11 @@ import { isValidCalendarHex } from './calendar-date.util';
       [class.busy]="segment.pattern === 'busy_anonymous'"
       [class.ended]="ended || segment.periodEnded"
       [class.card]="variant === 'card'"
+      [class.work]="isWork"
+      [class.partial]="isPartial"
       [attr.aria-label]="segment.ariaLabel"
+      [attr.data-category]="segment.category ?? 'absence'"
+      [attr.data-visual-kind]="segment.visualKind ?? 'absence'"
       [style.--seg-color]="safeColor"
       [style.--hatch-start]="segment.hatchStartRatio"
       [style.--hatch-end]="segment.hatchEndRatio"
@@ -57,9 +61,46 @@ import { isValidCalendarHex } from './calendar-date.util';
         border-radius: 10px;
         border: 1px solid color-mix(in srgb, var(--seg-color) 45%, var(--pw-border));
       }
+      /* Work events: red frame on the timed fill strip */
+      .seg.work .seg-fill {
+        box-shadow: inset 0 0 0 5px #dc2626;
+      }
+      .seg.work.card {
+        border-width: 1px;
+        border-color: color-mix(in srgb, var(--seg-color) 45%, var(--pw-border));
+        box-shadow: none;
+      }
+      .seg.work.card .seg-fill {
+        box-shadow: inset 0 0 0 4px #dc2626;
+      }
+      /* Partial day: green frame on the timed fill strip */
+      .seg.partial .seg-fill {
+        box-shadow: inset 0 0 0 5px #16a34a;
+      }
+      .seg.partial.card {
+        border-width: 1px;
+        border-color: color-mix(in srgb, var(--seg-color) 45%, var(--pw-border));
+        box-shadow: none;
+      }
+      .seg.partial.card .seg-fill {
+        box-shadow: inset 0 0 0 4px #16a34a;
+      }
       .seg.pending {
         outline: 2px dashed color-mix(in srgb, var(--seg-color) 80%, #000);
         outline-offset: -3px;
+      }
+      /* Timed work/partial: pending outline on the fill strip only */
+      .seg.work.pending,
+      .seg.partial.pending {
+        outline: none;
+      }
+      .seg.work.pending .seg-fill {
+        outline: 4px dashed color-mix(in srgb, #dc2626 70%, #000);
+        outline-offset: -4px;
+      }
+      .seg.partial.pending .seg-fill {
+        outline: 4px dashed color-mix(in srgb, #16a34a 70%, #000);
+        outline-offset: -4px;
       }
       .seg.ended {
         filter: grayscale(0.45);
@@ -85,14 +126,28 @@ import { isValidCalendarHex } from './calendar-date.util';
         left: 0;
         width: 100%;
       }
+      /* Absence hatches (e.g. part_time): -45deg; width from hatch ratios */
       .seg[data-pattern='hatch_left'] .seg-fill,
       .seg[data-pattern='hatch_mid'] .seg-fill,
       .seg[data-pattern='hatch_right'] .seg-fill,
       .seg[data-pattern='busy_anonymous'] .seg-fill {
         background-image: repeating-linear-gradient(
           -45deg,
-          var(--seg-color) 0 3px,
-          transparent 3px 7px
+          var(--seg-color) 0 8px,
+          transparent 8px 18px
+        );
+        background-color: color-mix(in srgb, var(--seg-color) 35%, transparent);
+        opacity: 1;
+      }
+      /* Work hatches: opposite direction (+45deg); still respect time ratios */
+      .seg.work[data-pattern='hatch_left'] .seg-fill,
+      .seg.work[data-pattern='hatch_mid'] .seg-fill,
+      .seg.work[data-pattern='hatch_right'] .seg-fill,
+      .seg.work[data-pattern='solid'] .seg-fill {
+        background-image: repeating-linear-gradient(
+          45deg,
+          var(--seg-color) 0 8px,
+          transparent 8px 18px
         );
         background-color: color-mix(in srgb, var(--seg-color) 35%, transparent);
         opacity: 1;
@@ -128,5 +183,13 @@ export class CalendarSegmentComponent {
 
   get safeColor(): string {
     return isValidCalendarHex(this.segment.color) ? this.segment.color : '#6B7280';
+  }
+
+  get isWork(): boolean {
+    return this.segment.category === 'work';
+  }
+
+  get isPartial(): boolean {
+    return this.segment.visualKind === 'partial_absence';
   }
 }

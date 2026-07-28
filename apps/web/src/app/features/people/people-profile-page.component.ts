@@ -118,7 +118,7 @@ type AbsenceTabId = 'requests' | 'calendar';
               />
             }
             @case ('absences') {
-              <nav class="tabs subtabs" role="tablist" aria-label="Відсутності працівника">
+              <nav class="tabs subtabs" role="tablist" aria-label="Робочий календар працівника">
                 <button
                   type="button"
                   class="tab"
@@ -380,7 +380,7 @@ export class PeopleProfilePageComponent implements OnInit {
 
   readonly tabs: Array<{ id: TabId; label: string }> = [
     { id: 'data', label: 'Дані працівника' },
-    { id: 'absences', label: 'Відсутності' },
+    { id: 'absences', label: 'Робочий календар' },
     { id: 'documents', label: 'Документи' },
     { id: 'metrics', label: 'Показники' },
     { id: 'history', label: 'Історія' },

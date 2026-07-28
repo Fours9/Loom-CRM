@@ -18,7 +18,7 @@ import type { AbsenceType } from '@loom/contracts-absences';
 import { DocumentsApiService } from '../documents/public-api';
 import { EmployeeAbsenceDocumentsService } from '../absences/public-api';
 
-type DocumentType = 'absence' | EmployeeDocumentType;
+type DocumentType = 'time_event' | EmployeeDocumentType;
 
 type DocumentFileRow = {
   id: string;
@@ -29,7 +29,7 @@ type DocumentFileRow = {
 };
 
 type DocumentListRow = {
-  source: 'employee_document' | 'absence';
+  source: 'employee_document' | 'time_event';
   id: string;
   employeeId: string;
   documentType: DocumentType;
@@ -44,7 +44,7 @@ type DocumentListRow = {
 type SortKey = 'date_desc' | 'date_asc' | 'title_asc' | 'title_desc';
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
-  absence: 'Відсутність',
+  time_event: 'Робочий календар',
   employment: 'Працевлаштування',
   questionnaire: 'Анкета',
   identity: 'Ідентифікація',
@@ -55,11 +55,14 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   other: 'Інше',
 };
 
-const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
-  day_off: 'Вихідний',
+const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
+  day_off: 'Відгул',
   vacation: 'Відпустка',
   sick_leave: 'Лікарняний',
   part_time: 'Неповний день',
+  overtime: 'Понаднормові',
+  business_trip: 'Відрядження',
+  extra_work_day: 'Робочий день поза графіком',
 };
 
 @Component({
@@ -171,7 +174,7 @@ const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
                   <div class="doc-title">
                     <strong>{{ row.title }}</strong>
                     <span class="badge">{{ typeLabel(row.documentType) }}</span>
-                    @if (row.source === 'absence') {
+                    @if (row.source === 'time_event') {
                       <a
                         class="icon-btn"
                         [routerLink]="['/absences/requests', row.id]"
@@ -327,7 +330,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
   @Input({ required: true }) employeeId!: string;
 
   readonly uploadTypes = [...EMPLOYEE_DOCUMENT_TYPES];
-  readonly allFilterTypes: DocumentType[] = ['absence', ...EMPLOYEE_DOCUMENT_TYPES];
+  readonly allFilterTypes: DocumentType[] = ['time_event', ...EMPLOYEE_DOCUMENT_TYPES];
 
   readonly loading = signal(false);
   readonly documentsFailed = signal(false);
@@ -400,11 +403,11 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
           canDelete: item.permissions.canDelete,
         }));
         const absRows: DocumentListRow[] = absences.items.map((item) => ({
-          source: 'absence',
+          source: 'time_event',
           id: item.id,
           employeeId: item.employeeId,
-          documentType: 'absence',
-          title: formatAbsenceTitle(item.absenceType, item.relatedStartDate, item.relatedEndDate),
+          documentType: 'time_event',
+          title: formatTimeEventTitle(item.eventType, item.relatedStartDate, item.relatedEndDate),
           createdAt: item.createdAt,
           relatedStartDate: item.relatedStartDate,
           relatedEndDate: item.relatedEndDate,
@@ -443,7 +446,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
         }));
         this.allRows = [
           ...docRows,
-          ...this.allRows.filter((r) => r.source === 'absence'),
+          ...this.allRows.filter((r) => r.source === 'time_event'),
         ];
         this.applyFilters();
         this.documentsFailed.set(false);
@@ -605,13 +608,13 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
   }
 }
 
-function formatAbsenceTitle(
-  absenceType: AbsenceType | string,
+function formatTimeEventTitle(
+  eventType: AbsenceType | string,
   start: string,
   end: string | null,
 ): string {
   const label =
-    ABSENCE_TYPE_LABELS[absenceType as AbsenceType] ?? String(absenceType);
+    TIME_EVENT_TYPE_LABELS[eventType as AbsenceType] ?? String(eventType);
   const startFmt = formatUaDate(start);
   if (!end || end === start) {
     return `${label} · ${startFmt}`;

@@ -72,7 +72,7 @@ pnpm migration:run
 - Web: http://localhost:4200  
 - Логін: акаунти зі знімка (часто `hr@tier.ua`); без restore — seed `admin@loom.local` / `Admin123!`
 
-`start.bat` після міграцій перевіряє, чи порожня `users`, і якщо так — сам викликає `db-restore.ps1`. Явний крок 6 все одно рекомендований (передбачуваний результат, логи restore видно одразу).
+`start.bat` після міграцій **не** викликає restore автоматично (жива БД не затирається). Після clone / порожньої БД зробіть крок 6 явно.
 
 ### ProjectWeekend (copy-source)
 
@@ -159,7 +159,7 @@ pnpm migration:run
 
 | Симптом | Причина та рішення |
 | --- | --- |
-| БД «пуста», немає логінів зі знімка | Зробили лише migrate / `start.bat` без restore — `.\scripts\db-restore.ps1`, перезапуск |
+| БД «пуста», немає логінів зі знімка | Зробили лише migrate / `start.bat` без явного restore — `.\scripts\db-restore.ps1`, перезапуск |
 | Імена/відділи як `????????` | Старий баг restore через PowerShell pipe ламав UTF-8 — оновіть скрипти й знову `.\scripts\db-restore.ps1` (не комітьте зіпсований live bak як знімок) |
 | Не можу залогінитись на новому ПК | Порожня/інша БД — `.\scripts\db-restore.ps1`, перезапуск API |
 | Шукаю `data/app.sqlite` як у PW | У LoomCRM живої SQLite немає — жива БД у Postgres; знімок: `data/app.snapshot.sql` |

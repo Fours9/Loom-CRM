@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Not, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserRole } from '../../platform/identity/user.enums';
 import { AuditService } from '../../platform/audit/audit.service';
@@ -14,6 +14,7 @@ import { PermissionService } from '../../platform/permissions/permission.service
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
 import { DepartmentsService } from '../../organization/departments/departments.service';
 import { PositionsService } from '../../organization/positions/positions.service';
+import { EmployeesService } from '../../organization/employees/employees.service';
 import { AbsenceRequest } from './absence-request.entity';
 import { AbsenceRequestHistory } from './absence-request-history.entity';
 import { AbsenceAttachment } from './absence-attachment.entity';
@@ -22,6 +23,16 @@ import { pwPermissions, statusGroupOf } from './pw-permissions';
 import type { Employee } from '../../organization/employees/employee.entity';
 import { normalizeUploadedFileName } from '../../platform/http/normalize-uploaded-file-name';
 import { absenceHistoryActionLabel } from './absence-history-labels';
+import {
+  TIME_EVENT_TYPE_LABELS,
+  getTimeEventTypeDefinition,
+  type TimeEventType,
+} from './domain/time-event-type-catalog';
+import { buildTimeEventTypeMetadata, mapDurationMinutes } from './domain/time-event-metadata';
+import { validateTimeEventCandidate } from './domain/time-event-request-validator';
+import { assertSchedulePolicy } from './domain/time-event-schedule-policy';
+import { checkTimeEventOverlap } from './domain/time-event-overlap-policy';
+import { TimeEventWorkflowPolicy } from './domain/time-event-workflow-policy';
 
 export type ListQuery = {
   page?: number;
@@ -51,6 +62,7 @@ export class AbsenceRequestsService {
     private readonly access: EmployeeAccessService,
     private readonly departments: DepartmentsService,
     private readonly positions: PositionsService,
+    private readonly employees: EmployeesService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     private readonly permissions: PermissionService,
@@ -59,12 +71,7 @@ export class AbsenceRequestsService {
   async metadata(actor: User) {
     const depts = await this.departments.findAll();
     return {
-      types: [
-        { value: AbsenceType.Vacation, label: 'Відпустка' },
-        { value: AbsenceType.DayOff, label: 'Відгул' },
-        { value: AbsenceType.SickLeave, label: 'Лікарняний' },
-        { value: AbsenceType.PartTime, label: 'Неповний день' },
-      ],
+      types: buildTimeEventTypeMetadata(),
       statuses: [
         { value: AbsenceRequestStatus.Pending, label: 'Подана' },
         { value: AbsenceRequestStatus.Approved, label: 'Затверджена' },
@@ -211,13 +218,15 @@ export class AbsenceRequestsService {
               : String(a.createdAt),
         }));
         const end = r.endDate ?? null;
+        const typeLabel =
+          TIME_EVENT_TYPE_LABELS[r.type as TimeEventType] ?? r.type;
         return {
-          source: 'absence' as const,
+          source: 'time_event' as const,
           id: r.id,
           employeeId: r.employeeId,
-          documentType: 'absence' as const,
-          title: `${r.type} ${r.startDate}${end ? `–${end}` : ''}`,
-          absenceType: r.type,
+          documentType: 'time_event' as const,
+          title: `${typeLabel} ${r.startDate}${end ? `–${end}` : ''}`,
+          eventType: r.type,
           createdAt:
             r.createdAt instanceof Date
               ? r.createdAt.toISOString()
@@ -302,13 +311,36 @@ export class AbsenceRequestsService {
     }
     const emp = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, emp);
-    if (actor.role === UserRole.Employee && emp.userId !== actor.id) {
-      throw new ForbiddenException('Cannot create absence for another employee');
-    }
+    TimeEventWorkflowPolicy.assertCanCreateFor({
+      actor,
+      targetEmployeeUserId: emp.userId,
+    });
+    TimeEventWorkflowPolicy.assertBackdatingAllowed(
+      { actor, targetEmployeeUserId: emp.userId },
+      input.startDate,
+    );
+
+    const candidate = validateTimeEventCandidate({
+      type: input.type,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      startTime: input.absenceStartTime,
+      endTime: input.absenceEndTime,
+      isUnpaid: input.isUnpaid,
+    });
+
+    const schedule = await this.employees.getScheduleDaysInternal(emp.id);
+    assertSchedulePolicy(candidate.type, candidate.startDate, schedule);
+
+    const typeLabel = TIME_EVENT_TYPE_LABELS[candidate.type];
+    const category = getTimeEventTypeDefinition(candidate.type)!.category;
 
     const saved = await this.dataSource.transaction(async (manager) => {
       const reqRepo = manager.getRepository(AbsenceRequest);
       const histRepo = manager.getRepository(AbsenceRequestHistory);
+
+      await this.assertNoOverlapInTx(manager, emp.id, candidate, null);
+
       const row = await reqRepo.save(
         reqRepo.create({
           employeeId: emp.id,
@@ -317,12 +349,12 @@ export class AbsenceRequestsService {
           employeeNameAtSubmission: `${emp.lastName} ${emp.firstName}`,
           employeeNumberAtSubmission: emp.employeeNumber,
           calendarColorAtSubmission: emp.calendarColor,
-          type: input.type,
-          startDate: input.startDate,
-          endDate: input.endDate ?? null,
-          absenceStartTime: input.absenceStartTime ?? null,
-          absenceEndTime: input.absenceEndTime ?? null,
-          isUnpaid: !!input.isUnpaid,
+          type: candidate.type as AbsenceType,
+          startDate: candidate.startDate,
+          endDate: candidate.endDate,
+          absenceStartTime: candidate.startTime,
+          absenceEndTime: candidate.endTime,
+          isUnpaid: candidate.isUnpaid,
           reason: input.reason ?? null,
           employeeComment: input.employeeComment ?? null,
           status: AbsenceRequestStatus.Pending,
@@ -344,6 +376,11 @@ export class AbsenceRequestsService {
           actorId: actor.id,
           entityType: 'absence_request',
           entityId: row.id,
+          metadata: {
+            type: candidate.type,
+            category,
+            summary: `Створено заявку «${typeLabel}»`,
+          },
         },
         manager,
       );
@@ -373,31 +410,70 @@ export class AbsenceRequestsService {
     if (!detail.permissions.canEdit && !detail.permissions.canAdjust) {
       throw new ForbiddenException('Cannot edit this request');
     }
-    const row = await this.getOrFail(id);
-    this.assertVersion(row, input.version);
-    if (input.type !== undefined) row.type = input.type;
-    if (input.startDate !== undefined) row.startDate = input.startDate;
-    if (input.endDate !== undefined) row.endDate = input.endDate;
-    if (input.absenceStartTime !== undefined)
-      row.absenceStartTime = input.absenceStartTime;
-    if (input.absenceEndTime !== undefined)
-      row.absenceEndTime = input.absenceEndTime;
-    if (input.isUnpaid !== undefined) row.isUnpaid = input.isUnpaid;
-    if (input.reason !== undefined) row.reason = input.reason;
-    if (input.employeeComment !== undefined)
-      row.employeeComment = input.employeeComment;
-    if (input.adjustmentComment !== undefined)
-      row.adjustmentComment = input.adjustmentComment;
-    row.version += 1;
-    await this.requests.save(row);
-    await this.history.save(
-      this.history.create({
-        requestId: id,
-        action: 'updated',
-        actorUserId: actor.id,
-        comment: null,
-      }),
-    );
+
+    await this.dataSource.transaction(async (manager) => {
+      const reqRepo = manager.getRepository(AbsenceRequest);
+      const row = await reqRepo.findOne({ where: { id } });
+      if (!row) throw new NotFoundException('Absence request not found');
+      this.assertVersion(row, input.version);
+
+      const merged = validateTimeEventCandidate({
+        type: input.type ?? row.type,
+        startDate: input.startDate ?? row.startDate,
+        endDate:
+          input.endDate !== undefined ? input.endDate : row.endDate,
+        startTime:
+          input.absenceStartTime !== undefined
+            ? input.absenceStartTime
+            : row.absenceStartTime,
+        endTime:
+          input.absenceEndTime !== undefined
+            ? input.absenceEndTime
+            : row.absenceEndTime,
+        isUnpaid:
+          input.isUnpaid !== undefined ? input.isUnpaid : row.isUnpaid,
+      });
+
+      const schedule = await this.employees.getScheduleDaysInternal(
+        row.employeeId,
+      );
+      assertSchedulePolicy(merged.type, merged.startDate, schedule);
+      await this.assertNoOverlapInTx(manager, row.employeeId, merged, row.id);
+
+      row.type = merged.type as AbsenceType;
+      row.startDate = merged.startDate;
+      row.endDate = merged.endDate;
+      row.absenceStartTime = merged.startTime;
+      row.absenceEndTime = merged.endTime;
+      row.isUnpaid = merged.isUnpaid;
+      if (input.reason !== undefined) row.reason = input.reason;
+      if (input.employeeComment !== undefined)
+        row.employeeComment = input.employeeComment;
+      if (input.adjustmentComment !== undefined)
+        row.adjustmentComment = input.adjustmentComment;
+      row.version += 1;
+      await reqRepo.save(row);
+      await manager.getRepository(AbsenceRequestHistory).save(
+        manager.getRepository(AbsenceRequestHistory).create({
+          requestId: id,
+          action: 'updated',
+          actorUserId: actor.id,
+          comment: null,
+        }),
+      );
+      const category = getTimeEventTypeDefinition(merged.type)!.category;
+      await this.audit.record(
+        {
+          action: 'absence.request.updated',
+          actorId: actor.id,
+          entityType: 'absence_request',
+          entityId: id,
+          metadata: { type: merged.type, category },
+        },
+        manager,
+      );
+    });
+
     return this.findOne(actor, id);
   }
 
@@ -455,30 +531,69 @@ export class AbsenceRequestsService {
     if (!detail.permissions.canAdjust) {
       throw new ForbiddenException('Cannot adjust this request');
     }
-    const row = await this.getOrFail(id);
-    this.assertVersion(row, input.version);
-    if (input.startDate !== undefined) row.startDate = input.startDate;
-    if (input.endDate !== undefined) row.endDate = input.endDate ?? null;
-    if (input.type !== undefined) row.type = input.type;
-    if (input.absenceStartTime !== undefined)
-      row.absenceStartTime = input.absenceStartTime ?? null;
-    if (input.absenceEndTime !== undefined)
-      row.absenceEndTime = input.absenceEndTime ?? null;
-    if (input.isUnpaid !== undefined) row.isUnpaid = input.isUnpaid;
-    if (input.reason !== undefined) row.reason = input.reason ?? null;
-    if (input.employeeComment !== undefined)
-      row.employeeComment = input.employeeComment ?? null;
-    row.adjustmentComment = input.adjustmentComment ?? row.adjustmentComment;
-    row.version += 1;
-    await this.requests.save(row);
-    await this.history.save(
-      this.history.create({
-        requestId: id,
-        action: 'adjusted',
-        actorUserId: actor.id,
-        comment: input.adjustmentComment ?? null,
-      }),
-    );
+
+    await this.dataSource.transaction(async (manager) => {
+      const reqRepo = manager.getRepository(AbsenceRequest);
+      const row = await reqRepo.findOne({ where: { id } });
+      if (!row) throw new NotFoundException('Absence request not found');
+      this.assertVersion(row, input.version);
+
+      const merged = validateTimeEventCandidate({
+        type: input.type ?? row.type,
+        startDate: input.startDate ?? row.startDate,
+        endDate:
+          input.endDate !== undefined ? input.endDate : row.endDate,
+        startTime:
+          input.absenceStartTime !== undefined
+            ? input.absenceStartTime
+            : row.absenceStartTime,
+        endTime:
+          input.absenceEndTime !== undefined
+            ? input.absenceEndTime
+            : row.absenceEndTime,
+        isUnpaid:
+          input.isUnpaid !== undefined ? input.isUnpaid : row.isUnpaid,
+      });
+
+      const schedule = await this.employees.getScheduleDaysInternal(
+        row.employeeId,
+      );
+      assertSchedulePolicy(merged.type, merged.startDate, schedule);
+      await this.assertNoOverlapInTx(manager, row.employeeId, merged, row.id);
+
+      row.type = merged.type as AbsenceType;
+      row.startDate = merged.startDate;
+      row.endDate = merged.endDate;
+      row.absenceStartTime = merged.startTime;
+      row.absenceEndTime = merged.endTime;
+      row.isUnpaid = merged.isUnpaid;
+      if (input.reason !== undefined) row.reason = input.reason ?? null;
+      if (input.employeeComment !== undefined)
+        row.employeeComment = input.employeeComment ?? null;
+      row.adjustmentComment = input.adjustmentComment ?? row.adjustmentComment;
+      row.version += 1;
+      await reqRepo.save(row);
+      await manager.getRepository(AbsenceRequestHistory).save(
+        manager.getRepository(AbsenceRequestHistory).create({
+          requestId: id,
+          action: 'adjusted',
+          actorUserId: actor.id,
+          comment: input.adjustmentComment ?? null,
+        }),
+      );
+      const category = getTimeEventTypeDefinition(merged.type)!.category;
+      await this.audit.record(
+        {
+          action: 'absence.request.adjusted',
+          actorId: actor.id,
+          entityType: 'absence_request',
+          entityId: id,
+          metadata: { type: merged.type, category },
+        },
+        manager,
+      );
+    });
+
     return this.findOne(actor, id);
   }
 
@@ -652,10 +767,16 @@ export class AbsenceRequestsService {
           actorId: actor.id,
           entityType: 'absence_request',
           entityId: row.id,
+          metadata: {
+            type: row.type,
+            category: getTimeEventTypeDefinition(row.type)?.category ?? null,
+          },
         },
         manager,
       );
       if (emp.userId) {
+        const typeLabel =
+          TIME_EVENT_TYPE_LABELS[row.type as TimeEventType] ?? row.type;
         await this.notifications.create(
           {
             recipientId: emp.userId,
@@ -667,7 +788,10 @@ export class AbsenceRequestsService {
               status === AbsenceRequestStatus.Approved
                 ? 'Заявку схвалено'
                 : 'Заявку відхилено',
-            body: `Заявка ${row.startDate}`,
+            body:
+              status === AbsenceRequestStatus.Approved
+                ? `Заявку «${typeLabel}» (${row.startDate}) схвалено`
+                : `Заявку «${typeLabel}» (${row.startDate}) відхилено`,
             payload: { requestId: row.id },
           },
           manager,
@@ -676,6 +800,40 @@ export class AbsenceRequestsService {
     });
 
     return this.findOne(actor, id);
+  }
+
+  private async assertNoOverlapInTx(
+    manager: EntityManager,
+    employeeId: string,
+    candidate: {
+      type: TimeEventType;
+      startDate: string;
+      endDate: string | null;
+      startTime: string | null;
+      endTime: string | null;
+    },
+    excludeRequestId: string | null,
+  ): Promise<void> {
+    const existing = await manager.getRepository(AbsenceRequest).find({
+      where: { employeeId },
+    });
+    const overlap = checkTimeEventOverlap({
+      candidate,
+      excludeRequestId,
+      existing: existing.map((r) => ({
+        id: r.id,
+        type: r.type,
+        status: r.status,
+        statusBeforeDeletionRequest: r.statusBeforeDeletionRequest,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        startTime: r.absenceStartTime,
+        endTime: r.absenceEndTime,
+      })),
+    });
+    if (overlap) {
+      throw new BadRequestException(overlap);
+    }
   }
 
   /** Single physical removal path for pending delete and admin-approved deletion. */
@@ -767,6 +925,11 @@ export class AbsenceRequestsService {
       endDate: r.endDate,
       absenceStartTime: r.absenceStartTime,
       absenceEndTime: r.absenceEndTime,
+      durationMinutes: mapDurationMinutes(
+        r.type,
+        r.absenceStartTime,
+        r.absenceEndTime,
+      ),
       isUnpaid: r.isUnpaid,
       reason: r.reason,
       version: r.version,
