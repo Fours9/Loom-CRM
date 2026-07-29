@@ -172,6 +172,21 @@ export type EmployeeContactItem = {
   visibility: string;
 };
 
+export type EmployeePersonalContactType =
+  | 'personal_phone'
+  | 'personal_email'
+  | 'personal_telegram';
+
+export type PersonalContactWriteItem = {
+  type: EmployeePersonalContactType;
+  value: string;
+  isPrimary?: boolean;
+};
+
+export type ReplacePersonalContactsRequest = {
+  contacts: PersonalContactWriteItem[];
+};
+
 export type EmployeePersonalSection = {
   birthDate: string | null;
   city: string | null;

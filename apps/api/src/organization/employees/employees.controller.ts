@@ -20,6 +20,7 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -174,9 +175,28 @@ class PatchPersonalDto {
   @IsOptional() @IsString() city?: string | null;
   @IsOptional() @IsString() preferredLanguage?: string | null;
   @IsOptional() @IsString() preferredName?: string | null;
-  @IsOptional() @IsString() personalPhone?: string | null;
-  @IsOptional() @IsString() personalEmail?: string | null;
-  @IsOptional() @IsString() personalTelegram?: string | null;
+}
+
+class PersonalContactItemDto {
+  @IsIn(['personal_phone', 'personal_email', 'personal_telegram'])
+  type!: 'personal_phone' | 'personal_email' | 'personal_telegram';
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(320)
+  value!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPrimary?: boolean;
+}
+
+class ReplacePersonalContactsDto {
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => PersonalContactItemDto)
+  contacts!: PersonalContactItemDto[];
 }
 
 class EmergencyContactItemDto {
@@ -432,6 +452,16 @@ export class EmployeesController {
     @Body() dto: PatchPersonalDto,
   ) {
     return this.profile.patchPersonal(user, id, dto);
+  }
+
+  @Put(':id/personal-contacts')
+  @RequirePermissions(Permission.EmployeesEdit)
+  putPersonalContacts(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReplacePersonalContactsDto,
+  ) {
+    return this.profile.replacePersonalContacts(user, id, dto.contacts);
   }
 
   @Put(':id/emergency-contact')

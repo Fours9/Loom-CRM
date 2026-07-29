@@ -39,6 +39,22 @@ describe('visiblePeopleProfileTabs', () => {
     expect(tabs.map((t) => t.id)).toEqual(['data', 'metrics', 'later']);
   });
 
+  it('hides questionnaires without questionnaires.view', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsViewHistory,
+      permissions: allPerms,
+    });
+    expect(tabs.some((t) => t.id === 'questionnaires')).toBe(false);
+  });
+
+  it('shows questionnaires with questionnaires.view', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsViewHistory,
+      permissions: [...allPerms, Permission.QuestionnairesView],
+    });
+    expect(tabs.find((t) => t.id === 'questionnaires')?.label).toBe('Анкети');
+  });
+
   it('hides history when canViewHistory is false', () => {
     const tabs = visiblePeopleProfileTabs({
       capabilities: capsNoHistory,

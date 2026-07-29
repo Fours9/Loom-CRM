@@ -18,6 +18,11 @@ export const Permission = {
   AbsencesCalendarView: 'absences.calendar.view',
   DocumentsView: 'documents.view',
   DocumentsManage: 'documents.manage',
+  QuestionnairesView: 'questionnaires.view',
+  QuestionnairesAssign: 'questionnaires.assign',
+  QuestionnairesCompleteSelf: 'questionnaires.complete.self',
+  QuestionnairesReview: 'questionnaires.review',
+  QuestionnairesApplyProfileChanges: 'questionnaires.apply_profile_changes',
   SettingsManage: 'settings.manage',
   AuditView: 'audit.view',
 } as const;

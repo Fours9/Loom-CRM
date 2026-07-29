@@ -6,6 +6,7 @@ export type PeopleProfileTabId =
   | 'data'
   | 'absences'
   | 'documents'
+  | 'questionnaires'
   | 'metrics'
   | 'history'
   | 'later';
@@ -19,6 +20,7 @@ const ALL_TABS: readonly PeopleProfileTab[] = [
   { id: 'data', label: 'Дані працівника' },
   { id: 'absences', label: 'Робочий графік' },
   { id: 'documents', label: 'Документи' },
+  { id: 'questionnaires', label: 'Анкети' },
   { id: 'metrics', label: 'Показники' },
   { id: 'history', label: 'Історія' },
   { id: 'later', label: 'Згодом' },
@@ -52,6 +54,8 @@ export function visiblePeopleProfileTabs(input: {
         return hasPermission(perms, P.AbsencesCalendarView);
       case 'documents':
         return hasPermission(perms, P.DocumentsView);
+      case 'questionnaires':
+        return hasPermission(perms, P.QuestionnairesView);
       case 'history':
         return Boolean(caps?.canViewHistory);
       default:

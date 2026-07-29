@@ -34,6 +34,8 @@ export type CompletenessEmployeeSlice = {
   phoneNumber: string | null;
   workEmail: string | null;
   personalPhoneNumber: string | null;
+  personalEmail: string | null;
+  personalTelegram: string | null;
   photoUrl: string | null;
   birthDate: string | null;
   city: string | null;
@@ -91,9 +93,13 @@ export function buildProfileCompletenessFacts(input: {
 
   const hasPersonalContact =
     Boolean(e.personalPhoneNumber?.trim()) ||
+    Boolean(e.personalEmail?.trim()) ||
+    Boolean(e.personalTelegram?.trim()) ||
     contacts.some(
       (c) =>
-        (c.type === 'personal_phone' || c.type === 'personal_email') &&
+        (c.type === 'personal_phone' ||
+          c.type === 'personal_email' ||
+          c.type === 'personal_telegram') &&
         Boolean(c.value?.trim()),
     );
 

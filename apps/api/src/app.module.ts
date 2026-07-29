@@ -16,6 +16,7 @@ import { SeedModule } from './platform/seed/seed.module';
 import { OrganizationModule } from './organization/organization.module';
 import { AbsencesModule } from './modules/absences/absences.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { QuestionnairesModule } from './modules/questionnaires/questionnaires.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
     SeedModule,
     AbsencesModule,
     DocumentsModule,
+    QuestionnairesModule,
     ApplicationBootstrapModule,
     HealthModule,
   ],
