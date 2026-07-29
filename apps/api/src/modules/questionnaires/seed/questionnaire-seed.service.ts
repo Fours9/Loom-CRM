@@ -47,7 +47,14 @@ export class QuestionnaireSeedService implements OnModuleInit {
     const existing = await this.versions.findOne({
       where: { templateId: template.id, version: 1 },
     });
-    if (existing) return;
+    if (existing) {
+      existing.schemaJson = EMPLOYEE_360_V1_SCHEMA as unknown as Record<
+        string,
+        unknown
+      >;
+      await this.versions.save(existing);
+      return;
+    }
 
     await this.versions.save(
       this.versions.create({

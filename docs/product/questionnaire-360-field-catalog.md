@@ -300,12 +300,14 @@ Signatures (employee/manager/admin name+date) are process metadata — optional 
 
 ---
 
-## Client integration notes (for fill UI owner)
+## Client integration notes (fill wizard)
 
-1. GET assignment returns `schema_json` (runtime) + draft `answers_json` + profile mirror for step 1.  
-2. PATCH draft uses optimistic `revision`.  
-3. POST submit (PR-5) creates immutable `questionnaire_submissions` row.  
-4. Do not import Organization/Absences internals; use HTTP + `@loom/contracts-questionnaires`.
+1. GET assignment returns runtime `schema` + draft `answers`/`revision` + `profileMirror` for display defaults (draft keys win via `hasOwnProperty`; mirror is not written into draft without user edit).
+2. PATCH draft uses optimistic `revision`. Autosave **serializes** PATCHes (one in-flight; pending accumulates; never cancel an accepted in-flight PATCH / no `switchMap` last-wins).
+3. **409 conflict:** stop autosave; keep local answers; fetch server draft; show conflict banner + «Завантажити серверну версію» (explicit discard). No silent overwrite; no invented field-level merge.
+4. **Submit:** client validation → `autosaveCoordinator.flush()` → POST submit with final server revision in DB; CTA disabled while `submitting`. If flush fails, submit aborts.
+5. **Step gating:** linear Intro → schema steps → Review. `buildQuestionnaireAssignmentLink` builds URL only; `resolveQuestionnaireActiveStep` enforces reachability for `?step=` / drawer. Reserved UI keys `__intro__` / `__review__`.
+6. FE: People via `questionnaires/public-api.ts`; fill/store/fields private. HTTP questionnaires via `QuestionnairesApiService`; profile mirror via private adapter + `@loom/contracts-employees` (not People internals).
 
 ---
 

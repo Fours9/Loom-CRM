@@ -36,6 +36,12 @@ export type QuestionnaireSchemaField = {
   valueType: string;
   helpText?: string;
   requiredPolicy?: string;
+  /** Boolean: default radio; `checkbox` for confirmations only. */
+  uiControl?: 'radio' | 'checkbox';
+  min?: number;
+  max?: number;
+  minItems?: number;
+  maxItems?: number;
   options?: Array<{ value: string; label: string }>;
   children?: QuestionnaireSchemaField[];
   createsProfileProposal?: boolean;
