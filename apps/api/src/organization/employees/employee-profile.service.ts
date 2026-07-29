@@ -29,6 +29,14 @@ import {
   projectEmployeeHistoryItem,
   resolveHistoryActorLabel,
 } from './employee-history.projector';
+import {
+  isPersonalContactType,
+  legacyPersonalFromContacts,
+  normalizePersonalContactsForWrite,
+  PERSONAL_CONTACT_TYPES,
+  resolvePrimaryPersonalValue,
+  type PersonalContactWriteInput,
+} from './employee-personal-contacts';
 
 type AssignmentWriteDto = {
   companyId?: string | null;
@@ -125,7 +133,8 @@ export class EmployeeProfileService {
         this.hasPerm(actor, Permission.EmployeesViewHistory) ||
         (canView && this.access.isManager(actor)),
       canStartOnboarding: false,
-      canAssignQuestionnaire: false,
+      canAssignQuestionnaire:
+        this.hasPerm(actor, Permission.QuestionnairesAssign) && canView,
     };
   }
 
@@ -307,15 +316,37 @@ export class EmployeeProfileService {
           visibility: c.visibility,
         })),
         personal: caps.canViewPersonal
-          ? {
-              birthDate: employee.birthDate,
-              city: employee.city,
-              preferredLanguage: employee.preferredLanguage,
-              preferredName: employee.preferredName,
-              personalPhone: employee.personalPhoneNumber,
-              personalEmail: employee.personalEmail,
-              personalTelegram: employee.personalTelegram,
-            }
+          ? (() => {
+              const legacy = {
+                personalPhoneNumber: employee.personalPhoneNumber,
+                personalEmail: employee.personalEmail,
+                personalTelegram: employee.personalTelegram,
+              };
+              const personalContacts = contacts.filter((c) =>
+                isPersonalContactType(c.type),
+              );
+              return {
+                birthDate: employee.birthDate,
+                city: employee.city,
+                preferredLanguage: employee.preferredLanguage,
+                preferredName: employee.preferredName,
+                personalPhone: resolvePrimaryPersonalValue(
+                  personalContacts,
+                  'personal_phone',
+                  legacy,
+                ),
+                personalEmail: resolvePrimaryPersonalValue(
+                  personalContacts,
+                  'personal_email',
+                  legacy,
+                ),
+                personalTelegram: resolvePrimaryPersonalValue(
+                  personalContacts,
+                  'personal_telegram',
+                  legacy,
+                ),
+              };
+            })()
           : null,
         emergencyContact: caps.canViewEmergencyContact
           ? emergency.map((e) => ({
@@ -397,9 +428,6 @@ export class EmployeeProfileService {
       city?: string | null;
       preferredLanguage?: string | null;
       preferredName?: string | null;
-      personalPhone?: string | null;
-      personalEmail?: string | null;
-      personalTelegram?: string | null;
     },
   ) {
     const employee = await this.access.getEmployeeOrFail(id);
@@ -419,36 +447,6 @@ export class EmployeeProfileService {
       if (dto.preferredName !== undefined) {
         row.preferredName = dto.preferredName?.trim() || null;
       }
-      if (dto.personalPhone !== undefined) {
-        row.personalPhoneNumber = dto.personalPhone?.trim() || null;
-        await this.upsertContact(
-          id,
-          'personal_phone',
-          row.personalPhoneNumber,
-          'personal',
-          manager,
-        );
-      }
-      if (dto.personalEmail !== undefined) {
-        row.personalEmail = dto.personalEmail?.trim() || null;
-        await this.upsertContact(
-          id,
-          'personal_email',
-          row.personalEmail,
-          'personal',
-          manager,
-        );
-      }
-      if (dto.personalTelegram !== undefined) {
-        row.personalTelegram = dto.personalTelegram?.trim() || null;
-        await this.upsertContact(
-          id,
-          'personal_telegram',
-          row.personalTelegram,
-          'personal',
-          manager,
-        );
-      }
       await repo.save(row);
       await this.audit.record(
         {
@@ -462,6 +460,91 @@ export class EmployeeProfileService {
       );
     });
     return this.getProfile(actor, id);
+  }
+
+  async replacePersonalContacts(
+    actor: User,
+    employeeId: string,
+    contacts: PersonalContactWriteInput[],
+  ) {
+    const employee = await this.access.getEmployeeOrFail(employeeId);
+    const capabilities = await this.capabilities(actor, employee);
+    if (!capabilities.canEditPersonal) {
+      throw new BadRequestException('Cannot edit personal contacts');
+    }
+
+    for (const contact of contacts) {
+      if (!isPersonalContactType(contact.type)) {
+        throw new BadRequestException(
+          `Invalid personal contact type: ${contact.type}`,
+        );
+      }
+    }
+
+    let normalized: ReturnType<typeof normalizePersonalContactsForWrite>;
+    try {
+      normalized = normalizePersonalContactsForWrite(contacts);
+    } catch {
+      throw new BadRequestException('Invalid personal contact payload');
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      const employeeRepository = manager.getRepository(Employee);
+      const contactRepository = manager.getRepository(EmployeeContact);
+
+      await employeeRepository.findOneOrFail({
+        where: { id: employeeId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      const previous = await contactRepository.find({
+        where: { employeeId, type: In([...PERSONAL_CONTACT_TYPES]) },
+      });
+
+      await contactRepository
+        .createQueryBuilder()
+        .delete()
+        .where('employee_id = :employeeId', { employeeId })
+        .andWhere('type IN (:...types)', { types: [...PERSONAL_CONTACT_TYPES] })
+        .execute();
+
+      const rows = normalized.map((contact) =>
+        contactRepository.create({
+          employeeId,
+          type: contact.type,
+          value: contact.value,
+          isPrimary: contact.isPrimary,
+          visibility: 'personal',
+        }),
+      );
+
+      const saved = rows.length ? await contactRepository.save(rows) : [];
+
+      const legacy = legacyPersonalFromContacts(saved);
+      await employeeRepository.update(employeeId, {
+        personalPhoneNumber: legacy.personalPhoneNumber,
+        personalEmail: legacy.personalEmail,
+        personalTelegram: legacy.personalTelegram,
+      });
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.personal_contacts_updated',
+          entityType: 'Employee',
+          entityId: employeeId,
+          metadata: {
+            previousCount: previous.length,
+            count: saved.length,
+            deletedIds: previous.map((row) => row.id),
+            createdIds: saved.map((row) => row.id),
+          },
+        },
+        manager,
+      );
+    });
+
+    return this.getProfile(actor, employeeId);
   }
 
   async patchContacts(

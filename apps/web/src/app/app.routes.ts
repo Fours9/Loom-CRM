@@ -42,6 +42,13 @@ export const routes: Routes = [
             (m) => m.STATISTICS_ROUTES,
           ),
       },
+      {
+        path: 'questionnaires',
+        loadChildren: () =>
+          import('./features/questionnaires/questionnaires.routes').then(
+            (m) => m.QUESTIONNAIRE_ROUTES,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

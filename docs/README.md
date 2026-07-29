@@ -22,18 +22,21 @@
 | **Organization** | employees (Profile Core), departments, positions, schedules, access scope |
 | **Absences** | повний PW-паритетний модуль відсутностей |
 | **Documents** | MVP: `employee_documents`, People-вкладка + агрегат вкладень Absences (storage поки `content_base64`; Platform Files — planned) |
+| **Questionnaires** | Phase 3 In progress: [field catalog](product/questionnaire-360-field-catalog.md), [ADR 0009](adr/0009-questionnaire-360-mvp.md); fill UI окремо |
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
-**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий графік** (Графік роботи · Заявки · Календар; Absences `public-api`), Документи, Показники (stub), Історія, Згодом (stub); visibility gated by permissions/capabilities. Історія: актор + UA summary. Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
+**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий графік** (Графік роботи · Заявки · Календар; Absences `public-api`), Документи, **Анкети** (Questionnaires — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [catalog](product/questionnaire-360-field-catalog.md); fill wizard окремо), Показники (stub), Історія, Згодом (stub); visibility gated by permissions/capabilities. Історія: актор + UA summary. Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
+
+**Анкета 360°:** policy catalog → seed → `schema_json`; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)).
 
 | Тип документа | Призначення |
 | --- | --- |
 | **Living status** | цей hub, [roadmap](product/hr-profile-roadmap.md), [work calendar](product/work-calendar-roadmap.md), [architecture](architecture.md), [AGENTS.md](../AGENTS.md) |
 | **Target / vision** | [employee-profile-core.md](product/employee-profile-core.md) — **не** статус імплементації |
-| **Frozen decisions** | [ADR](adr/) 0001–0008 (рішення зафіксовані) |
+| **Frozen decisions** | [ADR](adr/) 0001–0009 (рішення зафіксовані) |
 
 Відкладено (Phase 1 polish): photo upload у профілі (потрібен Platform Files). History cursor pagination — поза поточним polish.
 

@@ -33,6 +33,7 @@ import {
   EmployeeAbsenceRequestsPanelComponent,
   EmployeeWorkSchedulePanelComponent,
 } from '../absences/public-api';
+import { EmployeeQuestionnairesPanelComponent } from '../questionnaires/public-api';
 import { EmployeeDocumentsPanelComponent } from './employee-documents-panel.component';
 import { EmployeeProfileCompletenessComponent } from './employee-profile-completeness.component';
 import { EmployeeHistoryPanelComponent } from './employee-history-panel.component';
@@ -57,6 +58,7 @@ type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
     EmployeeAbsenceRequestsPanelComponent,
     EmployeeWorkSchedulePanelComponent,
     EmployeeDocumentsPanelComponent,
+    EmployeeQuestionnairesPanelComponent,
     EmployeeProfileCompletenessComponent,
     EmployeeHistoryPanelComponent,
     EmployeeDataPanelComponent,
@@ -208,6 +210,17 @@ type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
                 <p class="error">Не вдалося завантажити документи.</p>
               }
             }
+            @case ('questionnaires') {
+              @defer (on immediate) {
+                <loom-employee-questionnaires-panel [employeeId]="profile()!.header.id" />
+              } @placeholder {
+                <p class="muted">Підготовка анкет…</p>
+              } @loading (after 100ms) {
+                <p class="muted">Завантаження анкет…</p>
+              } @error {
+                <p class="error">Не вдалося завантажити анкети.</p>
+              }
+            }
             @case ('metrics') {
               <h2>Показники</h2>
               <p class="muted">Розділ у розробці. Тут з’являться KPI, цілі та метрики працівника.</p>
@@ -218,7 +231,7 @@ type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
             @default {
               <h2>Наступні модулі</h2>
               <p class="muted">
-                Onboarding, Skills, Goals, Reviews, Questionnaires —
+                Onboarding, Skills, Goals, Reviews —
                 див. roadmap (Phases 2–9). Не змішуємо з Profile Core.
               </p>
             }

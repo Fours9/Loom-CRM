@@ -27,6 +27,8 @@ import { WorkSchedulePwParity1730000006000 } from './migrations/1730000006000-Wo
 import { EmployeeProfileCore1730000007000 } from './migrations/1730000007000-EmployeeProfileCore';
 import { EmployeeImportantDates1730000008000 } from './migrations/1730000008000-EmployeeImportantDates';
 import { EmployeeDocuments1730000009000 } from './migrations/1730000009000-EmployeeDocuments';
+import { RepairPersonalContactsBackfill1730000010000 } from './migrations/1730000010000-RepairPersonalContactsBackfill';
+import { QuestionnairesModule1730000011000 } from './migrations/1730000011000-QuestionnairesModule';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -64,6 +66,8 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeProfileCore1730000007000,
       EmployeeImportantDates1730000008000,
       EmployeeDocuments1730000009000,
+      RepairPersonalContactsBackfill1730000010000,
+      QuestionnairesModule1730000011000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],
