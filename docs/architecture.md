@@ -34,6 +34,13 @@ Documents module owns `employee_documents` (interim `content_base64` storage unt
 
 CRM employee profile: `/people/:id` — tabs Дані працівника, Робочий графік (Графік роботи · Заявки · Календар), Документи, Анкети (Questionnaires 360 — [ADR 0009](adr/0009-questionnaire-360-mvp.md)), Показники (stub), Історія, Згодом (stub). Visibility gated by session permissions (`absences.calendar.view`, `documents.view`, `questionnaires.view`) and `capabilities.canViewHistory` (hide, not empty-state). History timeline: actor label + UA summary. People list `/people`: core `completenessPercent`, `sortBy=completeness`, `maxCompleteness`. Absences PW-parity card: `/absences/employees/:id` (unchanged). Living phase status: [hr-profile-roadmap.md](product/hr-profile-roadmap.md). Work calendar intent: [work-calendar-roadmap.md](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
 
+### Questionnaires FE boundary
+
+- **Public:** `apps/web/src/app/features/questionnaires/public-api.ts` — People panel, snapshot summary, `buildQuestionnaireAssignmentLink` (URL only).
+- **Private:** fill route `/questionnaires/:id` (`fill/` — DraftStore, AutosaveCoordinator, field widgets). Not re-exported.
+- Profile mirror: assignment `profileMirror` and/or private `QuestionnaireProfileMirrorService` (`HttpClient` + `@loom/contracts-employees`); never People page/store/`employee-data-panel`.
+- Questionnaires HTTP: `QuestionnairesApiService` only (no employee endpoints on that gateway).
+
 ### Profile completeness
 
 Role-independent dual score (`core` / `extended`) via pure calculator (`employee-profile-completeness.ts`); `header.completenessPercent` and list `completenessPercent` = core only; `extended` is `null` for managers viewing others. List enrichment is batched (no per-row scope queries). See [hr-profile-roadmap.md](product/hr-profile-roadmap.md).

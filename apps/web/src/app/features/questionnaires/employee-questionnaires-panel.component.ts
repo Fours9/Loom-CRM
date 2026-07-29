@@ -15,6 +15,7 @@ import type {
 } from '@loom/contracts-questionnaires';
 import { QuestionnairesApiService } from './core/questionnaires-api.service';
 import { QuestionnaireSnapshotSummaryComponent } from './questionnaire-snapshot-summary.component';
+import { buildQuestionnaireAssignmentLink } from './navigation/questionnaire-navigation';
 
 const STATUS_LABELS: Record<string, string> = {
   assigned: 'Призначено',
@@ -61,7 +62,11 @@ const STATUS_LABELS: Record<string, string> = {
           @for (item of items(); track item.id) {
             <li class="card">
               <div class="card-main">
-                <a [routerLink]="['/questionnaires', item.id]">{{ item.templateTitle }}</a>
+                <a
+                  [routerLink]="assignmentLink(item.id).routerLink"
+                  [queryParams]="assignmentLink(item.id).queryParams"
+                  >{{ item.templateTitle }}</a
+                >
                 <span class="badge">{{ statusLabel(item.status) }}</span>
                 <span class="pct">{{ item.completionPercent }}%</span>
               </div>
@@ -227,6 +232,10 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
 
   statusLabel(status: string): string {
     return STATUS_LABELS[status] ?? status;
+  }
+
+  assignmentLink(assignmentId: string) {
+    return buildQuestionnaireAssignmentLink({ assignmentId });
   }
 
   formatDate(iso: string): string {

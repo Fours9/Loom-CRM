@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | **1. Employee Profile Core** | Header, section edit (basics/contacts/personal/dates/employment), assignment history, capabilities, audit/history API, completeness, `/people/:id` | **Done** |
 | 2. Self-service + approval | `/me/profile`, change requests, approval queue | Planned |
-| 3. Questionnaires MVP | Seeded 360 template, assign, draft autosave, immutable submissions, review, profile proposals ([field catalog](./questionnaire-360-field-catalog.md), [ADR 0009](../adr/0009-questionnaire-360-mvp.md)). Fill wizard UI owned separately (PR-4). | **Shipped (foundation PR-1…3,5…7; fill wizard PR-4 pending)** |
+| 3. Questionnaires MVP | Seeded 360 template, assign, draft autosave, immutable submissions, review, profile proposals, fill wizard ([field catalog](./questionnaire-360-field-catalog.md), [ADR 0009](../adr/0009-questionnaire-360-mvp.md)). | **In progress / Partially implemented** (foundation + fill wizard shipped; see Phase 3) |
 | 4. Onboarding | Templates, tasks, progress widget | Planned |
 | 5. Goals + probation reviews | Goals, manager review cycles | Planned |
 | 6. Skills + development | Catalogs, position requirements, assessments | Planned |
@@ -33,7 +33,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 | Дані працівника | Основні · Контакти · Дати · Посада (редагування за capabilities) | завжди |
 | Робочий графік | **Графік роботи** + Заявки + Календар (Absences `public-api`: schedule panel через `getEmployee` + `PUT .../schedule`; UI = `ScheduleEditor`. Empty API schedule ≠ default Пн–Пт — дефолт лише в draft при редагуванні. Compat TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)) | `absences.calendar.view` |
 | Документи | Documents MVP + агрегат вкладень time-event (Absences) | `documents.view` |
-| Анкети | Questionnaires 360: list/assign, status/%, proposals accept/reject, snapshot summary; fill UI stub `/questionnaires/:id` | `questionnaires.view` |
+| Анкети | Questionnaires 360: list/assign, status/%, proposals accept/reject, snapshot summary; fill wizard `/questionnaires/:id` | `questionnaires.view` |
 | Показники | Stub (roadmap Phase 5 / 8) | завжди |
 | Історія | Audit timeline: дата · актор · UA summary (`EmployeeProfileHistoryItem`) | `capabilities.canViewHistory` |
 | Згодом | Stub (майбутні модулі) | завжди |
@@ -56,9 +56,14 @@ PW-паритетна картка без змін: `/absences/employees/:id`.
 
 ## Phase 3 — Questionnaires 360 (living)
 
-**Є (foundation):** module `apps/api/src/modules/questionnaires/`; contracts `@loom/contracts-questionnaires`; permissions `questionnaires.view|assign|complete.self|review|apply_profile_changes`; seed `employee-360` v1; assign/list/detail/draft PATCH (optimistic revision)/submit/request-changes/review; profile proposals + accept/reject via `EmployeeProfileService`; People tab «Анкети»; stub `/questionnaires/:id`; snapshot summary (experience/education/strengths/hobbies/work_style).
+**Status:** In progress / Partially implemented.
 
-**Немає:** fill wizard form fields (PR-4, окремий UI owner); auto-apply answers to profile; Phase 2 `/me` approval queue.
+**Shipped:**
+- foundation: module `apps/api/src/modules/questionnaires/`; contracts `@loom/contracts-questionnaires`; permissions; seed `employee-360` v1; assign/list/detail/draft PATCH (optimistic revision)/submit/request-changes/review; profile proposals + accept/reject via `EmployeeProfileService`
+- assign panel + snapshot summary on People «Анкети»
+- **fill wizard (PR-4):** `/questionnaires/:id` schema-driven wizard (Intro → schema steps → Review); serialized autosave; 409 conflict UI; `flush()` before submit; linear `?step=` gating; FE entry `questionnaires/public-api.ts` (+ `buildQuestionnaireAssignmentLink` only — wizard/store private)
+
+**Remaining:** auto-apply answers to profile (explicitly out); Phase 2 `/me` approval queue; IndexedDB offline; full Playwright matrix; template builder.
 
 ## Phase 1 — відкладені polish (не блокують Done)
 

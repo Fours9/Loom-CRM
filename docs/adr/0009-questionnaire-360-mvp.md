@@ -2,13 +2,19 @@
 
 ## Status
 
-Accepted (foundation planned; implementation follows PR-0…PR-7 roadmap).
+Accepted.
+
+## Implementation status
+
+- Foundation (templates, assignments, draft revision, submissions, proposals): shipped
+- Assignment UI (People «Анкети» panel + snapshot summary): shipped
+- Fill wizard (PR-4 schema-driven `/questionnaires/:id`): shipped
 
 ## Context
 
 `anketa_360.html` mixes permanent profile, voluntary snapshot answers, skills, grade/pay, goals, reviews, onboarding, documents, and consents. Dumping fields onto `employees` or a single mutable `submitted_snapshot_json` on the draft response breaks history when HR requests changes and resubmission occurs.
 
-Phase 2 `/me` + generic approval is deferred. Fill wizard UI is owned outside the shared foundation PRs; API contracts must be stable before submit integration.
+Phase 2 `/me` + generic approval is deferred. Fill wizard UI integrates submit after PR-5 APIs are stable.
 
 ## Decision
 
@@ -26,9 +32,9 @@ Phase 2 `/me` + generic approval is deferred. Fill wizard UI is owned outside th
 6. **No auto-apply** of questionnaire answers to profile.
 7. **Actor classes** in catalog: `employee_owner` | `manager_in_scope` | `admin`. No runtime `hr` role.
 8. **Assignment ownership:** only active User linked to Employee may fill; Admin/Manager do not answer on behalf; no account → reject assign.
-9. **PR split:** PR-1 = templates/assignments/draft PATCH only; PR-5 = submit / request-changes / resubmit / review. Fill UI (PR-4) may draft after PR-3; integrate submit only after PR-5.
+9. **PR split:** PR-1 = templates/assignments/draft PATCH only; PR-5 = submit / request-changes / resubmit / review. Fill UI (PR-4) drafts after PR-3 and submits via PR-5.
 10. **Do not** add `employees.photo_consent_status`. Photo legal consent → future Consents; `photoUrl` remains admin-managed until Platform Files.
-11. **FE entry:** `apps/web/.../questionnaires/public-api.ts` for People assign/summary panels.
+11. **FE entry:** `apps/web/.../questionnaires/public-api.ts` for People assign/summary panels + `buildQuestionnaireAssignmentLink`. Fill page / DraftStore / AutosaveCoordinator / field widgets stay feature-private.
 
 ## Consequences
 

@@ -1,9 +1,9 @@
 import { Routes } from '@angular/router';
-import { QuestionnaireFillStubPageComponent } from './questionnaire-fill-stub-page.component';
+import { QuestionnaireFillPageComponent } from './fill/questionnaire-fill-page.component';
 
 export const QUESTIONNAIRE_ROUTES: Routes = [
   {
     path: ':id',
-    component: QuestionnaireFillStubPageComponent,
+    component: QuestionnaireFillPageComponent,
   },
 ];

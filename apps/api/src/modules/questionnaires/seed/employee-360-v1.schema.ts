@@ -10,6 +10,11 @@ export type SeedField = {
   valueType: string;
   helpText?: string;
   requiredPolicy: string;
+  uiControl?: 'radio' | 'checkbox';
+  min?: number;
+  max?: number;
+  minItems?: number;
+  maxItems?: number;
   options?: Array<{ value: string; label: string }>;
   children?: SeedField[];
   createsProfileProposal?: boolean;
@@ -594,38 +599,38 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           key: 'consents.info_accurate',
           label: 'Підтверджую актуальність інформації',
           valueType: 'boolean',
+          uiControl: 'checkbox',
           requiredPolicy: 'recommended',
         },
         {
           key: 'consents.hr_processing',
           label: 'Згода на обробку для HR-процесів',
           valueType: 'boolean',
+          uiControl: 'checkbox',
           requiredPolicy: 'recommended',
         },
         {
           key: 'consents.photo_internal',
           label: 'Згода на фото у внутрішньому профілі',
           valueType: 'boolean',
+          uiControl: 'checkbox',
           requiredPolicy: 'voluntary',
         },
         {
           key: 'consents.birthday_greeting',
           label: 'Згода на привітання з ДН',
           valueType: 'boolean',
+          uiControl: 'checkbox',
           requiredPolicy: 'voluntary',
         },
         {
           key: 'consents.hr_notifications',
           label: 'Згода на HR-повідомлення',
           valueType: 'boolean',
+          uiControl: 'checkbox',
           requiredPolicy: 'voluntary',
         },
       ],
-    },
-    {
-      key: 'submit',
-      label: 'Надіслати',
-      fields: [],
     },
   ],
 };
