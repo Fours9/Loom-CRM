@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
   ViewChild,
   computed,
@@ -14,6 +15,10 @@ import {
 } from '../navigation/questionnaire-step-keys';
 import { isSchemaStepReachable } from '../navigation/resolve-active-step';
 import {
+  isQuestionnaireStepBrowsable,
+  resolveQuestionnaireNavigationMode,
+} from '../navigation/questionnaire-navigation-mode';
+import {
   reviewRowsForStep,
   resolveStepUiState,
   visibleFieldsForStep,
@@ -21,6 +26,8 @@ import {
 import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireFieldHostComponent } from './fields/questionnaire-field-host.component';
+import { QuestionnaireSaveStatusComponent } from './questionnaire-save-status.component';
+import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { validateFieldValue } from './validation/questionnaire-validation';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { fieldsByKey, listInactiveOwnAnswers } from '@loom/questionnaire-schema';
@@ -30,9 +37,17 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
 @Component({
   selector: 'loom-questionnaire-wizard-shell',
   standalone: true,
-  imports: [RouterLink, QuestionnaireFieldHostComponent],
+  imports: [
+    RouterLink,
+    QuestionnaireFieldHostComponent,
+    QuestionnaireSaveStatusComponent,
+  ],
   template: `
-    <div class="wizard" [class.drawer-open]="drawerOpen()">
+    <div
+      class="wizard"
+      [class.drawer-open]="drawerOpen()"
+      [class.read-only]="!store.editable()"
+    >
       <header class="top">
         <div class="top-main">
           <p class="eyebrow">Анкета</p>
@@ -41,7 +56,39 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
             Крок {{ stepIndexLabel() }} · {{ store.progress().percent }}%
           </p>
         </div>
-        <div class="save" aria-live="polite">{{ saveStatusText() }}</div>
+        @if (showHeaderSaveAndClose()) {
+          <div class="top-actions">
+            <loom-questionnaire-save-status
+              [text]="saveStatusText()"
+              [visual]="saveStatusVisual()"
+            />
+            <button
+              type="button"
+              class="btn"
+              [disabled]="!revision.canResubmit()"
+              [attr.aria-busy]="store.submitState() === 'submitting'"
+              (click)="resubmitAndClose()"
+            >
+              {{
+                store.submitState() === 'submitting'
+                  ? 'Збереження…'
+                  : 'Зберегти і закрити'
+              }}
+            </button>
+          </div>
+        } @else if (store.editable()) {
+          <loom-questionnaire-save-status
+            class="save-slot"
+            [text]="saveStatusText()"
+            [visual]="saveStatusVisual()"
+          />
+        } @else {
+          <loom-questionnaire-save-status
+            class="save-slot"
+            text="Лише перегляд"
+            visual="saved"
+          />
+        }
         <button
           type="button"
           class="btn ghost drawer-toggle"
@@ -91,7 +138,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
                 <button
                   type="button"
                   class="step-btn"
-                  [disabled]="!canOpenStep(step.key)"
+                  [disabled]="!canBrowseStep(step.key)"
                   [attr.aria-current]="
                     store.activeStepKey() === step.key ? 'step' : null
                   "
@@ -106,7 +153,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
               <button
                 type="button"
                 class="step-btn"
-                [disabled]="!canOpenReview()"
+                [disabled]="!canBrowseReview()"
                 [attr.aria-current]="
                   store.activeStepKey() === reviewKey ? 'step' : null
                 "
@@ -121,19 +168,38 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         <section class="viewport">
           @if (store.activeStepKey() === introKey) {
             <div class="intro">
-              <p>
-                Заповніть анкету кроками. Чернетка зберігається автоматично.
-                Після надсилання керівник зможе переглянути відповіді; зміни до
-                профілю не застосуються автоматично.
-              </p>
-              <p class="muted">
-                Рекомендовані поля не блокують перехід; обовʼязкові — блокують.
-              </p>
+              @if (store.editable() && isRevisionEdit()) {
+                <p>
+                  Внесіть зміни. Кнопка «Зберегти» лише пише чернетку; щоб
+                  оновити пропозиції до профілю, натисніть «Зберегти і закрити».
+                </p>
+              } @else if (store.editable()) {
+                <p>
+                  Заповніть анкету кроками. Чернетка зберігається автоматично.
+                  Після надсилання керівник зможе переглянути відповіді; зміни до
+                  профілю не застосуються автоматично.
+                </p>
+                <p class="muted">
+                  Рекомендовані поля не блокують перехід; обовʼязкові — блокують.
+                </p>
+              } @else {
+                <p>
+                  Це надіслана анкета в режимі перегляду. Щоб змінити відповіді,
+                  натисніть «Редагувати», збережіть зміни й натисніть «Зберегти і
+                  закрити».
+                </p>
+              }
             </div>
           } @else if (store.activeStepKey() === reviewKey) {
             <div class="review">
-              <h2>Перевірте відповіді</h2>
-              @if (recommendedWarnings().length) {
+              <h2>{{
+                store.editable()
+                  ? isRevisionEdit()
+                    ? 'Перевірте зміни'
+                    : 'Перевірте відповіді'
+                  : 'Надіслані відповіді'
+              }}</h2>
+              @if (store.editable() && recommendedWarnings().length) {
                 <div class="warnings">
                   <p>Рекомендовані поля без відповіді:</p>
                   <ul>
@@ -151,7 +217,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
                   </ul>
                 </div>
               }
-              @if (inactiveWarnings().length) {
+              @if (store.editable() && inactiveWarnings().length) {
                 <div class="warnings" role="status">
                   <p>Збережені неактивні відповіді — не будуть надіслані:</p>
                   <ul>
@@ -266,14 +332,24 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
           Назад
         </button>
         <div class="footer-right">
-          @if (store.editable() && !store.conflict()) {
+          @if (
+            store.editable() &&
+            !store.conflict() &&
+            !showHeaderSaveAndClose() &&
+            !(isRevisionEdit() && store.activeStepKey() === reviewKey)
+          ) {
+            @if (footerSaveHint(); as hint) {
+              <span class="footer-save" aria-live="polite">{{ hint }}</span>
+            }
             <button
               type="button"
               class="btn"
+              [class.saving]="store.saveState() === 'saving'"
               [disabled]="store.saveState() === 'saving'"
+              [attr.aria-busy]="store.saveState() === 'saving'"
               (click)="saveNow()"
             >
-              Зберегти зараз
+              {{ saveButtonLabel() }}
             </button>
           }
           @if (store.activeStepKey() !== reviewKey) {
@@ -284,6 +360,20 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
               (click)="next()"
             >
               Далі
+            </button>
+          } @else if (store.editable() && isRevisionEdit()) {
+            <button
+              type="button"
+              class="btn primary"
+              [disabled]="!revision.canResubmit()"
+              [attr.aria-busy]="store.submitState() === 'submitting'"
+              (click)="resubmitAndClose()"
+            >
+              {{
+                store.submitState() === 'submitting'
+                  ? 'Збереження…'
+                  : 'Зберегти і закрити'
+              }}
             </button>
           } @else if (store.editable()) {
             <button
@@ -305,8 +395,23 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
       @if (store.submitState() === 'success') {
         <div class="overlay success">
           <h2>Анкету надіслано</h2>
-          <p>Дякуємо. Можна повернутися до профілю.</p>
-          <a class="btn primary" routerLink="/people">До працівників</a>
+          <p>Дякуємо. Можна повернутися до профілю або відредагувати відповіді.</p>
+          <div class="overlay-actions">
+            @if (store.assignment()?.capabilities?.canReopenSelf) {
+              <button
+                type="button"
+                class="btn"
+                [disabled]="reopenBusy()"
+                (click)="reopenAfterSubmit()"
+              >
+                {{ reopenBusy() ? 'Відкриття…' : 'Редагувати знову' }}
+              </button>
+            }
+            <a class="btn primary" routerLink="/people">До працівників</a>
+          </div>
+          @if (reopenError(); as err) {
+            <p class="overlay-error">{{ err }}</p>
+          }
         </div>
       }
     </div>
@@ -319,6 +424,12 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         min-height: calc(100vh - 4rem);
         gap: 0.75rem;
         position: relative;
+      }
+      .wizard.read-only {
+        min-height: auto;
+      }
+      .wizard.read-only .viewport {
+        padding-bottom: 5.5rem;
       }
       .top {
         display: flex;
@@ -342,10 +453,16 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         margin: 0;
         color: var(--pw-muted);
       }
-      .save {
+      .top-actions {
         margin-left: auto;
-        font-size: 0.9rem;
-        color: var(--pw-muted);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        justify-content: flex-end;
+      }
+      .save-slot {
+        margin-left: auto;
       }
       .body {
         display: grid;
@@ -402,7 +519,14 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
       .footer-right {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         gap: 0.5rem;
+      }
+      .footer-save {
+        font-size: 0.85rem;
+        color: var(--pw-muted);
+        min-width: 7rem;
+        text-align: right;
       }
       .btn {
         min-height: 44px;
@@ -417,6 +541,11 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         display: inline-flex;
         align-items: center;
         justify-content: center;
+      }
+      .btn.saving {
+        border-color: #0b57d0;
+        color: #0b57d0;
+        font-weight: 600;
       }
       .btn.primary {
         background: var(--pw-accent);
@@ -516,6 +645,17 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         place-content: center;
         gap: 0.75rem;
         text-align: center;
+        padding: 1rem;
+      }
+      .overlay-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center;
+      }
+      .overlay-error {
+        margin: 0;
+        color: #b42318;
       }
       .drawer-toggle {
         display: none;
@@ -548,11 +688,24 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
 export class QuestionnaireWizardShellComponent {
   readonly store = inject(QuestionnaireDraftStore);
   private readonly autosave = inject(QuestionnaireAutosaveCoordinator);
+  readonly revision = inject(QuestionnaireRevisionCoordinator);
   private readonly api = inject(QuestionnairesApiService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly introKey = QUESTIONNAIRE_INTRO_STEP;
   readonly reviewKey = QUESTIONNAIRE_REVIEW_STEP;
   readonly drawerOpen = signal(false);
+  /** Short feedback after manual save when header status alone is easy to miss. */
+  readonly saveFlash = signal<string | null>(null);
+  readonly reopenBusy = signal(false);
+  readonly reopenError = signal<string | null>(null);
+  private saveFlashTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    this.destroyRef.onDestroy(() => {
+      if (this.saveFlashTimer) clearTimeout(this.saveFlashTimer);
+    });
+  }
 
   @ViewChild('stepHeading') stepHeading?: ElementRef<HTMLElement>;
   @ViewChild('submitErrorEl') submitErrorEl?: ElementRef<HTMLElement>;
@@ -607,6 +760,8 @@ export class QuestionnaireWizardShellComponent {
   });
 
   saveStatusText(): string {
+    const flash = this.saveFlash();
+    if (flash) return flash;
     if (this.store.autosaveBlocked()) return 'Збереження призупинено (конфлікт)';
     switch (this.store.saveState()) {
       case 'dirty':
@@ -620,6 +775,73 @@ export class QuestionnaireWizardShellComponent {
       default:
         return 'Чернетка';
     }
+  }
+
+  saveStatusVisual():
+    | 'idle'
+    | 'dirty'
+    | 'saving'
+    | 'saved'
+    | 'error'
+    | 'blocked' {
+    if (this.saveFlash() === 'Збережено' || this.saveFlash() === 'Уже збережено') {
+      return 'saved';
+    }
+    if (this.store.autosaveBlocked()) return 'blocked';
+    if (this.store.submitState() === 'submitting') return 'saving';
+    if (this.store.submitState() === 'error') return 'error';
+    switch (this.store.saveState()) {
+      case 'dirty':
+        return 'dirty';
+      case 'saving':
+        return 'saving';
+      case 'saved':
+        return 'saved';
+      case 'error':
+        return 'error';
+      default:
+        return 'idle';
+    }
+  }
+
+  saveButtonLabel(): string {
+    if (this.store.saveState() === 'saving') return 'Збереження…';
+    const flash = this.saveFlash();
+    if (flash) return flash;
+    return this.isRevisionEdit() ? 'Зберегти' : 'Зберегти зараз';
+  }
+
+  isRevisionEdit(): boolean {
+    return this.revision.isRevisionEdit();
+  }
+
+  /** Middle steps (not intro / review): Save & close lives in the header. */
+  showHeaderSaveAndClose(): boolean {
+    if (!this.isRevisionEdit() || this.store.conflict()) return false;
+    const key = this.store.activeStepKey();
+    return (
+      key !== QUESTIONNAIRE_INTRO_STEP && key !== QUESTIONNAIRE_REVIEW_STEP
+    );
+  }
+
+  footerSaveHint(): string {
+    if (this.store.saveState() === 'saving') return 'Зачекайте…';
+    const flash = this.saveFlash();
+    if (flash) return flash;
+    if (this.store.saveState() === 'dirty') return 'Є зміни';
+    if (this.store.saveState() === 'error') {
+      return this.store.saveError() ?? 'Помилка';
+    }
+    return '';
+  }
+
+  private flashSave(message: string, ms = 2200): void {
+    if (this.saveFlashTimer) clearTimeout(this.saveFlashTimer);
+    this.saveFlash.set(message);
+    this.saveFlashTimer = setTimeout(() => {
+      this.saveFlash.set(null);
+      this.saveFlashTimer = null;
+    }, ms);
   }
 
   fieldValue(fieldKey: string): unknown {
@@ -679,10 +901,30 @@ export class QuestionnaireWizardShellComponent {
     );
   }
 
+  canBrowseStep(stepKey: string): boolean {
+    const mode = resolveQuestionnaireNavigationMode({
+      editable: this.store.editable(),
+    });
+    return isQuestionnaireStepBrowsable({
+      mode,
+      linearReachable: this.canOpenStep(stepKey),
+    });
+  }
+
   canOpenReview(): boolean {
     const steps = this.store.schemaSteps();
     if (!steps.length) return true;
     return steps.every((s) => this.store.completedSteps().has(s.key));
+  }
+
+  canBrowseReview(): boolean {
+    const mode = resolveQuestionnaireNavigationMode({
+      editable: this.store.editable(),
+    });
+    return isQuestionnaireStepBrowsable({
+      mode,
+      linearReachable: this.canOpenReview(),
+    });
   }
 
   reviewRows(stepKey: string) {
@@ -708,15 +950,20 @@ export class QuestionnaireWizardShellComponent {
   canNext(): boolean {
     const key = this.store.activeStepKey();
     if (key === QUESTIONNAIRE_REVIEW_STEP) return false;
+    const mode = resolveQuestionnaireNavigationMode({
+      editable: this.store.editable(),
+    });
+    if (mode === 'free_read_only') return true;
     if (key === QUESTIONNAIRE_INTRO_STEP) return true;
     return this.store.isCurrentStepRequiredValid();
   }
 
   canSubmit(): boolean {
+    if (this.isRevisionEdit()) return this.revision.canResubmit();
     if (!this.store.editable()) return false;
     if (this.store.conflict()) return false;
     if (this.store.submitState() === 'submitting') return false;
-    if (!this.store.assignment()?.capabilities.canSubmit) return false;
+    if (!this.store.assignment()?.capabilities?.canSubmit) return false;
     return this.store.allRequiredValid();
   }
 
@@ -736,7 +983,15 @@ export class QuestionnaireWizardShellComponent {
   }
 
   async saveNow(): Promise<void> {
-    await this.autosave.flush();
+    if (this.store.saveState() === 'saving') return;
+    const before = this.store.saveState();
+    const ok = await this.revision.saveDraft();
+    if (!ok) return;
+    if (before === 'idle' || before === 'saved') {
+      this.flashSave('Уже збережено');
+      return;
+    }
+    this.flashSave('Збережено');
   }
 
   acceptServer(): void {
@@ -744,17 +999,41 @@ export class QuestionnaireWizardShellComponent {
   }
 
   focusField(fieldKey: string): void {
-    const el = document.querySelector(
-      `[data-field-key="${CSS.escape(fieldKey)}"]`,
-    ) as HTMLElement | null;
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const focusable = el?.querySelector(
-      'input, textarea, button, select',
-    ) as HTMLElement | null;
-    focusable?.focus();
+    const topLevelKey = fieldKey.replace(/\[.*$/, '');
+    const step = this.store
+      .schemaSteps()
+      .find((s) => s.fields.some((f) => f.key === topLevelKey));
+    if (!step) return;
+
+    const focusInDom = (): void => {
+      const el = document.querySelector(
+        `[data-field-key="${CSS.escape(topLevelKey)}"]`,
+      ) as HTMLElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const focusable = el?.querySelector(
+        'input, textarea, button, select',
+      ) as HTMLElement | null;
+      focusable?.focus();
+    };
+
+    if (this.store.activeStepKey() === step.key) {
+      focusInDom();
+      return;
+    }
+
+    void this.navigateTo(step.key, { focusHeading: false }).then(() => {
+      // Wait for step template to render field hosts.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(focusInDom);
+      });
+    });
   }
 
   async submit(): Promise<void> {
+    if (this.isRevisionEdit()) {
+      await this.resubmitAndClose();
+      return;
+    }
     if (!this.canSubmit()) return;
     if (!this.store.beginSubmit()) return;
 
@@ -775,6 +1054,7 @@ export class QuestionnaireWizardShellComponent {
 
     try {
       await firstValueFrom(this.api.submit(id));
+      await this.store.load(id, this.store.activeStepKey());
       this.store.finishSubmitSuccess();
     } catch (err: unknown) {
       this.store.finishSubmitError(
@@ -782,6 +1062,30 @@ export class QuestionnaireWizardShellComponent {
           'Не вдалося надіслати анкету',
       );
       queueMicrotask(() => this.submitErrorEl?.nativeElement.focus());
+    }
+  }
+
+  async resubmitAndClose(): Promise<void> {
+    try {
+      await this.revision.resubmitAndClose();
+    } catch {
+      queueMicrotask(() => this.submitErrorEl?.nativeElement.focus());
+    }
+  }
+
+  async reopenAfterSubmit(): Promise<void> {
+    if (this.reopenBusy()) return;
+    this.reopenBusy.set(true);
+    this.reopenError.set(null);
+    try {
+      await this.revision.reopenSelf();
+    } catch (err: unknown) {
+      this.reopenError.set(
+        (err as { error?: { message?: string } })?.error?.message ||
+          'Не вдалося відкрити анкету для редагування',
+      );
+    } finally {
+      this.reopenBusy.set(false);
     }
   }
 
@@ -793,9 +1097,13 @@ export class QuestionnaireWizardShellComponent {
     ];
   }
 
-  private async navigateTo(stepKey: string): Promise<void> {
+  private async navigateTo(
+    stepKey: string,
+    opts?: { focusHeading?: boolean },
+  ): Promise<void> {
     await this.autosave.flush();
     this.store.setActiveStep(stepKey);
+    if (opts?.focusHeading === false) return;
     queueMicrotask(() => this.stepHeading?.nativeElement.focus());
   }
 }

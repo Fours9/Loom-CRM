@@ -82,6 +82,15 @@ export class QuestionnairesController {
     return this.submissions.submit(actor, id);
   }
 
+  @Post('assignments/:id/reopen')
+  @RequirePermissions(Permission.QuestionnairesCompleteSelf)
+  reopenSelf(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.submissions.reopenSelf(actor, id);
+  }
+
   @Post('assignments/:id/request-changes')
   @RequirePermissions(Permission.QuestionnairesReview)
   requestChanges(

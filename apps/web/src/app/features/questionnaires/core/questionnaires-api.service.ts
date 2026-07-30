@@ -56,6 +56,13 @@ export class QuestionnairesApiService {
     );
   }
 
+  reopenSelf(assignmentId: string): Observable<QuestionnaireSubmissionSummary> {
+    return this.http.post<QuestionnaireSubmissionSummary>(
+      `/api/v1/questionnaires/assignments/${assignmentId}/reopen`,
+      {},
+    );
+  }
+
   requestChanges(
     assignmentId: string,
     body?: { reviewComment?: string | null },

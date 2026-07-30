@@ -17,6 +17,11 @@ import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import { QuestionnaireResponseService } from './questionnaire-response.service';
 import { projectVisibleQuestionnaireAnswers } from '@loom/questionnaire-schema';
 import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
+import {
+  applyReopenTransition,
+  toSubmissionSummaryDto,
+} from './reopen/questionnaire-reopen-transition';
+import { supersedePendingForSubmission } from './proposals/questionnaire-proposal-lifecycle';
 
 @Injectable()
 export class QuestionnaireSubmissionService {
@@ -92,10 +97,10 @@ export class QuestionnaireSubmissionService {
       if (!assignment.startedAt) assignment.startedAt = now;
       await assignmentRepo.save(assignment);
 
+      await this.proposals.generateFromSubmission(manager, actor, created.id);
+
       return created;
     });
-
-    await this.proposals.generateFromSubmission(actor, submission.id);
 
     return {
       id: submission.id,
@@ -124,41 +129,46 @@ export class QuestionnaireSubmissionService {
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
 
-    if (assignment.status !== 'submitted' && assignment.status !== 'reviewed') {
-      throw new BadRequestException(
-        `Cannot request changes from status ${assignment.status}`,
-      );
+    const { submission } = await this.dataSource.transaction(async (manager) =>
+      applyReopenTransition(manager, assignment, {
+        kind: 'reviewer_request_changes',
+        actorUserId: actor.id,
+        reviewComment: input.reviewComment ?? null,
+      }),
+    );
+
+    return toSubmissionSummaryDto(submission);
+  }
+
+  /**
+   * Owner reopens a submitted/reviewed assignment for further edits.
+   * Does not mutate latest submission review metadata.
+   */
+  async reopenSelf(actor: User, assignmentId: string) {
+    if (
+      !this.permissions.has(actor.role, Permission.QuestionnairesCompleteSelf)
+    ) {
+      throw new ForbiddenException('Cannot reopen questionnaire');
     }
 
-    const response = await this.responses.findOne({
-      where: { assignmentId },
+    const assignment = await this.assignments.findOne({
+      where: { id: assignmentId },
     });
-    if (!response) throw new NotFoundException('Response not found');
+    if (!assignment) throw new NotFoundException('Assignment not found');
 
-    const latest = await this.submissions.findOne({
-      where: { responseId: response.id },
-      order: { submissionNumber: 'DESC' },
-    });
-    if (!latest) throw new NotFoundException('No submission to review');
+    const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
+    if (!this.access.isOwner(actor, employee)) {
+      throw new ForbiddenException('Only the employee may reopen');
+    }
 
-    const now = new Date();
-    latest.reviewStatus = 'changes_requested';
-    latest.reviewedByUserId = actor.id;
-    latest.reviewedAt = now;
-    latest.reviewComment = input.reviewComment?.trim() || null;
-    await this.submissions.save(latest);
+    const { submission } = await this.dataSource.transaction(async (manager) =>
+      applyReopenTransition(manager, assignment, {
+        kind: 'owner_reopen',
+        actorUserId: actor.id,
+      }),
+    );
 
-    assignment.status = 'changes_requested';
-    await this.assignments.save(assignment);
-
-    return {
-      id: latest.id,
-      submissionNumber: latest.submissionNumber,
-      submittedAt: latest.submittedAt.toISOString(),
-      reviewStatus: latest.reviewStatus,
-      reviewedAt: latest.reviewedAt?.toISOString() ?? null,
-      reviewComment: latest.reviewComment,
-    };
+    return toSubmissionSummaryDto(submission);
   }
 
   async review(
@@ -187,28 +197,53 @@ export class QuestionnaireSubmissionService {
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
 
+    if (input.reviewStatus === 'changes_requested') {
+      // Prefer shared transition when the reviewed row is the latest submission.
+      const response = submission.response;
+      const latest = await this.submissions.findOne({
+        where: { responseId: response.id },
+        order: { submissionNumber: 'DESC' },
+      });
+      if (latest && latest.id === submission.id) {
+        const { submission: updated } = await this.dataSource.transaction(
+          async (manager) =>
+            applyReopenTransition(manager, assignment, {
+              kind: 'reviewer_request_changes',
+              actorUserId: actor.id,
+              reviewComment: input.reviewComment ?? null,
+            }),
+        );
+        return toSubmissionSummaryDto(updated);
+      }
+
+      // Older submission reviewed: update that row + supersede its pending.
+      const now = new Date();
+      await this.dataSource.transaction(async (manager) => {
+        const subRepo = manager.getRepository(QuestionnaireSubmission);
+        const assignRepo = manager.getRepository(QuestionnaireAssignment);
+        submission.reviewStatus = 'changes_requested';
+        submission.reviewedByUserId = actor.id;
+        submission.reviewedAt = now;
+        submission.reviewComment = input.reviewComment?.trim() || null;
+        await subRepo.save(submission);
+        assignment.status = 'changes_requested';
+        await assignRepo.save(assignment);
+        await supersedePendingForSubmission(manager, submission.id, now);
+      });
+      return toSubmissionSummaryDto(submission);
+    }
+
     const now = new Date();
-    submission.reviewStatus = input.reviewStatus;
+    submission.reviewStatus = 'approved';
     submission.reviewedByUserId = actor.id;
     submission.reviewedAt = now;
     submission.reviewComment = input.reviewComment?.trim() || null;
     await this.submissions.save(submission);
 
-    if (input.reviewStatus === 'approved') {
-      assignment.status = 'reviewed';
-      assignment.reviewedAt = now;
-    } else {
-      assignment.status = 'changes_requested';
-    }
+    assignment.status = 'reviewed';
+    assignment.reviewedAt = now;
     await this.assignments.save(assignment);
 
-    return {
-      id: submission.id,
-      submissionNumber: submission.submissionNumber,
-      submittedAt: submission.submittedAt.toISOString(),
-      reviewStatus: submission.reviewStatus,
-      reviewedAt: submission.reviewedAt?.toISOString() ?? null,
-      reviewComment: submission.reviewComment,
-    };
+    return toSubmissionSummaryDto(submission);
   }
 }

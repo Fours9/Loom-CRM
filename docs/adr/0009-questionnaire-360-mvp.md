@@ -12,6 +12,7 @@ Accepted.
 - Schema UX (family / celebration_dates, visibleWhen, layout groups, from/to, multi-language): shipped
 - `@loom/questionnaire-schema` pure helpers + submit visible-answer projection: shipped
 - Application startup composition root (single `OnModuleInit`): shipped
+- Owner self-reopen vs HR request-changes (parameterized reopen cause); revision UX; proposal `superseded` + atomic generate: shipped
 
 ## Versioning (pre-production)
 
@@ -38,18 +39,23 @@ Phase 2 `/me` + generic approval is deferred. Fill wizard UI integrates submit a
 4. **Immutable submissions table** (not overwrite on response):
    - `questionnaire_responses` — mutable `answers_json` + `revision`.
    - `questionnaire_submissions` — immutable `snapshot_json`, `submission_number`, `submitted_by_user_id`, review fields.
-   - request-changes reopens draft; resubmit creates a **new** submission row.
-5. **Profile proposals** reference `submission_id` (not only assignment). Apply via Organization **application facade** in the same Nest process (no HTTP loopback, no direct Org repository writes from Questionnaires).
-6. **No auto-apply** of questionnaire answers to profile.
-7. **Actor classes** in catalog: `employee_owner` | `manager_in_scope` | `admin`. No runtime `hr` role.
-8. **Assignment ownership:** only active User linked to Employee may fill; Admin/Manager do not answer on behalf; no account → reject assign.
-9. **PR split:** PR-1 = templates/assignments/draft PATCH only; PR-5 = submit / request-changes / resubmit / review. Fill UI (PR-4) drafts after PR-3 and submits via PR-5.
-10. **Do not** add `employees.photo_consent_status`. Photo legal consent → future Consents; `photoUrl` remains admin-managed until Platform Files.
-11. **FE entry:** `apps/web/.../questionnaires/public-api.ts` for People assign/summary panels + `buildQuestionnaireAssignmentLink`. Fill page / DraftStore / AutosaveCoordinator / field widgets stay feature-private.
+   - request-changes / owner reopen → assignment `changes_requested`; resubmit creates a **new** submission row.
+5. **Reopen causes (different side effects):**
+   - `owner_reopen`: assignment → `changes_requested`; latest submission **review metadata unchanged**; pending proposals for that submission → `superseded`.
+   - `reviewer_request_changes` (HR `request-changes` or review → changes_requested): assignment → `changes_requested`; latest (or reviewed) submission gets `reviewStatus=changes_requested`, reviewer actor, `reviewedAt`, comment; pending for that submission → `superseded`.
+6. **Profile proposals** reference `submission_id` (+ DTO `assignmentId` via join). Apply via Organization **application facade** (no HTTP loopback). Statuses: `pending` | `accepted` | `rejected` | `superseded`. For `superseded`, `reviewedAt` is **system resolution time** (not human review); `reviewedByUserId` is null. At most one `pending` per employee + `target_section` + `proposed_changes.field` (partial unique index).
+7. **Proposal lifecycle:** supersede pending on reopen / request-changes / review→changes_requested **before** further edits; on submit, create submission + generate proposals **in one transaction**. Accepted/rejected history is never rewritten. `GET .../proposals` is **read-only**: returns pending, suppresses profile-equal rows in memory (no UPDATE). Residual pending after direct People profile edits is OK until next questionnaire write-path.
+8. **No auto-apply** of questionnaire answers to profile.
+9. **Actor classes** in catalog: `employee_owner` | `manager_in_scope` | `admin`. No runtime `hr` role.
+10. **Assignment ownership:** only active User linked to Employee may fill; Admin/Manager do not answer on behalf; no account → reject assign.
+11. **PR split:** PR-1 = templates/assignments/draft PATCH only; PR-5 = submit / request-changes / resubmit / review. Fill UI (PR-4) drafts after PR-3 and submits via PR-5.
+12. **Do not** add `employees.photo_consent_status`. Photo legal consent → future Consents; `photoUrl` remains admin-managed until Platform Files.
+13. **FE entry:** `apps/web/.../questionnaires/public-api.ts` for People assign/summary panels + `buildQuestionnaireAssignmentLink`. Fill page / DraftStore / Autosave / RevisionCoordinator / field widgets stay feature-private.
 
 ## Consequences
 
 - Resubmission history is first-class; proposals stay attributable to a snapshot.
+- Owner self-reopen does not fabricate reviewer history on the latest submission.
 - Catalog and seed can drift — PR-2/seed docs must call out manual sync.
 - Managers never see as “HR role”; permissions + scope + capabilities cover HR-like actions via `admin` (and future permission grants).
 - Living status: [hr-profile-roadmap.md](../product/hr-profile-roadmap.md).

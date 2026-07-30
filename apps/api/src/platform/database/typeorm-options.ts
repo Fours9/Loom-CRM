@@ -29,6 +29,7 @@ import { EmployeeImportantDates1730000008000 } from './migrations/1730000008000-
 import { EmployeeDocuments1730000009000 } from './migrations/1730000009000-EmployeeDocuments';
 import { RepairPersonalContactsBackfill1730000010000 } from './migrations/1730000010000-RepairPersonalContactsBackfill';
 import { QuestionnairesModule1730000011000 } from './migrations/1730000011000-QuestionnairesModule';
+import { QuestionnaireProposalSuperseded1730000012000 } from './migrations/1730000012000-QuestionnaireProposalSuperseded';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -68,6 +69,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeDocuments1730000009000,
       RepairPersonalContactsBackfill1730000010000,
       QuestionnairesModule1730000011000,
+      QuestionnaireProposalSuperseded1730000012000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

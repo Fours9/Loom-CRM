@@ -23,6 +23,7 @@ export const QUESTIONNAIRE_PROPOSAL_STATUSES = [
   'pending',
   'accepted',
   'rejected',
+  'superseded',
 ] as const;
 
 export type QuestionnaireProposalStatus =

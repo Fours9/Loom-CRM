@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { Permission } from '../../platform/permissions/permission.names';
 import { PermissionService } from '../../platform/permissions/permission.service';
@@ -21,6 +21,12 @@ import {
   parsePreferredLanguage,
   serializePreferredLanguage,
 } from '@loom/questionnaire-schema';
+import type { QuestionnaireProfileProposalItem } from '@loom/contracts-questionnaires';
+import {
+  proposalMatchesCurrentValue,
+  valuesEqual,
+} from './proposals/questionnaire-proposal-comparison';
+import { supersedePendingForSameField } from './proposals/questionnaire-proposal-lifecycle';
 
 type ProposalMapping = { section: string; field: string };
 type SchemaField = {
@@ -33,16 +39,6 @@ type SchemaField = {
 type SchemaJson = {
   steps: Array<{ fields: SchemaField[] }>;
 };
-
-function valuesEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (a == null && b == null) return true;
-  if (a == null || b == null) return false;
-  if (typeof a === 'string' || typeof b === 'string') {
-    return String(a).trim() === String(b).trim();
-  }
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 function prefixAnswers(
   answers: Record<string, unknown>,
@@ -76,52 +72,76 @@ export class QuestionnaireProposalService {
     private readonly profiles: EmployeeProfileService,
   ) {}
 
+  /**
+   * Build and persist proposals for a new submission.
+   * Must run inside the same transaction as submission create when called from submit.
+   */
   async generateFromSubmission(
+    manager: EntityManager,
     _actor: User,
     submissionId: string,
   ): Promise<void> {
-    const submission = await this.submissions.findOne({
-      where: { id: submissionId },
-      relations: { response: true },
-    });
-    if (!submission) return;
+    const submission = await manager
+      .getRepository(QuestionnaireSubmission)
+      .findOne({
+        where: { id: submissionId },
+        relations: { response: true },
+      });
+    if (!submission?.response) return;
 
-    const assignment = await this.assignments.findOne({
-      where: { id: submission.response.assignmentId },
-      relations: { templateVersion: true },
-    });
-    if (!assignment) return;
+    const assignment = await manager
+      .getRepository(QuestionnaireAssignment)
+      .findOne({
+        where: { id: submission.response.assignmentId },
+        relations: { templateVersion: true },
+      });
+    if (!assignment?.templateVersion) return;
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     const schema = assignment.templateVersion.schemaJson as SchemaJson;
     const answers = submission.snapshotJson ?? {};
-
-    const fields = schema.steps.flatMap((s) => s.fields ?? []).filter(
-      (f) => f.createsProfileProposal && f.proposalMapping,
+    const fieldsByKey = new Map(
+      schema.steps
+        .flatMap((s) => s.fields ?? [])
+        .map((f) => [f.key, f] as const),
     );
 
-    const current = this.readCurrentProfileValues(employee, await this.loadContacts(employee.id));
+    const fields = schema.steps
+      .flatMap((s) => s.fields ?? [])
+      .filter((f) => f.createsProfileProposal && f.proposalMapping);
 
-    const rows: QuestionnaireProfileProposal[] = [];
-    const languageField = fields.find(
-      (f) => f.key === 'personal.preferred_language',
-    );
+    const contacts = await manager.getRepository(EmployeeContact).find({
+      where: {
+        employeeId: employee.id,
+        type: In([...PERSONAL_CONTACT_TYPES]),
+      },
+    });
+    const current = this.readCurrentProfileValues(employee, contacts);
+
+    const proposalRepo = manager.getRepository(QuestionnaireProfileProposal);
+    const languageField = fieldsByKey.get('personal.preferred_language');
     const languageOptions = languageField?.options ?? [
       { value: 'uk', label: 'Українська' },
       { value: 'en', label: 'Англійська' },
       { value: 'other', label: 'Інша' },
     ];
 
+    const candidates: Array<{
+      targetSection: string;
+      proposedChanges: {
+        section: string;
+        field: string;
+        answerKey: string;
+        from: unknown;
+        to: unknown;
+      };
+    }> = [];
+
     for (const field of fields) {
       const mapping = field.proposalMapping!;
-
-      // other text is folded into preferred_language proposal only
-      if (field.key === 'personal.preferred_language_other') {
-        continue;
-      }
+      if (field.key === 'personal.preferred_language_other') continue;
 
       let to: unknown = answers[field.key];
-
       if (field.key === 'personal.preferred_language') {
         const parsed = parsePreferredLanguage(to, languageOptions);
         if (
@@ -154,26 +174,74 @@ export class QuestionnaireProposalService {
       }
       if (valuesEqual(from, to)) continue;
 
-      rows.push(
-        this.proposals.create({
-          submissionId: submission.id,
-          employeeId: employee.id,
-          targetSection: mapping.section,
-          proposedChanges: {
-            section: mapping.section,
-            field: mapping.field,
-            answerKey: field.key,
-            from: from ?? null,
-            to,
-          },
-          status: 'pending',
-        }),
-      );
+      candidates.push({
+        targetSection: mapping.section,
+        proposedChanges: {
+          section: mapping.section,
+          field: mapping.field,
+          answerKey: field.key,
+          from: from ?? null,
+          to,
+        },
+      });
     }
 
-    if (rows.length) {
-      await this.proposals.save(rows);
+    const now = new Date();
+
+    // Supersede pending that already match current profile (any submission).
+    const allPending = await proposalRepo.find({
+      where: { employeeId: employee.id, status: 'pending' },
+    });
+    const profileEqual = allPending.filter((p) => {
+      const change = p.proposedChanges as {
+        section?: string;
+        field?: string;
+        answerKey?: string;
+      };
+      const schemaField = change.answerKey
+        ? fieldsByKey.get(change.answerKey)
+        : null;
+      const profileKey =
+        change.section && change.field
+          ? `${change.section}.${change.field}`
+          : null;
+      if (!profileKey) return false;
+      return proposalMatchesCurrentValue({
+        proposal: p,
+        currentProfileValue: current[profileKey],
+        schemaField,
+      });
+    });
+    for (const p of profileEqual) {
+      p.status = 'superseded';
+      p.reviewedByUserId = null;
+      p.reviewedAt = now;
     }
+    if (profileEqual.length) await proposalRepo.save(profileEqual);
+
+    // Supersede older pending for the same target fields we are about to insert.
+    for (const c of candidates) {
+      await supersedePendingForSameField(manager, {
+        employeeId: employee.id,
+        section: c.proposedChanges.section,
+        field: c.proposedChanges.field,
+        answerKey: c.proposedChanges.answerKey,
+        now,
+      });
+    }
+
+    if (!candidates.length) return;
+
+    const rows = candidates.map((c) =>
+      proposalRepo.create({
+        submissionId: submission.id,
+        employeeId: employee.id,
+        targetSection: c.targetSection,
+        proposedChanges: c.proposedChanges,
+        status: 'pending',
+      }),
+    );
+    await proposalRepo.save(rows);
   }
 
   async listForEmployee(actor: User, employeeId: string) {
@@ -188,12 +256,56 @@ export class QuestionnaireProposalService {
     }
 
     const items = await this.proposals.find({
-      where: { employeeId },
+      where: { employeeId, status: 'pending' },
       order: { createdAt: 'DESC' },
     });
 
+    const assignmentBySubmission = await this.assignmentIdsBySubmissionIds(
+      items.map((p) => p.submissionId),
+    );
+    const schemaByAssignment = await this.schemasByAssignmentIds([
+      ...assignmentBySubmission.values(),
+    ]);
+
+    const current = this.readCurrentProfileValues(
+      employee,
+      await this.loadContacts(employeeId),
+    );
+
+    const dtos: QuestionnaireProfileProposalItem[] = [];
+    for (const p of items) {
+      const assignmentId = assignmentBySubmission.get(p.submissionId);
+      if (!assignmentId) continue;
+
+      const change = p.proposedChanges as {
+        section?: string;
+        field?: string;
+        answerKey?: string;
+      };
+      const schema = schemaByAssignment.get(assignmentId);
+      const schemaField = change.answerKey
+        ? schema?.fieldsByKey.get(change.answerKey)
+        : undefined;
+      const profileKey =
+        change.section && change.field
+          ? `${change.section}.${change.field}`
+          : null;
+      if (
+        profileKey &&
+        proposalMatchesCurrentValue({
+          proposal: p,
+          currentProfileValue: current[profileKey],
+          schemaField,
+        })
+      ) {
+        continue; // read-time suppression only
+      }
+
+      dtos.push(this.toDto(p, assignmentId));
+    }
+
     return {
-      items: items.map((p) => this.toDto(p)),
+      items: dtos,
       capabilities: {
         canApply: this.permissions.has(
           actor.role,
@@ -213,10 +325,18 @@ export class QuestionnaireProposalService {
       throw new ForbiddenException('Cannot apply profile changes');
     }
 
-    const proposal = await this.proposals.findOne({ where: { id: proposalId } });
+    const proposal = await this.proposals.findOne({
+      where: { id: proposalId },
+      relations: { submission: { response: true } },
+    });
     if (!proposal) throw new NotFoundException('Proposal not found');
     if (proposal.status !== 'pending') {
       throw new BadRequestException(`Proposal is ${proposal.status}`);
+    }
+
+    const assignmentId = proposal.submission?.response?.assignmentId;
+    if (!assignmentId) {
+      throw new NotFoundException('Proposal assignment not found');
     }
 
     const employee = await this.access.getEmployeeOrFail(proposal.employeeId);
@@ -225,6 +345,7 @@ export class QuestionnaireProposalService {
     const change = proposal.proposedChanges as {
       section: string;
       field: string;
+      answerKey?: string;
       to: unknown;
     };
 
@@ -235,7 +356,15 @@ export class QuestionnaireProposalService {
     proposal.reviewedAt = new Date();
     await this.proposals.save(proposal);
 
-    return this.toDto(proposal);
+    await supersedePendingForSameField(this.proposals.manager, {
+      employeeId: proposal.employeeId,
+      section: change.section,
+      field: change.field,
+      answerKey: change.answerKey,
+      exceptProposalId: proposal.id,
+    });
+
+    return this.toDto(proposal, assignmentId);
   }
 
   async reject(actor: User, proposalId: string) {
@@ -248,10 +377,18 @@ export class QuestionnaireProposalService {
       throw new ForbiddenException('Cannot reject profile changes');
     }
 
-    const proposal = await this.proposals.findOne({ where: { id: proposalId } });
+    const proposal = await this.proposals.findOne({
+      where: { id: proposalId },
+      relations: { submission: { response: true } },
+    });
     if (!proposal) throw new NotFoundException('Proposal not found');
     if (proposal.status !== 'pending') {
       throw new BadRequestException(`Proposal is ${proposal.status}`);
+    }
+
+    const assignmentId = proposal.submission?.response?.assignmentId;
+    if (!assignmentId) {
+      throw new NotFoundException('Proposal assignment not found');
     }
 
     const employee = await this.access.getEmployeeOrFail(proposal.employeeId);
@@ -262,7 +399,7 @@ export class QuestionnaireProposalService {
     proposal.reviewedAt = new Date();
     await this.proposals.save(proposal);
 
-    return this.toDto(proposal);
+    return this.toDto(proposal, assignmentId);
   }
 
   async latestSnapshotSummary(actor: User, employeeId: string) {
@@ -312,7 +449,11 @@ export class QuestionnaireProposalService {
     change: { section: string; field: string; to: unknown },
   ): Promise<void> {
     const value =
-      typeof change.to === 'string' ? change.to : change.to == null ? null : String(change.to);
+      typeof change.to === 'string'
+        ? change.to
+        : change.to == null
+          ? null
+          : String(change.to);
 
     if (change.section === 'overview' || change.section === 'header') {
       const dto: Record<string, string | null> = {};
@@ -363,7 +504,6 @@ export class QuestionnaireProposalService {
       asPrimary: boolean,
     ) => {
       if (!val) {
-        // remove primary of this type if clearing
         for (let i = next.length - 1; i >= 0; i--) {
           if (next[i].type === type && next[i].isPrimary === asPrimary) {
             next.splice(i, 1);
@@ -388,7 +528,6 @@ export class QuestionnaireProposalService {
       throw new BadRequestException(`Unsupported contact field: ${field}`);
     }
 
-    // Ensure at least one primary per type that has values
     for (const type of PERSONAL_CONTACT_TYPES) {
       const ofType = next.filter((c) => c.type === type);
       if (ofType.length && !ofType.some((c) => c.isPrimary)) {
@@ -451,17 +590,64 @@ export class QuestionnaireProposalService {
     };
   }
 
-  private toDto(p: QuestionnaireProfileProposal) {
+  private toDto(
+    p: QuestionnaireProfileProposal,
+    assignmentId: string,
+  ): QuestionnaireProfileProposalItem {
     return {
       id: p.id,
       submissionId: p.submissionId,
+      assignmentId,
       employeeId: p.employeeId,
       targetSection: p.targetSection,
-      proposedChanges: p.proposedChanges,
+      proposedChanges: p.proposedChanges as QuestionnaireProfileProposalItem['proposedChanges'],
       status: p.status,
       reviewedByUserId: p.reviewedByUserId,
       reviewedAt: p.reviewedAt?.toISOString() ?? null,
       createdAt: p.createdAt.toISOString(),
     };
+  }
+
+  private async assignmentIdsBySubmissionIds(
+    submissionIds: string[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Set(submissionIds.filter(Boolean))];
+    const map = new Map<string, string>();
+    if (!unique.length) return map;
+
+    const rows = await this.submissions.find({
+      where: { id: In(unique) },
+      relations: { response: true },
+    });
+    for (const row of rows) {
+      const assignmentId = row.response?.assignmentId;
+      if (assignmentId) map.set(row.id, assignmentId);
+    }
+    return map;
+  }
+
+  private async schemasByAssignmentIds(
+    assignmentIds: string[],
+  ): Promise<
+    Map<string, { fieldsByKey: Map<string, SchemaField> }>
+  > {
+    const unique = [...new Set(assignmentIds.filter(Boolean))];
+    const map = new Map<string, { fieldsByKey: Map<string, SchemaField> }>();
+    if (!unique.length) return map;
+
+    const rows = await this.assignments.find({
+      where: { id: In(unique) },
+      relations: { templateVersion: true },
+    });
+    for (const row of rows) {
+      const schema = row.templateVersion?.schemaJson as SchemaJson | undefined;
+      const fieldsByKey = new Map(
+        (schema?.steps ?? [])
+          .flatMap((s) => s.fields ?? [])
+          .map((f) => [f.key, f] as const),
+      );
+      map.set(row.id, { fieldsByKey });
+    }
+    return map;
   }
 }
