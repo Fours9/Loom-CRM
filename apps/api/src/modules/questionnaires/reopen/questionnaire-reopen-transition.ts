@@ -7,6 +7,7 @@ import { supersedePendingForSubmission } from '../proposals/questionnaire-propos
 
 export type QuestionnaireReopenCause =
   | { kind: 'owner_reopen'; actorUserId: string }
+  | { kind: 'admin_start_revision'; actorUserId: string }
   | {
       kind: 'reviewer_request_changes';
       actorUserId: string;
@@ -53,7 +54,7 @@ export async function applyReopenTransition(
     latest.reviewComment = cause.reviewComment?.trim() || null;
     await manager.getRepository(QuestionnaireSubmission).save(latest);
   }
-  // owner_reopen: leave latest submission review metadata untouched
+  // owner_reopen / admin_start_revision: leave latest submission review metadata untouched
 
   assignment.status = 'changes_requested';
   await manager.getRepository(QuestionnaireAssignment).save(assignment);

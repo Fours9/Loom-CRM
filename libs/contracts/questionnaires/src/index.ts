@@ -7,7 +7,26 @@ export const QUESTIONNAIRE_ASSIGNMENT_STATUSES = [
   'changes_requested',
   'reviewed',
   'cancelled',
+  'closed',
 ] as const;
+
+export type QuestionnaireAttachmentState =
+  | 'attached'
+  | 'detached'
+  | 'closed';
+
+export const QUESTIONNAIRE_DIRECTORY_SORT_BY = [
+  'createdAt',
+  'updatedAt',
+  'employeeName',
+  'departmentName',
+  'positionName',
+  'templateCode',
+  'status',
+] as const;
+
+export type QuestionnaireDirectorySortBy =
+  (typeof QUESTIONNAIRE_DIRECTORY_SORT_BY)[number];
 
 export type QuestionnaireAssignmentStatus =
   (typeof QUESTIONNAIRE_ASSIGNMENT_STATUSES)[number];
@@ -136,6 +155,10 @@ export type QuestionnaireAssignmentListItem = {
   capabilities: {
     canOpen: boolean;
     canAssign: boolean;
+    canCancel: boolean;
+    canReactivate: boolean;
+    canClose: boolean;
+    canDelete: boolean;
   };
 };
 
@@ -168,9 +191,53 @@ export type QuestionnaireAssignmentDetail = {
     canSubmit: boolean;
     /** Owner may reopen a submitted/reviewed assignment for further edits. */
     canReopenSelf: boolean;
+    /** Admin (CompleteAny) may start a revision; also opens owner edit (shared revision). */
+    canStartRevision: boolean;
     canRequestChanges: boolean;
     canReview: boolean;
   };
+};
+
+export type QuestionnaireDirectoryQuery = {
+  departmentId?: EntityId;
+  positionId?: EntityId;
+  createdFrom?: string;
+  createdTo?: string;
+  attachmentState?: QuestionnaireAttachmentState;
+  sortBy?: QuestionnaireDirectorySortBy;
+  sortDir?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+};
+
+export type QuestionnaireDirectoryItem = {
+  id: EntityId;
+  templateCode: string;
+  templateTitle: string;
+  version: number;
+  employeeId: EntityId;
+  employeeDisplayName: string;
+  departmentName: string | null;
+  positionName: string | null;
+  status: QuestionnaireAssignmentStatus;
+  attachmentState: QuestionnaireAttachmentState;
+  createdAt: string;
+  /** Last aggregate activity (assignment or draft), not draft-only. */
+  updatedAt: string;
+  capabilities: {
+    canOpen: boolean;
+    canCancel: boolean;
+    canReactivate: boolean;
+    canClose: boolean;
+    canDelete: boolean;
+  };
+};
+
+export type QuestionnaireDirectoryResponse = {
+  items: QuestionnaireDirectoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type QuestionnaireProposedChange = {

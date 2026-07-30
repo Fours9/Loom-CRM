@@ -1,7 +1,5 @@
 /**
- * Single FE navigation contract for opening a questionnaire assignment fill route.
- * Production CTAs must use buildQuestionnaireAssignmentLink — do not hardcode path/query.
- * Step accessibility is NOT handled here — see resolveQuestionnaireActiveStep.
+ * Single FE navigation contract for questionnaire routes.
  */
 
 export const QUESTIONNAIRE_ASSIGNMENT_NAVIGATION = {
@@ -39,6 +37,10 @@ export function buildQuestionnaireAssignmentLink(
     routerLink: `${QUESTIONNAIRE_ASSIGNMENT_NAVIGATION.pathPrefix}/${assignmentId}`,
     queryParams,
   };
+}
+
+export function buildQuestionnaireDirectoryLink(): { routerLink: string } {
+  return { routerLink: QUESTIONNAIRE_ASSIGNMENT_NAVIGATION.pathPrefix };
 }
 
 export function parseQuestionnaireStepQuery(

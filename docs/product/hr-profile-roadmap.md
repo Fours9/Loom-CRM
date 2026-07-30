@@ -33,7 +33,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 | Дані працівника | Основні · Контакти · Дати · Посада (редагування за capabilities) | завжди |
 | Робочий графік | **Графік роботи** + Заявки + Календар (Absences `public-api`: schedule panel через `getEmployee` + `PUT .../schedule`; UI = `ScheduleEditor`. Empty API schedule ≠ default Пн–Пт — дефолт лише в draft при редагуванні. Compat TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)) | `absences.calendar.view` |
 | Документи | Documents MVP + агрегат вкладень time-event (Absences) | `documents.view` |
-| Анкети | Questionnaires 360: list/assign, status/%, proposals accept/reject, snapshot summary; fill wizard `/questionnaires/:id` | `questionnaires.view` |
+| Анкети | Directory `/questionnaires` + People panel; assign/cancel/reactivate/close/delete; fill wizard | `questionnaires.view` |
 | Показники | Stub (roadmap Phase 5 / 8) | завжди |
 | Історія | Audit timeline: дата · актор · UA summary (`EmployeeProfileHistoryItem`) | `capabilities.canViewHistory` |
 | Згодом | Stub (майбутні модулі) | завжди |
@@ -64,6 +64,8 @@ PW-паритетна картка без змін: `/absences/employees/:id`.
 - **fill wizard (PR-4):** `/questionnaires/:id` schema-driven wizard (Intro → schema steps → Review); serialized autosave; 409 conflict UI; `flush()` before submit; linear `?step=` gating; FE entry `questionnaires/public-api.ts` (+ `buildQuestionnaireAssignmentLink` only — wizard/store private)
 - **schema UX:** steps `family` + `celebration_dates`; `visibleWhen`; layout groups; from/to periods; preferred_language multi; submit projects visible answers; `@loom/questionnaire-schema`; startup composition root; fail-safe `pnpm questionnaires:reset` ([runbook](../dev/questionnaire-test-reset.md)); `family.other_dates` repeating list (Назва/З/По, **snapshot**, не профіль)
 - **revision + proposals:** owner `POST .../reopen` vs HR request-changes (different submission review side effects); pending → `superseded` on reopen; atomic submit+proposal generate; proposals nested under assignment; UI «Зберегти і закрити» = new immutable submission
+- **assignment lifecycle:** admin cancel (`cancelled` + supersede all pending) / reactivate (same row → `assigned`, clear `reviewedAt`) / close (terminal `closed`) / hard delete (CASCADE + audit; applied profile changes not rolled back); People panel + global directory
+- **directory + access:** nav «Анкети» `/questionnaires`; `QuestionnairesCompleteAny` Admin fill-on-behalf; Admin submit on cancelled preserves cancelled; `canStartRevision` vs `canReopenSelf`; printable `template.code`
 
 **Remaining:** auto-apply answers to profile (explicitly out); Phase 2 `/me` approval queue; IndexedDB offline; full Playwright matrix; template builder; production template v2 when real assignments exist.
 

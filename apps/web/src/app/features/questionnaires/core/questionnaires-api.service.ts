@@ -5,6 +5,7 @@ import type {
   CreateQuestionnaireAssignmentRequest,
   QuestionnaireAssignmentDetail,
   QuestionnaireAssignmentListResponse,
+  QuestionnaireDirectoryResponse,
   QuestionnaireDraftDto,
   QuestionnaireProfileProposalItem,
   QuestionnaireProfileProposalListResponse,
@@ -36,6 +37,59 @@ export class QuestionnairesApiService {
     return this.http.post<QuestionnaireAssignmentDetail>(
       `/api/v1/questionnaires/assignments`,
       body,
+    );
+  }
+
+  listDirectory(params: {
+    departmentId?: string;
+    positionId?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    attachmentState?: string;
+    sortBy?: string;
+    sortDir?: string;
+    limit?: number;
+    offset?: number;
+  }): Observable<QuestionnaireDirectoryResponse> {
+    const q: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '') q[k] = String(v);
+    }
+    return this.http.get<QuestionnaireDirectoryResponse>(
+      `/api/v1/questionnaires/directory`,
+      { params: q },
+    );
+  }
+
+  cancelAssignment(id: string): Observable<QuestionnaireAssignmentDetail> {
+    return this.http.post<QuestionnaireAssignmentDetail>(
+      `/api/v1/questionnaires/assignments/${id}/cancel`,
+      {},
+    );
+  }
+
+  reactivateAssignment(id: string): Observable<QuestionnaireAssignmentDetail> {
+    return this.http.post<QuestionnaireAssignmentDetail>(
+      `/api/v1/questionnaires/assignments/${id}/reactivate`,
+      {},
+    );
+  }
+
+  closeAssignment(id: string): Observable<QuestionnaireAssignmentDetail> {
+    return this.http.post<QuestionnaireAssignmentDetail>(
+      `/api/v1/questionnaires/assignments/${id}/close`,
+      {},
+    );
+  }
+
+  deleteAssignment(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/v1/questionnaires/assignments/${id}`);
+  }
+
+  startRevision(assignmentId: string): Observable<QuestionnaireSubmissionSummary> {
+    return this.http.post<QuestionnaireSubmissionSummary>(
+      `/api/v1/questionnaires/assignments/${assignmentId}/start-revision`,
+      {},
     );
   }
 

@@ -4,6 +4,7 @@ export { EmployeeQuestionnairesPanelComponent } from './employee-questionnaires-
 export { QuestionnaireSnapshotSummaryComponent } from './questionnaire-snapshot-summary.component';
 export {
   buildQuestionnaireAssignmentLink,
+  buildQuestionnaireDirectoryLink,
   QUESTIONNAIRE_ASSIGNMENT_NAVIGATION,
 } from './navigation/questionnaire-navigation';
 export {

@@ -21,6 +21,33 @@ export async function supersedePendingForSubmission(
   return pending.length;
 }
 
+/**
+ * Close all pending proposals for an assignment (any submission revision).
+ * Used on cancel — reopen still uses supersedePendingForSubmission for one revision.
+ */
+export async function supersedePendingForAssignment(
+  manager: EntityManager,
+  assignmentId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const repo = manager.getRepository(QuestionnaireProfileProposal);
+  const pending = await repo
+    .createQueryBuilder('p')
+    .innerJoin('p.submission', 's')
+    .innerJoin('s.response', 'r')
+    .where('r.assignmentId = :assignmentId', { assignmentId })
+    .andWhere('p.status = :status', { status: 'pending' })
+    .getMany();
+  if (!pending.length) return 0;
+  for (const p of pending) {
+    p.status = 'superseded';
+    p.reviewedByUserId = null;
+    p.reviewedAt = now;
+  }
+  await repo.save(pending);
+  return pending.length;
+}
+
 /** Supersede other pending rows for the same employee + section.field. */
 export async function supersedePendingForSameField(
   manager: EntityManager,

@@ -30,6 +30,7 @@ import { EmployeeDocuments1730000009000 } from './migrations/1730000009000-Emplo
 import { RepairPersonalContactsBackfill1730000010000 } from './migrations/1730000010000-RepairPersonalContactsBackfill';
 import { QuestionnairesModule1730000011000 } from './migrations/1730000011000-QuestionnairesModule';
 import { QuestionnaireProposalSuperseded1730000012000 } from './migrations/1730000012000-QuestionnaireProposalSuperseded';
+import { QuestionnaireClosedAndUpdatedAt1730000013000 } from './migrations/1730000013000-QuestionnaireClosedAndUpdatedAt';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -70,6 +71,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       RepairPersonalContactsBackfill1730000010000,
       QuestionnairesModule1730000011000,
       QuestionnaireProposalSuperseded1730000012000,
+      QuestionnaireClosedAndUpdatedAt1730000013000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

@@ -74,6 +74,8 @@ export class QuestionnaireDraftStore {
   readonly submitState = signal<SubmitState>('idle');
   readonly submitError = signal<string | null>(null);
   readonly schemaError = signal<string | null>(null);
+  /** Explicit user opt-in to edit; open/view starts without this. */
+  readonly editSessionActive = signal(false);
 
   readonly uiMode = computed<UiMode>(() => {
     const state = this.loadState();
@@ -82,14 +84,50 @@ export class QuestionnaireDraftStore {
     const detail = this.assignment();
     if (!detail) return 'not_found';
     const status = detail.status;
-    if (status === 'cancelled') return 'unavailable';
-    if (detail.capabilities.canEditDraft || detail.capabilities.canSubmit) {
+    const canMutateDraft =
+      detail.capabilities.canEditDraft || detail.capabilities.canSubmit;
+
+    if (canMutateDraft) {
       if (status === 'submitted' || status === 'reviewed') return 'read_only';
-      return 'editable';
+      return this.editSessionActive() ? 'editable' : 'read_only';
     }
-    // Viewer (e.g. HR): keep read-only for submitted/reviewed/reopened, not "owner only".
+    if (status === 'cancelled' || status === 'closed') return 'unavailable';
     if (status === 'assigned' || status === 'in_progress') return 'owner_only';
     return 'read_only';
+  });
+
+  readonly isAdminDetachedEdit = computed(
+    () =>
+      this.assignment()?.status === 'cancelled' &&
+      this.uiMode() === 'editable',
+  );
+
+  /** Show top-right «Редагувати» when viewing and edit is allowed / startable. */
+  readonly canShowEditButton = computed(() => {
+    if (this.loadState() !== 'ready') return false;
+    if (this.editSessionActive()) return false;
+    const detail = this.assignment();
+    if (!detail) return false;
+    if (detail.status === 'closed') return false;
+    if (detail.status === 'cancelled' && !detail.capabilities.canEditDraft) {
+      return false;
+    }
+    return (
+      detail.capabilities.canEditDraft ||
+      detail.capabilities.canReopenSelf ||
+      detail.capabilities.canStartRevision
+    );
+  });
+
+  readonly canShowRequestChangesButton = computed(() => {
+    if (this.loadState() !== 'ready') return false;
+    if (this.editSessionActive()) return false;
+    const detail = this.assignment();
+    if (!detail) return false;
+    if (detail.status !== 'submitted' && detail.status !== 'reviewed') {
+      return false;
+    }
+    return !!detail.capabilities.canRequestChanges;
   });
 
   readonly editable = computed(() => this.uiMode() === 'editable');
@@ -139,6 +177,57 @@ export class QuestionnaireDraftStore {
     this.submitState.set('idle');
     this.submitError.set(null);
     this.schemaError.set(null);
+    this.editSessionActive.set(false);
+  }
+
+  beginEditSession(): void {
+    this.editSessionActive.set(true);
+    this.materializeMirrorIntoProposalAnswers();
+  }
+
+  /**
+   * Copy currently displayed mirror defaults into draft for proposal-mapped fields
+   * that the user has not edited yet — so submit snapshot includes confirmed values
+   * and diffs vs profile are computed correctly.
+   */
+  materializeMirrorIntoProposalAnswers(): void {
+    if (!this.editSessionActive() || this.conflict()) return;
+
+    const schema = {
+      code: 'x',
+      version: 1,
+      title: '',
+      steps: this.schemaSteps(),
+    };
+    const byKey = fieldsByKey(schema);
+    const mirror = this.profileMirror();
+    const prev = this.answers();
+    const next = { ...prev };
+    let changed = false;
+
+    for (const field of byKey.values()) {
+      if (!field.createsProfileProposal || !field.proposalMapping) continue;
+      if (Object.prototype.hasOwnProperty.call(next, field.key)) continue;
+
+      const display = resolveQuestionnaireFieldDisplay(field, {
+        answers: next,
+        profileMirror: mirror,
+        fieldsByKey: byKey,
+      });
+      if (display.source !== 'profile_mirror') continue;
+      const value = display.value;
+      if (value === null || value === undefined || value === '') continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+
+      next[field.key] = value;
+      changed = true;
+    }
+
+    if (!changed) return;
+    this.answers.set(next);
+    if (this.saveState() !== 'saving') {
+      this.saveState.set('dirty');
+    }
   }
 
   async load(assignmentId: string, requestedStepKey?: string | null): Promise<void> {

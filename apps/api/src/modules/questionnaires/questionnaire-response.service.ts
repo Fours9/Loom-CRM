@@ -1,17 +1,19 @@
 import {
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
-import { Permission } from '../../platform/permissions/permission.names';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
+import {
+  computeDetailCapabilities,
+  requireCanEditDraft,
+} from './assignments/questionnaire-assignment-access';
 
 @Injectable()
 export class QuestionnaireResponseService {
@@ -47,19 +49,16 @@ export class QuestionnaireResponseService {
     if (!assignment) throw new NotFoundException('Assignment not found');
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
-    if (!this.access.isOwner(actor, employee)) {
-      throw new ForbiddenException('Only the employee may edit the draft');
-    }
-    if (
-      !this.permissions.has(actor.role, Permission.QuestionnairesCompleteSelf)
-    ) {
-      throw new ForbiddenException('Cannot complete questionnaire');
-    }
+    await this.access.requireCanView(actor, employee);
 
-    const editable = new Set(['assigned', 'in_progress', 'changes_requested']);
-    if (!editable.has(assignment.status)) {
-      throw new ForbiddenException('Assignment is not editable');
-    }
+    const caps = computeDetailCapabilities({
+      actor,
+      employee,
+      status: assignment.status,
+      permissions: this.permissions,
+      access: this.access,
+    });
+    requireCanEditDraft(caps);
 
     const response = await this.ensureResponse(assignmentId);
     if (response.revision !== input.revision) {
@@ -73,6 +72,7 @@ export class QuestionnaireResponseService {
     response.revision = response.revision + 1;
     const saved = await this.responses.save(response);
 
+    // Do not flip cancelled → in_progress (Admin on-behalf keeps detached).
     if (assignment.status === 'assigned') {
       assignment.status = 'in_progress';
       assignment.startedAt = assignment.startedAt ?? new Date();

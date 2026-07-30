@@ -22,6 +22,12 @@ import {
   toSubmissionSummaryDto,
 } from './reopen/questionnaire-reopen-transition';
 import { supersedePendingForSubmission } from './proposals/questionnaire-proposal-lifecycle';
+import {
+  canCompleteOnBehalf,
+  computeDetailCapabilities,
+  requireCanSubmit,
+} from './assignments/questionnaire-assignment-access';
+import { isOwnerEditableStatus } from './assignments/questionnaire-assignment-transitions';
 
 @Injectable()
 export class QuestionnaireSubmissionService {
@@ -47,21 +53,29 @@ export class QuestionnaireSubmissionService {
     if (!assignment) throw new NotFoundException('Assignment not found');
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
-    if (!this.access.isOwner(actor, employee)) {
-      throw new ForbiddenException('Only the employee may submit');
-    }
-    if (
-      !this.permissions.has(actor.role, Permission.QuestionnairesCompleteSelf)
-    ) {
-      throw new ForbiddenException('Cannot submit questionnaire');
-    }
+    await this.access.requireCanView(actor, employee);
 
-    const allowed = new Set(['assigned', 'in_progress', 'changes_requested']);
-    if (!allowed.has(assignment.status)) {
+    const caps = computeDetailCapabilities({
+      actor,
+      employee,
+      status: assignment.status,
+      permissions: this.permissions,
+      access: this.access,
+    });
+    requireCanSubmit(caps);
+
+    if (
+      !isOwnerEditableStatus(assignment.status) &&
+      assignment.status !== 'cancelled'
+    ) {
       throw new BadRequestException(
         `Cannot submit from status ${assignment.status}`,
       );
     }
+
+    const preserveCancelled =
+      assignment.status === 'cancelled' &&
+      canCompleteOnBehalf(this.permissions, actor);
 
     const response = await this.responseService.ensureResponse(assignmentId);
     const schema = assignment.templateVersion
@@ -92,8 +106,9 @@ export class QuestionnaireSubmissionService {
         }),
       );
 
-      assignment.status = 'submitted';
+      assignment.status = preserveCancelled ? 'cancelled' : 'submitted';
       assignment.submittedAt = now;
+      assignment.reviewedAt = null;
       if (!assignment.startedAt) assignment.startedAt = now;
       await assignmentRepo.save(assignment);
 
@@ -145,25 +160,59 @@ export class QuestionnaireSubmissionService {
    * Does not mutate latest submission review metadata.
    */
   async reopenSelf(actor: User, assignmentId: string) {
-    if (
-      !this.permissions.has(actor.role, Permission.QuestionnairesCompleteSelf)
-    ) {
-      throw new ForbiddenException('Cannot reopen questionnaire');
-    }
-
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
-    if (!this.access.isOwner(actor, employee)) {
-      throw new ForbiddenException('Only the employee may reopen');
+    const caps = computeDetailCapabilities({
+      actor,
+      employee,
+      status: assignment.status,
+      permissions: this.permissions,
+      access: this.access,
+    });
+    if (!caps.canReopenSelf) {
+      throw new ForbiddenException('Cannot reopen questionnaire');
     }
 
     const { submission } = await this.dataSource.transaction(async (manager) =>
       applyReopenTransition(manager, assignment, {
         kind: 'owner_reopen',
+        actorUserId: actor.id,
+      }),
+    );
+
+    return toSubmissionSummaryDto(submission);
+  }
+
+  /**
+   * Admin (CompleteAny) starts a shared revision — also opens owner edit.
+   */
+  async startRevision(actor: User, assignmentId: string) {
+    const assignment = await this.assignments.findOne({
+      where: { id: assignmentId },
+    });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+
+    const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
+    await this.access.requireCanView(actor, employee);
+
+    const caps = computeDetailCapabilities({
+      actor,
+      employee,
+      status: assignment.status,
+      permissions: this.permissions,
+      access: this.access,
+    });
+    if (!caps.canStartRevision) {
+      throw new ForbiddenException('Cannot start questionnaire revision');
+    }
+
+    const { submission } = await this.dataSource.transaction(async (manager) =>
+      applyReopenTransition(manager, assignment, {
+        kind: 'admin_start_revision',
         actorUserId: actor.id,
       }),
     );

@@ -21,6 +21,7 @@ export const Permission = {
   QuestionnairesView: 'questionnaires.view',
   QuestionnairesAssign: 'questionnaires.assign',
   QuestionnairesCompleteSelf: 'questionnaires.complete.self',
+  QuestionnairesCompleteAny: 'questionnaires.complete.any',
   QuestionnairesReview: 'questionnaires.review',
   QuestionnairesApplyProfileChanges: 'questionnaires.apply_profile_changes',
   SettingsManage: 'settings.manage',
