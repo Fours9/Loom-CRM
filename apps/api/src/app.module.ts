@@ -17,6 +17,7 @@ import { OrganizationModule } from './organization/organization.module';
 import { AbsencesModule } from './modules/absences/absences.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { QuestionnairesModule } from './modules/questionnaires/questionnaires.module';
+import { ApplicationStartupModule } from './application-startup/application-startup.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { QuestionnairesModule } from './modules/questionnaires/questionnaires.mo
     DocumentsModule,
     QuestionnairesModule,
     ApplicationBootstrapModule,
+    ApplicationStartupModule,
     HealthModule,
   ],
 })

@@ -9,6 +9,17 @@ Accepted.
 - Foundation (templates, assignments, draft revision, submissions, proposals): shipped
 - Assignment UI (People «Анкети» panel + snapshot summary): shipped
 - Fill wizard (PR-4 schema-driven `/questionnaires/:id`): shipped
+- Schema UX (family / celebration_dates, visibleWhen, layout groups, from/to, multi-language): shipped
+- `@loom/questionnaire-schema` pure helpers + submit visible-answer projection: shipped
+- Application startup composition root (single `OnModuleInit`): shipped
+
+## Versioning (pre-production)
+
+`employee-360` **v1** may be refreshed in-place from checked-in seed **only while there are no real assignments that must be preserved** (pre-production). Use [`docs/dev/questionnaire-test-reset.md`](../dev/questionnaire-test-reset.md) before breaking schema changes.
+
+After the first **production** assignment, published template versions are **immutable**. Schema drift in production fails startup; publish **version 2+** instead of overwriting v1.
+
+Non-production seed may overwrite v1 `schema_json` only when assignment count for that version is **0**; if assignments > 0 and seed differs → throw (reset or v2).
 
 ## Context
 

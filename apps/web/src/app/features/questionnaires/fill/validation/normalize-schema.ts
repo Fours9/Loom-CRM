@@ -2,6 +2,7 @@ import type {
   QuestionnaireSchemaJson,
   QuestionnaireSchemaStep,
 } from '@loom/contracts-questionnaires';
+import { validateQuestionnaireSchema } from '@loom/questionnaire-schema';
 import {
   QUESTIONNAIRE_INTRO_STEP,
   QUESTIONNAIRE_REVIEW_STEP,
@@ -12,12 +13,17 @@ export type SchemaNormalizeResult =
   | { ok: true; steps: QuestionnaireSchemaStep[] }
   | { ok: false; error: string };
 
-/** Validate uniqueness / reserved keys; drop empty-field steps (legacy submit). */
+/** Validate uniqueness / reserved / visibleWhen / default graphs; drop empty steps. */
 export function normalizeQuestionnaireSchemaSteps(
   schema: QuestionnaireSchemaJson | null | undefined,
 ): SchemaNormalizeResult {
   if (!schema?.steps) {
     return { ok: true, steps: [] };
+  }
+
+  const validation = validateQuestionnaireSchema(schema);
+  if (!validation.ok) {
+    return { ok: false, error: validation.errors[0] ?? 'Invalid schema' };
   }
 
   const seen = new Set<string>();

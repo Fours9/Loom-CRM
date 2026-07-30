@@ -123,6 +123,23 @@ export function validateFieldValue(
           };
         }
       }
+      const from = rowObj['from'];
+      const to = rowObj['to'];
+      if (
+        typeof from === 'string' &&
+        from &&
+        typeof to === 'string' &&
+        to &&
+        isIsoDateOnly(from) &&
+        isIsoDateOnly(to) &&
+        to < from
+      ) {
+        return {
+          fieldKey: `${field.key}[${i}].to`,
+          message: `${field.label} #${i + 1}: дата «До» має бути не раніше «Від»`,
+          severity: 'error',
+        };
+      }
     }
     return null;
   }

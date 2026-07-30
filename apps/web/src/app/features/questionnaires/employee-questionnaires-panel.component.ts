@@ -6,7 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import type {
@@ -29,7 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
 @Component({
   selector: 'loom-employee-questionnaires-panel',
   standalone: true,
-  imports: [RouterLink, QuestionnaireSnapshotSummaryComponent],
+  imports: [QuestionnaireSnapshotSummaryComponent],
   template: `
     <div class="panel">
       <div class="toolbar">
@@ -61,14 +61,19 @@ const STATUS_LABELS: Record<string, string> = {
         <ul class="list">
           @for (item of items(); track item.id) {
             <li class="card">
-              <div class="card-main">
-                <a
-                  [routerLink]="assignmentLink(item.id).routerLink"
-                  [queryParams]="assignmentLink(item.id).queryParams"
-                  >{{ item.templateTitle }}</a
+              <div class="card-row">
+                <div class="card-main">
+                  <strong>{{ item.templateTitle }}</strong>
+                  <span class="badge">{{ statusLabel(item.status) }}</span>
+                  <span class="pct">{{ item.completionPercent }}%</span>
+                </div>
+                <button
+                  type="button"
+                  class="btn view"
+                  (click)="openAssignment(item.id)"
                 >
-                <span class="badge">{{ statusLabel(item.status) }}</span>
-                <span class="pct">{{ item.completionPercent }}%</span>
+                  Переглянути
+                </button>
               </div>
               <div class="meta">
                 @if (item.dueAt) {
@@ -147,11 +152,20 @@ const STATUS_LABELS: Record<string, string> = {
         display: grid;
         gap: 0.4rem;
       }
+      .card-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+        justify-content: space-between;
+      }
       .card-main {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
         align-items: center;
+        min-width: 0;
+        flex: 1 1 auto;
       }
       .badge {
         border: 1px solid var(--pw-border);
@@ -160,9 +174,12 @@ const STATUS_LABELS: Record<string, string> = {
         font-size: 0.8rem;
       }
       .pct {
-        margin-left: auto;
         font-weight: 600;
         color: var(--pw-accent);
+      }
+      .btn.view {
+        flex: 0 0 auto;
+        white-space: nowrap;
       }
       .meta {
         display: flex;
@@ -212,6 +229,7 @@ const STATUS_LABELS: Record<string, string> = {
 })
 export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   private readonly api = inject(QuestionnairesApiService);
+  private readonly router = inject(Router);
 
   @Input({ required: true }) employeeId!: string;
 
@@ -234,8 +252,9 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
     return STATUS_LABELS[status] ?? status;
   }
 
-  assignmentLink(assignmentId: string) {
-    return buildQuestionnaireAssignmentLink({ assignmentId });
+  openAssignment(assignmentId: string): void {
+    const link = buildQuestionnaireAssignmentLink({ assignmentId });
+    void this.router.navigateByUrl(link.routerLink);
   }
 
   formatDate(iso: string): string {

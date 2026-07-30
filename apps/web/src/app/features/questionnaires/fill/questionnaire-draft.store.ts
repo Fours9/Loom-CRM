@@ -19,11 +19,16 @@ import {
   computeQuestionnaireProgress,
 } from './progress/questionnaire-progress';
 import {
-  areStepRequiredFieldsValid,
   collectStepIssues,
-  displayFieldValue,
+  isRequiredFieldValid,
   type FieldValidationIssue,
 } from './validation/questionnaire-validation';
+import { resolveQuestionnaireFieldDisplay } from './display/questionnaire-display-value';
+import {
+  areStepVisibleRequiredValid,
+  fieldsByKey,
+  isQuestionnaireFieldVisible,
+} from '@loom/questionnaire-schema';
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'not_found' | 'error';
 export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
@@ -275,10 +280,8 @@ export class QuestionnaireDraftStore {
     }
     const step = this.schemaSteps().find((s) => s.key === key);
     if (!step) return true;
-    return areStepRequiredFieldsValid(
-      step.fields,
-      this.answers(),
-      this.profileMirror(),
+    return areStepVisibleRequiredValid(step, this.answers(), (f, v) =>
+      isRequiredFieldValid(f, v),
     );
   }
 
@@ -287,7 +290,9 @@ export class QuestionnaireDraftStore {
     const step = this.schemaSteps().find((s) => s.key === key);
     if (!step) return [];
     return collectStepIssues(
-      step.fields,
+      step.fields.filter((f) =>
+        isQuestionnaireFieldVisible(f, this.answers()),
+      ),
       this.answers(),
       this.profileMirror(),
     );
@@ -295,10 +300,8 @@ export class QuestionnaireDraftStore {
 
   allRequiredValid(): boolean {
     return this.schemaSteps().every((step) =>
-      areStepRequiredFieldsValid(
-        step.fields,
-        this.answers(),
-        this.profileMirror(),
+      areStepVisibleRequiredValid(step, this.answers(), (f, v) =>
+        isRequiredFieldValid(f, v),
       ),
     );
   }
@@ -310,16 +313,23 @@ export class QuestionnaireDraftStore {
   }
 
   displayValue(fieldKey: string): unknown {
-    const steps = this.schemaSteps();
-    for (const step of steps) {
-      const field = step.fields.find((f) => f.key === fieldKey);
-      if (field) {
-        return displayFieldValue(this.answers(), this.profileMirror(), field);
-      }
+    const byKey = fieldsByKey({
+      code: 'x',
+      version: 1,
+      title: '',
+      steps: this.schemaSteps(),
+    });
+    const field = byKey.get(fieldKey);
+    if (!field) {
+      return hasOwn(this.answers(), fieldKey)
+        ? this.answers()[fieldKey]
+        : undefined;
     }
-    return hasOwn(this.answers(), fieldKey)
-      ? this.answers()[fieldKey]
-      : undefined;
+    return resolveQuestionnaireFieldDisplay(field, {
+      answers: this.answers(),
+      profileMirror: this.profileMirror(),
+      fieldsByKey: byKey,
+    }).value;
   }
 
   snapshotAnswers(): Record<string, unknown> {

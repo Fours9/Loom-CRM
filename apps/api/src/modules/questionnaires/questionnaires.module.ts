@@ -43,6 +43,7 @@ import { QuestionnairesController } from './questionnaires.controller';
   exports: [
     QuestionnaireAssignmentService,
     QuestionnaireProposalService,
+    QuestionnaireSeedService,
   ],
 })
 export class QuestionnairesModule {}

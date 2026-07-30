@@ -30,6 +30,21 @@ export const QUESTIONNAIRE_REVIEW_STATUSES = [
 export type QuestionnaireReviewStatus =
   (typeof QUESTIONNAIRE_REVIEW_STATUSES)[number];
 
+export type QuestionnaireConditionValue = string | number | boolean | null;
+
+/** Strict union: equals XOR includes (never both). */
+export type QuestionnaireVisibleWhen =
+  | {
+      answerKey: string;
+      equals: QuestionnaireConditionValue;
+      includes?: never;
+    }
+  | {
+      answerKey: string;
+      includes: QuestionnaireConditionValue;
+      equals?: never;
+    };
+
 export type QuestionnaireSchemaField = {
   key: string;
   label: string;
@@ -46,6 +61,12 @@ export type QuestionnaireSchemaField = {
   children?: QuestionnaireSchemaField[];
   createsProfileProposal?: boolean;
   proposalMapping?: { section: string; field: string };
+  visibleWhen?: QuestionnaireVisibleWhen;
+  uiGroup?: string;
+  uiGroupLabel?: string;
+  uiLayout?: 'row' | 'stack';
+  /** Display-only default from another answer key (not written to draft). */
+  defaultFromAnswerKey?: string;
 };
 
 export type QuestionnaireSchemaStep = {

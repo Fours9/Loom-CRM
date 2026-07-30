@@ -16,15 +16,16 @@ import { isSchemaStepReachable } from '../navigation/resolve-active-step';
 import {
   reviewRowsForStep,
   resolveStepUiState,
+  visibleFieldsForStep,
 } from './progress/questionnaire-progress';
 import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireFieldHostComponent } from './fields/questionnaire-field-host.component';
-import {
-  displayFieldValue,
-  validateFieldValue,
-} from './validation/questionnaire-validation';
+import { validateFieldValue } from './validation/questionnaire-validation';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
+import { fieldsByKey, listInactiveOwnAnswers } from '@loom/questionnaire-schema';
+import { resolveQuestionnaireFieldDisplay } from './display/questionnaire-display-value';
+import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
 
 @Component({
   selector: 'loom-questionnaire-wizard-shell',
@@ -150,6 +151,16 @@ import { QuestionnairesApiService } from '../core/questionnaires-api.service';
                   </ul>
                 </div>
               }
+              @if (inactiveWarnings().length) {
+                <div class="warnings" role="status">
+                  <p>Збережені неактивні відповіді — не будуть надіслані:</p>
+                  <ul>
+                    @for (w of inactiveWarnings(); track w) {
+                      <li>{{ w }}</li>
+                    }
+                  </ul>
+                </div>
+              }
               @for (step of store.schemaSteps(); track step.key) {
                 <article class="review-block">
                   <h3>{{ step.label }}</h3>
@@ -158,9 +169,19 @@ import { QuestionnairesApiService } from '../core/questionnaires-api.service';
                       row of reviewRows(step.key);
                       track row.fieldKey
                     ) {
-                      <div class="dl-row">
+                      <div class="dl-row" [class.inactive]="row.inactive">
                         <dt>{{ row.label }}</dt>
-                        <dd>{{ row.display }}</dd>
+                        <dd>
+                          {{ row.display }}
+                          @if (row.sourceLabel) {
+                            <span class="src">{{ row.sourceLabel }}</span>
+                          }
+                          @if (row.inactive) {
+                            <span class="src warn-src"
+                              >не буде надіслано</span
+                            >
+                          }
+                        </dd>
                       </div>
                     }
                   </dl>
@@ -180,14 +201,36 @@ import { QuestionnairesApiService } from '../core/questionnaires-api.service';
           } @else {
             @if (activeSchemaStep(); as step) {
               <div class="fields">
-                @for (field of step.fields; track field.key) {
-                  <loom-questionnaire-field-host
-                    [field]="field"
-                    [value]="fieldValue(field.key)"
-                    [disabled]="!store.editable() || !!store.conflict()"
-                    [error]="fieldError(field.key)"
-                    (valueChange)="onFieldChange(field.key, $event)"
-                  />
+                @for (block of fieldBlocks(); track block.track) {
+                  @if (block.kind === 'group') {
+                    <fieldset class="field-group">
+                      @if (block.label) {
+                        <legend>{{ block.label }}</legend>
+                      }
+                      <div
+                        class="group-body"
+                        [class.row]="block.layout === 'row'"
+                      >
+                        @for (field of block.fields; track field.key) {
+                          <loom-questionnaire-field-host
+                            [field]="field"
+                            [value]="fieldValue(field.key)"
+                            [disabled]="!store.editable() || !!store.conflict()"
+                            [error]="fieldError(field.key)"
+                            (valueChange)="onFieldChange(field.key, $event)"
+                          />
+                        }
+                      </div>
+                    </fieldset>
+                  } @else {
+                    <loom-questionnaire-field-host
+                      [field]="block.field"
+                      [value]="fieldValue(block.field.key)"
+                      [disabled]="!store.editable() || !!store.conflict()"
+                      [error]="fieldError(block.field.key)"
+                      (valueChange)="onFieldChange(block.field.key, $event)"
+                    />
+                  }
                 }
                 @if (blockingErrors().length) {
                   <div class="errors" role="alert">
@@ -424,6 +467,32 @@ import { QuestionnairesApiService } from '../core/questionnaires-api.service';
         grid-template-columns: minmax(8rem, 40%) 1fr;
         gap: 0.5rem;
       }
+      .dl-row.inactive {
+        opacity: 0.75;
+      }
+      .src {
+        display: block;
+        color: var(--pw-muted);
+        font-size: 0.8rem;
+      }
+      .warn-src {
+        color: #b42318;
+      }
+      .field-group {
+        border: 1px solid var(--pw-border);
+        border-radius: 10px;
+        padding: 0.75rem;
+        margin: 0;
+        display: grid;
+        gap: 0.75rem;
+      }
+      .group-body {
+        display: grid;
+        gap: 0.75rem;
+      }
+      .group-body.row {
+        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+      }
       dt {
         color: var(--pw-muted);
       }
@@ -514,11 +583,28 @@ export class QuestionnaireWizardShellComponent {
     this.store.allIssues().filter((i) => i.severity === 'warning'),
   );
 
+  readonly inactiveWarnings = computed(() => {
+    const schema = {
+      code: 'x',
+      version: 1,
+      title: '',
+      steps: this.store.schemaSteps(),
+    };
+    const keys = listInactiveOwnAnswers(schema, this.store.answers());
+    const byKey = fieldsByKey(schema);
+    return keys.map((k) => byKey.get(k)?.label ?? k);
+  });
+
   readonly blockingErrors = computed(() =>
-    this.store
-      .currentStepIssues()
-      .filter((i) => i.severity === 'error'),
+    this.store.currentStepIssues().filter((i) => i.severity === 'error'),
   );
+
+  readonly fieldBlocks = computed(() => {
+    const step = this.activeSchemaStep();
+    if (!step) return [] as FieldBlock[];
+    const visible = visibleFieldsForStep(step, this.store.answers());
+    return buildFieldBlocks(visible);
+  });
 
   saveStatusText(): string {
     if (this.store.autosaveBlocked()) return 'Збереження призупинено (конфлікт)';
@@ -537,25 +623,35 @@ export class QuestionnaireWizardShellComponent {
   }
 
   fieldValue(fieldKey: string): unknown {
-    const step = this.activeSchemaStep();
-    const field = step?.fields.find((f) => f.key === fieldKey);
+    const byKey = fieldsByKey({
+      code: 'x',
+      version: 1,
+      title: '',
+      steps: this.store.schemaSteps(),
+    });
+    const field = byKey.get(fieldKey);
     if (!field) return undefined;
-    return displayFieldValue(
-      this.store.answers(),
-      this.store.profileMirror(),
-      field,
-    );
+    return resolveQuestionnaireFieldDisplay(field, {
+      answers: this.store.answers(),
+      profileMirror: this.store.profileMirror(),
+      fieldsByKey: byKey,
+    }).value;
   }
 
   fieldError(fieldKey: string): string | null {
-    const step = this.activeSchemaStep();
-    const field = step?.fields.find((f) => f.key === fieldKey);
+    const byKey = fieldsByKey({
+      code: 'x',
+      version: 1,
+      title: '',
+      steps: this.store.schemaSteps(),
+    });
+    const field = byKey.get(fieldKey);
     if (!field) return null;
-    const value = displayFieldValue(
-      this.store.answers(),
-      this.store.profileMirror(),
-      field,
-    );
+    const value = resolveQuestionnaireFieldDisplay(field, {
+      answers: this.store.answers(),
+      profileMirror: this.store.profileMirror(),
+      fieldsByKey: byKey,
+    }).value;
     const issue = validateFieldValue(field, value);
     return issue?.severity === 'error' ? issue.message : null;
   }
@@ -596,6 +692,7 @@ export class QuestionnaireWizardShellComponent {
       step,
       this.store.answers(),
       this.store.profileMirror(),
+      this.store.schemaSteps(),
     );
   }
 
@@ -701,4 +798,45 @@ export class QuestionnaireWizardShellComponent {
     this.store.setActiveStep(stepKey);
     queueMicrotask(() => this.stepHeading?.nativeElement.focus());
   }
+}
+
+type FieldBlock =
+  | {
+      kind: 'group';
+      track: string;
+      label?: string;
+      layout?: 'row' | 'stack';
+      fields: QuestionnaireSchemaField[];
+    }
+  | {
+      kind: 'single';
+      track: string;
+      field: QuestionnaireSchemaField;
+    };
+
+function buildFieldBlocks(fields: QuestionnaireSchemaField[]): FieldBlock[] {
+  const blocks: FieldBlock[] = [];
+  let i = 0;
+  while (i < fields.length) {
+    const field = fields[i]!;
+    if (!field.uiGroup) {
+      blocks.push({ kind: 'single', track: field.key, field });
+      i += 1;
+      continue;
+    }
+    const groupKey = field.uiGroup;
+    const groupFields: QuestionnaireSchemaField[] = [];
+    while (i < fields.length && fields[i]!.uiGroup === groupKey) {
+      groupFields.push(fields[i]!);
+      i += 1;
+    }
+    blocks.push({
+      kind: 'group',
+      track: `g:${groupKey}`,
+      label: groupFields[0]?.uiGroupLabel,
+      layout: groupFields[0]?.uiLayout,
+      fields: groupFields,
+    });
+  }
+  return blocks;
 }

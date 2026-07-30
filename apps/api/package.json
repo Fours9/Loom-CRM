@@ -3,13 +3,13 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "node ./scripts/dev.mjs",
-    "build": "tsc -p tsconfig.build.json",
+    "dev": "pnpm --filter @loom/questionnaire-schema build && node ./scripts/dev.mjs",
+    "build": "pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
-    "start:nest": "tsc -p tsconfig.build.json && nest start --watch",
+    "start:nest": "pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json && nest start --watch",
     "lint": "eslint \"{src,test}/**/*.ts\"",
-    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "typecheck": "pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json --noEmit",
     "test": "jest",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/platform/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/platform/database/data-source.ts",
@@ -36,7 +36,9 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.27",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "@loom/contracts-questionnaires": "workspace:*",
+    "@loom/questionnaire-schema": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

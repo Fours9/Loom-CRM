@@ -2,42 +2,18 @@
  * employee-360 v1 typed seed — manually synced from
  * docs/product/questionnaire-360-field-catalog.md (in_mvp fields only).
  * Runtime SoT after publish: questionnaire_template_versions.schema_json.
+ *
+ * Pre-production: v1 schema may be refreshed in-place when assignments = 0.
+ * After first production assignment, publish a new version instead.
  */
 
-export type SeedField = {
-  key: string;
-  label: string;
-  valueType: string;
-  helpText?: string;
-  requiredPolicy: string;
-  uiControl?: 'radio' | 'checkbox';
-  min?: number;
-  max?: number;
-  minItems?: number;
-  maxItems?: number;
-  options?: Array<{ value: string; label: string }>;
-  children?: SeedField[];
-  createsProfileProposal?: boolean;
-  proposalMapping?: { section: string; field: string };
-};
-
-export type SeedStep = {
-  key: string;
-  label: string;
-  fields: SeedField[];
-};
-
-export type Employee360V1Schema = {
-  code: 'employee-360';
-  version: 1;
-  title: string;
-  steps: SeedStep[];
-};
+import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
+import { completionPercentVisible } from '@loom/questionnaire-schema';
 
 export const EMPLOYEE_360_TEMPLATE_CODE = 'employee-360';
 export const EMPLOYEE_360_TEMPLATE_TITLE = 'Анкета 360° співробітника';
 
-export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
+export const EMPLOYEE_360_V1_SCHEMA = {
   code: 'employee-360',
   version: 1,
   title: EMPLOYEE_360_TEMPLATE_TITLE,
@@ -51,6 +27,8 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Прізвище',
           valueType: 'text',
           requiredPolicy: 'recommended',
+          uiGroup: 'identity_name',
+          uiLayout: 'row',
           createsProfileProposal: true,
           proposalMapping: { section: 'overview', field: 'lastName' },
         },
@@ -59,6 +37,8 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: "Ім'я",
           valueType: 'text',
           requiredPolicy: 'recommended',
+          uiGroup: 'identity_name',
+          uiLayout: 'row',
           createsProfileProposal: true,
           proposalMapping: { section: 'overview', field: 'firstName' },
         },
@@ -67,8 +47,19 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'По батькові',
           valueType: 'text',
           requiredPolicy: 'voluntary',
+          uiGroup: 'identity_name',
+          uiLayout: 'row',
           createsProfileProposal: true,
           proposalMapping: { section: 'overview', field: 'middleName' },
+        },
+        {
+          key: 'personal.preferred_name',
+          label: "Ім'я для звернення",
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+          uiGroup: 'identity_preferred',
+          createsProfileProposal: true,
+          proposalMapping: { section: 'header', field: 'preferredName' },
         },
         {
           key: 'personal.birth_date',
@@ -91,6 +82,8 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Основний телефон',
           valueType: 'text',
           requiredPolicy: 'recommended',
+          uiGroup: 'contacts',
+          uiGroupLabel: 'Контакти',
           createsProfileProposal: true,
           proposalMapping: { section: 'contacts', field: 'personal_phone' },
         },
@@ -99,6 +92,8 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Додатковий телефон',
           valueType: 'text',
           requiredPolicy: 'voluntary',
+          uiGroup: 'contacts',
+          uiGroupLabel: 'Контакти',
           createsProfileProposal: true,
           proposalMapping: {
             section: 'contacts',
@@ -110,6 +105,8 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Особиста email',
           valueType: 'text',
           requiredPolicy: 'recommended',
+          uiGroup: 'contacts',
+          uiGroupLabel: 'Контакти',
           createsProfileProposal: true,
           proposalMapping: { section: 'contacts', field: 'personal_email' },
         },
@@ -118,13 +115,15 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Telegram',
           valueType: 'text',
           requiredPolicy: 'voluntary',
+          uiGroup: 'contacts',
+          uiGroupLabel: 'Контакти',
           createsProfileProposal: true,
           proposalMapping: { section: 'contacts', field: 'personal_telegram' },
         },
         {
           key: 'personal.preferred_language',
           label: 'Бажана мова',
-          valueType: 'single_choice',
+          valueType: 'multi_choice',
           requiredPolicy: 'voluntary',
           options: [
             { value: 'uk', label: 'Українська' },
@@ -139,22 +138,16 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Інша мова',
           valueType: 'text',
           requiredPolicy: 'voluntary',
-          createsProfileProposal: true,
-          proposalMapping: { section: 'personal', field: 'preferredLanguage' },
-        },
-        {
-          key: 'personal.preferred_name',
-          label: "Ім'я для звернення",
-          valueType: 'text',
-          requiredPolicy: 'voluntary',
-          createsProfileProposal: true,
-          proposalMapping: { section: 'header', field: 'preferredName' },
+          visibleWhen: {
+            answerKey: 'personal.preferred_language',
+            includes: 'other',
+          },
         },
       ],
     },
     {
       key: 'family',
-      label: "Сім'я та важливі дати",
+      label: 'Сімейний стан',
       fields: [
         {
           key: 'family.marital_status',
@@ -184,6 +177,7 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Діти',
           valueType: 'repeating_group',
           requiredPolicy: 'voluntary',
+          visibleWhen: { answerKey: 'family.has_children', equals: 'yes' },
           children: [
             { key: 'name', label: "Ім'я", valueType: 'text', requiredPolicy: 'voluntary' },
             {
@@ -193,6 +187,36 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
               requiredPolicy: 'voluntary',
             },
             { key: 'note', label: 'Нотатка', valueType: 'text', requiredPolicy: 'voluntary' },
+          ],
+        },
+        {
+          key: 'family.pets',
+          label: 'Домашні тварини',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+      ],
+    },
+    {
+      key: 'celebration_dates',
+      label: 'Святкові дати',
+      fields: [
+        {
+          key: 'celebration.birth_date',
+          label: 'День народження',
+          valueType: 'date',
+          requiredPolicy: 'voluntary',
+          defaultFromAnswerKey: 'personal.birth_date',
+        },
+        {
+          key: 'hobbies.birthday_greeting',
+          label: 'Вітати з Днем народження',
+          valueType: 'single_choice',
+          requiredPolicy: 'voluntary',
+          options: [
+            { value: 'public', label: 'Публічно' },
+            { value: 'hr_only', label: 'Лише HR' },
+            { value: 'none', label: 'Не вітати' },
           ],
         },
         {
@@ -206,10 +230,16 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           ],
         },
         {
-          key: 'family.pets',
-          label: 'Домашні тварини',
-          valueType: 'text',
+          key: 'hobbies.gift_format',
+          label: 'Формат подарунка',
+          valueType: 'multi_choice',
           requiredPolicy: 'voluntary',
+          options: [
+            { value: 'merch', label: 'Мерч' },
+            { value: 'certificate', label: 'Сертифікат' },
+            { value: 'experience', label: 'Досвід' },
+            { value: 'useful_item', label: 'Корисна річ' },
+          ],
         },
         {
           key: 'family.other_dates_note',
@@ -244,6 +274,7 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Кількість підлеглих',
           valueType: 'number',
           requiredPolicy: 'voluntary',
+          visibleWhen: { answerKey: 'experience.managed_people', equals: 'yes' },
         },
         {
           key: 'experience.prior_jobs',
@@ -253,7 +284,8 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           children: [
             { key: 'company', label: 'Компанія', valueType: 'text', requiredPolicy: 'voluntary' },
             { key: 'position', label: 'Посада', valueType: 'text', requiredPolicy: 'voluntary' },
-            { key: 'period', label: 'Період', valueType: 'text', requiredPolicy: 'voluntary' },
+            { key: 'from', label: 'Від', valueType: 'date', requiredPolicy: 'voluntary' },
+            { key: 'to', label: 'До', valueType: 'date', requiredPolicy: 'voluntary' },
             { key: 'results', label: 'Результати', valueType: 'text', requiredPolicy: 'voluntary' },
           ],
         },
@@ -302,7 +334,8 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
               valueType: 'text',
               requiredPolicy: 'voluntary',
             },
-            { key: 'years', label: 'Роки', valueType: 'text', requiredPolicy: 'voluntary' },
+            { key: 'from', label: 'Від', valueType: 'date', requiredPolicy: 'voluntary' },
+            { key: 'to', label: 'До', valueType: 'date', requiredPolicy: 'voluntary' },
             { key: 'degree', label: 'Ступінь', valueType: 'text', requiredPolicy: 'voluntary' },
           ],
         },
@@ -472,29 +505,7 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           label: 'Опис харчових особливостей',
           valueType: 'text',
           requiredPolicy: 'voluntary',
-        },
-        {
-          key: 'hobbies.gift_format',
-          label: 'Формат подарунка',
-          valueType: 'multi_choice',
-          requiredPolicy: 'voluntary',
-          options: [
-            { value: 'merch', label: 'Мерч' },
-            { value: 'certificate', label: 'Сертифікат' },
-            { value: 'experience', label: 'Досвід' },
-            { value: 'useful_item', label: 'Корисна річ' },
-          ],
-        },
-        {
-          key: 'hobbies.birthday_greeting',
-          label: 'Вітати з Днем народження',
-          valueType: 'single_choice',
-          requiredPolicy: 'voluntary',
-          options: [
-            { value: 'public', label: 'Публічно' },
-            { value: 'hr_only', label: 'Лише HR' },
-            { value: 'none', label: 'Не вітати' },
-          ],
+          visibleWhen: { answerKey: 'hobbies.food', equals: 'has_notes' },
         },
         {
           key: 'hobbies.corporate_events',
@@ -617,13 +628,6 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
           requiredPolicy: 'voluntary',
         },
         {
-          key: 'consents.birthday_greeting',
-          label: 'Згода на привітання з ДН',
-          valueType: 'boolean',
-          uiControl: 'checkbox',
-          requiredPolicy: 'voluntary',
-        },
-        {
           key: 'consents.hr_notifications',
           label: 'Згода на HR-повідомлення',
           valueType: 'boolean',
@@ -633,9 +637,23 @@ export const EMPLOYEE_360_V1_SCHEMA: Employee360V1Schema = {
       ],
     },
   ],
-};
+} as const satisfies QuestionnaireSchemaJson;
 
-/** Flat list of answerable field keys (top-level schema fields). */
+/** @deprecated use completionPercentVisible from @loom/questionnaire-schema */
+export function completionPercent(
+  answers: Record<string, unknown> | null | undefined,
+  schema: unknown,
+): number {
+  const s = schema as QuestionnaireSchemaJson;
+  const full: QuestionnaireSchemaJson = {
+    code: s?.code ?? 'runtime',
+    version: s?.version ?? 1,
+    title: s?.title ?? '',
+    steps: s?.steps ?? [],
+  };
+  return completionPercentVisible(full, answers ?? {});
+}
+
 export function listSchemaFieldKeys(
   schema: { steps: Array<{ fields: Array<{ key: string }> }> },
 ): string[] {
@@ -646,20 +664,4 @@ export function listSchemaFieldKeys(
     }
   }
   return keys;
-}
-
-export function completionPercent(
-  answers: Record<string, unknown> | null | undefined,
-  schema: { steps: Array<{ fields: Array<{ key: string }> }> },
-): number {
-  const keys = listSchemaFieldKeys(schema);
-  if (keys.length === 0) return 0;
-  const filled = keys.filter((key) => {
-    const value = answers?.[key];
-    if (value === null || value === undefined) return false;
-    if (typeof value === 'string' && value.trim() === '') return false;
-    if (Array.isArray(value) && value.length === 0) return false;
-    return true;
-  }).length;
-  return Math.round((filled / keys.length) * 100);
 }
