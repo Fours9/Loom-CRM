@@ -30,7 +30,7 @@
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 
-**Анкета 360°:** policy catalog → seed → `schema_json`; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)). Fill UI = schema-driven wizard на `/questionnaires/:id` (не HTML reference).
+**Анкета 360°:** policy catalog → seed → `schema_json`; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)). Fill UI = schema-driven wizard на `/questionnaires/:id` (не HTML reference). Pre-prod schema refresh: [questionnaire-test-reset](dev/questionnaire-test-reset.md) + snapshot DoD.
 
 | Тип документа | Призначення |
 | --- | --- |
@@ -43,6 +43,7 @@
 ## Практичне
 
 - [Синхронізація через Git](dev/git-sync.md) — pull/push, новий ПК, `db-snapshot` / `db-restore`, типові проблеми
+- [Reset анкет (pre-prod)](dev/questionnaire-test-reset.md) — dry-run / execute + snapshot DoD
 
 ## Розробницьке
 
@@ -50,6 +51,7 @@
 - [ADR](adr/) — зафіксовані рішення
 - [Деплой (Docker Compose)](dev/deploy.md)
 - [Експлуатація (operations)](dev/operations.md)
+- [Reset анкет (pre-prod)](dev/questionnaire-test-reset.md)
 - [Production readiness checklist](dev/production-readiness.md)
 - [Cutover ProjectWeekend → LoomCRM](cutover.md)
 - [COPYMAP](COPYMAP.md)

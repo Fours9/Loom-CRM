@@ -1,10 +1,10 @@
 /**
  * Windows-safe API dev watcher.
- * - Avoids Nest CLI `taskkill` crash on missing PID
- * - Avoids `node --watch` EADDRINUSE races on port reopen
+ * - One Nest at a time (mutex + kill listeners on :PORT)
+ * - Restart only after tsc -w reports a clean compile (no fs.watch race)
+ * - No wmic (removed on modern Windows)
  */
 import { spawn, execSync } from 'node:child_process';
-import { watch } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,9 @@ let tscWatch = null;
 let appChild = null;
 let restartTimer = null;
 let shuttingDown = false;
+let startInFlight = null;
+let startEpoch = 0;
+let pendingRestart = false;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,6 +43,30 @@ function pidsOnPort(listenPort) {
   }
 }
 
+function orphanMainPids() {
+  if (process.platform !== 'win32') return [];
+  try {
+    const script = [
+      "$ErrorActionPreference='SilentlyContinue'",
+      "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" |",
+      '  Where-Object { $_.CommandLine -and $_.CommandLine -like \'*%LOOM%*main.js*\' } |',
+      '  ForEach-Object { $_.ProcessId }',
+    ]
+      .join(' ')
+      .replace('%LOOM%', 'Loom-CRM-Core');
+    const out = execSync(`powershell -NoProfile -Command ${JSON.stringify(script)}`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return out
+      .split(/\r?\n/)
+      .map((s) => Number(s.trim()))
+      .filter((pid) => Number.isFinite(pid) && pid > 0 && pid !== process.pid);
+  } catch {
+    return [];
+  }
+}
+
 function killPid(pid) {
   if (!pid || pid === process.pid) return;
   try {
@@ -54,11 +81,10 @@ function killPid(pid) {
 }
 
 async function freePort(listenPort) {
-  for (const pid of pidsOnPort(listenPort)) {
-    killPid(pid);
-  }
-  // Give Windows a moment to release the socket.
-  for (let i = 0; i < 20; i += 1) {
+  const victims = new Set([...pidsOnPort(listenPort), ...orphanMainPids()]);
+  if (appChild?.pid) victims.add(appChild.pid);
+  for (const pid of victims) killPid(pid);
+  for (let i = 0; i < 40; i += 1) {
     if (pidsOnPort(listenPort).length === 0) return;
     await sleep(100);
   }
@@ -68,43 +94,83 @@ function stopApp() {
   if (!appChild) return;
   const child = appChild;
   appChild = null;
-  try {
-    child.kill();
-  } catch {
-    // ignore
+  if (child.pid) killPid(child.pid);
+  else {
+    try {
+      child.kill();
+    } catch {
+      // ignore
+    }
   }
 }
 
-async function startApp() {
+async function waitUntilListening(listenPort, epoch, timeoutMs = 25000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (shuttingDown || epoch !== startEpoch) return false;
+    if (pidsOnPort(listenPort).length > 0) return true;
+    if (appChild && appChild.exitCode != null) return false;
+    await sleep(150);
+  }
+  return pidsOnPort(listenPort).length > 0;
+}
+
+async function startAppUnlocked() {
   if (shuttingDown) return;
+  const epoch = ++startEpoch;
   stopApp();
   await freePort(port);
-  if (shuttingDown) return;
+  if (shuttingDown || epoch !== startEpoch) return;
 
-  appChild = spawn(process.execPath, [mainJs], {
+  const child = spawn(process.execPath, [mainJs], {
     cwd: apiRoot,
     stdio: 'inherit',
     env: process.env,
   });
+  appChild = child;
 
-  appChild.on('exit', (code, signal) => {
+  child.on('exit', (code, signal) => {
+    if (appChild !== child) return;
+    appChild = null;
     if (shuttingDown) return;
     if (signal === 'SIGTERM' || signal === 'SIGINT') return;
-    // Keep watcher alive; next file change will restart.
     if (code && code !== 0) {
       console.error(`[api-dev] app exited with code ${code}`);
     }
-    appChild = null;
   });
+
+  const ok = await waitUntilListening(port, epoch);
+  if (!ok && epoch === startEpoch && !shuttingDown) {
+    console.error(`[api-dev] timed out waiting for port ${port}`);
+  } else if (ok && epoch === startEpoch) {
+    console.log(`[api-dev] listening on :${port} (pid ${child.pid})`);
+  }
 }
 
-function scheduleRestart() {
+function startApp() {
+  if (shuttingDown) return Promise.resolve();
+  if (startInFlight) {
+    pendingRestart = true;
+    return startInFlight;
+  }
+  startInFlight = (async () => {
+    do {
+      pendingRestart = false;
+      await startAppUnlocked();
+    } while (pendingRestart && !shuttingDown);
+  })().finally(() => {
+    startInFlight = null;
+  });
+  return startInFlight;
+}
+
+function scheduleRestart(reason) {
   if (shuttingDown) return;
   clearTimeout(restartTimer);
-  // Debounce tsc multi-file emit bursts.
   restartTimer = setTimeout(() => {
+    console.log(`[api-dev] restart (${reason})`);
     void startApp();
-  }, 500);
+  }, 1000);
 }
 
 function shutdown(code = 0) {
@@ -141,16 +207,26 @@ initial.on('exit', (code) => {
     [tscPath, '-p', 'tsconfig.build.json', '-w', '--preserveWatchOutput'],
     {
       cwd: apiRoot,
-      stdio: 'inherit',
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
     },
   );
 
-  watch(path.join(apiRoot, 'dist'), { recursive: true }, (_event, filename) => {
-    if (!filename) return;
-    if (!String(filename).endsWith('.js')) return;
-    scheduleRestart();
-  });
+  let tscBuf = '';
+  const onTscChunk = (chunk) => {
+    const text = String(chunk);
+    process.stdout.write(text);
+    tscBuf += text;
+    if (tscBuf.length > 8000) tscBuf = tscBuf.slice(-4000);
+    // Fresh successful watch compile → restart app once.
+    if (/Found 0 errors\. Watching for file changes\./.test(tscBuf)) {
+      tscBuf = '';
+      scheduleRestart('tsc');
+    }
+  };
+  tscWatch.stdout.on('data', onTscChunk);
+  tscWatch.stderr.on('data', onTscChunk);
 
-  void startApp();
+  // First boot (do not wait for tsc -w echo — dist already built by initial tsc).
+  scheduleRestart('boot');
 });

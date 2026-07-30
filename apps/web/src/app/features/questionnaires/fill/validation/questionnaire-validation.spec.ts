@@ -198,7 +198,7 @@ describe('questionnaire-validation', () => {
 });
 
 describe('progress and review labels', () => {
-  it('computes progress without intro/review', () => {
+  it('computes completion from answered visible fields', () => {
     const steps = [
       {
         key: 's1',
@@ -225,9 +225,12 @@ describe('progress and review labels', () => {
         ],
       },
     ];
-    expect(computeQuestionnaireProgress(steps, {}, {}).percent).toBe(50);
+    expect(computeQuestionnaireProgress(steps, {}, {}).percent).toBe(0);
     expect(
       computeQuestionnaireProgress(steps, { a: 'x' }, {}).percent,
+    ).toBe(50);
+    expect(
+      computeQuestionnaireProgress(steps, { a: 'x', b: 'y' }, {}).percent,
     ).toBe(100);
   });
 

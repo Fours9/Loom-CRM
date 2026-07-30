@@ -96,7 +96,8 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | # | sectionKey | sectionLabel | destination (primary) | mvpStatus |
 |---|------------|--------------|----------------------|-----------|
 | 1 | `personal` | Особисті дані | employee_profile | in_mvp (mirror + proposals) |
-| 2 | `family` | Сім'я та важливі дати | questionnaire_snapshot | in_mvp (voluntary; stay in snapshot) |
+| 2 | `family` | Сімейний стан | questionnaire_snapshot | in_mvp (voluntary; stay in snapshot) |
+| 2b | `celebration_dates` | Святкові дати | questionnaire_snapshot | in_mvp (split from family; gifts + ДН) |
 | 3 | `emergency` | Контакт на екстрений випадок | employee_profile | excluded from fill MVP (already Profile Core) |
 | 4 | `employment` | Робота в компанії | employment_assignment | excluded from fill MVP (Profile Core) |
 | 5 | `grade` | Грейд і рівень посади | later compensation | later_module |
@@ -115,8 +116,8 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | 18 | `consents` | Згода та підписи | consents + questionnaire_snapshot | in_mvp (answers in snapshot; legal consents later module) |
 | 19 | `crm_control` | Контроль внесення в CRM | process | excluded (computed/process) |
 
-**MVP wizard steps (seed PR-2):**  
-1 profile_mirror · 2 family · 3 experience · 4 education · 5 strengths · 6 hobbies · 7 work_style · 8 consents_review · 9 submit.
+**MVP wizard steps (seed):**  
+1 profile_mirror · 2 family · 3 celebration_dates · 4 experience · 5 education · 6 strengths · 7 hobbies · 8 work_style · 9 consents_review.
 
 ---
 
@@ -127,6 +128,7 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | personal.last_name | 10 | Прізвище | text | recommended | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | overview.lastName | read-only mirror in wizard |
 | personal.first_name | 20 | Ім'я | text | recommended | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | overview.firstName | |
 | personal.middle_name | 30 | По батькові | text | voluntary | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | overview.middleName | |
+| personal.preferred_name | 35 | Ім'я для звернення | text | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | header.preferredName | under ПІБ row (`uiGroup` identity_preferred) |
 | personal.birth_date | 40 | Дата народження | date | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | personal.birthDate | |
 | personal.city | 50 | Місто проживання | text | recommended | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | personal.city | |
 | personal.photo_status | 60 | Фото для профілю | single_choice | voluntary | employee_owner | employee_owner, admin | personal | consents | later_module | false | — | options: added, later, declined — legal consent → Consents; not employees.photo_consent_status |
@@ -134,11 +136,10 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | personal.phone_secondary | 80 | Додатковий телефон | text | voluntary | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_phone | additional row |
 | personal.email | 90 | Особиста email | text | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_email | |
 | personal.telegram | 100 | Telegram | text | voluntary | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_telegram | |
-| personal.preferred_language | 110 | Бажана мова | single_choice | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | personal.preferredLanguage | options: uk, en, other |
-| personal.preferred_language_other | 111 | Інша мова | text | voluntary | employee_owner | employee_owner, admin | normal | employee_profile | in_mvp | true | personal.preferredLanguage | if other |
-| personal.preferred_name | 120 | Ім'я для звернення | text | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | header.preferredName | |
+| personal.preferred_language | 110 | Бажана мова | multi_choice | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | personal.preferredLanguage | options: uk, en, other; profile canonical `uk,en,other:Текст` |
+| personal.preferred_language_other | 111 | Інша мова | text | voluntary | employee_owner | employee_owner, admin | normal | employee_profile | in_mvp | false | — | visibleWhen includes `other`; no separate proposal |
 
-`preferred_language` options: `{uk,en,other}` / labels Українська, Англійська, Інша.
+`preferred_language` options: `{uk,en,other}` / labels Українська, Англійська, Інша. Phones/email/telegram: `uiGroup: contacts`.
 
 ---
 
@@ -148,12 +149,22 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 |-----|-------|-------|-----------|----------------|-------------|-------------|-----------|-------|
 | family.marital_status | 10 | Сімейний стан | single_choice | voluntary | personal | questionnaire_snapshot | in_mvp | options: prefer_not_say, single, married, other |
 | family.has_children | 20 | Чи є діти | single_choice | voluntary | personal | questionnaire_snapshot | in_mvp | yes, no, prefer_not_say |
-| family.children | 30 | Діти | repeating_group | voluntary | personal | questionnaire_snapshot | in_mvp | children: name, birth_date, note (age computed UI) |
-| family.gifts_permission | 40 | Дозвіл для подарунків | single_choice | voluntary | personal | questionnaire_snapshot | in_mvp | yes, no |
-| family.pets | 50 | Домашні тварини | text | voluntary | personal | questionnaire_snapshot | in_mvp | |
-| family.other_dates_note | 60 | Інші важливі дати | text | voluntary | personal | questionnaire_snapshot | in_mvp | Profile Core already has important_dates; this note stays snapshot unless proposed later |
+| family.children | 30 | Діти | repeating_group | voluntary | personal | questionnaire_snapshot | in_mvp | visibleWhen equals yes; children: name, birth_date, note |
+| family.pets | 40 | Домашні тварини | text | voluntary | personal | questionnaire_snapshot | in_mvp | |
 
 `filledBy`/`visibility` for family: employee_owner fill; visibility employee_owner + admin (manager optional later — default admin + owner for MVP).
+
+---
+
+## Fields — block 2b `celebration_dates` (voluntary snapshot)
+
+| key | order | label | valueType | requiredPolicy | destination | mvpStatus | notes |
+|-----|-------|-------|-----------|----------------|-------------|-----------|-------|
+| celebration.birth_date | 10 | День народження | date | voluntary | questionnaire_snapshot | in_mvp | `defaultFromAnswerKey: personal.birth_date` (display) |
+| hobbies.birthday_greeting | 20 | Вітати з Днем народження | single_choice | voluntary | questionnaire_snapshot | in_mvp | public, hr_only, none (under ДН date) |
+| family.gifts_permission | 30 | Дозвіл для подарунків | single_choice | voluntary | questionnaire_snapshot | in_mvp | yes, no (moved from family) |
+| hobbies.gift_format | 40 | Формат подарунка | multi_choice | voluntary | questionnaire_snapshot | in_mvp | merch, certificate, experience, useful_item (moved from hobbies) |
+| family.other_dates_note | 50 | Інші важливі дати | text | voluntary | questionnaire_snapshot | in_mvp | snapshot note |
 
 ---
 
@@ -194,8 +205,8 @@ Documented mapping only (`mvpStatus: excluded`): company/direction/department/po
 | experience.achievements | 40 | Досягнення якими пишаюся | textarea | voluntary | questionnaire_snapshot | in_mvp |
 | experience.want_to_learn | 50 | Чого хочу навчитись | textarea | voluntary | questionnaire_snapshot | in_mvp |
 
-`managed_people` options: `yes`, `no`.  
-`prior_jobs` children: `company`, `position`, `period`, `results` (all text).
+`managed_people` options: `yes`, `no`. `managed_count` visibleWhen equals `yes`.  
+`prior_jobs` children: `company`, `position`, `from` (date), `to` (date; empty OK; `to >= from` if both set), `results`.
 
 ---
 
@@ -223,7 +234,7 @@ Single catalog entry representing matrix (not 26 hardcoded employee columns):
 | education.desired_courses | 60 | Які курси хочу пройти | textarea | questionnaire_snapshot | in_mvp |
 
 `education.level` options: `secondary`, `vocational`, `incomplete_higher`, `bachelor`, `master`, `phd`.  
-`institutions` children: `name`, `specialty`, `years`, `degree`.  
+`institutions` children: `name`, `specialty`, `from` (date), `to` (date; empty OK; `to >= from` if both set), `degree`.  
 `languages` children: `language`, `level` (`native`|`conversational`|`intermediate`|`advanced`).  
 `driver_license` options: `none`, `A`, `B`, `C`, `D`.
 
@@ -254,12 +265,10 @@ All: voluntary, personal/normal, questionnaire_snapshot, in_mvp, filledBy employ
 | hobbies.shirt_size | 30 | Розмір футболки | single_choice | xs,s,m,l,xl,xxl |
 | hobbies.outerwear_size | 40 | Розмір верхнього одягу | text | |
 | hobbies.food | 50 | Харчові особливості | single_choice | none, has_notes, prefer_not_say |
-| hobbies.food_notes | 51 | Опис харчових особливостей | text | |
-| hobbies.gift_format | 60 | Формат подарунка | multi_choice | merch, certificate, experience, useful_item |
-| hobbies.birthday_greeting | 70 | Вітати з Днем народження | single_choice | public, hr_only, none |
-| hobbies.corporate_events | 80 | Готовий/а до корпоративів | single_choice | active, sometimes, not_really |
+| hobbies.food_notes | 51 | Опис харчових особливостей | text | visibleWhen equals has_notes |
+| hobbies.corporate_events | 60 | Готовий/а до корпоративів | single_choice | active, sometimes, not_really |
 
-All voluntary → questionnaire_snapshot.
+Gifts / ДН greeting live under `celebration_dates` (not hobbies). All voluntary → questionnaire_snapshot.
 
 ---
 
@@ -293,21 +302,22 @@ Legal versioned consents → future Consents module. MVP stores attestation bool
 | consents.info_accurate | 10 | Підтверджую актуальність інформації | boolean | recommended | questionnaire_snapshot | in_mvp |
 | consents.hr_processing | 20 | Згода на обробку для HR-процесів | boolean | recommended | consents | in_mvp |
 | consents.photo_internal | 30 | Згода на фото у внутрішньому профілі | boolean | voluntary | consents | in_mvp |
-| consents.birthday_greeting | 40 | Згода на привітання з ДН | boolean | voluntary | consents | in_mvp |
-| consents.hr_notifications | 50 | Згода на HR-повідомлення | boolean | voluntary | consents | in_mvp |
+| consents.hr_notifications | 40 | Згода на HR-повідомлення | boolean | voluntary | consents | in_mvp |
 
-Signatures (employee/manager/admin name+date) are process metadata — optional later; not employee columns.
+`consents.birthday_greeting` removed (greeting preference is `hobbies.birthday_greeting` on celebration step). Signatures are process metadata — optional later; not employee columns.
 
 ---
 
 ## Client integration notes (fill wizard)
 
-1. GET assignment returns runtime `schema` + draft `answers`/`revision` + `profileMirror` for display defaults (draft keys win via `hasOwnProperty`; mirror is not written into draft without user edit).
-2. PATCH draft uses optimistic `revision`. Autosave **serializes** PATCHes (one in-flight; pending accumulates; never cancel an accepted in-flight PATCH / no `switchMap` last-wins).
+1. GET assignment returns runtime `schema` + draft `answers`/`revision` + `profileMirror` for display defaults (draft keys win via `hasOwnProperty`; mirror is not written into draft without user edit). `defaultFromAnswerKey` is display-only (Review labels by source).
+2. PATCH draft uses optimistic `revision`. Autosave **serializes** PATCHes (one in-flight; pending accumulates; never cancel an accepted in-flight PATCH / no `switchMap` last-wins). Hidden answers may remain in draft.
 3. **409 conflict:** stop autosave; keep local answers; fetch server draft; show conflict banner + «Завантажити серверну версію» (explicit discard). No silent overwrite; no invented field-level merge.
-4. **Submit:** client validation → `autosaveCoordinator.flush()` → POST submit with final server revision in DB; CTA disabled while `submitting`. If flush fails, submit aborts.
-5. **Step gating:** linear Intro → schema steps → Review. `buildQuestionnaireAssignmentLink` builds URL only; `resolveQuestionnaireActiveStep` enforces reachability for `?step=` / drawer. Reserved UI keys `__intro__` / `__review__`.
-6. FE: People via `questionnaires/public-api.ts`; fill/store/fields private. HTTP questionnaires via `QuestionnairesApiService`; profile mirror via private adapter + `@loom/contracts-employees` (not People internals).
+4. **Submit:** client validation → `flush()` → POST submit. Backend snapshot = `projectVisibleQuestionnaireAnswers(schema, draft)` (not raw draft). Inactive own answers: Review warning «не буде надіслано».
+5. **Step gating:** linear Intro → schema steps → Review. `visibleWhen` (strict equals|includes union). Navigation = visible required valid; completion % = answered visible / visible (`@loom/questionnaire-schema`).
+6. **Preferred language:** multi_choice in answers; profile/proposal canonical `uk,en,other:Текст` (`other:` last segment).
+7. FE: People via `questionnaires/public-api.ts`; fill private. Domain pure helpers in `@loom/questionnaire-schema` (not contracts).
+8. **Pre-prod schema refresh:** [`docs/dev/questionnaire-test-reset.md`](../dev/questionnaire-test-reset.md) + snapshot DoD before/after breaking v1 changes.
 
 ---
 
@@ -316,6 +326,7 @@ Signatures (employee/manager/admin name+date) are process metadata — optional 
 | Artifact | Role |
 |----------|------|
 | This catalog | policy SoT |
-| `employee-360-v1` seed (PR-2) | code seed synced manually from catalog `in_mvp` rows |
+| `employee-360-v1` seed | code seed synced manually from catalog `in_mvp` rows (`satisfies QuestionnaireSchemaJson`) |
 | `schema_json` in DB | runtime SoT after publish |
+| `@loom/questionnaire-schema` | pure helpers (not contracts); API uses built `dist/` |
 | HTML reference | human UX reference only |

@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { BootstrapState } from './bootstrap-state.entity';
@@ -6,7 +6,7 @@ import { BootstrapState } from './bootstrap-state.entity';
 export const BOOTSTRAP_ROW_ID = 'default';
 
 @Injectable()
-export class ApplicationBootstrapService implements OnModuleInit {
+export class ApplicationBootstrapService {
   private readonly logger = new Logger(ApplicationBootstrapService.name);
   private ready = false;
 
@@ -16,12 +16,13 @@ export class ApplicationBootstrapService implements OnModuleInit {
     private readonly bootstrapRepo: Repository<BootstrapState>,
   ) {}
 
-  async onModuleInit(): Promise<void> {
-    await this.run();
-  }
-
   isReady(): boolean {
     return this.ready;
+  }
+
+  /** Called from ApplicationStartupService (composition root). */
+  async ensureReady(): Promise<void> {
+    await this.run();
   }
 
   async run(): Promise<void> {

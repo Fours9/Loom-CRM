@@ -62,8 +62,10 @@ PW-паритетна картка без змін: `/absences/employees/:id`.
 - foundation: module `apps/api/src/modules/questionnaires/`; contracts `@loom/contracts-questionnaires`; permissions; seed `employee-360` v1; assign/list/detail/draft PATCH (optimistic revision)/submit/request-changes/review; profile proposals + accept/reject via `EmployeeProfileService`
 - assign panel + snapshot summary on People «Анкети»
 - **fill wizard (PR-4):** `/questionnaires/:id` schema-driven wizard (Intro → schema steps → Review); serialized autosave; 409 conflict UI; `flush()` before submit; linear `?step=` gating; FE entry `questionnaires/public-api.ts` (+ `buildQuestionnaireAssignmentLink` only — wizard/store private)
+- **schema UX:** steps `family` + `celebration_dates`; `visibleWhen`; layout groups; from/to periods; preferred_language multi; submit projects visible answers; `@loom/questionnaire-schema`; startup composition root; fail-safe `pnpm questionnaires:reset` ([runbook](../dev/questionnaire-test-reset.md))
 
-**Remaining:** auto-apply answers to profile (explicitly out); Phase 2 `/me` approval queue; IndexedDB offline; full Playwright matrix; template builder.
+**Remaining:** auto-apply answers to profile (explicitly out); Phase 2 `/me` approval queue; IndexedDB offline; full Playwright matrix; template builder; production template v2 when real assignments exist.
+
 
 ## Phase 1 — відкладені polish (не блокують Done)
 

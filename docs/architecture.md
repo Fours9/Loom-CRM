@@ -37,9 +37,18 @@ CRM employee profile: `/people/:id` — tabs Дані працівника, Ро
 ### Questionnaires FE boundary
 
 - **Public:** `apps/web/src/app/features/questionnaires/public-api.ts` — People panel, snapshot summary, `buildQuestionnaireAssignmentLink` (URL only).
-- **Private:** fill route `/questionnaires/:id` (`fill/` — DraftStore, AutosaveCoordinator, field widgets). Not re-exported.
+- **Private:** fill route `/questionnaires/:id` (`fill/` — DraftStore, AutosaveCoordinator, field widgets, display resolver). Not re-exported.
 - Profile mirror: assignment `profileMirror` and/or private `QuestionnaireProfileMirrorService` (`HttpClient` + `@loom/contracts-employees`); never People page/store/`employee-data-panel`.
 - Questionnaires HTTP: `QuestionnairesApiService` only (no employee endpoints on that gateway).
+
+### Questionnaire schema library
+
+- `@loom/contracts-questionnaires` — API/DTO/schema **shapes only** (incl. `visibleWhen`, layout meta).
+- `@loom/questionnaire-schema` — framework-free domain helpers: visibility, `projectVisibleQuestionnaireAnswers`, completion %, preferred-language serialize/parse, schema validation. Used by `apps/api` + `apps/web`. Contracts must **not** import this package. API loads compiled `dist/` (CJS); web path-maps to `src/` (Angular). Build via `pnpm --filter @loom/questionnaire-schema build` (also from API `dev`).
+
+### Application startup
+
+Single Nest `OnModuleInit` in `apps/api/src/application-startup/` orchestrates `ApplicationBootstrapService.ensureReady()` then `QuestionnaireSeedService.ensureEmployee360V1()`. Platform must not import Questionnaires; seed services do not self-init via `OnModuleInit`.
 
 ### Profile completeness
 

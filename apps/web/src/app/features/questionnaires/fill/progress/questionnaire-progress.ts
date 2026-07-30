@@ -1,13 +1,25 @@
 import type {
   QuestionnaireSchemaField,
+  QuestionnaireSchemaJson,
   QuestionnaireSchemaStep,
 } from '@loom/contracts-questionnaires';
 import {
-  areStepRequiredFieldsValid,
+  completionPercentVisible,
+  isQuestionnaireFieldVisible,
+  areStepVisibleRequiredValid,
+  listInactiveOwnAnswers,
+} from '@loom/questionnaire-schema';
+import {
   collectStepIssues,
-  displayFieldValue,
+  isRequiredFieldValid,
+  validateFieldValue,
 } from '../validation/questionnaire-validation';
 import type { FieldValidationIssue } from '../validation/questionnaire-validation';
+import {
+  resolveQuestionnaireFieldDisplay,
+  reviewSourceLabel,
+} from '../display/questionnaire-display-value';
+import { fieldsByKey } from '@loom/questionnaire-schema';
 
 export type QuestionnaireStepUiState =
   | 'not_started'
@@ -19,55 +31,71 @@ export type QuestionnaireStepUiState =
 export type QuestionnaireProgress = {
   completedRequiredSteps: number;
   totalSchemaSteps: number;
-  /** 0–100 */
+  /** 0–100 — answered visible / visible (shared with BE) */
   percent: number;
 };
 
-/**
- * Progress = (# schema steps with all required valid) / (# schema steps).
- * Intro / Review are excluded.
- */
 export function computeQuestionnaireProgress(
   schemaSteps: QuestionnaireSchemaStep[],
   answers: Record<string, unknown>,
-  profileMirror: Record<string, unknown>,
+  _profileMirror: Record<string, unknown>,
 ): QuestionnaireProgress {
-  const totalSchemaSteps = schemaSteps.length;
-  if (totalSchemaSteps === 0) {
-    return { completedRequiredSteps: 0, totalSchemaSteps: 0, percent: 0 };
-  }
+  const schema: QuestionnaireSchemaJson = {
+    code: 'runtime',
+    version: 1,
+    title: '',
+    steps: schemaSteps,
+  };
+  const percent = completionPercentVisible(schema, answers);
   let completedRequiredSteps = 0;
   for (const step of schemaSteps) {
-    if (areStepRequiredFieldsValid(step.fields, answers, profileMirror)) {
+    if (
+      areStepVisibleRequiredValid(step, answers, (f, v) =>
+        isRequiredFieldValid(f, v),
+      )
+    ) {
       completedRequiredSteps += 1;
     }
   }
   return {
     completedRequiredSteps,
-    totalSchemaSteps,
-    percent: Math.round((completedRequiredSteps / totalSchemaSteps) * 100),
+    totalSchemaSteps: schemaSteps.length,
+    percent,
   };
 }
 
 export function completedSchemaStepKeys(
   schemaSteps: QuestionnaireSchemaStep[],
   answers: Record<string, unknown>,
-  profileMirror: Record<string, unknown>,
+  _profileMirror: Record<string, unknown>,
 ): Set<string> {
   const keys = new Set<string>();
   for (const step of schemaSteps) {
-    if (areStepRequiredFieldsValid(step.fields, answers, profileMirror)) {
+    if (
+      areStepVisibleRequiredValid(step, answers, (f, v) =>
+        isRequiredFieldValid(f, v),
+      )
+    ) {
       keys.add(step.key);
     }
   }
   return keys;
 }
 
+export function visibleFieldsForStep(
+  step: QuestionnaireSchemaStep,
+  answers: Record<string, unknown>,
+): QuestionnaireSchemaField[] {
+  return (step.fields ?? []).filter((f) =>
+    isQuestionnaireFieldVisible(f, answers),
+  );
+}
+
 export function schemaStepHasAnswers(
   step: QuestionnaireSchemaStep,
   answers: Record<string, unknown>,
 ): boolean {
-  return step.fields.some((f) =>
+  return visibleFieldsForStep(step, answers).some((f) =>
     Object.prototype.hasOwnProperty.call(answers, f.key),
   );
 }
@@ -82,22 +110,50 @@ export function resolveStepUiState(input: {
   if (input.stepKey === input.currentStepKey) return 'current';
   const step = input.schemaSteps.find((s) => s.key === input.stepKey);
   if (!step) return 'not_started';
-  const complete = areStepRequiredFieldsValid(
-    step.fields,
+  const complete = areStepVisibleRequiredValid(
+    step,
     input.answers,
-    input.profileMirror,
+    (f, v) => isRequiredFieldValid(f, v),
   );
   if (complete) {
-    const issues = collectStepIssues(
-      step.fields,
+    const issues = collectVisibleStepIssues(
+      step,
       input.answers,
       input.profileMirror,
+      input.schemaSteps,
     );
-    if (issues.some((i: FieldValidationIssue) => i.severity === 'warning')) return 'warning';
+    if (issues.some((i: FieldValidationIssue) => i.severity === 'warning')) {
+      return 'warning';
+    }
     return 'complete';
   }
   if (schemaStepHasAnswers(step, input.answers)) return 'incomplete';
   return 'not_started';
+}
+
+export function collectVisibleStepIssues(
+  step: QuestionnaireSchemaStep,
+  answers: Record<string, unknown>,
+  profileMirror: Record<string, unknown>,
+  allSteps: QuestionnaireSchemaStep[],
+): FieldValidationIssue[] {
+  const byKey = fieldsByKey({
+    code: 'x',
+    version: 1,
+    title: '',
+    steps: allSteps,
+  });
+  const issues: FieldValidationIssue[] = [];
+  for (const field of visibleFieldsForStep(step, answers)) {
+    const display = resolveQuestionnaireFieldDisplay(field, {
+      answers,
+      profileMirror,
+      fieldsByKey: byKey,
+    });
+    const err = validateFieldValue(field, display.value);
+    if (err) issues.push(err);
+  }
+  return issues;
 }
 
 export function choiceLabel(
@@ -123,15 +179,55 @@ export function reviewRowsForStep(
   step: QuestionnaireSchemaStep,
   answers: Record<string, unknown>,
   profileMirror: Record<string, unknown>,
-): Array<{ fieldKey: string; label: string; display: string }> {
-  return step.fields.map((field) => {
-    const value = displayFieldValue(answers, profileMirror, field);
-    return {
+  allSteps: QuestionnaireSchemaStep[],
+): Array<{
+  fieldKey: string;
+  label: string;
+  display: string;
+  sourceLabel: string | null;
+  inactive: boolean;
+}> {
+  const byKey = fieldsByKey({
+    code: 'x',
+    version: 1,
+    title: '',
+    steps: allSteps,
+  });
+  const schema = {
+    code: 'x',
+    version: 1,
+    title: '',
+    steps: allSteps,
+  };
+  const inactive = new Set(listInactiveOwnAnswers(schema, answers));
+
+  const rows: Array<{
+    fieldKey: string;
+    label: string;
+    display: string;
+    sourceLabel: string | null;
+    inactive: boolean;
+  }> = [];
+
+  for (const field of step.fields ?? []) {
+    const visible = isQuestionnaireFieldVisible(field, answers);
+    const hasOwn = Object.prototype.hasOwnProperty.call(answers, field.key);
+    if (!visible && !hasOwn) continue;
+
+    const resolved = resolveQuestionnaireFieldDisplay(field, {
+      answers,
+      profileMirror,
+      fieldsByKey: byKey,
+    });
+    rows.push({
       fieldKey: field.key,
       label: field.label,
-      display: formatReviewDisplay(field, value),
-    };
-  });
+      display: formatReviewDisplay(field, resolved.value),
+      sourceLabel: visible ? reviewSourceLabel(resolved.source) : null,
+      inactive: !visible && hasOwn,
+    });
+  }
+  return rows;
 }
 
 function formatReviewDisplay(
@@ -153,3 +249,6 @@ function formatReviewDisplay(
   if (value === null || value === undefined || value === '') return '—';
   return String(value);
 }
+
+// re-export for callers that still import collectStepIssues pattern
+export { collectStepIssues };

@@ -17,10 +17,16 @@ import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireProfileProposal } from './questionnaire-profile-proposal.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
+import {
+  parsePreferredLanguage,
+  serializePreferredLanguage,
+} from '@loom/questionnaire-schema';
 
 type ProposalMapping = { section: string; field: string };
 type SchemaField = {
   key: string;
+  valueType?: string;
+  options?: Array<{ value: string; label: string }>;
   createsProfileProposal?: boolean;
   proposalMapping?: ProposalMapping;
 };
@@ -97,36 +103,56 @@ export class QuestionnaireProposalService {
     const current = this.readCurrentProfileValues(employee, await this.loadContacts(employee.id));
 
     const rows: QuestionnaireProfileProposal[] = [];
+    const languageField = fields.find(
+      (f) => f.key === 'personal.preferred_language',
+    );
+    const languageOptions = languageField?.options ?? [
+      { value: 'uk', label: 'Українська' },
+      { value: 'en', label: 'Англійська' },
+      { value: 'other', label: 'Інша' },
+    ];
+
     for (const field of fields) {
       const mapping = field.proposalMapping!;
-      let to = answers[field.key];
 
-      // preferred_language_other only applies when language === other
+      // other text is folded into preferred_language proposal only
       if (field.key === 'personal.preferred_language_other') {
-        if (answers['personal.preferred_language'] !== 'other') continue;
+        continue;
       }
+
+      let to: unknown = answers[field.key];
+
       if (field.key === 'personal.preferred_language') {
-        if (to === 'other') {
-          to = answers['personal.preferred_language_other'] ?? to;
+        const parsed = parsePreferredLanguage(to, languageOptions);
+        if (
+          parsed.selected.includes('other') &&
+          typeof answers['personal.preferred_language_other'] === 'string' &&
+          answers['personal.preferred_language_other'].trim()
+        ) {
+          parsed.otherText = String(
+            answers['personal.preferred_language_other'],
+          ).trim();
         }
+        to = serializePreferredLanguage(
+          parsed.selected,
+          parsed.otherText,
+          languageOptions,
+        );
       }
 
       if (to === null || to === undefined || to === '') continue;
 
-      const from = current[`${mapping.section}.${mapping.field}`];
-      if (valuesEqual(from, to)) continue;
-
-      // Skip duplicate preferredLanguage from preferred_language_other if already queued
-      if (
-        field.key === 'personal.preferred_language_other' &&
-        rows.some(
-          (r) =>
-            (r.proposedChanges as { answerKey?: string }).answerKey ===
-            'personal.preferred_language',
-        )
-      ) {
-        continue;
+      const fromRaw = current[`${mapping.section}.${mapping.field}`];
+      let from = fromRaw;
+      if (field.key === 'personal.preferred_language') {
+        const fromParsed = parsePreferredLanguage(fromRaw, languageOptions);
+        from = serializePreferredLanguage(
+          fromParsed.selected,
+          fromParsed.otherText,
+          languageOptions,
+        );
       }
+      if (valuesEqual(from, to)) continue;
 
       rows.push(
         this.proposals.create({

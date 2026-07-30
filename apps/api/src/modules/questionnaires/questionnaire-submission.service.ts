@@ -15,6 +15,8 @@ import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
 import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import { QuestionnaireResponseService } from './questionnaire-response.service';
+import { projectVisibleQuestionnaireAnswers } from '@loom/questionnaire-schema';
+import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
 
 @Injectable()
 export class QuestionnaireSubmissionService {
@@ -57,6 +59,12 @@ export class QuestionnaireSubmissionService {
     }
 
     const response = await this.responseService.ensureResponse(assignmentId);
+    const schema = assignment.templateVersion
+      .schemaJson as unknown as QuestionnaireSchemaJson;
+    const snapshotJson = projectVisibleQuestionnaireAnswers(
+      schema,
+      response.answersJson ?? {},
+    );
     const latest = await this.submissions.findOne({
       where: { responseId: response.id },
       order: { submissionNumber: 'DESC' },
@@ -72,7 +80,7 @@ export class QuestionnaireSubmissionService {
         submissionRepo.create({
           responseId: response.id,
           submissionNumber: nextNumber,
-          snapshotJson: { ...(response.answersJson ?? {}) },
+          snapshotJson,
           submittedByUserId: actor.id,
           submittedAt: now,
           reviewStatus: 'pending',
