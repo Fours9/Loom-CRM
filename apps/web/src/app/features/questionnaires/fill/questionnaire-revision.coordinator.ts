@@ -24,7 +24,16 @@ export class QuestionnaireRevisionCoordinator {
     await this.store.load(id, this.store.activeStepKey());
   }
 
+  async startRevision(): Promise<void> {
+    const id = this.store.assignment()?.id;
+    if (!id) throw new Error('Немає assignment');
+    await firstValueFrom(this.api.startRevision(id));
+    this.autosave.resetForAssignmentSwitch();
+    await this.store.load(id, this.store.activeStepKey());
+  }
+
   async saveDraft(): Promise<boolean> {
+    this.store.materializeMirrorIntoProposalAnswers();
     return this.autosave.flush();
   }
 
@@ -40,6 +49,7 @@ export class QuestionnaireRevisionCoordinator {
       throw new Error('Збереження вже виконується');
     }
 
+    this.store.materializeMirrorIntoProposalAnswers();
     const flushed = await this.autosave.flush();
     if (!flushed) {
       this.store.finishSubmitError(

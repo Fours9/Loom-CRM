@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import { forkJoin, of } from 'rxjs';
+import { forkJoin, of, type Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import type {
   QuestionnaireAssignmentListItem,
@@ -23,7 +23,8 @@ const STATUS_LABELS: Record<string, string> = {
   submitted: 'Надіслано',
   changes_requested: 'Потрібні зміни',
   reviewed: 'Переглянуто',
-  cancelled: 'Скасовано',
+  cancelled: 'Відкріплено',
+  closed: 'Закрито',
 };
 
 const PROPOSAL_STATUS_LABELS: Record<string, string> = {
@@ -73,21 +74,63 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                   <span class="badge">{{ statusLabel(item.status) }}</span>
                   <span class="pct">{{ item.completionPercent }}%</span>
                 </div>
-                <button
-                  type="button"
-                  class="btn view"
-                  (click)="openAssignment(item.id)"
-                >
-                  {{
-                    item.status === 'submitted' || item.status === 'reviewed'
-                      ? 'Відкрити'
-                      : item.status === 'changes_requested' ||
-                          item.status === 'in_progress' ||
-                          item.status === 'assigned'
-                        ? 'Продовжити'
-                        : 'Переглянути'
-                  }}
-                </button>
+                <div class="card-actions">
+                  <button
+                    type="button"
+                    class="btn view"
+                    (click)="openAssignment(item.id)"
+                  >
+                    {{
+                      item.status === 'submitted' || item.status === 'reviewed'
+                        ? 'Відкрити'
+                        : item.status === 'changes_requested' ||
+                            item.status === 'in_progress' ||
+                            item.status === 'assigned'
+                          ? 'Продивитись'
+                          : 'Переглянути'
+                    }}
+                  </button>
+                  @if (item.capabilities.canCancel) {
+                    <button
+                      type="button"
+                      class="btn ghost"
+                      [disabled]="busyAssignmentId() === item.id"
+                      (click)="cancelAssignment(item.id)"
+                    >
+                      Відкріпити
+                    </button>
+                  }
+                  @if (item.capabilities.canReactivate) {
+                    <button
+                      type="button"
+                      class="btn primary"
+                      [disabled]="busyAssignmentId() === item.id"
+                      (click)="reactivateAssignment(item.id)"
+                    >
+                      Відновити
+                    </button>
+                  }
+                  @if (item.capabilities.canClose) {
+                    <button
+                      type="button"
+                      class="btn ghost"
+                      [disabled]="busyAssignmentId() === item.id"
+                      (click)="closeAssignment(item.id)"
+                    >
+                      Закрити
+                    </button>
+                  }
+                  @if (item.capabilities.canDelete) {
+                    <button
+                      type="button"
+                      class="btn ghost danger"
+                      [disabled]="busyAssignmentId() === item.id"
+                      (click)="deleteAssignment(item.id)"
+                    >
+                      Видалити
+                    </button>
+                  }
+                </div>
               </div>
               <div class="meta">
                 @if (item.dueAt) {
@@ -133,6 +176,13 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                       }
                     </ul>
                   </div>
+                } @else if (
+                  item.status === 'submitted' || item.status === 'reviewed'
+                ) {
+                  <p class="muted proposals-empty">
+                    Немає пропозицій до профілю (немає відмінностей від поточного
+                    профілю).
+                  </p>
                 }
               }
             </li>
@@ -200,9 +250,20 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         font-weight: 600;
         color: var(--pw-accent);
       }
+      .card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+        justify-content: flex-end;
+      }
       .btn.view {
         flex: 0 0 auto;
         white-space: nowrap;
+      }
+      .btn.danger {
+        color: #b42318;
+        border-color: color-mix(in srgb, #b42318 35%, var(--pw-border));
       }
       .meta {
         display: flex;
@@ -259,6 +320,10 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         font-size: 0.9rem;
         font-weight: 600;
       }
+      .proposals-empty {
+        margin: 0.25rem 0 0;
+        font-size: 0.9rem;
+      }
       .prop-list {
         list-style: none;
         margin: 0;
@@ -285,6 +350,7 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
 
   readonly loading = signal(false);
   readonly assignBusy = signal(false);
+  readonly busyAssignmentId = signal<string | null>(null);
   readonly error = signal<string | null>(null);
   readonly assignOk = signal(false);
   readonly items = signal<QuestionnaireAssignmentListItem[]>([]);
@@ -372,6 +438,76 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
     this.api.rejectProposal(id).subscribe({
       next: () => this.reload(),
       error: () => this.error.set('Не вдалося відхилити пропозицію'),
+    });
+  }
+
+  cancelAssignment(id: string): void {
+    if (
+      !window.confirm(
+        'Скасувати призначення анкети? Чернетка та попередні подання збережуться, але працівник не зможе продовжити заповнення, доки анкету не буде відновлено.',
+      )
+    ) {
+      return;
+    }
+    this.runLifecycle(id, this.api.cancelAssignment(id), 'Не вдалося відкріпити анкету');
+  }
+
+  reactivateAssignment(id: string): void {
+    this.runLifecycle(
+      id,
+      this.api.reactivateAssignment(id),
+      'Не вдалося відновити анкету',
+    );
+  }
+
+  closeAssignment(id: string): void {
+    if (
+      !window.confirm(
+        'Закрити анкету без можливості відновлення доступу до редагування? Відкріплення можна скасувати пізніше; закриття — ні.',
+      )
+    ) {
+      return;
+    }
+    this.runLifecycle(id, this.api.closeAssignment(id), 'Не вдалося закрити анкету');
+  }
+
+  deleteAssignment(id: string): void {
+    if (
+      !window.confirm(
+        'Видалити анкету без можливості відновлення? Буде видалено чернетку, усі подання та пропозиції. Уже застосовані до профілю зміни не скасовуються.',
+      )
+    ) {
+      return;
+    }
+    this.runLifecycle(id, this.api.deleteAssignment(id), 'Не вдалося видалити анкету');
+  }
+
+  private runLifecycle(
+    id: string,
+    request: Observable<unknown>,
+    fallbackError: string,
+  ): void {
+    if (this.busyAssignmentId()) return;
+    this.busyAssignmentId.set(id);
+    this.error.set(null);
+    request.subscribe({
+      next: () => {
+        this.busyAssignmentId.set(null);
+        this.reload();
+      },
+      error: (err) => {
+        this.busyAssignmentId.set(null);
+        const status = err?.status as number | undefined;
+        const msg =
+          err?.error?.message ||
+          (status === 404
+            ? 'Анкету не знайдено'
+            : status === 409
+              ? 'Дію неможливо виконати для поточного статусу'
+              : fallbackError);
+        this.error.set(typeof msg === 'string' ? msg : fallbackError);
+        this.reload();
+      },
     });
   }
 

@@ -29,6 +29,7 @@ const ADMIN: Permission[] = [
   Permission.EmployeesViewHistory,
   Permission.DocumentsManage,
   Permission.QuestionnairesAssign,
+  Permission.QuestionnairesCompleteAny,
   Permission.QuestionnairesReview,
   Permission.QuestionnairesApplyProfileChanges,
   Permission.DepartmentsManage,

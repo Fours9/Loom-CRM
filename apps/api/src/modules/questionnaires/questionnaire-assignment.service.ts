@@ -1,27 +1,57 @@
 import {
-  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserStatus } from '../../platform/identity/user.enums';
 import { UsersService } from '../../platform/identity/users.service';
 import { Permission } from '../../platform/permissions/permission.names';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
+import { AuditService } from '../../platform/audit/audit.service';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
 import { QuestionnaireTemplate } from './questionnaire-template.entity';
 import { QuestionnaireTemplateVersion } from './questionnaire-template-version.entity';
+import { QuestionnaireProfileProposal } from './questionnaire-profile-proposal.entity';
 import { QuestionnaireResponseService } from './questionnaire-response.service';
 import {
   completionPercent,
   EMPLOYEE_360_TEMPLATE_CODE,
 } from './seed/employee-360-v1.schema';
+import {
+  canCancelAssignment,
+  canCloseAssignment,
+  canReactivateAssignment,
+  QUESTIONNAIRE_ASSIGNMENT_AUDIT,
+} from './assignments/questionnaire-assignment-transitions';
+import {
+  computeDetailCapabilities,
+  computeListLifecycleCapabilities,
+} from './assignments/questionnaire-assignment-access';
+import { attachmentStateForStatus } from './assignments/questionnaire-assignment-attachment-state';
+import {
+  applyDirectoryFilters,
+  applyDirectoryScope,
+  applyDirectorySort,
+  type QuestionnaireDirectoryFilters,
+  type QuestionnaireDirectoryScope,
+} from './assignments/questionnaire-assignment-list.query';
+import { Employee } from '../../organization/employees/employee.entity';
+import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
+import { PERSONAL_CONTACT_TYPES } from '../../organization/employees/employee-personal-contacts';
+import type {
+  QuestionnaireDirectoryQuery,
+  QuestionnaireDirectoryResponse,
+} from '@loom/contracts-questionnaires';
+import { buildQuestionnaireProfileMirror } from './proposals/questionnaire-profile-mirror';
+import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
 
 @Injectable()
 export class QuestionnaireAssignmentService {
@@ -36,10 +66,14 @@ export class QuestionnaireAssignmentService {
     private readonly responses: Repository<QuestionnaireResponse>,
     @InjectRepository(QuestionnaireSubmission)
     private readonly submissions: Repository<QuestionnaireSubmission>,
+    @InjectRepository(EmployeeContact)
+    private readonly contacts: Repository<EmployeeContact>,
     private readonly access: EmployeeAccessService,
     private readonly users: UsersService,
     private readonly permissions: PermissionService,
     private readonly responseService: QuestionnaireResponseService,
+    private readonly audit: AuditService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(
@@ -149,40 +183,23 @@ export class QuestionnaireAssignmentService {
     };
 
     const isOwner = this.access.isOwner(actor, employee);
-    const canCompleteSelf = this.permissions.has(
-      actor.role,
-      Permission.QuestionnairesCompleteSelf,
-    );
-    const canReview = this.permissions.has(
-      actor.role,
-      Permission.QuestionnairesReview,
-    );
-    const editableStatuses = new Set(['assigned', 'in_progress', 'changes_requested']);
-    const canEditDraft =
-      isOwner && canCompleteSelf && editableStatuses.has(assignment.status);
-    const canSubmit = canEditDraft;
-    const canReopenSelf =
-      isOwner &&
-      canCompleteSelf &&
-      (assignment.status === 'submitted' || assignment.status === 'reviewed');
-    const canRequestChanges =
-      canReview &&
-      (assignment.status === 'submitted' || assignment.status === 'reviewed');
+    const caps = computeDetailCapabilities({
+      actor,
+      employee,
+      status: assignment.status,
+      permissions: this.permissions,
+      access: this.access,
+    });
 
     let profileMirror: Record<string, unknown> | null = null;
     if (isOwner || this.access.isAdmin(actor)) {
-      profileMirror = {
-        lastName: employee.lastName,
-        firstName: employee.firstName,
-        middleName: employee.middleName,
-        preferredName: employee.preferredName,
-        birthDate: employee.birthDate,
-        city: employee.city,
-        preferredLanguage: employee.preferredLanguage,
-        personalPhoneNumber: employee.personalPhoneNumber,
-        personalEmail: employee.personalEmail,
-        personalTelegram: employee.personalTelegram,
-      };
+      const contacts = await this.contacts.find({
+        where: {
+          employeeId: employee.id,
+          type: In([...PERSONAL_CONTACT_TYPES]),
+        },
+      });
+      profileMirror = buildQuestionnaireProfileMirror(employee, contacts);
     }
 
     return {
@@ -216,18 +233,313 @@ export class QuestionnaireAssignmentService {
       })),
       completionPercent: completionPercent(draft?.answersJson, schema),
       profileMirror,
-      capabilities: {
-        canEditDraft,
-        canSubmit,
-        canReopenSelf,
-        canRequestChanges,
-        canReview:
-          canReview &&
-          (assignment.status === 'submitted' ||
-            assignment.status === 'changes_requested' ||
-            assignment.status === 'reviewed'),
-      },
+      capabilities: caps,
     };
+  }
+
+  async cancel(actor: User, assignmentId: string) {
+    await this.dataSource.transaction(async (manager) => {
+      const assignment = await this.lockAssignment(manager, assignmentId);
+      await this.requireAssignmentLifecycleAccess(actor, assignment);
+
+      if (!canCancelAssignment(assignment.status)) {
+        throw new ConflictException(
+          `Cannot cancel assignment in status ${assignment.status}`,
+        );
+      }
+
+      const previousStatus = assignment.status;
+      const now = new Date();
+      assignment.status = 'cancelled';
+      await manager.getRepository(QuestionnaireAssignment).save(assignment);
+      await supersedePendingForAssignment(manager, assignment.id, now);
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.cancelled,
+          entityType: 'questionnaire_assignment',
+          entityId: assignment.id,
+          metadata: {
+            assignmentId: assignment.id,
+            employeeId: assignment.employeeId,
+            previousStatus,
+          },
+        },
+        manager,
+      );
+    });
+
+    return this.getDetail(actor, assignmentId);
+  }
+
+  async reactivate(actor: User, assignmentId: string) {
+    await this.dataSource.transaction(async (manager) => {
+      const assignment = await this.lockAssignment(manager, assignmentId);
+      await this.requireAssignmentLifecycleAccess(actor, assignment);
+
+      if (!canReactivateAssignment(assignment.status)) {
+        throw new ConflictException(
+          `Cannot reactivate assignment in status ${assignment.status}`,
+        );
+      }
+
+      assignment.status = 'assigned';
+      assignment.reviewedAt = null;
+      await manager.getRepository(QuestionnaireAssignment).save(assignment);
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.reactivated,
+          entityType: 'questionnaire_assignment',
+          entityId: assignment.id,
+          metadata: {
+            assignmentId: assignment.id,
+            employeeId: assignment.employeeId,
+            previousStatus: 'cancelled',
+          },
+        },
+        manager,
+      );
+    });
+
+    return this.getDetail(actor, assignmentId);
+  }
+
+  async close(actor: User, assignmentId: string) {
+    await this.dataSource.transaction(async (manager) => {
+      const assignment = await this.lockAssignment(manager, assignmentId);
+      await this.requireAssignmentLifecycleAccess(actor, assignment);
+
+      if (!canCloseAssignment(assignment.status)) {
+        throw new ConflictException(
+          `Cannot close assignment in status ${assignment.status}`,
+        );
+      }
+
+      const previousStatus = assignment.status;
+      const now = new Date();
+      assignment.status = 'closed';
+      await manager.getRepository(QuestionnaireAssignment).save(assignment);
+      await supersedePendingForAssignment(manager, assignment.id, now);
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.closed,
+          entityType: 'questionnaire_assignment',
+          entityId: assignment.id,
+          metadata: {
+            assignmentId: assignment.id,
+            employeeId: assignment.employeeId,
+            previousStatus,
+          },
+        },
+        manager,
+      );
+    });
+
+    return this.getDetail(actor, assignmentId);
+  }
+
+  async listDirectory(
+    actor: User,
+    query: QuestionnaireDirectoryQuery,
+  ): Promise<QuestionnaireDirectoryResponse> {
+    if (!this.permissions.has(actor.role, Permission.QuestionnairesView)) {
+      throw new ForbiddenException('Cannot view questionnaires');
+    }
+
+    const limit = Math.min(Math.max(query.limit ?? 50, 1), 100);
+    const offset = Math.max(query.offset ?? 0, 0);
+    const filters: QuestionnaireDirectoryFilters = {
+      departmentId: query.departmentId,
+      positionId: query.positionId,
+      createdFrom: query.createdFrom,
+      createdTo: query.createdTo,
+      attachmentState: query.attachmentState,
+      sortBy: query.sortBy,
+      sortDir: query.sortDir,
+      limit,
+      offset,
+    };
+
+    const scope = await this.resolveDirectoryScope(actor);
+
+    const baseQb = () => {
+      const qb = this.assignments
+        .createQueryBuilder('a')
+        .innerJoin('a.templateVersion', 'tv')
+        .innerJoin('tv.template', 'tmpl')
+        .innerJoin(Employee, 'emp', 'emp.id = a.employee_id')
+        .leftJoin('emp.department', 'dept')
+        .leftJoin('emp.position', 'pos')
+        .leftJoin(
+          QuestionnaireResponse,
+          'resp',
+          'resp.assignment_id = a.id',
+        );
+      applyDirectoryScope(qb, scope);
+      applyDirectoryFilters(qb, filters);
+      return qb;
+    };
+
+    const total = await baseQb().clone().select('a.id').distinct(true).getCount();
+
+    const qb = baseQb()
+      .select([
+        'a.id AS id',
+        'a.status AS status',
+        'a.created_at AS "createdAt"',
+        'a.updated_at AS "assignmentUpdatedAt"',
+        'a.employee_id AS "employeeId"',
+        'tmpl.code AS "templateCode"',
+        'tmpl.title AS "templateTitle"',
+        'tv.version AS version',
+        'emp.first_name AS "firstName"',
+        'emp.last_name AS "lastName"',
+        'emp.middle_name AS "middleName"',
+        'dept.name AS "departmentName"',
+        'pos.name AS "positionName"',
+        'resp.updated_at AS "responseUpdatedAt"',
+      ]);
+    applyDirectorySort(qb, filters.sortBy ?? 'createdAt', filters.sortDir ?? 'desc');
+    qb.offset(offset).limit(limit);
+
+    const rows = await qb.getRawMany<{
+      id: string;
+      status: string;
+      createdAt: Date;
+      assignmentUpdatedAt: Date;
+      employeeId: string;
+      templateCode: string;
+      templateTitle: string;
+      version: number;
+      firstName: string;
+      lastName: string;
+      middleName: string | null;
+      departmentName: string | null;
+      positionName: string | null;
+      responseUpdatedAt: Date | null;
+    }>();
+
+    const items = rows.map((row) => {
+      const lifecycle = computeListLifecycleCapabilities({
+        actor,
+        status: row.status,
+        permissions: this.permissions,
+      });
+      const assignmentUpdated = new Date(row.assignmentUpdatedAt).getTime();
+      const responseUpdated = row.responseUpdatedAt
+        ? new Date(row.responseUpdatedAt).getTime()
+        : new Date(row.createdAt).getTime();
+      const activityMs = Math.max(assignmentUpdated, responseUpdated);
+      const displayName = [row.lastName, row.firstName, row.middleName]
+        .filter(Boolean)
+        .join(' ');
+
+      return {
+        id: row.id,
+        templateCode: row.templateCode,
+        templateTitle: row.templateTitle,
+        version: Number(row.version),
+        employeeId: row.employeeId,
+        employeeDisplayName: displayName,
+        departmentName: row.departmentName,
+        positionName: row.positionName,
+        status: row.status as QuestionnaireDirectoryResponse['items'][number]['status'],
+        attachmentState: attachmentStateForStatus(row.status),
+        createdAt: new Date(row.createdAt).toISOString(),
+        updatedAt: new Date(activityMs).toISOString(),
+        capabilities: {
+          canOpen: lifecycle.canOpen,
+          canCancel: lifecycle.canCancel,
+          canReactivate: lifecycle.canReactivate,
+          canClose: lifecycle.canClose,
+          canDelete: lifecycle.canDelete,
+        },
+      };
+    });
+
+    return { items, total, limit, offset };
+  }
+
+  private async resolveDirectoryScope(
+    actor: User,
+  ): Promise<QuestionnaireDirectoryScope> {
+    if (this.access.isAdmin(actor)) {
+      return { kind: 'all' };
+    }
+    if (this.access.scope(actor) === 'managed_departments') {
+      const departmentIds = await this.access.managedDepartmentIds(actor);
+      return {
+        kind: 'departments_and_self',
+        departmentIds,
+        userId: actor.id,
+      };
+    }
+    return { kind: 'self', userId: actor.id };
+  }
+
+  async deleteAssignment(actor: User, assignmentId: string): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const assignment = await this.lockAssignment(manager, assignmentId);
+      await this.requireAssignmentLifecycleAccess(actor, assignment);
+
+      const response = await manager.getRepository(QuestionnaireResponse).findOne({
+        where: { assignmentId: assignment.id },
+      });
+      let submissionCount = 0;
+      let proposalCount = 0;
+      if (response) {
+        submissionCount = await manager
+          .getRepository(QuestionnaireSubmission)
+          .count({ where: { responseId: response.id } });
+        const submissionIds = (
+          await manager.getRepository(QuestionnaireSubmission).find({
+            where: { responseId: response.id },
+            select: ['id'],
+          })
+        ).map((s) => s.id);
+        if (submissionIds.length) {
+          proposalCount = await manager
+            .getRepository(QuestionnaireProfileProposal)
+            .createQueryBuilder('p')
+            .where('p.submission_id IN (:...ids)', { ids: submissionIds })
+            .getCount();
+        }
+      }
+
+      const template = assignment.templateVersion?.template;
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.deleted,
+          entityType: 'questionnaire_assignment',
+          entityId: assignment.id,
+          metadata: {
+            assignmentId: assignment.id,
+            employeeId: assignment.employeeId,
+            templateCode: template?.code ?? null,
+            version: assignment.templateVersion?.version ?? null,
+            previousStatus: assignment.status,
+            responseId: response?.id ?? null,
+            submissionCount,
+            proposalCount,
+            actorUserId: actor.id,
+          },
+        },
+        manager,
+      );
+
+      const result = await manager
+        .getRepository(QuestionnaireAssignment)
+        .delete(assignment.id);
+      if (result.affected !== 1) {
+        throw new NotFoundException('Assignment not found');
+      }
+    });
   }
 
   async loadAssignmentOrFail(id: string): Promise<QuestionnaireAssignment> {
@@ -237,6 +549,37 @@ export class QuestionnaireAssignmentService {
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
     return assignment;
+  }
+
+  private async lockAssignment(
+    manager: EntityManager,
+    assignmentId: string,
+  ): Promise<QuestionnaireAssignment> {
+    const locked = await manager
+      .getRepository(QuestionnaireAssignment)
+      .createQueryBuilder('a')
+      .setLock('pessimistic_write')
+      .where('a.id = :id', { id: assignmentId })
+      .getOne();
+    if (!locked) throw new NotFoundException('Assignment not found');
+
+    const withRelations = await manager.getRepository(QuestionnaireAssignment).findOne({
+      where: { id: locked.id },
+      relations: { templateVersion: { template: true } },
+    });
+    if (!withRelations) throw new NotFoundException('Assignment not found');
+    return withRelations;
+  }
+
+  private async requireAssignmentLifecycleAccess(
+    actor: User,
+    assignment: QuestionnaireAssignment,
+  ): Promise<void> {
+    if (!this.permissions.has(actor.role, Permission.QuestionnairesAssign)) {
+      throw new ForbiddenException('Cannot manage questionnaire assignment');
+    }
+    const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
+    await this.access.requireCanView(actor, employee);
   }
 
   private canAssign(actor: User): boolean {
@@ -262,6 +605,7 @@ export class QuestionnaireAssignmentService {
     row: QuestionnaireAssignment,
     employee: Awaited<ReturnType<EmployeeAccessService['getEmployeeOrFail']>>,
   ) {
+    void employee;
     const draft = await this.responses.findOne({
       where: { assignmentId: row.id },
     });
@@ -287,6 +631,12 @@ export class QuestionnaireAssignmentService {
       steps: Array<{ fields: Array<{ key: string }> }>;
     };
 
+    const lifecycle = computeListLifecycleCapabilities({
+      actor,
+      status: row.status,
+      permissions: this.permissions,
+    });
+
     return {
       id: row.id,
       employeeId: row.employeeId,
@@ -301,10 +651,7 @@ export class QuestionnaireAssignmentService {
       createdAt: row.createdAt.toISOString(),
       completionPercent: completionPercent(draft?.answersJson, schema),
       latestSubmission,
-      capabilities: {
-        canOpen: true,
-        canAssign: this.canAssign(actor),
-      },
+      capabilities: lifecycle,
     };
   }
 }

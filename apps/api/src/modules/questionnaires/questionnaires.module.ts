@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrganizationModule } from '../../organization/organization.module';
+import { AuditModule } from '../../platform/audit/audit.module';
 import { IdentityModule } from '../../platform/identity/identity.module';
 import { PermissionsModule } from '../../platform/permissions/permissions.module';
 import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
@@ -31,6 +32,7 @@ import { QuestionnairesController } from './questionnaires.controller';
     OrganizationModule,
     IdentityModule,
     PermissionsModule,
+    AuditModule,
   ],
   providers: [
     QuestionnaireAssignmentService,

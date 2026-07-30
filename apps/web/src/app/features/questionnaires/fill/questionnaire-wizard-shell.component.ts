@@ -7,7 +7,6 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
   QUESTIONNAIRE_INTRO_STEP,
@@ -38,7 +37,6 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
   selector: 'loom-questionnaire-wizard-shell',
   standalone: true,
   imports: [
-    RouterLink,
     QuestionnaireFieldHostComponent,
     QuestionnaireSaveStatusComponent,
   ],
@@ -184,9 +182,8 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
                 </p>
               } @else {
                 <p>
-                  Це надіслана анкета в режимі перегляду. Щоб змінити відповіді,
-                  натисніть «Редагувати», збережіть зміни й натисніть «Зберегти і
-                  закрити».
+                  Режим перегляду. Щоб змінити відповіді, натисніть «Редагувати»
+                  зверху справа.
                 </p>
               }
             </div>
@@ -391,29 +388,6 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
           }
         </div>
       </footer>
-
-      @if (store.submitState() === 'success') {
-        <div class="overlay success">
-          <h2>Анкету надіслано</h2>
-          <p>Дякуємо. Можна повернутися до профілю або відредагувати відповіді.</p>
-          <div class="overlay-actions">
-            @if (store.assignment()?.capabilities?.canReopenSelf) {
-              <button
-                type="button"
-                class="btn"
-                [disabled]="reopenBusy()"
-                (click)="reopenAfterSubmit()"
-              >
-                {{ reopenBusy() ? 'Відкриття…' : 'Редагувати знову' }}
-              </button>
-            }
-            <a class="btn primary" routerLink="/people">До працівників</a>
-          </div>
-          @if (reopenError(); as err) {
-            <p class="overlay-error">{{ err }}</p>
-          }
-        </div>
-      }
     </div>
   `,
   styles: [
@@ -637,26 +611,6 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         padding: 0;
         text-decoration: underline;
       }
-      .overlay.success {
-        position: absolute;
-        inset: 0;
-        background: color-mix(in srgb, var(--pw-bg, #fff) 92%, transparent);
-        display: grid;
-        place-content: center;
-        gap: 0.75rem;
-        text-align: center;
-        padding: 1rem;
-      }
-      .overlay-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        justify-content: center;
-      }
-      .overlay-error {
-        margin: 0;
-        color: #b42318;
-      }
       .drawer-toggle {
         display: none;
       }
@@ -697,8 +651,6 @@ export class QuestionnaireWizardShellComponent {
   readonly drawerOpen = signal(false);
   /** Short feedback after manual save when header status alone is easy to miss. */
   readonly saveFlash = signal<string | null>(null);
-  readonly reopenBusy = signal(false);
-  readonly reopenError = signal<string | null>(null);
   private saveFlashTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -1037,6 +989,7 @@ export class QuestionnaireWizardShellComponent {
     if (!this.canSubmit()) return;
     if (!this.store.beginSubmit()) return;
 
+    this.store.materializeMirrorIntoProposalAnswers();
     const flushed = await this.autosave.flush();
     if (!flushed) {
       this.store.finishSubmitError(
@@ -1055,7 +1008,6 @@ export class QuestionnaireWizardShellComponent {
     try {
       await firstValueFrom(this.api.submit(id));
       await this.store.load(id, this.store.activeStepKey());
-      this.store.finishSubmitSuccess();
     } catch (err: unknown) {
       this.store.finishSubmitError(
         (err as { error?: { message?: string } })?.error?.message ||
@@ -1070,22 +1022,6 @@ export class QuestionnaireWizardShellComponent {
       await this.revision.resubmitAndClose();
     } catch {
       queueMicrotask(() => this.submitErrorEl?.nativeElement.focus());
-    }
-  }
-
-  async reopenAfterSubmit(): Promise<void> {
-    if (this.reopenBusy()) return;
-    this.reopenBusy.set(true);
-    this.reopenError.set(null);
-    try {
-      await this.revision.reopenSelf();
-    } catch (err: unknown) {
-      this.reopenError.set(
-        (err as { error?: { message?: string } })?.error?.message ||
-          'Не вдалося відкрити анкету для редагування',
-      );
-    } finally {
-      this.reopenBusy.set(false);
     }
   }
 

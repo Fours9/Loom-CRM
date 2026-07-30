@@ -5,6 +5,7 @@ export const QUESTIONNAIRE_ASSIGNMENT_STATUSES = [
   'changes_requested',
   'reviewed',
   'cancelled',
+  'closed',
 ] as const;
 
 export type QuestionnaireAssignmentStatus =

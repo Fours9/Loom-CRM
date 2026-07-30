@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import type { QuestionnaireAssignmentStatus } from './questionnaire.enums';
 import { QuestionnaireTemplateVersion } from './questionnaire-template-version.entity';
@@ -49,6 +50,9 @@ export class QuestionnaireAssignment {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  updatedAt!: Date;
 
   @OneToOne(() => QuestionnaireResponse, (r) => r.assignment)
   response?: QuestionnaireResponse | null;

@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -22,6 +24,7 @@ import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import {
   CreateQuestionnaireAssignmentDto,
   PatchQuestionnaireDraftDto,
+  QuestionnaireDirectoryQueryDto,
   RequestQuestionnaireChangesDto,
   ReviewQuestionnaireSubmissionDto,
 } from './questionnaire.dto';
@@ -35,6 +38,15 @@ export class QuestionnairesController {
     private readonly submissions: QuestionnaireSubmissionService,
     private readonly proposals: QuestionnaireProposalService,
   ) {}
+
+  @Get('directory')
+  @RequirePermissions(Permission.QuestionnairesView)
+  listDirectory(
+    @CurrentUser() actor: User,
+    @Query() query: QuestionnaireDirectoryQueryDto,
+  ) {
+    return this.assignments.listDirectory(actor, query);
+  }
 
   @Post('assignments')
   @RequirePermissions(Permission.QuestionnairesAssign)
@@ -63,8 +75,46 @@ export class QuestionnairesController {
     return this.assignments.getDetail(actor, id);
   }
 
+  @Post('assignments/:id/cancel')
+  @RequirePermissions(Permission.QuestionnairesAssign)
+  cancelAssignment(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.assignments.cancel(actor, id);
+  }
+
+  @Post('assignments/:id/reactivate')
+  @RequirePermissions(Permission.QuestionnairesAssign)
+  reactivateAssignment(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.assignments.reactivate(actor, id);
+  }
+
+  @Post('assignments/:id/close')
+  @RequirePermissions(Permission.QuestionnairesAssign)
+  closeAssignment(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.assignments.close(actor, id);
+  }
+
+  @Delete('assignments/:id')
+  @HttpCode(204)
+  @RequirePermissions(Permission.QuestionnairesAssign)
+  async deleteAssignment(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.assignments.deleteAssignment(actor, id);
+  }
+
+  /** Service enforces CompleteSelf OR CompleteAny via capabilities. */
   @Patch('assignments/:id/draft')
-  @RequirePermissions(Permission.QuestionnairesCompleteSelf)
+  @RequirePermissions(Permission.QuestionnairesView)
   patchDraft(
     @CurrentUser() actor: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -74,7 +124,7 @@ export class QuestionnairesController {
   }
 
   @Post('assignments/:id/submit')
-  @RequirePermissions(Permission.QuestionnairesCompleteSelf)
+  @RequirePermissions(Permission.QuestionnairesView)
   submit(
     @CurrentUser() actor: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -89,6 +139,15 @@ export class QuestionnairesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.submissions.reopenSelf(actor, id);
+  }
+
+  @Post('assignments/:id/start-revision')
+  @RequirePermissions(Permission.QuestionnairesCompleteAny)
+  startRevision(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.submissions.startRevision(actor, id);
   }
 
   @Post('assignments/:id/request-changes')

@@ -13,6 +13,11 @@ const NAV_TREE: NavNode[] = [
   { path: '/', label: 'Головна' },
   { path: '/people', label: 'Працівники', permission: Permission.EmployeesView },
   {
+    path: '/questionnaires',
+    label: 'Анкети',
+    permission: Permission.QuestionnairesView,
+  },
+  {
     path: '/absences',
     label: 'Робочий календар',
     permission: Permission.AbsencesCalendarView,
