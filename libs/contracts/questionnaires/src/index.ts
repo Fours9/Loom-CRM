@@ -16,6 +16,7 @@ export const QUESTIONNAIRE_PROPOSAL_STATUSES = [
   'pending',
   'accepted',
   'rejected',
+  'superseded',
 ] as const;
 
 export type QuestionnaireProposalStatus =
@@ -165,6 +166,8 @@ export type QuestionnaireAssignmentDetail = {
   capabilities: {
     canEditDraft: boolean;
     canSubmit: boolean;
+    /** Owner may reopen a submitted/reviewed assignment for further edits. */
+    canReopenSelf: boolean;
     canRequestChanges: boolean;
     canReview: boolean;
   };
@@ -181,6 +184,8 @@ export type QuestionnaireProposedChange = {
 export type QuestionnaireProfileProposalItem = {
   id: EntityId;
   submissionId: EntityId;
+  /** Assignment that produced this proposal (via submission → response). */
+  assignmentId: EntityId;
   employeeId: EntityId;
   targetSection: string;
   proposedChanges: QuestionnaireProposedChange;

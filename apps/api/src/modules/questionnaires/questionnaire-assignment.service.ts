@@ -161,6 +161,10 @@ export class QuestionnaireAssignmentService {
     const canEditDraft =
       isOwner && canCompleteSelf && editableStatuses.has(assignment.status);
     const canSubmit = canEditDraft;
+    const canReopenSelf =
+      isOwner &&
+      canCompleteSelf &&
+      (assignment.status === 'submitted' || assignment.status === 'reviewed');
     const canRequestChanges =
       canReview &&
       (assignment.status === 'submitted' || assignment.status === 'reviewed');
@@ -215,6 +219,7 @@ export class QuestionnaireAssignmentService {
       capabilities: {
         canEditDraft,
         canSubmit,
+        canReopenSelf,
         canRequestChanges,
         canReview:
           canReview &&

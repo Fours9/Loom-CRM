@@ -83,12 +83,13 @@ export class QuestionnaireDraftStore {
     if (!detail) return 'not_found';
     const status = detail.status;
     if (status === 'cancelled') return 'unavailable';
-    if (!detail.capabilities.canEditDraft && !detail.capabilities.canSubmit) {
+    if (detail.capabilities.canEditDraft || detail.capabilities.canSubmit) {
       if (status === 'submitted' || status === 'reviewed') return 'read_only';
-      return 'owner_only';
+      return 'editable';
     }
-    if (status === 'submitted' || status === 'reviewed') return 'read_only';
-    return 'editable';
+    // Viewer (e.g. HR): keep read-only for submitted/reviewed/reopened, not "owner only".
+    if (status === 'assigned' || status === 'in_progress') return 'owner_only';
+    return 'read_only';
   });
 
   readonly editable = computed(() => this.uiMode() === 'editable');
@@ -187,6 +188,31 @@ export class QuestionnaireDraftStore {
   }
 
   applyRequestedStep(requestedStepKey: string | null): void {
+    if (!this.editable()) {
+      const key = requestedStepKey?.trim() || null;
+      if (key === QUESTIONNAIRE_INTRO_STEP) {
+        this.activeStepKey.set(QUESTIONNAIRE_INTRO_STEP);
+        return;
+      }
+      if (key === QUESTIONNAIRE_REVIEW_STEP) {
+        this.activeStepKey.set(QUESTIONNAIRE_REVIEW_STEP);
+        return;
+      }
+      if (key && this.schemaSteps().some((s) => s.key === key)) {
+        this.activeStepKey.set(key);
+        return;
+      }
+      // Default read-only landing: review if all complete, else intro.
+      const completed = this.completedSteps();
+      const allComplete =
+        this.schemaSteps().length > 0 &&
+        this.schemaSteps().every((s) => completed.has(s.key));
+      this.activeStepKey.set(
+        allComplete ? QUESTIONNAIRE_REVIEW_STEP : QUESTIONNAIRE_INTRO_STEP,
+      );
+      return;
+    }
+
     const completed = this.completedSteps();
     const resolved = resolveQuestionnaireActiveStep({
       requestedStepKey,

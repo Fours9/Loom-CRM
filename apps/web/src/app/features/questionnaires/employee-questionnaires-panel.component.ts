@@ -26,6 +26,12 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Скасовано',
 };
 
+const PROPOSAL_STATUS_LABELS: Record<string, string> = {
+  pending: 'Очікує',
+  accepted: 'Прийнято',
+  rejected: 'Відхилено',
+};
+
 @Component({
   selector: 'loom-employee-questionnaires-panel',
   standalone: true,
@@ -72,7 +78,15 @@ const STATUS_LABELS: Record<string, string> = {
                   class="btn view"
                   (click)="openAssignment(item.id)"
                 >
-                  Переглянути
+                  {{
+                    item.status === 'submitted' || item.status === 'reviewed'
+                      ? 'Відкрити'
+                      : item.status === 'changes_requested' ||
+                          item.status === 'in_progress' ||
+                          item.status === 'assigned'
+                        ? 'Продовжити'
+                        : 'Переглянути'
+                  }}
                 </button>
               </div>
               <div class="meta">
@@ -81,41 +95,50 @@ const STATUS_LABELS: Record<string, string> = {
                 }
                 <span>v{{ item.version }}</span>
               </div>
+              @if (proposalsForAssignment(item.id); as props) {
+                @if (props.length) {
+                  <div class="assignment-proposals">
+                    <h4>Пропозиції до профілю</h4>
+                    <ul class="prop-list">
+                      @for (p of props; track p.id) {
+                        <li class="prop-card">
+                          <div class="card-main">
+                            <strong>{{ proposalLabel(p) }}</strong>
+                            <span class="badge">{{
+                              proposalStatusLabel(p.status)
+                            }}</span>
+                          </div>
+                          <div class="meta">
+                            <span>{{ formatChange(p) }}</span>
+                          </div>
+                          @if (canApply() && p.status === 'pending') {
+                            <div class="actions">
+                              <button
+                                type="button"
+                                class="btn primary"
+                                (click)="accept(p.id)"
+                              >
+                                Прийняти
+                              </button>
+                              <button
+                                type="button"
+                                class="btn ghost"
+                                (click)="reject(p.id)"
+                              >
+                                Відхилити
+                              </button>
+                            </div>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+              }
             </li>
           }
         </ul>
       }
-
-      <section class="proposals">
-        <h3>Пропозиції до профілю</h3>
-        @if (!proposals().length) {
-          <p class="muted">Немає пропозицій.</p>
-        } @else {
-          <ul class="list">
-            @for (p of proposals(); track p.id) {
-              <li class="card">
-                <div class="card-main">
-                  <strong>{{ proposalLabel(p) }}</strong>
-                  <span class="badge">{{ p.status }}</span>
-                </div>
-                <div class="meta">
-                  <span>{{ formatChange(p) }}</span>
-                </div>
-                @if (canApply() && p.status === 'pending') {
-                  <div class="actions">
-                    <button type="button" class="btn primary" (click)="accept(p.id)">
-                      Прийняти
-                    </button>
-                    <button type="button" class="btn ghost" (click)="reject(p.id)">
-                      Відхилити
-                    </button>
-                  </div>
-                }
-              </li>
-            }
-          </ul>
-        }
-      </section>
 
       <loom-questionnaire-snapshot-summary [employeeId]="employeeId" />
     </div>
@@ -224,6 +247,33 @@ const STATUS_LABELS: Record<string, string> = {
         display: grid;
         gap: 0.6rem;
       }
+      .assignment-proposals {
+        display: grid;
+        gap: 0.45rem;
+        margin-top: 0.35rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid var(--pw-border);
+      }
+      .assignment-proposals h4 {
+        margin: 0;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+      .prop-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.45rem;
+      }
+      .prop-card {
+        border: 1px solid var(--pw-border);
+        border-radius: 8px;
+        padding: 0.55rem 0.65rem;
+        background: color-mix(in srgb, var(--pw-bg, #f6f8fb) 70%, transparent);
+        display: grid;
+        gap: 0.35rem;
+      }
     `,
   ],
 })
@@ -250,6 +300,27 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
 
   statusLabel(status: string): string {
     return STATUS_LABELS[status] ?? status;
+  }
+
+  proposalStatusLabel(status: string): string {
+    return PROPOSAL_STATUS_LABELS[status] ?? status;
+  }
+
+  /** Pending proposals for this questionnaire (primary: assignmentId). */
+  proposalsForAssignment(
+    assignmentId: string,
+  ): QuestionnaireProfileProposalItem[] {
+    const latestSubmissionId =
+      this.items().find((i) => i.id === assignmentId)?.latestSubmission?.id ??
+      null;
+    return this.proposals().filter((p) => {
+      if (p.status !== 'pending') return false;
+      if (p.assignmentId === assignmentId) return true;
+      // Legacy rolling-deploy fallback only (submissionId ≠ assignmentId).
+      return (
+        !!latestSubmissionId && p.submissionId === latestSubmissionId
+      );
+    });
   }
 
   openAssignment(assignmentId: string): void {

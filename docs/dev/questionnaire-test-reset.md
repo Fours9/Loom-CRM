@@ -49,7 +49,9 @@ Live reset без оновлення tracked snapshot → наступний `db
 
 Закомітити оновлений `data/app.snapshot.sql`, якщо snapshot раніше містив questionnaire rows або застарілий `schema_json`. Інакше runbook перевіряє відсутність assignment/response/submission/proposal rows у snapshot і все одно фіксує актуальну v1 schema одним snapshot pass після seed (template/version rows з’являться після `migration:run` + API startup).
 
-**Перевірка snapshot (без rows):** у `data/app.snapshot.sql` не повинно бути `COPY`/`INSERT` для `questionnaire_assignments` / `questionnaire_responses` / `questionnaire_submissions` / `questionnaire_profile_proposals` зі старими drafts. Після seed — `questionnaire_template_versions.schema_json` має містити steps `family` + `celebration_dates`.
+**Перевірка snapshot (без rows):** у `data/app.snapshot.sql` не повинно бути `COPY`/`INSERT` для `questionnaire_assignments` / `questionnaire_responses` / `questionnaire_submissions` / `questionnaire_profile_proposals` зі старими drafts. Після seed — `questionnaire_template_versions.schema_json` має містити steps `family` + `celebration_dates` і поле `family.other_dates` (`repeating_group`, не text `other_dates_note`).
+
+Breaking answer shapes (наприклад `family.other_dates_note` text → `family.other_dates` list) вимагають reset + API restart перед smoke.
 
 ## Коли потрібен reset
 

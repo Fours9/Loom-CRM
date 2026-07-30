@@ -183,6 +183,51 @@ describe('questionnaire-validation', () => {
     expect(validateFieldValue(field, [{ name: 'Ann' }])).toBeNull();
   });
 
+  it('rejects repeating row when to is before from', () => {
+    const field: QuestionnaireSchemaField = {
+      key: 'family.other_dates',
+      label: 'Інші важливі дати',
+      valueType: 'repeating_group',
+      requiredPolicy: 'voluntary',
+      maxItems: 20,
+      children: [
+        {
+          key: 'title',
+          label: 'Назва',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'from',
+          label: 'З',
+          valueType: 'date',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'to',
+          label: 'По',
+          valueType: 'date',
+          requiredPolicy: 'voluntary',
+        },
+      ],
+    };
+    expect(
+      validateFieldValue(field, [
+        { title: 'Ювілей', from: '2026-05-01', to: '2026-04-01' },
+      ])?.severity,
+    ).toBe('error');
+    expect(
+      validateFieldValue(field, [
+        { title: 'Ювілей', from: '2026-04-01', to: '2026-05-01' },
+      ]),
+    ).toBeNull();
+    expect(
+      validateFieldValue(field, [
+        { title: 'Ювілей', from: '2026-04-01', to: '' },
+      ]),
+    ).toBeNull();
+  });
+
   it('step required ignores recommended', () => {
     expect(
       areStepRequiredFieldsValid(

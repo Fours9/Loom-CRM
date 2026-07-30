@@ -164,7 +164,7 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | hobbies.birthday_greeting | 20 | Вітати з Днем народження | single_choice | voluntary | questionnaire_snapshot | in_mvp | public, hr_only, none (under ДН date) |
 | family.gifts_permission | 30 | Дозвіл для подарунків | single_choice | voluntary | questionnaire_snapshot | in_mvp | yes, no (moved from family) |
 | hobbies.gift_format | 40 | Формат подарунка | multi_choice | voluntary | questionnaire_snapshot | in_mvp | merch, certificate, experience, useful_item (moved from hobbies) |
-| family.other_dates_note | 50 | Інші важливі дати | text | voluntary | questionnaire_snapshot | in_mvp | snapshot note |
+| family.other_dates | 50 | Інші важливі дати | repeating_group | voluntary | questionnaire_snapshot | in_mvp | children: title (Назва), from (З), to (По; empty OK; to >= from); maxItems 20; snapshot-only (не employee_important_dates) |
 
 ---
 
@@ -230,8 +230,8 @@ Single catalog entry representing matrix (not 26 hardcoded employee columns):
 | education.institutions | 20 | Навчальні заклади | repeating_group | questionnaire_snapshot | in_mvp |
 | education.languages | 30 | Мови | repeating_group | questionnaire_snapshot | in_mvp |
 | education.certificates | 40 | Сертифікати / курси | textarea | questionnaire_snapshot | in_mvp |
-| education.driver_license | 50 | Водійське посвідчення | multi_choice | questionnaire_snapshot | in_mvp |
-| education.desired_courses | 60 | Які курси хочу пройти | textarea | questionnaire_snapshot | in_mvp |
+| education.desired_courses | 50 | Які курси хочу пройти | textarea | questionnaire_snapshot | in_mvp |
+| education.driver_license | 60 | Водійське посвідчення | multi_choice | questionnaire_snapshot | in_mvp |
 
 `education.level` options: `secondary`, `vocational`, `incomplete_higher`, `bachelor`, `master`, `phd`.  
 `institutions` children: `name`, `specialty`, `from` (date), `to` (date; empty OK; `to >= from` if both set), `degree`.  
