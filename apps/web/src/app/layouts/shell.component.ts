@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import {
+  ActivatedRoute,
   NavigationEnd,
   Router,
   RouterLink,
@@ -36,11 +37,11 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
     <div
       class="shell app-shell"
       [class.in-absences]="inAbsences()"
-      [class.questionnaire-fill]="inQuestionnaireFill()"
-      [class.side-pinned]="sidePinned() && !inQuestionnaireFill()"
+      [class.app-chrome-hidden]="hideAppChrome()"
+      [class.side-pinned]="sidePinned() && !hideAppChrome()"
       data-pw-app="1"
     >
-      @if (!inQuestionnaireFill()) {
+      @if (!hideAppChrome()) {
       <header class="topbar">
         <div class="topbar-start">
           <button
@@ -194,7 +195,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
       }
 
       <div class="body">
-        @if (!inQuestionnaireFill()) {
+        @if (!hideAppChrome()) {
         @if (!viewport.isTabletUp() && isMobileNavOpen()) {
           <div class="scrim" (click)="closeMobileNav('backdrop')" aria-hidden="true"></div>
         }
@@ -626,10 +627,10 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         min-width: 0;
         padding: 1rem;
       }
-      .shell.questionnaire-fill {
+      .shell.app-chrome-hidden {
         --shell-topbar-h: 0px;
       }
-      .shell.questionnaire-fill .content {
+      .shell.app-chrome-hidden .content {
         padding: 0;
         min-height: 100vh;
         min-height: 100dvh;
@@ -638,7 +639,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         .shell {
           --shell-topbar-h: 4.55rem;
         }
-        .shell.questionnaire-fill {
+        .shell.app-chrome-hidden {
           --shell-topbar-h: 0px;
         }
         .topbar {
@@ -703,6 +704,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   readonly frameTone = notificationFrameTone;
   private readonly notificationsApi = inject(NotificationsApi);
   private readonly router = inject(Router);
+  private readonly activatedRoute = inject(ActivatedRoute);
   private readonly scrollLock = inject(OverlayScrollLockService);
 
   @ViewChild('menuBtn') menuBtn?: ElementRef<HTMLButtonElement>;
@@ -718,11 +720,8 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   private readonly url = signal(this.router.url);
   readonly inAbsences = computed(() => this.url().startsWith('/absences'));
-  /** Fill wizard: hide app chrome (topbar + sidebar). Directory list keeps chrome. */
-  readonly inQuestionnaireFill = computed(() => {
-    const path = (this.url().split('?')[0] ?? '').replace(/\/+$/, '') || '/';
-    return /^\/questionnaires\/[^/]+$/.test(path);
-  });
+  /** Route data flag — Shell stays feature-agnostic (no URL sniffing). */
+  readonly hideAppChrome = signal(false);
   /** Docked rail only on tablet+ when open — never overlays content. */
   readonly sidePinned = computed(
     () => this.viewport.isTabletUp() && this.sideOpen(),
@@ -751,10 +750,12 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.refreshUnread();
+    this.updateRouteFlags();
     this.routerSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => {
         this.url.set(e.urlAfterRedirects);
+        this.updateRouteFlags();
         this.inboxOpen = false;
         if (this.isMobileNavOpen()) {
           this.closeMobileNav('navigation');
@@ -767,6 +768,12 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.routerSub?.unsubscribe();
     document.removeEventListener('keydown', this.keyHandler);
     this.releaseScrollLock();
+  }
+
+  private updateRouteFlags(): void {
+    let route = this.activatedRoute;
+    while (route.firstChild) route = route.firstChild;
+    this.hideAppChrome.set(route.snapshot.data['hideAppChrome'] === true);
   }
 
   /** Phone: close flyout after choosing a link (PW). Tablet+: no-op. */

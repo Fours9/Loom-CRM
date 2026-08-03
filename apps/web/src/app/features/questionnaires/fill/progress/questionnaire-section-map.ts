@@ -15,12 +15,17 @@ export type ProgressSection = {
   steps: ProgressSectionStep[];
 };
 
-/** Employee-360 major sections (schema step order may differ). */
-const EMPLOYEE_360_SECTION_DEFS: Array<{
+export type ProgressSectionDefinition = {
   id: string;
   label: string;
   stepKeys: string[];
-}> = [
+};
+
+/**
+ * UX section grouping for the fill progress rail.
+ * May reorder relative to linear wizard Next/Back (schema order).
+ */
+const EMPLOYEE_360_SECTION_DEFS: ProgressSectionDefinition[] = [
   {
     id: 'intro',
     label: 'Вступ',
@@ -53,72 +58,88 @@ const EMPLOYEE_360_SECTION_DEFS: Array<{
   },
 ];
 
+const TEMPLATE_PROGRESS_SECTION_MAPS = {
+  'employee-360': EMPLOYEE_360_SECTION_DEFS,
+} satisfies Record<string, ProgressSectionDefinition[]>;
+
 const INTRO_LABEL = 'Вступ';
 const REVIEW_LABEL = 'Перегляд';
 
+export type BuildProgressSectionsInput = {
+  templateCode: string;
+  schemaSteps: Array<Pick<QuestionnaireSchemaStep, 'key' | 'label'>>;
+};
+
 /**
  * Builds major progress sections for the fill rail.
- * Uses employee-360 grouping when those keys are present; otherwise
+ * Uses an explicit templateCode map when present; otherwise
  * Intro + each schema step + Review.
  */
 export function buildProgressSections(
-  schemaSteps: QuestionnaireSchemaStep[],
+  input: BuildProgressSectionsInput,
 ): ProgressSection[] {
-  const byKey = new Map(schemaSteps.map((s) => [s.key, s] as const));
-  const knownKeys = EMPLOYEE_360_SECTION_DEFS.flatMap((d) =>
-    d.stepKeys.filter(
-      (k) =>
-        k === QUESTIONNAIRE_INTRO_STEP ||
-        k === QUESTIONNAIRE_REVIEW_STEP ||
-        byKey.has(k),
-    ),
-  );
-  const schemaKeySet = new Set(schemaSteps.map((s) => s.key));
-  const matchedSchema = [...schemaKeySet].filter((k) =>
-    EMPLOYEE_360_SECTION_DEFS.some((d) => d.stepKeys.includes(k)),
-  );
-  const use360 =
-    matchedSchema.length >= Math.min(4, schemaSteps.length) &&
-    matchedSchema.length >= schemaSteps.length * 0.6;
+  const { templateCode, schemaSteps } = input;
+  const defs =
+    TEMPLATE_PROGRESS_SECTION_MAPS[
+      templateCode as keyof typeof TEMPLATE_PROGRESS_SECTION_MAPS
+    ];
 
-  if (use360) {
-    const used = new Set<string>();
-    const sections: ProgressSection[] = [];
-    for (const def of EMPLOYEE_360_SECTION_DEFS) {
-      const steps: ProgressSectionStep[] = [];
-      for (const key of def.stepKeys) {
-        if (key === QUESTIONNAIRE_INTRO_STEP) {
-          steps.push({ key, label: INTRO_LABEL });
-          used.add(key);
-          continue;
-        }
-        if (key === QUESTIONNAIRE_REVIEW_STEP) {
-          steps.push({ key, label: REVIEW_LABEL });
-          used.add(key);
-          continue;
-        }
-        const step = byKey.get(key);
-        if (!step) continue;
-        steps.push({ key, label: step.label });
-        used.add(key);
-      }
-      if (steps.length) sections.push({ id: def.id, label: def.label, steps });
-    }
-    // Any leftover schema steps (unknown) go into their own sections before review.
-    const reviewIdx = sections.findIndex((s) => s.id === 'review');
-    for (const step of schemaSteps) {
-      if (used.has(step.key)) continue;
-      const extra: ProgressSection = {
-        id: `step:${step.key}`,
-        label: step.label,
-        steps: [{ key: step.key, label: step.label }],
-      };
-      if (reviewIdx >= 0) sections.splice(reviewIdx, 0, extra);
-      else sections.push(extra);
-    }
-    return sections;
+  if (!defs) {
+    return buildFallbackSections(schemaSteps);
   }
 
+  const byKey = new Map(schemaSteps.map((s) => [s.key, s] as const));
+  const used = new Set<string>();
+  const sections: ProgressSection[] = [];
+
+  for (const def of defs) {
+    const steps: ProgressSectionStep[] = [];
+    for (const key of def.stepKeys) {
+      if (key === QUESTIONNAIRE_INTRO_STEP) {
+        steps.push({ key, label: INTRO_LABEL });
+        used.add(key);
+        continue;
+      }
+      if (key === QUESTIONNAIRE_REVIEW_STEP) {
+        steps.push({ key, label: REVIEW_LABEL });
+        used.add(key);
+        continue;
+      }
+      const step = byKey.get(key);
+      if (!step) continue;
+      steps.push({ key, label: step.label });
+      used.add(key);
+    }
+    if (steps.length) {
+      sections.push({ id: def.id, label: def.label, steps });
+    }
+  }
+
+  // Leftover schema steps (unknown to the map) in schema order, before review.
+  const extras: ProgressSection[] = [];
+  for (const step of schemaSteps) {
+    if (used.has(step.key)) continue;
+    extras.push({
+      id: `step:${step.key}`,
+      label: step.label,
+      steps: [{ key: step.key, label: step.label }],
+    });
+  }
+  if (extras.length) {
+    const reviewIdx = sections.findIndex((s) => s.id === 'review');
+    if (reviewIdx >= 0) {
+      sections.splice(reviewIdx, 0, ...extras);
+    } else {
+      sections.push(...extras);
+    }
+  }
+
+  return sections;
+}
+
+function buildFallbackSections(
+  schemaSteps: Array<Pick<QuestionnaireSchemaStep, 'key' | 'label'>>,
+): ProgressSection[] {
   return [
     {
       id: 'intro',

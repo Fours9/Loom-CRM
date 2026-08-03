@@ -12,7 +12,7 @@ import {
   QUESTIONNAIRE_REVIEW_STEP,
   type QuestionnaireWizardStepKey,
 } from '../navigation/questionnaire-step-keys';
-import { resolveQuestionnaireActiveStep } from '../navigation/resolve-active-step';
+import { resolveBrowsableQuestionnaireStep } from '../navigation/questionnaire-step-browse';
 import { normalizeQuestionnaireSchemaSteps } from './validation/normalize-schema';
 import {
   completedSchemaStepKeys,
@@ -163,24 +163,6 @@ export class QuestionnaireDraftStore {
     return `${title} — ${name}`;
   });
 
-  readonly stepHeading = computed(() => {
-    const key = this.activeStepKey();
-    if (key === QUESTIONNAIRE_INTRO_STEP) return 'Вступ';
-    if (key === QUESTIONNAIRE_REVIEW_STEP) return 'Перегляд і надсилання';
-    const step = this.schemaSteps().find((s) => s.key === key);
-    return step?.label ?? this.assignment()?.templateTitle ?? 'Анкета';
-  });
-
-  readonly stepIndexLabel = computed(() => {
-    const key = this.activeStepKey();
-    const steps = this.schemaSteps();
-    const total = steps.length + 2;
-    if (key === QUESTIONNAIRE_INTRO_STEP) return `1 з ${total}`;
-    if (key === QUESTIONNAIRE_REVIEW_STEP) return `${total} з ${total}`;
-    const idx = steps.findIndex((s) => s.key === key);
-    return `${idx + 2} з ${total}`;
-  });
-
   readonly progress = computed(() =>
     computeQuestionnaireProgress(
       this.schemaSteps(),
@@ -326,43 +308,19 @@ export class QuestionnaireDraftStore {
   }
 
   applyRequestedStep(requestedStepKey: string | null): void {
-    if (!this.editable()) {
-      const key = requestedStepKey?.trim() || null;
-      if (key === QUESTIONNAIRE_INTRO_STEP) {
-        this.activeStepKey.set(QUESTIONNAIRE_INTRO_STEP);
-        return;
-      }
-      if (key === QUESTIONNAIRE_REVIEW_STEP) {
-        this.activeStepKey.set(QUESTIONNAIRE_REVIEW_STEP);
-        return;
-      }
-      if (key && this.schemaSteps().some((s) => s.key === key)) {
-        this.activeStepKey.set(key);
-        return;
-      }
-      // Default read-only landing: review if all complete, else intro.
-      const completed = this.completedSteps();
-      const allComplete =
-        this.schemaSteps().length > 0 &&
-        this.schemaSteps().every((s) => completed.has(s.key));
-      this.activeStepKey.set(
-        allComplete ? QUESTIONNAIRE_REVIEW_STEP : QUESTIONNAIRE_INTRO_STEP,
-      );
-      return;
-    }
-
-    const completed = this.completedSteps();
-    const resolved = resolveQuestionnaireActiveStep({
+    const resolved = resolveBrowsableQuestionnaireStep({
       requestedStepKey,
+      editable: this.editable(),
       schemaSteps: this.schemaSteps(),
-      completedStepKeys: completed,
+      completedStepKeys: this.completedSteps(),
     });
     this.activeStepKey.set(resolved);
   }
 
   setActiveStep(stepKey: QuestionnaireWizardStepKey): void {
-    const resolved = resolveQuestionnaireActiveStep({
+    const resolved = resolveBrowsableQuestionnaireStep({
       requestedStepKey: stepKey,
+      editable: this.editable(),
       schemaSteps: this.schemaSteps(),
       completedStepKeys: this.completedSteps(),
     });

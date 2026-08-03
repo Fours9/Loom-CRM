@@ -3,6 +3,7 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  ViewChild,
   effect,
   inject,
   signal,
@@ -16,22 +17,12 @@ import {
   buildQuestionnaireAssignmentLink,
   parseQuestionnaireStepQuery,
 } from '../navigation/questionnaire-navigation';
-import { ThemeService } from '../../../core/theme/theme.service';
+import { canBrowseQuestionnaireStep } from '../navigation/questionnaire-step-browse';
 import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
+import { QuestionnaireFillChromeComponent } from './questionnaire-fill-chrome.component';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { QuestionnaireWizardShellComponent } from './questionnaire-wizard-shell.component';
-import { QuestionnaireSectionRailComponent } from './progress/questionnaire-section-rail.component';
-import { buildProgressSections } from './progress/questionnaire-section-map';
-import {
-  QUESTIONNAIRE_INTRO_STEP,
-  QUESTIONNAIRE_REVIEW_STEP,
-} from '../navigation/questionnaire-step-keys';
-import { isSchemaStepReachable } from '../navigation/resolve-active-step';
-import {
-  isQuestionnaireStepBrowsable,
-  resolveQuestionnaireNavigationMode,
-} from '../navigation/questionnaire-navigation-mode';
 
 const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   pending: 'Очікує',
@@ -45,7 +36,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   imports: [
     RouterLink,
     QuestionnaireWizardShellComponent,
-    QuestionnaireSectionRailComponent,
+    QuestionnaireFillChromeComponent,
   ],
   providers: [
     QuestionnaireDraftStore,
@@ -74,124 +65,17 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           </article>
         }
         @case ('ready') {
-          <header class="step-topbar">
-            <button
-              type="button"
-              class="icon-back"
-              title="Назад"
-              aria-label="Повернутися назад"
-              (click)="goBack()"
-            >
-              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
-                />
-              </svg>
-              <span class="back-label">Назад</span>
-            </button>
-            <div class="chrome-titles">
-              <h2>{{ store.pageTitle() }}</h2>
-              <p class="code-line">
-                Код:
-                <code>{{ store.assignment()?.templateCode }}</code>
-              </p>
-            </div>
-            <div class="step-topbar-actions">
-              <button
-                type="button"
-                class="theme-toggle"
-                (click)="theme.toggle()"
-                [attr.aria-label]="
-                  theme.mode() === 'dark' ? 'Увімкнути світлу тему' : 'Увімкнути темну тему'
-                "
-                [title]="theme.mode() === 'dark' ? 'Темна тема' : 'Світла тема'"
-              >
-                @if (theme.mode() === 'dark') {
-                  <span aria-hidden="true">☾</span>
-                  <span class="theme-label">Темна</span>
-                } @else {
-                  <span aria-hidden="true">☀</span>
-                  <span class="theme-label">Світла</span>
-                }
-              </button>
-              @if (store.canShowRequestChangesButton()) {
-                <button
-                  type="button"
-                  class="btn"
-                  [disabled]="actionBusy()"
-                  (click)="requestChanges()"
-                >
-                  {{ actionBusy() ? 'Запит…' : 'Запросити зміни' }}
-                </button>
-              }
-              @if (store.canShowEditButton()) {
-                <button
-                  type="button"
-                  class="btn primary"
-                  [disabled]="actionBusy()"
-                  (click)="onEditClick()"
-                >
-                  {{ actionBusy() ? 'Відкриття…' : 'Редагувати' }}
-                </button>
-              }
-              @if (store.editable() && revision.isRevisionEdit()) {
-                <button
-                  type="button"
-                  class="btn primary"
-                  [disabled]="actionBusy() || saveChangesBusy() || !revision.canResubmit()"
-                  [attr.aria-busy]="saveChangesBusy()"
-                  (click)="saveAndClose()"
-                >
-                  {{
-                    saveChangesBusy()
-                      ? 'Збереження…'
-                      : 'Зберегти і закрити'
-                  }}
-                </button>
-              }
-              @if (store.canShowDeleteButton()) {
-                <button
-                  type="button"
-                  class="btn danger"
-                  [disabled]="actionBusy() || saveChangesBusy()"
-                  (click)="deleteAssignment()"
-                >
-                  {{ actionBusy() ? 'Видалення…' : 'Видалити анкету' }}
-                </button>
-              }
-            </div>
-          </header>
-          <header class="page-chrome">
-            <div class="step-main">
-              <loom-questionnaire-section-rail
-                [schemaSteps]="store.schemaSteps()"
-                [activeStepKey]="store.activeStepKey()"
-                [completedStepKeys]="store.completedSteps()"
-                [canOpenStep]="canOpenRailStep"
-                [canOpenSection]="canOpenRailSection"
-                (stepSelect)="goToStep($event)"
-                (sectionSelect)="goToSection($event)"
-              />
-            </div>
-            <div class="chrome-actions">
-              @if (store.editable() && !revision.isRevisionEdit()) {
-                <button
-                  type="button"
-                  class="btn primary"
-                  [disabled]="actionBusy() || saveChangesBusy() || store.saveState() === 'saving'"
-                  [attr.aria-busy]="saveChangesBusy() || store.saveState() === 'saving'"
-                  (click)="saveChanges()"
-                >
-                  {{
-                    saveChangesBusy() || store.saveState() === 'saving'
-                      ? 'Збереження…'
-                      : 'Зберегти зміни'
-                  }}
-                </button>
-              }
-            </div>
-          </header>
+          <loom-questionnaire-fill-chrome
+            [actionBusy]="actionBusy()"
+            (back)="goBack()"
+            (edit)="onEditClick()"
+            (requestChanges)="requestChanges()"
+            (saveAndClose)="saveAndClose()"
+            (deleteAssignment)="deleteAssignment()"
+            (saveDraft)="saveChanges()"
+            (stepSelect)="goToStep($event)"
+            (sectionSelect)="goToSection($event)"
+          />
 
           @switch (store.uiMode()) {
             @case ('owner_only') {
@@ -220,7 +104,9 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
               @if (actionError()) {
                 <p class="error">{{ actionError() }}</p>
               }
-              <loom-questionnaire-wizard-shell />
+              <loom-questionnaire-wizard-shell
+                (navigationComplete)="focusRailHeading()"
+              />
 
               @if (showProposalsSection()) {
                 <section class="proposals" aria-label="Пропозиції до профілю">
@@ -287,114 +173,6 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         display: grid;
         gap: 0.85rem;
         overflow-x: clip;
-      }
-      .step-topbar {
-        position: sticky;
-        top: 0;
-        z-index: 5;
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        gap: 0.65rem 1rem;
-        align-items: center;
-        margin-inline: calc(-1 * var(--page-pad-x));
-        padding: max(0.65rem, env(safe-area-inset-top, 0px)) var(--page-pad-x) 0.75rem;
-        border-bottom: 2px solid color-mix(in srgb, var(--pw-border) 80%, #64748b);
-        background: var(--pw-bg, #f6f8fb);
-      }
-      .step-topbar-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        justify-content: flex-end;
-        align-items: center;
-      }
-      .theme-toggle {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.35rem;
-        font-weight: 600;
-        width: 2.75rem;
-        min-width: 2.75rem;
-        height: 2.75rem;
-        min-height: 2.75rem;
-        padding: 0;
-        border: 1px solid var(--pw-border-strong);
-        background: var(--pw-surface);
-        color: var(--pw-text);
-        border-radius: 8px;
-        cursor: pointer;
-      }
-      .theme-label {
-        display: none;
-      }
-      .page-chrome {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 0.75rem 1rem;
-        align-items: center;
-        padding: 0.35rem 0 0.15rem;
-      }
-      .step-main {
-        min-width: 0;
-      }
-      .icon-back {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.35rem;
-        min-width: 2.75rem;
-        height: 2.75rem;
-        min-height: 2.75rem;
-        padding: 0 0.75rem;
-        border-radius: 8px;
-        border: 1px solid var(--pw-border-strong);
-        background: var(--pw-surface);
-        color: var(--pw-text);
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .icon-back:hover {
-        border-color: var(--pw-accent);
-        color: var(--pw-accent);
-        background: color-mix(in srgb, var(--pw-accent) 12%, var(--pw-surface));
-      }
-      .icon-back svg {
-        display: block;
-        flex-shrink: 0;
-      }
-      .back-label {
-        line-height: 1;
-      }
-      .chrome-titles {
-        min-width: 0;
-        display: grid;
-        gap: 0.15rem;
-      }
-      .chrome-titles h2 {
-        margin: 0;
-        font-size: clamp(1rem, 1.2vw + 0.75rem, 1.2rem);
-        line-height: 1.3;
-        font-weight: 600;
-        overflow-wrap: anywhere;
-      }
-      .code-line {
-        margin: 0;
-        color: var(--pw-muted);
-        font-size: 0.9rem;
-      }
-      .code-line code {
-        font-size: 0.9rem;
-        color: inherit;
-        overflow-wrap: anywhere;
-      }
-      .chrome-actions {
-        justify-self: end;
-        align-self: center;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        justify-content: flex-end;
       }
       .state {
         display: grid;
@@ -503,49 +281,8 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           --page-pad-x: 0.75rem;
           gap: 0.7rem;
         }
-        .step-topbar {
-          grid-template-columns: auto minmax(0, 1fr);
-          align-items: start;
-        }
-        .step-topbar-actions {
-          grid-column: 1 / -1;
-          width: 100%;
-          justify-content: stretch;
-        }
-        .step-topbar-actions .btn {
-          flex: 1 1 calc(50% - 0.25rem);
-          min-width: 0;
-        }
-        .step-topbar-actions .theme-toggle {
-          flex: 0 0 auto;
-        }
-        .page-chrome {
-          grid-template-columns: 1fr;
-          gap: 0.65rem;
-        }
-        .chrome-actions {
-          justify-self: stretch;
-        }
-        .chrome-actions .btn {
-          flex: 1;
-          width: 100%;
-        }
-        .icon-back {
-          padding: 0 0.65rem;
-        }
         .prop-actions .btn {
           flex: 1;
-        }
-      }
-      @media (min-width: 641px) {
-        .theme-label {
-          display: inline;
-        }
-        .theme-toggle {
-          width: auto;
-          min-width: auto;
-          height: auto;
-          padding: 0.4rem 0.75rem;
         }
       }
       @media (min-width: 1100px) {
@@ -553,9 +290,6 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           --page-pad-x: 2rem;
           max-width: 1200px;
           gap: 1rem;
-        }
-        .chrome-titles h2 {
-          font-size: 1.2rem;
         }
       }
     `,
@@ -565,16 +299,17 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
   readonly store = inject(QuestionnaireDraftStore);
   private readonly autosave = inject(QuestionnaireAutosaveCoordinator);
   readonly revision = inject(QuestionnaireRevisionCoordinator);
-  readonly theme = inject(ThemeService);
   private readonly api = inject(QuestionnairesApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private sub?: Subscription;
 
+  @ViewChild(QuestionnaireFillChromeComponent)
+  private chrome?: QuestionnaireFillChromeComponent;
+
   readonly actionBusy = signal(false);
   readonly actionError = signal<string | null>(null);
-  readonly saveChangesBusy = signal(false);
   readonly assignmentProposals = signal<QuestionnaireProfileProposalItem[]>([]);
   readonly canApplyProposals = signal(false);
   readonly proposalsLoading = signal(false);
@@ -598,66 +333,40 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     return status === 'submitted' || status === 'reviewed';
   }
 
-  readonly canOpenRailStep = (stepKey: string): boolean =>
-    this.canBrowseStepKey(stepKey);
-
-  readonly canOpenRailSection = (sectionId: string): boolean => {
-    const section = buildProgressSections(this.store.schemaSteps()).find(
-      (s) => s.id === sectionId,
-    );
-    if (!section) return false;
-    return section.steps.some((s) => this.canBrowseStepKey(s.key));
-  };
-
   goToSection(sectionId: string): void {
-    const section = buildProgressSections(this.store.schemaSteps()).find(
-      (s) => s.id === sectionId,
-    );
+    const section = this.chrome?.sectionById(sectionId);
     if (!section) return;
     const active = this.store.activeStepKey();
     if (section.steps.some((s) => s.key === active)) return;
     const target =
-      section.steps.find((s) => this.canBrowseStepKey(s.key)) ?? section.steps[0];
+      section.steps.find((s) =>
+        canBrowseQuestionnaireStep(s.key, {
+          editable: this.store.editable(),
+          schemaSteps: this.store.schemaSteps(),
+          completedStepKeys: this.store.completedSteps(),
+        }),
+      ) ?? section.steps[0];
     if (target) void this.goToStep(target.key);
   }
 
   async goToStep(stepKey: string): Promise<void> {
-    if (!this.canBrowseStepKey(stepKey)) return;
+    if (
+      !canBrowseQuestionnaireStep(stepKey, {
+        editable: this.store.editable(),
+        schemaSteps: this.store.schemaSteps(),
+        completedStepKeys: this.store.completedSteps(),
+      })
+    ) {
+      return;
+    }
     if (this.store.activeStepKey() === stepKey) return;
     await this.autosave.flush();
     this.store.setActiveStep(stepKey);
-    queueMicrotask(() => {
-      document
-        .querySelector<HTMLElement>('.step-main h1, .rail h1')
-        ?.focus({ preventScroll: true });
-    });
+    queueMicrotask(() => this.focusRailHeading());
   }
 
-  private canBrowseStepKey(stepKey: string): boolean {
-    const mode = resolveQuestionnaireNavigationMode({
-      editable: this.store.editable(),
-    });
-    if (stepKey === QUESTIONNAIRE_INTRO_STEP) {
-      return isQuestionnaireStepBrowsable({ mode, linearReachable: true });
-    }
-    if (stepKey === QUESTIONNAIRE_REVIEW_STEP) {
-      const steps = this.store.schemaSteps();
-      const reachable =
-        !steps.length ||
-        steps.every((s) => this.store.completedSteps().has(s.key));
-      return isQuestionnaireStepBrowsable({
-        mode,
-        linearReachable: reachable,
-      });
-    }
-    return isQuestionnaireStepBrowsable({
-      mode,
-      linearReachable: isSchemaStepReachable(
-        stepKey,
-        this.store.schemaSteps(),
-        this.store.completedSteps(),
-      ),
-    });
+  focusRailHeading(): void {
+    this.chrome?.focusHeading();
   }
 
   proposalStatusLabel(status: string): string {
@@ -763,12 +472,11 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
   async saveAndClose(): Promise<void> {
     if (
       this.actionBusy() ||
-      this.saveChangesBusy() ||
+      this.revision.manualSaveBusy() ||
       !this.revision.canResubmit()
     ) {
       return;
     }
-    this.saveChangesBusy.set(true);
     this.actionError.set(null);
     try {
       await this.revision.resubmitAndClose();
@@ -778,31 +486,18 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
           this.store.submitError() ||
           'Не вдалося зберегти анкету',
       );
-    } finally {
-      this.saveChangesBusy.set(false);
     }
   }
 
   async saveChanges(): Promise<void> {
-    if (this.actionBusy() || this.saveChangesBusy()) return;
-    if (this.store.saveState() === 'saving' || this.store.conflict()) return;
-    this.saveChangesBusy.set(true);
+    if (this.actionBusy() || this.revision.manualSaveBusy()) return;
+    if (this.store.conflict()) return;
     this.actionError.set(null);
-    try {
-      this.store.materializeMirrorIntoProposalAnswers();
-      const ok = await this.autosave.flush();
-      if (!ok) {
-        this.actionError.set(
-          this.store.saveError() ?? 'Не вдалося зберегти зміни',
-        );
-      }
-    } catch (err: unknown) {
+    const result = await this.revision.saveDraftWithFeedback();
+    if (result === 'failed') {
       this.actionError.set(
-        (err as { error?: { message?: string } })?.error?.message ||
-          'Не вдалося зберегти зміни',
+        this.revision.manualSaveError() ?? 'Не вдалося зберегти зміни',
       );
-    } finally {
-      this.saveChangesBusy.set(false);
     }
   }
 

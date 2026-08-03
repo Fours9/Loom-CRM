@@ -1,16 +1,30 @@
-import { Component, computed, input, output } from '@angular/core';
-import type { QuestionnaireSchemaStep } from '@loom/contracts-questionnaires';
 import {
-  buildProgressSections,
+  Component,
+  ElementRef,
+  ViewChild,
+  computed,
+  input,
+  output,
+} from '@angular/core';
+import {
   findProgressSection,
+  type ProgressSection,
 } from './questionnaire-section-map';
+import {
+  isSectionCompleted as sectionCompleted,
+  isSectionPassed as sectionPassed,
+  isStepCompleted as stepCompleted,
+  isStepPassed as stepPassed,
+  sectionSpineProgress,
+  substepSpineProgress,
+} from './questionnaire-section-rail-state';
 
 @Component({
   selector: 'loom-questionnaire-section-rail',
   standalone: true,
   template: `
     <nav class="rail" aria-label="Прогрес анкети">
-      <h1 class="sr-only" tabindex="-1">{{ heading() }}</h1>
+      <h1 #railHeading class="sr-only" tabindex="-1">{{ heading() }}</h1>
 
       <div
         class="band"
@@ -28,7 +42,8 @@ import {
               <li
                 class="mark"
                 [class.current]="section.id === activeSection()?.id"
-                [class.done]="isSectionDone(section.id)"
+                [class.passed]="isSectionPassed(section.id)"
+                [class.done]="isSectionCompleted(section.id)"
               >
                 <button
                   type="button"
@@ -38,7 +53,7 @@ import {
                     section.id === activeSection()?.id ? 'step' : null
                   "
                   [attr.aria-label]="section.label"
-                  (click)="onSectionClick(section.id)"
+                  (click)="sectionSelect.emit(section.id)"
                 ></button>
               </li>
             }
@@ -76,7 +91,8 @@ import {
                 <li
                   class="mark"
                   [class.current]="sub.key === activeStepKey()"
-                  [class.done]="isStepDone(sub.key)"
+                  [class.passed]="isStepPassed(sub.key)"
+                  [class.done]="isStepCompleted(sub.key)"
                 >
                   <button
                     type="button"
@@ -218,10 +234,15 @@ import {
         box-shadow: 0 0 0 4px
           color-mix(in srgb, var(--pw-accent) 28%, transparent);
       }
-      .mark.done .dot {
+      .mark.passed .dot {
         border-color: var(--pw-accent);
         background: color-mix(in srgb, var(--pw-accent) 55%, var(--pw-surface));
       }
+      .mark.done .dot {
+        border-color: var(--pw-accent);
+        background: color-mix(in srgb, var(--pw-accent) 78%, var(--pw-surface));
+      }
+      .mark.passed.current .dot,
       .mark.done.current .dot {
         background: var(--pw-accent);
       }
@@ -249,7 +270,9 @@ import {
   ],
 })
 export class QuestionnaireSectionRailComponent {
-  readonly schemaSteps = input.required<QuestionnaireSchemaStep[]>();
+  @ViewChild('railHeading') private railHeading?: ElementRef<HTMLElement>;
+
+  readonly sections = input.required<ProgressSection[]>();
   readonly activeStepKey = input.required<string>();
   readonly completedStepKeys = input<ReadonlySet<string>>(new Set());
   readonly canOpenStep = input<(stepKey: string) => boolean>((_k) => true);
@@ -258,7 +281,9 @@ export class QuestionnaireSectionRailComponent {
   readonly stepSelect = output<string>();
   readonly sectionSelect = output<string>();
 
-  readonly sections = computed(() => buildProgressSections(this.schemaSteps()));
+  focusHeading(): void {
+    this.railHeading?.nativeElement.focus({ preventScroll: true });
+  }
 
   readonly activeSection = computed(() =>
     findProgressSection(this.sections(), this.activeStepKey()),
@@ -285,46 +310,35 @@ export class QuestionnaireSectionRailComponent {
     return !!section && section.steps.length > 1;
   });
 
+  /** Spine fill = position along sections (not completion). */
   sectionProgress(): string {
-    const sections = this.sections();
-    const active = this.activeSection();
-    if (!sections.length || !active) return '0%';
-    const idx = sections.findIndex((s) => s.id === active.id);
-    if (idx <= 0) return '0%';
-    return `${(idx / (sections.length - 1)) * 100}%`;
+    return sectionSpineProgress(this.sections(), this.activeSection()?.id);
   }
 
   subProgress(): string {
     const section = this.activeSection();
-    if (!section || section.steps.length <= 1) return '0%';
-    const idx = section.steps.findIndex((s) => s.key === this.activeStepKey());
-    if (idx <= 0) return '0%';
-    return `${(idx / (section.steps.length - 1)) * 100}%`;
+    if (!section) return '0%';
+    return substepSpineProgress(section.steps, this.activeStepKey());
   }
 
-  isSectionDone(sectionId: string): boolean {
-    const activeSection = this.activeSection();
-    if (!activeSection) return false;
-    const ids = this.sections().map((s) => s.id);
-    const activeIdx = ids.indexOf(activeSection.id);
-    const thisIdx = ids.indexOf(sectionId);
-    return thisIdx >= 0 && activeIdx >= 0 && thisIdx < activeIdx;
+  isSectionPassed(sectionId: string): boolean {
+    return sectionPassed(this.sections(), this.activeSection()?.id, sectionId);
   }
 
-  isStepDone(stepKey: string): boolean {
-    if (stepKey === this.activeStepKey()) return false;
+  isSectionCompleted(sectionId: string): boolean {
+    return sectionCompleted(
+      this.sections().find((s) => s.id === sectionId),
+      this.completedStepKeys(),
+    );
+  }
+
+  isStepPassed(stepKey: string): boolean {
     const section = this.activeSection();
-    if (section) {
-      const idx = section.steps.findIndex((s) => s.key === stepKey);
-      const activeIdx = section.steps.findIndex(
-        (s) => s.key === this.activeStepKey(),
-      );
-      if (idx >= 0 && activeIdx >= 0 && idx < activeIdx) return true;
-    }
-    return this.completedStepKeys().has(stepKey);
+    if (!section) return false;
+    return stepPassed(section.steps, this.activeStepKey(), stepKey);
   }
 
-  onSectionClick(sectionId: string): void {
-    this.sectionSelect.emit(sectionId);
+  isStepCompleted(stepKey: string): boolean {
+    return stepCompleted(stepKey, this.completedStepKeys());
   }
 }

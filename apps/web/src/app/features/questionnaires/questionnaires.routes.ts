@@ -11,5 +11,6 @@ export const QUESTIONNAIRE_ROUTES: Routes = [
   {
     path: ':id',
     component: QuestionnaireFillPageComponent,
+    data: { hideAppChrome: true },
   },
 ];

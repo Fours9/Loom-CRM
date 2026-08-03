@@ -95,3 +95,9 @@ export class QuestionnaireDirectoryQueryDto {
   @Min(0)
   offset?: number;
 }
+
+export class QuestionnaireSnapshotSummaryQueryDto {
+  @IsOptional()
+  @IsUUID()
+  assignmentId?: string;
+}
