@@ -6,34 +6,57 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { of } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import type {
   QuestionnaireAttachmentState,
   QuestionnaireDirectoryItem,
   QuestionnaireDirectorySortBy,
+  QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { buildQuestionnaireAssignmentLink } from '../navigation/questionnaire-navigation';
+import {
+  QUESTIONNAIRE_TYPE_LABELS,
+  questionnaireAttachmentLabel,
+  questionnaireTypeLabel,
+} from '../questionnaire-labels';
+import { QuestionnaireAttachPickerComponent } from './questionnaire-attach-picker.component';
 
 type Dept = { id: string; name: string };
 type Pos = { id: string; name: string };
 
-const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
-  attached: 'Прикріплено',
-  detached: 'Відкріплено',
-  closed: 'Закрито',
-};
-
 @Component({
   selector: 'loom-questionnaire-directory-page',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, QuestionnaireAttachPickerComponent],
   template: `
     <div class="page">
       <header class="header">
-        <h1>Анкети</h1>
-        <p class="muted">Усі призначення анкет у вашому доступі</p>
+        <div class="header-titles">
+          <h1>Анкети</h1>
+          <p class="muted">Усі призначення анкет у вашому доступі</p>
+        </div>
+        <div class="header-actions">
+          <button
+            type="button"
+            class="btn"
+            disabled
+            title="Незабаром"
+          >
+            Роздрукувати заготовку
+          </button>
+          @if (canCreate()) {
+            <button
+              type="button"
+              class="btn primary"
+              [disabled]="createBusy()"
+              (click)="createBlank()"
+            >
+              {{ createBusy() ? 'Створення…' : 'Створити анкету' }}
+            </button>
+          }
+        </div>
       </header>
 
       <div class="filters">
@@ -62,12 +85,25 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
           </select>
         </label>
         <label>
+          Тип
+          <select
+            [value]="templateType()"
+            (change)="setFilter('templateType', $any($event.target).value)"
+          >
+            <option value="">Усі</option>
+            @for (t of typeOptions; track t.value) {
+              <option [value]="t.value">{{ t.label }}</option>
+            }
+          </select>
+        </label>
+        <label>
           Стан
           <select
             [value]="attachmentState()"
             (change)="setFilter('attachmentState', $any($event.target).value)"
           >
             <option value="">Усі</option>
+            <option value="new">Нова</option>
             <option value="attached">Прикріплено</option>
             <option value="detached">Відкріплено</option>
             <option value="closed">Закрито</option>
@@ -117,6 +153,7 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
                     }}</span>
                   </button>
                 </th>
+                <th>Тип</th>
                 <th>
                   <button
                     type="button"
@@ -205,10 +242,15 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
                     <code>{{ item.templateCode }}</code>
                     <span class="ver">v{{ item.version }}</span>
                   </td>
+                  <td>{{ typeLabel(item.templateType) }}</td>
                   <td>
-                    <a [routerLink]="['/people', item.employeeId]">{{
-                      item.employeeDisplayName
-                    }}</a>
+                    @if (item.employeeId) {
+                      <a [routerLink]="['/people', item.employeeId]">{{
+                        item.employeeDisplayName
+                      }}</a>
+                    } @else {
+                      <span class="muted">Не прикріплено</span>
+                    }
                   </td>
                   <td>{{ item.departmentName || '—' }}</td>
                   <td>{{ item.positionName || '—' }}</td>
@@ -220,6 +262,22 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
                     }}</span>
                   </td>
                   <td class="actions">
+                    @if (item.capabilities.canAttach) {
+                      <button
+                        type="button"
+                        class="icon-btn"
+                        title="Прикріпити"
+                        aria-label="Прикріпити анкету до працівника"
+                        (click)="openAttachPicker(item)"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M16.5 6.5l-7.6 7.6a2.5 2.5 0 003.54 3.54l7.6-7.6a4.5 4.5 0 10-6.36-6.36l-7.6 7.6a6.5 6.5 0 109.19 9.19l6.6-6.6-1.41-1.42-6.6 6.6a4.5 4.5 0 11-6.36-6.36l7.6-7.6a2.5 2.5 0 013.54 3.54l-7.6 7.6a.5.5 0 01-.71-.71l6.6-6.6-1.41-1.42z"
+                          />
+                        </svg>
+                      </button>
+                    }
                     <button
                       type="button"
                       class="icon-btn"
@@ -266,6 +324,16 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
           </button>
         </div>
       }
+
+      @if (attachTarget(); as target) {
+        <loom-questionnaire-attach-picker
+          [constraint]="target.attachConstraint"
+          [busy]="attachBusy()"
+          [error]="attachError()"
+          (confirm)="confirmAttach($event)"
+          (close)="closeAttachPicker()"
+        />
+      }
     </div>
   `,
   styles: [
@@ -277,9 +345,21 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
         max-width: 1200px;
         margin: 0 auto;
       }
-      .header h1 {
+      .header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .header-titles h1 {
         margin: 0;
         font-size: 1.4rem;
+      }
+      .header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
       }
       .muted {
         color: var(--pw-muted);
@@ -414,6 +494,11 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
         cursor: pointer;
         font-size: 0.85rem;
       }
+      .btn.primary {
+        background: var(--pw-accent);
+        border-color: var(--pw-accent);
+        color: #fff;
+      }
       .btn:disabled {
         opacity: 0.55;
         cursor: not-allowed;
@@ -436,17 +521,23 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   private readonly router = inject(Router);
 
   readonly Math = Math;
+  readonly typeOptions = Object.entries(QUESTIONNAIRE_TYPE_LABELS).map(
+    ([value, label]) => ({ value, label }),
+  );
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly items = signal<QuestionnaireDirectoryItem[]>([]);
   readonly total = signal(0);
+  readonly canCreate = signal(false);
+  readonly createBusy = signal(false);
 
   readonly departments = signal<Dept[]>([]);
   readonly positions = signal<Pos[]>([]);
 
   readonly departmentId = signal('');
   readonly positionId = signal('');
+  readonly templateType = signal('');
   readonly attachmentState = signal('');
   readonly createdFrom = signal('');
   readonly createdTo = signal('');
@@ -454,6 +545,10 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   readonly sortDir = signal<'asc' | 'desc'>('desc');
   readonly limit = signal(50);
   readonly offset = signal(0);
+
+  readonly attachTarget = signal<QuestionnaireDirectoryItem | null>(null);
+  readonly attachBusy = signal(false);
+  readonly attachError = signal<string | null>(null);
 
   ngOnInit(): void {
     this.http
@@ -468,6 +563,7 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
     this.route.queryParamMap.subscribe((q) => {
       this.departmentId.set(q.get('departmentId') ?? '');
       this.positionId.set(q.get('positionId') ?? '');
+      this.templateType.set(q.get('templateType') ?? '');
       this.attachmentState.set(q.get('attachmentState') ?? '');
       this.createdFrom.set(q.get('createdFrom') ?? '');
       this.createdTo.set(q.get('createdTo') ?? '');
@@ -481,7 +577,11 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   }
 
   attachmentLabel(state: QuestionnaireAttachmentState): string {
-    return ATTACHMENT_LABELS[state] ?? state;
+    return questionnaireAttachmentLabel(state);
+  }
+
+  typeLabel(type: QuestionnaireType): string {
+    return questionnaireTypeLabel(type);
   }
 
   formatDate(iso: string): string {
@@ -530,10 +630,61 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
     void this.router.navigateByUrl(link.routerLink);
   }
 
+  async createBlank(): Promise<void> {
+    if (this.createBusy()) return;
+    this.createBusy.set(true);
+    this.error.set(null);
+    try {
+      const created = await firstValueFrom(this.api.createAssignment({}));
+      const link = buildQuestionnaireAssignmentLink({
+        assignmentId: created.id,
+      });
+      await this.router.navigateByUrl(link.routerLink);
+    } catch (err: unknown) {
+      this.error.set(
+        (err as { error?: { message?: string } })?.error?.message ||
+          'Не вдалося створити анкету',
+      );
+    } finally {
+      this.createBusy.set(false);
+    }
+  }
+
+  openAttachPicker(item: QuestionnaireDirectoryItem): void {
+    this.attachError.set(null);
+    this.attachTarget.set(item);
+  }
+
+  closeAttachPicker(): void {
+    this.attachTarget.set(null);
+    this.attachError.set(null);
+  }
+
+  confirmAttach(employeeId: string): void {
+    const target = this.attachTarget();
+    if (!target || this.attachBusy()) return;
+    this.attachBusy.set(true);
+    this.attachError.set(null);
+    this.api.attachAssignment(target.id, { employeeId }).subscribe({
+      next: () => {
+        this.attachBusy.set(false);
+        this.closeAttachPicker();
+        this.reload();
+      },
+      error: (err) => {
+        this.attachBusy.set(false);
+        this.attachError.set(
+          err?.error?.message || 'Не вдалося прикріпити анкету',
+        );
+      },
+    });
+  }
+
   private currentQuery(): Record<string, string | null> {
     return {
       departmentId: this.departmentId() || null,
       positionId: this.positionId() || null,
+      templateType: this.templateType() || null,
       attachmentState: this.attachmentState() || null,
       createdFrom: this.createdFrom() || null,
       createdTo: this.createdTo() || null,
@@ -550,6 +701,7 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
       .listDirectory({
         departmentId: this.departmentId() || undefined,
         positionId: this.positionId() || undefined,
+        templateType: this.templateType() || undefined,
         attachmentState: this.attachmentState() || undefined,
         createdFrom: this.createdFrom() || undefined,
         createdTo: this.createdTo() || undefined,
@@ -564,6 +716,7 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
           this.total.set(res.total);
           this.limit.set(res.limit);
           this.offset.set(res.offset);
+          this.canCreate.set(res.capabilities.canCreate);
           this.loading.set(false);
         },
         error: () => {

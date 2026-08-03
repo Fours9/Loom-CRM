@@ -34,16 +34,26 @@ export function canCancelAssignment(
   return CANCELLABLE_STATUSES.has(status as QuestionnaireAssignmentStatus);
 }
 
-export function canReactivateAssignment(
-  status: QuestionnaireAssignmentStatus | string,
-): boolean {
-  return status === 'cancelled';
-}
-
 export function canCloseAssignment(
   status: QuestionnaireAssignmentStatus | string,
 ): boolean {
   return CLOSABLE_STATUSES.has(status as QuestionnaireAssignmentStatus);
+}
+
+export function canAttachAssignment(input: {
+  status: QuestionnaireAssignmentStatus | string;
+  employeeId: string | null | undefined;
+  detachedFromEmployeeId: string | null | undefined;
+}): boolean {
+  const employeeId = input.employeeId ?? null;
+  const detached = input.detachedFromEmployeeId ?? null;
+  if (input.status === 'new') {
+    return employeeId === null && detached === null;
+  }
+  if (input.status === 'cancelled') {
+    return employeeId === null && detached !== null;
+  }
+  return false;
 }
 
 export function isOwnerEditableStatus(
@@ -60,7 +70,7 @@ export function canStartRevisionFromStatus(
 
 export const QUESTIONNAIRE_ASSIGNMENT_AUDIT = {
   cancelled: 'questionnaire.assignment.cancelled',
-  reactivated: 'questionnaire.assignment.reactivated',
+  attached: 'questionnaire.assignment.attached',
   closed: 'questionnaire.assignment.closed',
   deleted: 'questionnaire.assignment.deleted',
 } as const;

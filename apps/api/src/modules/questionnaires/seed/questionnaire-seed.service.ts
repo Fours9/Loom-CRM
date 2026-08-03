@@ -55,6 +55,7 @@ export class QuestionnaireSeedService {
         this.templates.create({
           code: EMPLOYEE_360_TEMPLATE_CODE,
           title: EMPLOYEE_360_TEMPLATE_TITLE,
+          type: 'general',
           status: 'published',
         }),
       );
@@ -74,9 +75,14 @@ export class QuestionnaireSeedService {
           publishedAt: new Date(),
         }),
       );
-      if (template.status !== 'published' || template.title !== EMPLOYEE_360_TEMPLATE_TITLE) {
+      if (
+        template.status !== 'published' ||
+        template.title !== EMPLOYEE_360_TEMPLATE_TITLE ||
+        template.type !== 'general'
+      ) {
         template.status = 'published';
         template.title = EMPLOYEE_360_TEMPLATE_TITLE;
+        template.type = 'general';
         await this.templates.save(template);
       }
       this.logger.log('Published employee-360 template version 1');
@@ -90,6 +96,20 @@ export class QuestionnaireSeedService {
     const titleOk = template.title === EMPLOYEE_360_TEMPLATE_TITLE;
     const statusOk = template.status === 'published';
     const publishedAtOk = !!existing.publishedAt;
+    const typeOk = template.type === 'general';
+
+    if (schemaEqual && titleOk && statusOk && publishedAtOk && typeOk) {
+      return;
+    }
+
+    // Type is metadata-only (not part of the immutable published schema):
+    // safe to normalize in every environment, including production, without
+    // tripping the fail-closed check below.
+    if (!typeOk) {
+      template.type = 'general';
+      await this.templates.save(template);
+      this.logger.log('Normalized employee-360 template type to general');
+    }
 
     if (schemaEqual && titleOk && statusOk && publishedAtOk) {
       return;

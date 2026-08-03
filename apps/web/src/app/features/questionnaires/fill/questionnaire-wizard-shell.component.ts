@@ -326,16 +326,14 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
   styles: [
     `
       .wizard {
-        display: grid;
-        grid-template-rows: auto auto 1fr auto;
-        min-height: calc(100vh - 4rem);
+        display: flex;
+        flex-direction: column;
+        min-height: calc(100dvh - 5.5rem);
+        min-height: calc(100vh - 5.5rem);
         gap: 0.75rem;
         position: relative;
       }
-      .wizard.read-only {
-        min-height: auto;
-      }
-      .wizard.read-only .viewport {
+      .wizard .viewport {
         padding-bottom: 5.5rem;
       }
       .top {
@@ -345,6 +343,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         align-items: center;
         padding: 0.35rem 0 0.5rem;
         border-bottom: 1px solid var(--pw-border);
+        flex: 0 0 auto;
       }
       .muted {
         margin: 0;
@@ -377,11 +376,12 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         grid-template-columns: 1fr;
         gap: 1rem;
         align-items: start;
+        flex: 1 1 auto;
+        min-height: 0;
       }
       .viewport {
         display: grid;
         gap: 1rem;
-        padding-bottom: 5.5rem;
         min-width: 0;
       }
       .fields {
@@ -392,8 +392,11 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         position: sticky;
         bottom: 0;
         z-index: 2;
+        flex: 0 0 auto;
+        margin-top: auto;
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         justify-content: space-between;
         gap: 0.75rem;
         padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom));
@@ -450,6 +453,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         border: 1px solid var(--pw-border);
         display: grid;
         gap: 0.4rem;
+        flex: 0 0 auto;
       }
       .banner.conflict {
         border-color: #f04438;

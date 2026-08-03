@@ -2,15 +2,19 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import type {
+  AttachQuestionnaireAssignmentRequest,
   CreateQuestionnaireAssignmentRequest,
   QuestionnaireAssignmentDetail,
   QuestionnaireAssignmentListResponse,
+  QuestionnaireAttachmentState,
   QuestionnaireDirectoryResponse,
+  QuestionnaireDirectorySortBy,
   QuestionnaireDraftDto,
   QuestionnaireProfileProposalItem,
   QuestionnaireProfileProposalListResponse,
   QuestionnaireSnapshotSummary,
   QuestionnaireSubmissionSummary,
+  QuestionnaireType,
   ReviewQuestionnaireSubmissionRequest,
 } from '@loom/contracts-questionnaires';
 
@@ -45,8 +49,9 @@ export class QuestionnairesApiService {
     positionId?: string;
     createdFrom?: string;
     createdTo?: string;
-    attachmentState?: string;
-    sortBy?: string;
+    attachmentState?: QuestionnaireAttachmentState | string;
+    templateType?: QuestionnaireType | string;
+    sortBy?: QuestionnaireDirectorySortBy | string;
     sortDir?: string;
     limit?: number;
     offset?: number;
@@ -68,10 +73,13 @@ export class QuestionnairesApiService {
     );
   }
 
-  reactivateAssignment(id: string): Observable<QuestionnaireAssignmentDetail> {
+  attachAssignment(
+    id: string,
+    body: AttachQuestionnaireAssignmentRequest,
+  ): Observable<QuestionnaireAssignmentDetail> {
     return this.http.post<QuestionnaireAssignmentDetail>(
-      `/api/v1/questionnaires/assignments/${id}/reactivate`,
-      {},
+      `/api/v1/questionnaires/assignments/${id}/attach`,
+      body,
     );
   }
 

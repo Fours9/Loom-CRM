@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { ThemeService } from '../../../core/theme/theme.service';
 import { canBrowseQuestionnaireStep } from '../navigation/questionnaire-step-browse';
+import { questionnaireTypeLabel } from '../questionnaire-labels';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { QuestionnaireSectionRailComponent } from './progress/questionnaire-section-rail.component';
@@ -40,11 +41,19 @@ import {
       <div class="chrome-titles">
         <h2>{{ store.pageTitle() }}</h2>
         <p class="code-line">
-          Код:
+          Тип: {{ templateTypeLabel() }} · Код:
           <code>{{ store.assignment()?.templateCode }}</code>
         </p>
       </div>
       <div class="step-topbar-actions">
+        <button
+          type="button"
+          class="btn"
+          disabled
+          title="Незабаром"
+        >
+          Роздрукувати
+        </button>
         <button
           type="button"
           class="theme-toggle"
@@ -374,6 +383,10 @@ export class QuestionnaireFillChromeComponent {
       templateCode: this.store.assignment()?.templateCode ?? '',
       schemaSteps: this.store.schemaSteps(),
     }),
+  );
+
+  readonly templateTypeLabel = computed(() =>
+    questionnaireTypeLabel(this.store.assignment()?.templateType ?? 'general'),
   );
 
   readonly canOpenRailStep = (stepKey: string): boolean =>

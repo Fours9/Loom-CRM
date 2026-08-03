@@ -27,8 +27,12 @@ export class QuestionnaireAssignment {
   templateVersion!: QuestionnaireTemplateVersion;
 
   @Index()
-  @Column({ name: 'employee_id', type: 'uuid' })
-  employeeId!: string;
+  @Column({ name: 'employee_id', type: 'uuid', nullable: true })
+  employeeId!: string | null;
+
+  @Index()
+  @Column({ name: 'detached_from_employee_id', type: 'uuid', nullable: true })
+  detachedFromEmployeeId!: string | null;
 
   @Column({ name: 'assigned_by_user_id', type: 'uuid' })
   assignedByUserId!: string;

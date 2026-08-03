@@ -4,14 +4,20 @@ import { Permission } from '../../../platform/permissions/permission.names';
 import type { PermissionService } from '../../../platform/permissions/permission.service';
 import type { EmployeeAccessService } from '../../../organization/access/employee-access.service';
 import type { Employee } from '../../../organization/employees/employee.entity';
+import type { QuestionnaireAssignment } from '../questionnaire-assignment.entity';
 import type { QuestionnaireAssignmentStatus } from '../questionnaire.enums';
 import {
+  canAttachAssignment,
   canCancelAssignment,
   canCloseAssignment,
-  canReactivateAssignment,
   canStartRevisionFromStatus,
   isOwnerEditableStatus,
 } from './questionnaire-assignment-transitions';
+
+export type AssignmentAccessContext = {
+  assignment: QuestionnaireAssignment;
+  employee: Employee | null;
+};
 
 export type QuestionnaireDetailCapabilities = {
   canEditDraft: boolean;
@@ -26,8 +32,8 @@ export type QuestionnaireDetailCapabilities = {
 export type QuestionnaireListLifecycleCapabilities = {
   canOpen: boolean;
   canAssign: boolean;
+  canAttach: boolean;
   canCancel: boolean;
-  canReactivate: boolean;
   canClose: boolean;
   canDelete: boolean;
 };
@@ -52,13 +58,13 @@ export function canManageLifecycle(
  */
 export function computeDetailCapabilities(input: {
   actor: User;
-  employee: Employee;
+  employee: Employee | null;
   status: QuestionnaireAssignmentStatus | string;
   permissions: PermissionService;
   access: EmployeeAccessService;
 }): QuestionnaireDetailCapabilities {
   const { actor, employee, status, permissions, access } = input;
-  const isOwner = access.isOwner(actor, employee);
+  const manage = canManageLifecycle(permissions, actor);
   const onBehalf = canCompleteOnBehalf(permissions, actor);
   const canReviewPerm = permissions.has(
     actor.role,
@@ -69,6 +75,18 @@ export function computeDetailCapabilities(input: {
     Permission.QuestionnairesCompleteSelf,
   );
 
+  if (status === 'new') {
+    return {
+      canEditDraft: manage && onBehalf,
+      canSubmit: false,
+      canReopenSelf: false,
+      canStartRevision: false,
+      canRequestChanges: false,
+      canReview: false,
+      canDelete: manage,
+    };
+  }
+
   if (status === 'closed') {
     return {
       canEditDraft: false,
@@ -77,15 +95,40 @@ export function computeDetailCapabilities(input: {
       canStartRevision: false,
       canRequestChanges: false,
       canReview: false,
-      canDelete: canManageLifecycle(permissions, actor),
+      canDelete: manage,
     };
   }
+
+  if (status === 'cancelled') {
+    return {
+      canEditDraft: false,
+      canSubmit: false,
+      canReopenSelf: false,
+      canStartRevision: false,
+      canRequestChanges: false,
+      canReview: false,
+      canDelete: manage,
+    };
+  }
+
+  if (!employee) {
+    return {
+      canEditDraft: false,
+      canSubmit: false,
+      canReopenSelf: false,
+      canStartRevision: false,
+      canRequestChanges: false,
+      canReview: false,
+      canDelete: manage,
+    };
+  }
+
+  const isOwner = access.isOwner(actor, employee);
 
   const ownerEdit =
     isOwner && canCompleteSelf && isOwnerEditableStatus(status);
 
-  const onBehalfEdit =
-    onBehalf && (isOwnerEditableStatus(status) || status === 'cancelled');
+  const onBehalfEdit = onBehalf && isOwnerEditableStatus(status);
 
   const canEditDraft = ownerEdit || onBehalfEdit;
   const canSubmit = canEditDraft;
@@ -111,23 +154,26 @@ export function computeDetailCapabilities(input: {
     canStartRevision,
     canRequestChanges,
     canReview,
-    canDelete: canManageLifecycle(permissions, actor),
+    canDelete: manage,
   };
 }
 
 export function computeListLifecycleCapabilities(input: {
   actor: User;
   status: QuestionnaireAssignmentStatus | string;
+  employeeId: string | null | undefined;
+  detachedFromEmployeeId: string | null | undefined;
   permissions: PermissionService;
 }): QuestionnaireListLifecycleCapabilities {
-  const { actor, status, permissions } = input;
+  const { actor, status, employeeId, detachedFromEmployeeId, permissions } =
+    input;
   const manage = canManageLifecycle(permissions, actor);
   if (status === 'closed') {
     return {
       canOpen: true,
       canAssign: manage,
+      canAttach: false,
       canCancel: false,
-      canReactivate: false,
       canClose: false,
       canDelete: manage,
     };
@@ -135,8 +181,10 @@ export function computeListLifecycleCapabilities(input: {
   return {
     canOpen: true,
     canAssign: manage,
+    canAttach:
+      manage &&
+      canAttachAssignment({ status, employeeId, detachedFromEmployeeId }),
     canCancel: manage && canCancelAssignment(status),
-    canReactivate: manage && canReactivateAssignment(status),
     canClose: manage && canCloseAssignment(status),
     canDelete: manage,
   };

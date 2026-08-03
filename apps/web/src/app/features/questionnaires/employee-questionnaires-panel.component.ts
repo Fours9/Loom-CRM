@@ -17,16 +17,11 @@ import type {
 import { QuestionnairesApiService } from './core/questionnaires-api.service';
 import { QuestionnaireSnapshotSummaryComponent } from './questionnaire-snapshot-summary.component';
 import { buildQuestionnaireAssignmentLink } from './navigation/questionnaire-navigation';
-
-const STATUS_LABELS: Record<string, string> = {
-  assigned: 'Призначено',
-  in_progress: 'В процесі',
-  submitted: 'Надіслано',
-  changes_requested: 'Потрібні зміни',
-  reviewed: 'Переглянуто',
-  cancelled: 'Відкріплено',
-  closed: 'Закрито',
-};
+import { QUESTIONNAIRE_INTRO_STEP } from './navigation/questionnaire-step-keys';
+import {
+  questionnaireStatusLabel,
+  questionnaireTypeLabel,
+} from './questionnaire-labels';
 
 const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   pending: 'Очікує',
@@ -72,6 +67,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
               <div class="card-row">
                 <div class="card-main">
                   <strong>{{ item.templateTitle }}</strong>
+                  <span class="badge type">{{ typeLabel(item.templateType) }}</span>
                   <span class="badge">{{ statusLabel(item.status) }}</span>
                   <span class="pct">{{ item.completionPercent }}%</span>
                 </div>
@@ -79,7 +75,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                   <button
                     type="button"
                     class="btn view"
-                    (click)="openAssignment(item.id)"
+                    (click)="openAssignment(item)"
                   >
                     {{
                       item.status === 'submitted' || item.status === 'reviewed'
@@ -87,20 +83,18 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                         : item.status === 'changes_requested' ||
                             item.status === 'in_progress' ||
                             item.status === 'assigned'
-                          ? 'Продивитись'
+                          ? 'Почати'
                           : 'Переглянути'
                     }}
                   </button>
-                  @if (item.capabilities.canReactivate) {
-                    <button
-                      type="button"
-                      class="btn primary"
-                      [disabled]="busyAssignmentId() === item.id"
-                      (click)="reactivateAssignment(item.id)"
-                    >
-                      Відновити
-                    </button>
-                  }
+                  <button
+                    type="button"
+                    class="btn view"
+                    disabled
+                    title="Незабаром"
+                  >
+                    Роздрукувати
+                  </button>
                   @if (hasLifecycleMoreActions(item)) {
                     <div class="more-menu-wrap">
                       <button
@@ -287,6 +281,9 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         border-radius: 999px;
         padding: 0.15rem 0.6rem;
         font-size: 0.8rem;
+      }
+      .badge.type {
+        color: var(--pw-muted);
       }
       .pct {
         font-weight: 600;
@@ -537,7 +534,11 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   }
 
   statusLabel(status: string): string {
-    return STATUS_LABELS[status] ?? status;
+    return questionnaireStatusLabel(status);
+  }
+
+  typeLabel(type: string): string {
+    return questionnaireTypeLabel(type);
   }
 
   proposalStatusLabel(status: string): string {
@@ -581,9 +582,18 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
     });
   }
 
-  openAssignment(assignmentId: string): void {
-    const link = buildQuestionnaireAssignmentLink({ assignmentId });
-    void this.router.navigateByUrl(link.routerLink);
+  openAssignment(item: QuestionnaireAssignmentListItem): void {
+    const startAtIntro =
+      item.status === 'assigned' ||
+      item.status === 'in_progress' ||
+      item.status === 'changes_requested';
+    const link = buildQuestionnaireAssignmentLink({
+      assignmentId: item.id,
+      ...(startAtIntro ? { stepKey: QUESTIONNAIRE_INTRO_STEP } : {}),
+    });
+    void this.router.navigate([link.routerLink], {
+      queryParams: link.queryParams,
+    });
   }
 
   formatDate(iso: string): string {
@@ -642,14 +652,6 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
       return;
     }
     this.runLifecycle(id, this.api.cancelAssignment(id), 'Не вдалося відкріпити анкету');
-  }
-
-  reactivateAssignment(id: string): void {
-    this.runLifecycle(
-      id,
-      this.api.reactivateAssignment(id),
-      'Не вдалося відновити анкету',
-    );
   }
 
   closeAssignment(id: string): void {

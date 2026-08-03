@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -10,7 +11,7 @@ import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
 import { QuestionnaireProfileProposal } from './questionnaire-profile-proposal.entity';
 import { Permission } from '../../platform/permissions/permission.names';
-import { UserRole } from '../../platform/identity/user.enums';
+import { UserRole, UserStatus } from '../../platform/identity/user.enums';
 import type { User } from '../../platform/identity/user.entity';
 import { QUESTIONNAIRE_ASSIGNMENT_AUDIT } from './assignments/questionnaire-assignment-transitions';
 
@@ -31,10 +32,16 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
     hasAssign?: boolean;
     canView?: boolean;
     deleteAffected?: number;
+    employeeId?: string | null;
+    detachedFromEmployeeId?: string | null;
   }) {
     const assignment = {
       id: 'a1',
-      employeeId: 'emp-1',
+      employeeId: opts.employeeId === undefined ? 'emp-1' : opts.employeeId,
+      detachedFromEmployeeId:
+        opts.detachedFromEmployeeId === undefined
+          ? null
+          : opts.detachedFromEmployeeId,
       templateVersionId: 'tv1',
       status: opts.status,
       startedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -150,7 +157,10 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
     };
 
     const access = {
-      getEmployeeOrFail: jest.fn(async () => employee),
+      getEmployeeOrFail: jest.fn(async (id: string) => ({
+        id,
+        userId: 'linked-user',
+      })),
       requireCanView: jest.fn(async () => {
         if (opts.canView === false) {
           throw new ForbiddenException('out of scope');
@@ -158,6 +168,13 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       }),
       isOwner: jest.fn(() => false),
       isAdmin: jest.fn(() => true),
+    };
+
+    const users = {
+      findById: jest.fn(async () => ({
+        id: 'linked-user',
+        status: UserStatus.Active,
+      })),
     };
 
     const service = new QuestionnaireAssignmentService(
@@ -173,8 +190,9 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         })),
       } as never,
       { find: jest.fn(async () => []), findOne: jest.fn() } as never,
+      { find: jest.fn(async () => []) } as never,
       access as never,
-      {} as never,
+      users as never,
       permissions as never,
       { ensureResponse: jest.fn() } as never,
       audit as never,
@@ -187,7 +205,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       employeeId: assignment.employeeId,
     } as never);
 
-    return { service, assignment, deleted, deleteOrder, audit, access };
+    return { service, assignment, deleted, deleteOrder, audit, access, users };
   }
 
   it.each([
@@ -200,56 +218,28 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
     const ctx = buildService({ status });
     await ctx.service.cancel(adminActor(), 'a1');
     expect(ctx.assignment.status).toBe('cancelled');
+    expect(ctx.assignment.employeeId).toBeNull();
+    expect(ctx.assignment.detachedFromEmployeeId).toBe('emp-1');
     expect(ctx.audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
         action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.cancelled,
+        metadata: expect.objectContaining({
+          previousEmployeeId: 'emp-1',
+        }),
       }),
       expect.anything(),
     );
   });
 
   it('rejects cancel when already cancelled', async () => {
-    const ctx = buildService({ status: 'cancelled' });
+    const ctx = buildService({
+      status: 'cancelled',
+      employeeId: null,
+      detachedFromEmployeeId: 'emp-1',
+    });
     await expect(ctx.service.cancel(adminActor(), 'a1')).rejects.toBeInstanceOf(
       ConflictException,
     );
-  });
-
-  it('reactivates only from cancelled and clears reviewedAt', async () => {
-    const ctx = buildService({
-      status: 'cancelled',
-      reviewedAt: new Date('2026-01-03T00:00:00.000Z'),
-    });
-    const { employeeId, templateVersionId, startedAt, submittedAt } =
-      ctx.assignment;
-    await ctx.service.reactivate(adminActor(), 'a1');
-    expect(ctx.assignment.status).toBe('assigned');
-    expect(ctx.assignment.reviewedAt).toBeNull();
-    expect(ctx.assignment.employeeId).toBe(employeeId);
-    expect(ctx.assignment.templateVersionId).toBe(templateVersionId);
-    expect(ctx.assignment.startedAt).toEqual(startedAt);
-    expect(ctx.assignment.submittedAt).toEqual(submittedAt);
-    expect(ctx.audit.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.reactivated,
-      }),
-      expect.anything(),
-    );
-  });
-
-  it('rejects reactivate from non-cancelled', async () => {
-    const ctx = buildService({ status: 'assigned' });
-    await expect(
-      ctx.service.reactivate(adminActor(), 'a1'),
-    ).rejects.toBeInstanceOf(ConflictException);
-  });
-
-  it('allows reactivate without uniqueness check against other actives', async () => {
-    const ctx = buildService({ status: 'cancelled' });
-    await expect(
-      ctx.service.reactivate(adminActor(), 'a1'),
-    ).resolves.toBeTruthy();
-    expect(ctx.assignment.status).toBe('assigned');
   });
 
   it('forbids lifecycle without QuestionnairesAssign', async () => {
@@ -264,6 +254,82 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
     await expect(ctx.service.cancel(adminActor(), 'a1')).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+
+  describe('attach', () => {
+    it('attaches a brand-new unattached assignment to any employee', async () => {
+      const ctx = buildService({
+        status: 'new',
+        employeeId: null,
+        detachedFromEmployeeId: null,
+      });
+      await ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' });
+      expect(ctx.assignment.status).toBe('assigned');
+      expect(ctx.assignment.employeeId).toBe('emp-2');
+      expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
+      expect(ctx.assignment.reviewedAt).toBeNull();
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.attached,
+          metadata: expect.objectContaining({
+            employeeId: 'emp-2',
+            attachKind: 'new',
+          }),
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('reattaches a cancelled assignment to its previously detached employee', async () => {
+      const ctx = buildService({
+        status: 'cancelled',
+        employeeId: null,
+        detachedFromEmployeeId: 'emp-1',
+      });
+      await ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-1' });
+      expect(ctx.assignment.status).toBe('assigned');
+      expect(ctx.assignment.employeeId).toBe('emp-1');
+      expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.attached,
+          metadata: expect.objectContaining({
+            attachKind: 'same_employee_reattach',
+          }),
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('refuses reattaching a cancelled assignment to a different employee', async () => {
+      const ctx = buildService({
+        status: 'cancelled',
+        employeeId: null,
+        detachedFromEmployeeId: 'emp-1',
+      });
+      await expect(
+        ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects attach for statuses that are not new/cancelled', async () => {
+      const ctx = buildService({ status: 'assigned' });
+      await expect(
+        ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('forbids attach without QuestionnairesAssign', async () => {
+      const ctx = buildService({
+        status: 'new',
+        employeeId: null,
+        detachedFromEmployeeId: null,
+        hasAssign: false,
+      });
+      await expect(
+        ctx.service.attach(employeeActor(), 'a1', { employeeId: 'emp-2' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
   });
 
   it('audits before hard delete', async () => {

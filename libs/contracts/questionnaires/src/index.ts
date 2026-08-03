@@ -1,6 +1,7 @@
 import type { EntityId } from '@loom/contracts-common';
 
 export const QUESTIONNAIRE_ASSIGNMENT_STATUSES = [
+  'new',
   'assigned',
   'in_progress',
   'submitted',
@@ -10,7 +11,17 @@ export const QUESTIONNAIRE_ASSIGNMENT_STATUSES = [
   'closed',
 ] as const;
 
+export const QUESTIONNAIRE_TYPES = [
+  'general',
+  'hr',
+  'manager',
+  'full',
+] as const;
+
+export type QuestionnaireType = (typeof QUESTIONNAIRE_TYPES)[number];
+
 export type QuestionnaireAttachmentState =
+  | 'new'
   | 'attached'
   | 'detached'
   | 'closed';
@@ -103,10 +114,22 @@ export type QuestionnaireSchemaJson = {
 };
 
 export type CreateQuestionnaireAssignmentRequest = {
-  employeeId: EntityId;
-  templateCode?: string;
+  employeeId?: EntityId;
   dueAt?: string | null;
 };
+
+export type AttachQuestionnaireAssignmentRequest = {
+  employeeId: EntityId;
+};
+
+export type QuestionnaireAttachConstraint =
+  | { kind: 'any_employee' }
+  | {
+      kind: 'same_employee';
+      employeeId: EntityId;
+      employeeDisplayName: string;
+    }
+  | null;
 
 export type PatchQuestionnaireDraftRequest = {
   answers: Record<string, unknown>;
@@ -143,6 +166,7 @@ export type QuestionnaireAssignmentListItem = {
   employeeId: EntityId;
   templateCode: string;
   templateTitle: string;
+  templateType: QuestionnaireType;
   version: number;
   status: QuestionnaireAssignmentStatus;
   dueAt: string | null;
@@ -156,7 +180,6 @@ export type QuestionnaireAssignmentListItem = {
     canOpen: boolean;
     canAssign: boolean;
     canCancel: boolean;
-    canReactivate: boolean;
     canClose: boolean;
     canDelete: boolean;
   };
@@ -171,12 +194,13 @@ export type QuestionnaireAssignmentListResponse = {
 
 export type QuestionnaireAssignmentDetail = {
   id: EntityId;
-  employeeId: EntityId;
-  /** Display name parts for fill chrome (overview; always when assignment is viewable). */
-  employeeLastName: string;
-  employeeFirstName: string;
+  employeeId: EntityId | null;
+  /** Display name parts for fill chrome (null when unattached). */
+  employeeLastName: string | null;
+  employeeFirstName: string | null;
   templateCode: string;
   templateTitle: string;
+  templateType: QuestionnaireType;
   version: number;
   status: QuestionnaireAssignmentStatus;
   dueAt: string | null;
@@ -209,6 +233,7 @@ export type QuestionnaireDirectoryQuery = {
   createdFrom?: string;
   createdTo?: string;
   attachmentState?: QuestionnaireAttachmentState;
+  templateType?: QuestionnaireType;
   sortBy?: QuestionnaireDirectorySortBy;
   sortDir?: 'asc' | 'desc';
   limit?: number;
@@ -219,9 +244,10 @@ export type QuestionnaireDirectoryItem = {
   id: EntityId;
   templateCode: string;
   templateTitle: string;
+  templateType: QuestionnaireType;
   version: number;
-  employeeId: EntityId;
-  employeeDisplayName: string;
+  employeeId: EntityId | null;
+  employeeDisplayName: string | null;
   departmentName: string | null;
   positionName: string | null;
   status: QuestionnaireAssignmentStatus;
@@ -229,10 +255,11 @@ export type QuestionnaireDirectoryItem = {
   createdAt: string;
   /** Last aggregate activity (assignment or draft), not draft-only. */
   updatedAt: string;
+  attachConstraint: QuestionnaireAttachConstraint;
   capabilities: {
     canOpen: boolean;
+    canAttach: boolean;
     canCancel: boolean;
-    canReactivate: boolean;
     canClose: boolean;
     canDelete: boolean;
   };
@@ -243,6 +270,9 @@ export type QuestionnaireDirectoryResponse = {
   total: number;
   limit: number;
   offset: number;
+  capabilities: {
+    canCreate: boolean;
+  };
 };
 
 export type QuestionnaireProposedChange = {

@@ -1,4 +1,7 @@
+import type { QuestionnaireType } from '@loom/contracts-questionnaires';
+
 export const QUESTIONNAIRE_ASSIGNMENT_STATUSES = [
+  'new',
   'assigned',
   'in_progress',
   'submitted',
@@ -19,6 +22,8 @@ export const QUESTIONNAIRE_TEMPLATE_STATUSES = [
 
 export type QuestionnaireTemplateStatus =
   (typeof QUESTIONNAIRE_TEMPLATE_STATUSES)[number];
+
+export type { QuestionnaireType };
 
 export const QUESTIONNAIRE_PROPOSAL_STATUSES = [
   'pending',
