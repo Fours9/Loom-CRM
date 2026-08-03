@@ -419,15 +419,7 @@ export class QuestionnaireProposalService {
       workStyle: null,
     };
 
-    const scopedId = assignmentId?.trim() || null;
-    if (
-      scopedId &&
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        scopedId,
-      )
-    ) {
-      return empty;
-    }
+    const scopedId = assignmentId || null;
 
     const assignments = scopedId
       ? await this.assignments.find({

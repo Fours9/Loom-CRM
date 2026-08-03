@@ -1,5 +1,6 @@
 import {
   Component,
+  HostListener,
   Input,
   OnChanges,
   SimpleChanges,
@@ -90,16 +91,6 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                           : 'Переглянути'
                     }}
                   </button>
-                  @if (item.capabilities.canCancel) {
-                    <button
-                      type="button"
-                      class="btn ghost"
-                      [disabled]="busyAssignmentId() === item.id"
-                      (click)="cancelAssignment(item.id)"
-                    >
-                      Відкріпити
-                    </button>
-                  }
                   @if (item.capabilities.canReactivate) {
                     <button
                       type="button"
@@ -110,15 +101,45 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                       Відновити
                     </button>
                   }
-                  @if (item.capabilities.canClose) {
-                    <button
-                      type="button"
-                      class="btn ghost"
-                      [disabled]="busyAssignmentId() === item.id"
-                      (click)="closeAssignment(item.id)"
-                    >
-                      Закрити
-                    </button>
+                  @if (hasLifecycleMoreActions(item)) {
+                    <div class="more-menu-wrap">
+                      <button
+                        type="button"
+                        class="btn ghost more-btn"
+                        title="Додаткові дії"
+                        aria-label="Додаткові дії"
+                        [attr.aria-expanded]="moreMenuAssignmentId() === item.id"
+                        [attr.aria-haspopup]="'menu'"
+                        [disabled]="busyAssignmentId() === item.id"
+                        (click)="toggleMoreMenu(item.id, $event)"
+                      >
+                        <span class="more-icon" aria-hidden="true">⋮</span>
+                      </button>
+                      @if (moreMenuAssignmentId() === item.id) {
+                        <div class="more-menu" role="menu">
+                          @if (item.capabilities.canCancel) {
+                            <button
+                              type="button"
+                              role="menuitem"
+                              [disabled]="busyAssignmentId() === item.id"
+                              (click)="cancelAssignmentFromMenu(item.id)"
+                            >
+                              Відкріпити
+                            </button>
+                          }
+                          @if (item.capabilities.canClose) {
+                            <button
+                              type="button"
+                              role="menuitem"
+                              [disabled]="busyAssignmentId() === item.id"
+                              (click)="closeAssignmentFromMenu(item.id)"
+                            >
+                              Закрити
+                            </button>
+                          }
+                        </div>
+                      }
+                    </div>
                   }
                 </div>
               </div>
@@ -286,6 +307,52 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         color: #b42318;
         border-color: color-mix(in srgb, #b42318 35%, var(--pw-border));
       }
+      .more-menu-wrap {
+        position: relative;
+        display: inline-flex;
+      }
+      .more-btn {
+        min-width: 2.4rem;
+        padding: 0.35rem 0.45rem;
+        line-height: 1;
+      }
+      .more-icon {
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .more-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        z-index: 30;
+        min-width: 11rem;
+        display: grid;
+        padding: 0.3rem;
+        background: var(--pw-surface, #fff);
+        border: 1.5px solid var(--pw-border-strong, var(--pw-border));
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+      }
+      .more-menu button {
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        color: var(--pw-text);
+        border: 0;
+        border-radius: 6px;
+        padding: 0.5rem 0.65rem;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      .more-menu button:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--pw-muted) 14%, transparent);
+      }
+      .more-menu button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
       .meta {
         display: flex;
         flex-wrap: wrap;
@@ -433,12 +500,40 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   readonly canAssign = signal(false);
   readonly canApply = signal(false);
   readonly summaryExpandedIds = signal<ReadonlySet<string>>(new Set());
+  readonly moreMenuAssignmentId = signal<string | null>(null);
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['employeeId'] && this.employeeId) {
       this.summaryExpandedIds.set(new Set());
+      this.moreMenuAssignmentId.set(null);
       this.reload();
     }
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.moreMenuAssignmentId.set(null);
+  }
+
+  hasLifecycleMoreActions(item: QuestionnaireAssignmentListItem): boolean {
+    return item.capabilities.canCancel || item.capabilities.canClose;
+  }
+
+  toggleMoreMenu(assignmentId: string, event: Event): void {
+    event.stopPropagation();
+    this.moreMenuAssignmentId.update((openId) =>
+      openId === assignmentId ? null : assignmentId,
+    );
+  }
+
+  cancelAssignmentFromMenu(id: string): void {
+    this.moreMenuAssignmentId.set(null);
+    this.cancelAssignment(id);
+  }
+
+  closeAssignmentFromMenu(id: string): void {
+    this.moreMenuAssignmentId.set(null);
+    this.closeAssignment(id);
   }
 
   statusLabel(status: string): string {

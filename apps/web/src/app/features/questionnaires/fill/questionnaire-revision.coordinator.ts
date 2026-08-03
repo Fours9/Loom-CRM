@@ -1,9 +1,11 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
+
+export type ManualSaveResult = 'saved' | 'already_saved' | 'failed';
 
 /**
  * Route-scoped revision actions (reopen / draft flush / resubmit).
@@ -15,6 +17,12 @@ export class QuestionnaireRevisionCoordinator {
   private readonly store = inject(QuestionnaireDraftStore);
   private readonly autosave = inject(QuestionnaireAutosaveCoordinator);
   private readonly router = inject(Router);
+
+  readonly manualSaveBusy = signal(false);
+  readonly manualSaveMessage = signal<string | null>(null);
+  readonly manualSaveError = computed(() => this.store.saveError());
+
+  private messageTimer: ReturnType<typeof setTimeout> | null = null;
 
   async reopenSelf(): Promise<void> {
     const id = this.store.assignment()?.id;
@@ -35,6 +43,29 @@ export class QuestionnaireRevisionCoordinator {
   async saveDraft(): Promise<boolean> {
     this.store.materializeMirrorIntoProposalAnswers();
     return this.autosave.flush();
+  }
+
+  async saveDraftWithFeedback(): Promise<ManualSaveResult> {
+    if (this.manualSaveBusy()) return 'failed';
+    if (this.store.saveState() === 'saving') return 'failed';
+
+    this.manualSaveBusy.set(true);
+    try {
+      const before = this.store.saveState();
+      if (before === 'idle' || before === 'saved') {
+        this.flashMessage('Уже збережено');
+        return 'already_saved';
+      }
+      const ok = await this.saveDraft();
+      if (!ok) {
+        this.flashMessage(null);
+        return 'failed';
+      }
+      this.flashMessage('Збережено');
+      return 'saved';
+    } finally {
+      this.manualSaveBusy.set(false);
+    }
   }
 
   /**
@@ -93,5 +124,18 @@ export class QuestionnaireRevisionCoordinator {
     const detail = this.store.assignment();
     if (!detail || !this.store.editable()) return false;
     return detail.submissions.length > 0;
+  }
+
+  private flashMessage(message: string | null, ms = 2200): void {
+    if (this.messageTimer) clearTimeout(this.messageTimer);
+    this.manualSaveMessage.set(message);
+    if (!message) {
+      this.messageTimer = null;
+      return;
+    }
+    this.messageTimer = setTimeout(() => {
+      this.manualSaveMessage.set(null);
+      this.messageTimer = null;
+    }, ms);
   }
 }

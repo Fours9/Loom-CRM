@@ -1,25 +1,19 @@
 import {
   Component,
-  DestroyRef,
   ElementRef,
   ViewChild,
   computed,
   inject,
-  signal,
+  output,
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
   QUESTIONNAIRE_INTRO_STEP,
   QUESTIONNAIRE_REVIEW_STEP,
 } from '../navigation/questionnaire-step-keys';
-import { isSchemaStepReachable } from '../navigation/resolve-active-step';
-import {
-  isQuestionnaireStepBrowsable,
-  resolveQuestionnaireNavigationMode,
-} from '../navigation/questionnaire-navigation-mode';
+import { resolveQuestionnaireNavigationMode } from '../navigation/questionnaire-navigation-mode';
 import {
   reviewRowsForStep,
-  resolveStepUiState,
   visibleFieldsForStep,
 } from './progress/questionnaire-progress';
 import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
@@ -55,13 +49,19 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
             <button
               type="button"
               class="btn"
-              [class.saving]="store.saveState() === 'saving'"
-              [disabled]="store.saveState() === 'saving' || !!store.conflict()"
-              [attr.aria-busy]="store.saveState() === 'saving'"
+              [class.saving]="store.saveState() === 'saving' || revision.manualSaveBusy()"
+              [disabled]="
+                store.saveState() === 'saving' ||
+                revision.manualSaveBusy() ||
+                !!store.conflict()
+              "
+              [attr.aria-busy]="
+                store.saveState() === 'saving' || revision.manualSaveBusy()
+              "
               (click)="saveNow()"
             >
               {{
-                store.saveState() === 'saving'
+                store.saveState() === 'saving' || revision.manualSaveBusy()
                   ? 'Збереження…'
                   : 'Зберегти зміни'
               }}
@@ -559,19 +559,10 @@ export class QuestionnaireWizardShellComponent {
   private readonly autosave = inject(QuestionnaireAutosaveCoordinator);
   readonly revision = inject(QuestionnaireRevisionCoordinator);
   private readonly api = inject(QuestionnairesApiService);
-  private readonly destroyRef = inject(DestroyRef);
 
   readonly introKey = QUESTIONNAIRE_INTRO_STEP;
   readonly reviewKey = QUESTIONNAIRE_REVIEW_STEP;
-  /** Short feedback after manual save when header status alone is easy to miss. */
-  readonly saveFlash = signal<string | null>(null);
-  private saveFlashTimer: ReturnType<typeof setTimeout> | null = null;
-
-  constructor() {
-    this.destroyRef.onDestroy(() => {
-      if (this.saveFlashTimer) clearTimeout(this.saveFlashTimer);
-    });
-  }
+  readonly navigationComplete = output<void>();
 
   @ViewChild('submitErrorEl') submitErrorEl?: ElementRef<HTMLElement>;
 
@@ -608,8 +599,9 @@ export class QuestionnaireWizardShellComponent {
   });
 
   saveStatusText(): string {
-    const flash = this.saveFlash();
+    const flash = this.revision.manualSaveMessage();
     if (flash) return flash;
+    if (this.revision.manualSaveBusy()) return 'Збереження…';
     if (this.store.autosaveBlocked()) return 'Збереження призупинено (конфлікт)';
     switch (this.store.saveState()) {
       case 'dirty':
@@ -632,9 +624,11 @@ export class QuestionnaireWizardShellComponent {
     | 'saved'
     | 'error'
     | 'blocked' {
-    if (this.saveFlash() === 'Збережено' || this.saveFlash() === 'Уже збережено') {
+    const flash = this.revision.manualSaveMessage();
+    if (flash === 'Збережено' || flash === 'Уже збережено') {
       return 'saved';
     }
+    if (this.revision.manualSaveBusy()) return 'saving';
     if (this.store.autosaveBlocked()) return 'blocked';
     if (this.store.submitState() === 'submitting') return 'saving';
     if (this.store.submitState() === 'error') return 'error';
@@ -653,8 +647,10 @@ export class QuestionnaireWizardShellComponent {
   }
 
   saveButtonLabel(): string {
-    if (this.store.saveState() === 'saving') return 'Збереження…';
-    const flash = this.saveFlash();
+    if (this.store.saveState() === 'saving' || this.revision.manualSaveBusy()) {
+      return 'Збереження…';
+    }
+    const flash = this.revision.manualSaveMessage();
     if (flash) return flash;
     return this.isRevisionEdit() ? 'Зберегти' : 'Зберегти зараз';
   }
@@ -673,23 +669,16 @@ export class QuestionnaireWizardShellComponent {
   }
 
   footerSaveHint(): string {
-    if (this.store.saveState() === 'saving') return 'Зачекайте…';
-    const flash = this.saveFlash();
+    if (this.store.saveState() === 'saving' || this.revision.manualSaveBusy()) {
+      return 'Зачекайте…';
+    }
+    const flash = this.revision.manualSaveMessage();
     if (flash) return flash;
     if (this.store.saveState() === 'dirty') return 'Є зміни';
     if (this.store.saveState() === 'error') {
       return this.store.saveError() ?? 'Помилка';
     }
     return '';
-  }
-
-  private flashSave(message: string, ms = 2200): void {
-    if (this.saveFlashTimer) clearTimeout(this.saveFlashTimer);
-    this.saveFlash.set(message);
-    this.saveFlashTimer = setTimeout(() => {
-      this.saveFlash.set(null);
-      this.saveFlashTimer = null;
-    }, ms);
   }
 
   fieldValue(fieldKey: string): unknown {
@@ -731,50 +720,6 @@ export class QuestionnaireWizardShellComponent {
     this.autosave.scheduleSave();
   }
 
-  stepState(stepKey: string): string {
-    return resolveStepUiState({
-      stepKey,
-      currentStepKey: this.store.activeStepKey(),
-      schemaSteps: this.store.schemaSteps(),
-      answers: this.store.answers(),
-      profileMirror: this.store.profileMirror(),
-    });
-  }
-
-  canOpenStep(stepKey: string): boolean {
-    return isSchemaStepReachable(
-      stepKey,
-      this.store.schemaSteps(),
-      this.store.completedSteps(),
-    );
-  }
-
-  canBrowseStep(stepKey: string): boolean {
-    const mode = resolveQuestionnaireNavigationMode({
-      editable: this.store.editable(),
-    });
-    return isQuestionnaireStepBrowsable({
-      mode,
-      linearReachable: this.canOpenStep(stepKey),
-    });
-  }
-
-  canOpenReview(): boolean {
-    const steps = this.store.schemaSteps();
-    if (!steps.length) return true;
-    return steps.every((s) => this.store.completedSteps().has(s.key));
-  }
-
-  canBrowseReview(): boolean {
-    const mode = resolveQuestionnaireNavigationMode({
-      editable: this.store.editable(),
-    });
-    return isQuestionnaireStepBrowsable({
-      mode,
-      linearReachable: this.canOpenReview(),
-    });
-  }
-
   reviewRows(stepKey: string) {
     const step = this.store.schemaSteps().find((s) => s.key === stepKey);
     if (!step) return [];
@@ -784,10 +729,6 @@ export class QuestionnaireWizardShellComponent {
       this.store.profileMirror(),
       this.store.schemaSteps(),
     );
-  }
-
-  go(stepKey: string): void {
-    void this.navigateTo(stepKey);
   }
 
   canBack(): boolean {
@@ -830,15 +771,7 @@ export class QuestionnaireWizardShellComponent {
   }
 
   async saveNow(): Promise<void> {
-    if (this.store.saveState() === 'saving') return;
-    const before = this.store.saveState();
-    const ok = await this.revision.saveDraft();
-    if (!ok) return;
-    if (before === 'idle' || before === 'saved') {
-      this.flashSave('Уже збережено');
-      return;
-    }
-    this.flashSave('Збережено');
+    await this.revision.saveDraftWithFeedback();
   }
 
   acceptServer(): void {
@@ -868,12 +801,14 @@ export class QuestionnaireWizardShellComponent {
       return;
     }
 
-    void this.navigateTo(step.key, { focusHeading: false }).then(() => {
-      // Wait for step template to render field hosts.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(focusInDom);
-      });
-    });
+    void this.navigateTo(step.key, { emitNavigationComplete: false }).then(
+      () => {
+        // Wait for step template to render field hosts.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(focusInDom);
+        });
+      },
+    );
   }
 
   async submit(): Promise<void> {
@@ -930,16 +865,12 @@ export class QuestionnaireWizardShellComponent {
 
   private async navigateTo(
     stepKey: string,
-    opts?: { focusHeading?: boolean },
+    opts?: { emitNavigationComplete?: boolean },
   ): Promise<void> {
     await this.autosave.flush();
     this.store.setActiveStep(stepKey);
-    if (opts?.focusHeading === false) return;
-    queueMicrotask(() => {
-      document
-        .querySelector<HTMLElement>('.step-main h1, .rail h1')
-        ?.focus({ preventScroll: true });
-    });
+    if (opts?.emitNavigationComplete === false) return;
+    queueMicrotask(() => this.navigationComplete.emit());
   }
 }
 

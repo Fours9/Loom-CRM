@@ -37,7 +37,8 @@ CRM employee profile: `/people/:id` — tabs Дані працівника, Ро
 ### Questionnaires FE boundary
 
 - **Public:** `apps/web/src/app/features/questionnaires/public-api.ts` — People panel, snapshot summary, `buildQuestionnaireAssignmentLink` (URL only).
-- **Private:** fill route `/questionnaires/:id` (`fill/` — DraftStore, AutosaveCoordinator, field widgets, display resolver). Not re-exported.
+- **Private:** immersive chrome-less fill `/questionnaires/:id` (`fill/` — FillChrome, section progress rail under `fill/progress/`, DraftStore, AutosaveCoordinator, RevisionCoordinator, WizardShell, field widgets). Not re-exported; left sidebar stepper removed.
+- Shell hides topbar/sidebar via route `data.hideAppChrome` (leaf walk); directory `/questionnaires` keeps chrome.
 - Profile mirror: assignment `profileMirror` and/or private `QuestionnaireProfileMirrorService` (`HttpClient` + `@loom/contracts-employees`); never People page/store/`employee-data-panel`.
 - Questionnaires HTTP: `QuestionnairesApiService` only (no employee endpoints on that gateway).
 

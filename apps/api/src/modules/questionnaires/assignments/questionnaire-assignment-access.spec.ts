@@ -147,3 +147,97 @@ describe('computeDetailCapabilities matrix', () => {
     expect(caps.canReactivate).toBe(false);
   });
 });
+
+describe('canDelete detail/list matrix', () => {
+  function perms(role: UserRole, extra: string[] = []): PermissionService {
+    const set = new Set<string>(
+      role === UserRole.Admin
+        ? [
+            Permission.QuestionnairesCompleteSelf,
+            Permission.QuestionnairesCompleteAny,
+            Permission.QuestionnairesAssign,
+            Permission.QuestionnairesReview,
+            ...extra,
+          ]
+        : role === UserRole.DepartmentManager
+          ? [Permission.QuestionnairesCompleteSelf, ...extra]
+          : [Permission.QuestionnairesCompleteSelf, ...extra],
+    );
+    return {
+      has: (_r: string, p: string) => set.has(p),
+    } as unknown as PermissionService;
+  }
+
+  function access(isOwner: boolean): EmployeeAccessService {
+    return {
+      isOwner: () => isOwner,
+    } as unknown as EmployeeAccessService;
+  }
+
+  const employee = { id: 'e1' } as Employee;
+
+  it('Admin + Assign → detail canDelete true', () => {
+    const caps = computeDetailCapabilities({
+      actor: { id: 'u1', role: UserRole.Admin } as User,
+      employee,
+      status: 'assigned',
+      permissions: perms(UserRole.Admin),
+      access: access(false),
+    });
+    expect(caps.canDelete).toBe(true);
+  });
+
+  it('owner employee → detail canDelete false', () => {
+    const caps = computeDetailCapabilities({
+      actor: { id: 'u1', role: UserRole.Employee } as User,
+      employee,
+      status: 'assigned',
+      permissions: perms(UserRole.Employee),
+      access: access(true),
+    });
+    expect(caps.canDelete).toBe(false);
+  });
+
+  it('manager in scope → detail canDelete false', () => {
+    const caps = computeDetailCapabilities({
+      actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
+      employee,
+      status: 'assigned',
+      permissions: perms(UserRole.DepartmentManager),
+      access: access(false),
+    });
+    expect(caps.canDelete).toBe(false);
+  });
+
+  it('Admin-owner + Assign → detail canDelete true', () => {
+    const caps = computeDetailCapabilities({
+      actor: { id: 'u1', role: UserRole.Admin } as User,
+      employee,
+      status: 'assigned',
+      permissions: perms(UserRole.Admin),
+      access: access(true),
+    });
+    expect(caps.canDelete).toBe(true);
+  });
+
+  it('closed + employee owner → detail canDelete false', () => {
+    const caps = computeDetailCapabilities({
+      actor: { id: 'u1', role: UserRole.Employee } as User,
+      employee,
+      status: 'closed',
+      permissions: perms(UserRole.Employee),
+      access: access(true),
+    });
+    expect(caps.canDelete).toBe(false);
+  });
+
+  it('list caps: owner canOpen does not imply canDelete', () => {
+    const caps = computeListLifecycleCapabilities({
+      actor: { id: 'u1', role: UserRole.Employee } as User,
+      status: 'assigned',
+      permissions: perms(UserRole.Employee),
+    });
+    expect(caps.canOpen).toBe(true);
+    expect(caps.canDelete).toBe(false);
+  });
+});

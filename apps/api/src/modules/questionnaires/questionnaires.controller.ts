@@ -25,6 +25,7 @@ import {
   CreateQuestionnaireAssignmentDto,
   PatchQuestionnaireDraftDto,
   QuestionnaireDirectoryQueryDto,
+  QuestionnaireSnapshotSummaryQueryDto,
   RequestQuestionnaireChangesDto,
   ReviewQuestionnaireSubmissionDto,
 } from './questionnaire.dto';
@@ -202,12 +203,12 @@ export class QuestionnairesController {
   snapshotSummary(
     @CurrentUser() actor: User,
     @Param('employeeId', ParseUUIDPipe) employeeId: string,
-    @Query('assignmentId') assignmentId?: string,
+    @Query() query: QuestionnaireSnapshotSummaryQueryDto,
   ) {
     return this.proposals.latestSnapshotSummary(
       actor,
       employeeId,
-      assignmentId?.trim() || null,
+      query.assignmentId ?? null,
     );
   }
 }

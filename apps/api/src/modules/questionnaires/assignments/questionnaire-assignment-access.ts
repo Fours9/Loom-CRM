@@ -47,8 +47,8 @@ export function canManageLifecycle(
 }
 
 /**
- * Single source for draft/submit/revision/lifecycle capabilities.
- * closed blocks all mutations except delete (handled at list caps).
+ * Single source for detail draft/submit/revision/delete capabilities.
+ * Lifecycle list capabilities are projected separately.
  */
 export function computeDetailCapabilities(input: {
   actor: User;
