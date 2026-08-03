@@ -1,4 +1,11 @@
-import { Component, Input, OnChanges, SimpleChanges, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnChanges,
+  SimpleChanges,
+  inject,
+  signal,
+} from '@angular/core';
 import type { QuestionnaireSnapshotSummary } from '@loom/contracts-questionnaires';
 import { QuestionnairesApiService } from './core/questionnaires-api.service';
 
@@ -6,8 +13,7 @@ import { QuestionnairesApiService } from './core/questionnaires-api.service';
   selector: 'loom-questionnaire-snapshot-summary',
   standalone: true,
   template: `
-    <section class="summary">
-      <h3>Підсумок анкети</h3>
+    <div class="summary-body">
       @if (loading()) {
         <p class="muted">Завантаження…</p>
       } @else if (!summary()?.submittedAt) {
@@ -32,15 +38,15 @@ import { QuestionnairesApiService } from './core/questionnaires-api.service';
           </div>
         }
       }
-    </section>
+    </div>
   `,
   styles: [
     `
-      .summary {
+      .summary-body {
         display: grid;
         gap: 0.75rem;
+        padding-top: 0.55rem;
       }
-      h3,
       h4 {
         margin: 0;
       }
@@ -80,6 +86,8 @@ export class QuestionnaireSnapshotSummaryComponent implements OnChanges {
   private readonly api = inject(QuestionnairesApiService);
 
   @Input({ required: true }) employeeId!: string;
+  /** When set, summary is scoped to this assignment's latest submission. */
+  @Input() assignmentId: string | null = null;
 
   readonly loading = signal(false);
   readonly summary = signal<QuestionnaireSnapshotSummary | null>(null);
@@ -96,7 +104,10 @@ export class QuestionnaireSnapshotSummaryComponent implements OnChanges {
   };
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['employeeId'] && this.employeeId) {
+    if (
+      (changes['employeeId'] || changes['assignmentId']) &&
+      this.employeeId
+    ) {
       this.reload();
     }
   }
@@ -112,7 +123,11 @@ export class QuestionnaireSnapshotSummaryComponent implements OnChanges {
 
   formatValue(value: unknown): string {
     if (value == null) return '—';
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
       return String(value);
     }
     return JSON.stringify(value, null, 2);
@@ -120,7 +135,7 @@ export class QuestionnaireSnapshotSummaryComponent implements OnChanges {
 
   private reload(): void {
     this.loading.set(true);
-    this.api.snapshotSummary(this.employeeId).subscribe({
+    this.api.snapshotSummary(this.employeeId, this.assignmentId).subscribe({
       next: (summary: QuestionnaireSnapshotSummary) => {
         this.summary.set(summary);
         this.loading.set(false);

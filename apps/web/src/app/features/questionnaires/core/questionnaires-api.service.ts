@@ -158,9 +158,17 @@ export class QuestionnairesApiService {
     );
   }
 
-  snapshotSummary(employeeId: string): Observable<QuestionnaireSnapshotSummary> {
+  snapshotSummary(
+    employeeId: string,
+    assignmentId?: string | null,
+  ): Observable<QuestionnaireSnapshotSummary> {
+    const params: Record<string, string> = {};
+    if (assignmentId?.trim()) {
+      params['assignmentId'] = assignmentId.trim();
+    }
     return this.http.get<QuestionnaireSnapshotSummary>(
       `/api/v1/questionnaires/employees/${employeeId}/snapshot-summary`,
+      { params },
     );
   }
 }

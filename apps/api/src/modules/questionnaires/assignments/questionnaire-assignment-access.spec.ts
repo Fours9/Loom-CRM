@@ -107,6 +107,7 @@ describe('computeDetailCapabilities matrix', () => {
       canStartRevision: false,
       canRequestChanges: false,
       canReview: false,
+      canDelete: true,
     });
   });
 

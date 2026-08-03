@@ -130,7 +130,56 @@ export class QuestionnaireDraftStore {
     return !!detail.capabilities.canRequestChanges;
   });
 
+  /** Hard-delete only in edit session (or closed view — edit is blocked). */
+  readonly canShowDeleteButton = computed(() => {
+    if (this.loadState() !== 'ready') return false;
+    const detail = this.assignment();
+    if (!detail?.capabilities?.canDelete) return false;
+    if (detail.status === 'closed') return true;
+    return this.editSessionActive() && this.uiMode() === 'editable';
+  });
+
   readonly editable = computed(() => this.uiMode() === 'editable');
+
+  /** Fill chrome title: replace «співробітника» with LastName FirstName. */
+  readonly pageTitle = computed(() => {
+    const detail = this.assignment();
+    const title = detail?.templateTitle?.trim() || 'Анкета';
+    const last =
+      detail?.employeeLastName?.trim() ||
+      (typeof this.profileMirror()['lastName'] === 'string'
+        ? String(this.profileMirror()['lastName']).trim()
+        : '');
+    const first =
+      detail?.employeeFirstName?.trim() ||
+      (typeof this.profileMirror()['firstName'] === 'string'
+        ? String(this.profileMirror()['firstName']).trim()
+        : '');
+    const name = [last, first].filter(Boolean).join(' ');
+    if (!name) return title;
+    if (/співробітника/i.test(title)) {
+      return title.replace(/співробітника/gi, name);
+    }
+    return `${title} — ${name}`;
+  });
+
+  readonly stepHeading = computed(() => {
+    const key = this.activeStepKey();
+    if (key === QUESTIONNAIRE_INTRO_STEP) return 'Вступ';
+    if (key === QUESTIONNAIRE_REVIEW_STEP) return 'Перегляд і надсилання';
+    const step = this.schemaSteps().find((s) => s.key === key);
+    return step?.label ?? this.assignment()?.templateTitle ?? 'Анкета';
+  });
+
+  readonly stepIndexLabel = computed(() => {
+    const key = this.activeStepKey();
+    const steps = this.schemaSteps();
+    const total = steps.length + 2;
+    if (key === QUESTIONNAIRE_INTRO_STEP) return `1 з ${total}`;
+    if (key === QUESTIONNAIRE_REVIEW_STEP) return `${total} з ${total}`;
+    const idx = steps.findIndex((s) => s.key === key);
+    return `${idx + 2} з ${total}`;
+  });
 
   readonly progress = computed(() =>
     computeQuestionnaireProgress(

@@ -202,7 +202,12 @@ export class QuestionnairesController {
   snapshotSummary(
     @CurrentUser() actor: User,
     @Param('employeeId', ParseUUIDPipe) employeeId: string,
+    @Query('assignmentId') assignmentId?: string,
   ) {
-    return this.proposals.latestSnapshotSummary(actor, employeeId);
+    return this.proposals.latestSnapshotSummary(
+      actor,
+      employeeId,
+      assignmentId?.trim() || null,
+    );
   }
 }

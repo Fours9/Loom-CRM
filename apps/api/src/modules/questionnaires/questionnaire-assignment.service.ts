@@ -205,6 +205,8 @@ export class QuestionnaireAssignmentService {
     return {
       id: assignment.id,
       employeeId: assignment.employeeId,
+      employeeLastName: employee.lastName,
+      employeeFirstName: employee.firstName,
       templateCode: assignment.templateVersion.template.code,
       templateTitle: assignment.templateVersion.template.title,
       version: assignment.templateVersion.version,

@@ -402,14 +402,41 @@ export class QuestionnaireProposalService {
     return this.toDto(proposal, assignmentId);
   }
 
-  async latestSnapshotSummary(actor: User, employeeId: string) {
+  async latestSnapshotSummary(
+    actor: User,
+    employeeId: string,
+    assignmentId?: string | null,
+  ) {
     const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
 
-    const assignments = await this.assignments.find({
-      where: { employeeId },
-      order: { createdAt: 'DESC' },
-    });
+    const empty = {
+      submittedAt: null as string | null,
+      experience: null,
+      education: null,
+      strengths: null,
+      hobbies: null,
+      workStyle: null,
+    };
+
+    const scopedId = assignmentId?.trim() || null;
+    if (
+      scopedId &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        scopedId,
+      )
+    ) {
+      return empty;
+    }
+
+    const assignments = scopedId
+      ? await this.assignments.find({
+          where: { id: scopedId, employeeId },
+        })
+      : await this.assignments.find({
+          where: { employeeId },
+          order: { createdAt: 'DESC' },
+        });
 
     for (const assignment of assignments) {
       const response = await this.responses.findOne({
@@ -433,14 +460,7 @@ export class QuestionnaireProposalService {
       };
     }
 
-    return {
-      submittedAt: null,
-      experience: null,
-      education: null,
-      strengths: null,
-      hobbies: null,
-      workStyle: null,
-    };
+    return empty;
   }
 
   private async applyChange(

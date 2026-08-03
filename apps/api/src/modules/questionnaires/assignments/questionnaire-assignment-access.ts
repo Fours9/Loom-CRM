@@ -20,6 +20,7 @@ export type QuestionnaireDetailCapabilities = {
   canStartRevision: boolean;
   canRequestChanges: boolean;
   canReview: boolean;
+  canDelete: boolean;
 };
 
 export type QuestionnaireListLifecycleCapabilities = {
@@ -76,6 +77,7 @@ export function computeDetailCapabilities(input: {
       canStartRevision: false,
       canRequestChanges: false,
       canReview: false,
+      canDelete: canManageLifecycle(permissions, actor),
     };
   }
 
@@ -109,6 +111,7 @@ export function computeDetailCapabilities(input: {
     canStartRevision,
     canRequestChanges,
     canReview,
+    canDelete: canManageLifecycle(permissions, actor),
   };
 }
 
