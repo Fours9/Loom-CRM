@@ -6,7 +6,7 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { of, type Observable } from 'rxjs';
+import { of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import type {
   QuestionnaireAttachmentState,
@@ -234,23 +234,6 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
                         />
                       </svg>
                     </button>
-                    @if (item.capabilities.canDelete) {
-                      <button
-                        type="button"
-                        class="icon-btn danger"
-                        title="Видалити"
-                        aria-label="Видалити анкету"
-                        [disabled]="busyId() === item.id"
-                        (click)="remove(item)"
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path
-                            fill="currentColor"
-                            d="M9 3h6l1 2h5v2H3V5h5l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9zm-1 12h12a1 1 0 0 0 1-1V8H5v12a1 1 0 0 0 1 1z"
-                          />
-                        </svg>
-                      </button>
-                    }
                   </td>
                 </tr>
               }
@@ -419,16 +402,6 @@ const ATTACHMENT_LABELS: Record<QuestionnaireAttachmentState, string> = {
         cursor: not-allowed;
         box-shadow: none;
       }
-      .icon-btn.danger {
-        color: #f97066;
-        border-color: color-mix(in srgb, #f97066 45%, var(--pw-border));
-        background: color-mix(in srgb, #f97066 12%, var(--pw-surface));
-      }
-      .icon-btn.danger:hover {
-        color: #fff;
-        background: #b42318;
-        border-color: #b42318;
-      }
       .icon-btn svg {
         width: 1.35rem;
         height: 1.35rem;
@@ -468,7 +441,6 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly items = signal<QuestionnaireDirectoryItem[]>([]);
   readonly total = signal(0);
-  readonly busyId = signal<string | null>(null);
 
   readonly departments = signal<Dept[]>([]);
   readonly positions = signal<Pos[]>([]);
@@ -556,38 +528,6 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   open(id: string): void {
     const link = buildQuestionnaireAssignmentLink({ assignmentId: id });
     void this.router.navigateByUrl(link.routerLink);
-  }
-
-  remove(item: QuestionnaireDirectoryItem): void {
-    if (
-      !window.confirm(
-        'Видалити анкету без можливості відновлення? Буде видалено чернетку, усі подання та пропозиції. Уже застосовані до профілю зміни не скасовуються.',
-      )
-    ) {
-      return;
-    }
-    this.run(item.id, this.api.deleteAssignment(item.id), 'Не вдалося видалити');
-  }
-
-  private run(
-    id: string,
-    request: Observable<unknown>,
-    fallback: string,
-  ): void {
-    if (this.busyId()) return;
-    this.busyId.set(id);
-    this.error.set(null);
-    request.subscribe({
-      next: () => {
-        this.busyId.set(null);
-        this.reload();
-      },
-      error: (err) => {
-        this.busyId.set(null);
-        this.error.set(err?.error?.message || fallback);
-        this.reload();
-      },
-    });
   }
 
   private currentQuery(): Record<string, string | null> {

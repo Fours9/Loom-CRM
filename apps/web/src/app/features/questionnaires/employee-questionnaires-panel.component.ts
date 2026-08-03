@@ -120,16 +120,6 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                       Закрити
                     </button>
                   }
-                  @if (item.capabilities.canDelete) {
-                    <button
-                      type="button"
-                      class="btn ghost danger"
-                      [disabled]="busyAssignmentId() === item.id"
-                      (click)="deleteAssignment(item.id)"
-                    >
-                      Видалити
-                    </button>
-                  }
                 </div>
               </div>
               <div class="meta">
@@ -138,59 +128,86 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                 }
                 <span>v{{ item.version }}</span>
               </div>
-              @if (proposalsForAssignment(item.id); as props) {
-                @if (props.length) {
-                  <div class="assignment-proposals">
-                    <h4>Пропозиції до профілю</h4>
-                    <ul class="prop-list">
-                      @for (p of props; track p.id) {
-                        <li class="prop-card">
-                          <div class="card-main">
-                            <strong>{{ proposalLabel(p) }}</strong>
-                            <span class="badge">{{
-                              proposalStatusLabel(p.status)
-                            }}</span>
-                          </div>
-                          <div class="meta">
-                            <span>{{ formatChange(p) }}</span>
-                          </div>
-                          @if (canApply() && p.status === 'pending') {
-                            <div class="actions">
-                              <button
-                                type="button"
-                                class="btn primary"
-                                (click)="accept(p.id)"
-                              >
-                                Прийняти
-                              </button>
-                              <button
-                                type="button"
-                                class="btn ghost"
-                                (click)="reject(p.id)"
-                              >
-                                Відхилити
-                              </button>
-                            </div>
-                          }
-                        </li>
+
+              <div class="subitems">
+                @if (showProposedChanges(item)) {
+                  <details class="fold">
+                    <summary>
+                      <span class="fold-title"
+                        >Запропоновані зміни до профілю</span
+                      >
+                      @if (proposalsForAssignment(item.id).length; as count) {
+                        <span class="fold-count">{{ count }}</span>
                       }
-                    </ul>
-                  </div>
-                } @else if (
-                  item.status === 'submitted' || item.status === 'reviewed'
-                ) {
-                  <p class="muted proposals-empty">
-                    Немає пропозицій до профілю (немає відмінностей від поточного
-                    профілю).
-                  </p>
+                    </summary>
+                    <div class="fold-body">
+                      @if (proposalsForAssignment(item.id); as props) {
+                        @if (props.length) {
+                          <ul class="prop-list">
+                            @for (p of props; track p.id) {
+                              <li class="prop-card">
+                                <div class="card-main">
+                                  <strong>{{ proposalLabel(p) }}</strong>
+                                  <span class="badge">{{
+                                    proposalStatusLabel(p.status)
+                                  }}</span>
+                                </div>
+                                <div class="meta">
+                                  <span>{{ formatChange(p) }}</span>
+                                </div>
+                                @if (canApply() && p.status === 'pending') {
+                                  <div class="actions">
+                                    <button
+                                      type="button"
+                                      class="btn primary"
+                                      (click)="accept(p.id)"
+                                    >
+                                      Прийняти
+                                    </button>
+                                    <button
+                                      type="button"
+                                      class="btn ghost"
+                                      (click)="reject(p.id)"
+                                    >
+                                      Відхилити
+                                    </button>
+                                  </div>
+                                }
+                              </li>
+                            }
+                          </ul>
+                        } @else {
+                          <p class="muted proposals-empty">
+                            Немає запропонованих змін (відповіді збігаються з
+                            профілем або поля профілю не змінювались).
+                          </p>
+                        }
+                      }
+                    </div>
+                  </details>
                 }
-              }
+
+                <details
+                  class="fold"
+                  (toggle)="onSummaryToggle(item.id, $event)"
+                >
+                  <summary>
+                    <span class="fold-title">Підсумок анкети</span>
+                  </summary>
+                  <div class="fold-body">
+                    @if (summaryExpandedIds().has(item.id)) {
+                      <loom-questionnaire-snapshot-summary
+                        [employeeId]="employeeId"
+                        [assignmentId]="item.id"
+                      />
+                    }
+                  </div>
+                </details>
+              </div>
             </li>
           }
         </ul>
       }
-
-      <loom-questionnaire-snapshot-summary [employeeId]="employeeId" />
     </div>
   `,
   styles: [
@@ -215,15 +232,16 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         margin: 0;
         padding: 0;
         display: grid;
-        gap: 0.6rem;
+        gap: 0.85rem;
       }
       .card {
-        border: 1px solid var(--pw-border);
-        border-radius: 10px;
-        padding: 0.75rem;
+        border: 2px solid color-mix(in srgb, var(--pw-border) 85%, #64748b);
+        border-radius: 12px;
+        padding: 0.9rem 1rem;
         background: var(--pw-surface);
         display: grid;
-        gap: 0.4rem;
+        gap: 0.55rem;
+        box-shadow: 0 1px 2px color-mix(in srgb, #0f172a 6%, transparent);
       }
       .card-row {
         display: flex;
@@ -240,10 +258,13 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         min-width: 0;
         flex: 1 1 auto;
       }
+      .card-main strong {
+        font-size: 1.05rem;
+      }
       .badge {
-        border: 1px solid var(--pw-border);
+        border: 1.5px solid var(--pw-border);
         border-radius: 999px;
-        padding: 0.1rem 0.55rem;
+        padding: 0.15rem 0.6rem;
         font-size: 0.8rem;
       }
       .pct {
@@ -278,7 +299,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
       }
       .btn {
         border-radius: 8px;
-        border: 1px solid var(--pw-border);
+        border: 1.5px solid var(--pw-border);
         padding: 0.4rem 0.75rem;
         background: var(--pw-surface);
         cursor: pointer;
@@ -304,24 +325,78 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
       .ok {
         color: #027a48;
       }
-      .proposals {
+      .subitems {
         display: grid;
-        gap: 0.6rem;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+        padding: 0.65rem 0.7rem 0.7rem;
+        border-radius: 10px;
+        border: 2px solid color-mix(in srgb, var(--pw-border) 70%, #94a3b8);
+        background: color-mix(in srgb, var(--pw-bg, #f6f8fb) 88%, #cbd5e1);
       }
-      .assignment-proposals {
-        display: grid;
-        gap: 0.45rem;
-        margin-top: 0.35rem;
-        padding-top: 0.55rem;
-        border-top: 1px solid var(--pw-border);
+      .fold {
+        border-radius: 8px;
+        border: 1.5px solid color-mix(in srgb, var(--pw-border) 75%, #64748b);
+        background: var(--pw-surface);
+        overflow: hidden;
       }
-      .assignment-proposals h4 {
-        margin: 0;
-        font-size: 0.9rem;
+      .fold > summary {
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        user-select: none;
+        padding: 0.65rem 0.75rem;
+        font-size: 0.95rem;
         font-weight: 600;
+        color: inherit;
+        background: color-mix(in srgb, var(--pw-surface) 92%, #e2e8f0);
+      }
+      .fold > summary:hover {
+        background: color-mix(in srgb, var(--pw-accent) 8%, var(--pw-surface));
+      }
+      .fold > summary::-webkit-details-marker {
+        display: none;
+      }
+      .fold > summary::before {
+        content: '';
+        width: 0.55rem;
+        height: 0.55rem;
+        flex: 0 0 auto;
+        border-right: 2.5px solid var(--pw-muted);
+        border-bottom: 2.5px solid var(--pw-muted);
+        transform: rotate(-45deg);
+        margin-top: -0.1rem;
+        transition: transform 0.15s ease;
+      }
+      .fold[open] > summary::before {
+        transform: rotate(45deg);
+        margin-top: 0.05rem;
+      }
+      .fold-title {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .fold-count {
+        flex: 0 0 auto;
+        min-width: 1.4rem;
+        text-align: center;
+        border-radius: 999px;
+        padding: 0.1rem 0.45rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #fff;
+        background: var(--pw-accent);
+      }
+      .fold-body {
+        padding: 0.65rem 0.75rem 0.75rem;
+        border-top: 1.5px solid color-mix(in srgb, var(--pw-border) 80%, #94a3b8);
+        display: grid;
+        gap: 0.5rem;
       }
       .proposals-empty {
-        margin: 0.25rem 0 0;
+        margin: 0;
         font-size: 0.9rem;
       }
       .prop-list {
@@ -329,13 +404,13 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         margin: 0;
         padding: 0;
         display: grid;
-        gap: 0.45rem;
+        gap: 0.5rem;
       }
       .prop-card {
-        border: 1px solid var(--pw-border);
+        border: 1.5px solid var(--pw-border);
         border-radius: 8px;
-        padding: 0.55rem 0.65rem;
-        background: color-mix(in srgb, var(--pw-bg, #f6f8fb) 70%, transparent);
+        padding: 0.6rem 0.7rem;
+        background: color-mix(in srgb, var(--pw-bg, #f6f8fb) 75%, transparent);
         display: grid;
         gap: 0.35rem;
       }
@@ -357,9 +432,11 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   readonly proposals = signal<QuestionnaireProfileProposalItem[]>([]);
   readonly canAssign = signal(false);
   readonly canApply = signal(false);
+  readonly summaryExpandedIds = signal<ReadonlySet<string>>(new Set());
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['employeeId'] && this.employeeId) {
+      this.summaryExpandedIds.set(new Set());
       this.reload();
     }
   }
@@ -370,6 +447,26 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
 
   proposalStatusLabel(status: string): string {
     return PROPOSAL_STATUS_LABELS[status] ?? status;
+  }
+
+  showProposedChanges(item: QuestionnaireAssignmentListItem): boolean {
+    if (this.proposalsForAssignment(item.id).length > 0) return true;
+    return (
+      item.status === 'submitted' ||
+      item.status === 'reviewed' ||
+      item.status === 'closed'
+    );
+  }
+
+  onSummaryToggle(assignmentId: string, event: Event): void {
+    const details = event.currentTarget as HTMLDetailsElement;
+    const open = !!details.open;
+    this.summaryExpandedIds.update((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(assignmentId);
+      else next.delete(assignmentId);
+      return next;
+    });
   }
 
   /** Pending proposals for this questionnaire (primary: assignmentId). */
@@ -469,17 +566,6 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
       return;
     }
     this.runLifecycle(id, this.api.closeAssignment(id), 'Не вдалося закрити анкету');
-  }
-
-  deleteAssignment(id: string): void {
-    if (
-      !window.confirm(
-        'Видалити анкету без можливості відновлення? Буде видалено чернетку, усі подання та пропозиції. Уже застосовані до профілю зміни не скасовуються.',
-      )
-    ) {
-      return;
-    }
-    this.runLifecycle(id, this.api.deleteAssignment(id), 'Не вдалося видалити анкету');
   }
 
   private runLifecycle(

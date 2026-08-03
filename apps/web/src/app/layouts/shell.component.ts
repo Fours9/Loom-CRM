@@ -36,9 +36,11 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
     <div
       class="shell app-shell"
       [class.in-absences]="inAbsences()"
-      [class.side-pinned]="sidePinned()"
+      [class.questionnaire-fill]="inQuestionnaireFill()"
+      [class.side-pinned]="sidePinned() && !inQuestionnaireFill()"
       data-pw-app="1"
     >
+      @if (!inQuestionnaireFill()) {
       <header class="topbar">
         <div class="topbar-start">
           <button
@@ -110,14 +112,14 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
             [attr.aria-label]="
               theme.mode() === 'dark' ? 'Увімкнути світлу тему' : 'Увімкнути темну тему'
             "
-            [title]="theme.mode() === 'dark' ? 'Світла тема' : 'Темна тема'"
+            [title]="theme.mode() === 'dark' ? 'Темна тема' : 'Світла тема'"
           >
             @if (theme.mode() === 'dark') {
-              <span aria-hidden="true">☀</span>
-              <span class="theme-label">Світла</span>
-            } @else {
               <span aria-hidden="true">☾</span>
               <span class="theme-label">Темна</span>
+            } @else {
+              <span aria-hidden="true">☀</span>
+              <span class="theme-label">Світла</span>
             }
           </button>
           <div class="inbox">
@@ -189,8 +191,10 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
           </button>
         </div>
       </header>
+      }
 
       <div class="body">
+        @if (!inQuestionnaireFill()) {
         @if (!viewport.isTabletUp() && isMobileNavOpen()) {
           <div class="scrim" (click)="closeMobileNav('backdrop')" aria-hidden="true"></div>
         }
@@ -264,6 +268,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
             </div>
           }
         </aside>
+        }
 
         <main
           class="content loom-absence-module"
@@ -621,9 +626,20 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         min-width: 0;
         padding: 1rem;
       }
+      .shell.questionnaire-fill {
+        --shell-topbar-h: 0px;
+      }
+      .shell.questionnaire-fill .content {
+        padding: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+      }
       @media (min-width: 641px) {
         .shell {
           --shell-topbar-h: 4.55rem;
+        }
+        .shell.questionnaire-fill {
+          --shell-topbar-h: 0px;
         }
         .topbar {
           display: grid;
@@ -702,6 +718,11 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   private readonly url = signal(this.router.url);
   readonly inAbsences = computed(() => this.url().startsWith('/absences'));
+  /** Fill wizard: hide app chrome (topbar + sidebar). Directory list keeps chrome. */
+  readonly inQuestionnaireFill = computed(() => {
+    const path = (this.url().split('?')[0] ?? '').replace(/\/+$/, '') || '/';
+    return /^\/questionnaires\/[^/]+$/.test(path);
+  });
   /** Docked rail only on tablet+ when open — never overlays content. */
   readonly sidePinned = computed(
     () => this.viewport.isTabletUp() && this.sideOpen(),

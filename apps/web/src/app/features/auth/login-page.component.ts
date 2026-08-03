@@ -26,12 +26,12 @@ import { PasswordVisibilityToggleComponent } from '../../shared/password-visibil
         [attr.aria-label]="
           theme.mode() === 'dark' ? 'Увімкнути світлу тему' : 'Увімкнути темну тему'
         "
-        [title]="theme.mode() === 'dark' ? 'Світла тема' : 'Темна тема'"
+        [title]="theme.mode() === 'dark' ? 'Темна тема' : 'Світла тема'"
       >
         @if (theme.mode() === 'dark') {
-          <span aria-hidden="true">☀</span> Світла
-        } @else {
           <span aria-hidden="true">☾</span> Темна
+        } @else {
+          <span aria-hidden="true">☀</span> Світла
         }
       </button>
 

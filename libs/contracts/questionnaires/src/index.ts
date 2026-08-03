@@ -172,6 +172,9 @@ export type QuestionnaireAssignmentListResponse = {
 export type QuestionnaireAssignmentDetail = {
   id: EntityId;
   employeeId: EntityId;
+  /** Display name parts for fill chrome (overview; always when assignment is viewable). */
+  employeeLastName: string;
+  employeeFirstName: string;
   templateCode: string;
   templateTitle: string;
   version: number;
@@ -195,6 +198,8 @@ export type QuestionnaireAssignmentDetail = {
     canStartRevision: boolean;
     canRequestChanges: boolean;
     canReview: boolean;
+    /** Admin Assign may hard-delete the assignment aggregate. */
+    canDelete: boolean;
   };
 };
 

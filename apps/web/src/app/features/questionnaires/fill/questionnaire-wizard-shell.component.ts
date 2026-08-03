@@ -43,18 +43,10 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
   template: `
     <div
       class="wizard"
-      [class.drawer-open]="drawerOpen()"
       [class.read-only]="!store.editable()"
     >
       <header class="top">
-        <div class="top-main">
-          <p class="eyebrow">Анкета</p>
-          <h1 #stepHeading tabindex="-1">{{ heading() }}</h1>
-          <p class="progress" aria-live="polite">
-            Крок {{ stepIndexLabel() }} · {{ store.progress().percent }}%
-          </p>
-        </div>
-        @if (showHeaderSaveAndClose()) {
+        @if (showHeaderSaveChanges()) {
           <div class="top-actions">
             <loom-questionnaire-save-status
               [text]="saveStatusText()"
@@ -63,14 +55,15 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
             <button
               type="button"
               class="btn"
-              [disabled]="!revision.canResubmit()"
-              [attr.aria-busy]="store.submitState() === 'submitting'"
-              (click)="resubmitAndClose()"
+              [class.saving]="store.saveState() === 'saving'"
+              [disabled]="store.saveState() === 'saving' || !!store.conflict()"
+              [attr.aria-busy]="store.saveState() === 'saving'"
+              (click)="saveNow()"
             >
               {{
-                store.submitState() === 'submitting'
+                store.saveState() === 'saving'
                   ? 'Збереження…'
-                  : 'Зберегти і закрити'
+                  : 'Зберегти зміни'
               }}
             </button>
           </div>
@@ -81,19 +74,18 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
             [visual]="saveStatusVisual()"
           />
         } @else {
-          <loom-questionnaire-save-status
-            class="save-slot"
-            text="Лише перегляд"
-            visual="saved"
-          />
+          <div class="read-only-row save-slot">
+            <loom-questionnaire-save-status
+              text="Лише перегляд"
+              visual="saved"
+            />
+            @if (store.assignmentStatus() === 'submitted') {
+              <span class="read-only-hint">Анкету надіслано. Перегляд відповідей.</span>
+            } @else if (store.assignmentStatus() === 'reviewed') {
+              <span class="read-only-hint">Анкету переглянуто. Перегляд відповідей.</span>
+            }
+          </div>
         }
-        <button
-          type="button"
-          class="btn ghost drawer-toggle"
-          (click)="drawerOpen.set(!drawerOpen())"
-        >
-          Кроки
-        </button>
       </header>
 
       @if (store.conflict(); as conflict) {
@@ -117,52 +109,6 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
       }
 
       <div class="body">
-        <nav class="stepper" [class.open]="drawerOpen()" aria-label="Кроки анкети">
-          <ol>
-            <li>
-              <button
-                type="button"
-                class="step-btn"
-                [attr.aria-current]="
-                  store.activeStepKey() === introKey ? 'step' : null
-                "
-                (click)="go(introKey)"
-              >
-                Вступ
-              </button>
-            </li>
-            @for (step of store.schemaSteps(); track step.key) {
-              <li>
-                <button
-                  type="button"
-                  class="step-btn"
-                  [disabled]="!canBrowseStep(step.key)"
-                  [attr.aria-current]="
-                    store.activeStepKey() === step.key ? 'step' : null
-                  "
-                  [attr.data-state]="stepState(step.key)"
-                  (click)="go(step.key)"
-                >
-                  {{ step.label }}
-                </button>
-              </li>
-            }
-            <li>
-              <button
-                type="button"
-                class="step-btn"
-                [disabled]="!canBrowseReview()"
-                [attr.aria-current]="
-                  store.activeStepKey() === reviewKey ? 'step' : null
-                "
-                (click)="go(reviewKey)"
-              >
-                Перегляд
-              </button>
-            </li>
-          </ol>
-        </nav>
-
         <section class="viewport">
           @if (store.activeStepKey() === introKey) {
             <div class="intro">
@@ -332,8 +278,9 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
           @if (
             store.editable() &&
             !store.conflict() &&
-            !showHeaderSaveAndClose() &&
-            !(isRevisionEdit() && store.activeStepKey() === reviewKey)
+            store.activeStepKey() !== introKey &&
+            store.activeStepKey() !== reviewKey &&
+            !showHeaderSaveChanges()
           ) {
             @if (footerSaveHint(); as hint) {
               <span class="footer-save" aria-live="polite">{{ hint }}</span>
@@ -358,21 +305,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
             >
               Далі
             </button>
-          } @else if (store.editable() && isRevisionEdit()) {
-            <button
-              type="button"
-              class="btn primary"
-              [disabled]="!revision.canResubmit()"
-              [attr.aria-busy]="store.submitState() === 'submitting'"
-              (click)="resubmitAndClose()"
-            >
-              {{
-                store.submitState() === 'submitting'
-                  ? 'Збереження…'
-                  : 'Зберегти і закрити'
-              }}
-            </button>
-          } @else if (store.editable()) {
+          } @else if (store.editable() && !isRevisionEdit()) {
             <button
               type="button"
               class="btn primary"
@@ -409,21 +342,11 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem;
-        align-items: flex-start;
-        position: sticky;
-        top: 0;
-        z-index: 2;
-        background: var(--pw-bg, #f6f8fb);
-        padding: 0.5rem 0;
+        align-items: center;
+        padding: 0.35rem 0 0.5rem;
         border-bottom: 1px solid var(--pw-border);
       }
-      h1 {
-        margin: 0;
-        font-size: 1.35rem;
-      }
-      .eyebrow,
-      .muted,
-      .progress {
+      .muted {
         margin: 0;
         color: var(--pw-muted);
       }
@@ -438,42 +361,28 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
       .save-slot {
         margin-left: auto;
       }
+      .read-only-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.35rem 0.75rem;
+      }
+      .read-only-hint {
+        margin: 0;
+        color: var(--pw-muted);
+        font-size: 0.9rem;
+      }
       .body {
         display: grid;
-        grid-template-columns: minmax(12rem, 16rem) 1fr;
+        grid-template-columns: 1fr;
         gap: 1rem;
         align-items: start;
-      }
-      .stepper ol {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: grid;
-        gap: 0.35rem;
-      }
-      .step-btn {
-        width: 100%;
-        text-align: left;
-        min-height: 44px;
-        padding: 0.45rem 0.65rem;
-        border-radius: 8px;
-        border: 1px solid transparent;
-        background: transparent;
-        cursor: pointer;
-        color: inherit;
-      }
-      .step-btn[aria-current='step'] {
-        border-color: var(--pw-accent);
-        background: var(--pw-accent-soft);
-      }
-      .step-btn:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
       }
       .viewport {
         display: grid;
         gap: 1rem;
         padding-bottom: 5.5rem;
+        min-width: 0;
       }
       .fields {
         display: grid;
@@ -484,6 +393,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         bottom: 0;
         z-index: 2;
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         gap: 0.75rem;
         padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom));
@@ -495,6 +405,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         flex-wrap: wrap;
         align-items: center;
         gap: 0.5rem;
+        margin-left: auto;
       }
       .footer-save {
         font-size: 0.85rem;
@@ -611,29 +522,33 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         padding: 0;
         text-decoration: underline;
       }
-      .drawer-toggle {
-        display: none;
-      }
       @media (max-width: 800px) {
-        .body {
+        .dl-row {
           grid-template-columns: 1fr;
+          gap: 0.15rem 0.5rem;
         }
-        .drawer-toggle {
-          display: inline-flex;
+        .footer .btn {
+          flex: 1 1 auto;
+          min-width: 0;
         }
-        .stepper {
-          display: none;
-          position: fixed;
-          inset: auto 0 4.5rem 0;
-          max-height: 50vh;
-          overflow: auto;
-          background: var(--pw-surface);
-          border-top: 1px solid var(--pw-border);
-          padding: 0.75rem;
-          z-index: 3;
+      }
+      @media (max-width: 480px) {
+        .top {
+          gap: 0.5rem;
         }
-        .stepper.open {
-          display: block;
+        .top-actions {
+          width: 100%;
+          margin-left: 0;
+          justify-content: stretch;
+        }
+        .top-actions .btn {
+          flex: 1;
+        }
+        .save-slot {
+          margin-left: 0;
+        }
+        .group-body.row {
+          grid-template-columns: 1fr;
         }
       }
     `,
@@ -648,7 +563,6 @@ export class QuestionnaireWizardShellComponent {
 
   readonly introKey = QUESTIONNAIRE_INTRO_STEP;
   readonly reviewKey = QUESTIONNAIRE_REVIEW_STEP;
-  readonly drawerOpen = signal(false);
   /** Short feedback after manual save when header status alone is easy to miss. */
   readonly saveFlash = signal<string | null>(null);
   private saveFlashTimer: ReturnType<typeof setTimeout> | null = null;
@@ -659,29 +573,11 @@ export class QuestionnaireWizardShellComponent {
     });
   }
 
-  @ViewChild('stepHeading') stepHeading?: ElementRef<HTMLElement>;
   @ViewChild('submitErrorEl') submitErrorEl?: ElementRef<HTMLElement>;
 
   readonly activeSchemaStep = computed(() => {
     const key = this.store.activeStepKey();
     return this.store.schemaSteps().find((s) => s.key === key) ?? null;
-  });
-
-  readonly heading = computed(() => {
-    const key = this.store.activeStepKey();
-    if (key === QUESTIONNAIRE_INTRO_STEP) return 'Вступ';
-    if (key === QUESTIONNAIRE_REVIEW_STEP) return 'Перегляд і надсилання';
-    return this.activeSchemaStep()?.label ?? this.store.assignment()?.templateTitle ?? 'Анкета';
-  });
-
-  readonly stepIndexLabel = computed(() => {
-    const key = this.store.activeStepKey();
-    const steps = this.store.schemaSteps();
-    const total = steps.length + 2;
-    if (key === QUESTIONNAIRE_INTRO_STEP) return `1 з ${total}`;
-    if (key === QUESTIONNAIRE_REVIEW_STEP) return `${total} з ${total}`;
-    const idx = steps.findIndex((s) => s.key === key);
-    return `${idx + 2} з ${total}`;
   });
 
   readonly recommendedWarnings = computed(() =>
@@ -767,9 +663,9 @@ export class QuestionnaireWizardShellComponent {
     return this.revision.isRevisionEdit();
   }
 
-  /** Middle steps (not intro / review): Save & close lives in the header. */
-  showHeaderSaveAndClose(): boolean {
-    if (!this.isRevisionEdit() || this.store.conflict()) return false;
+  /** Middle steps (not intro / review): draft «Зберегти зміни» in the header. */
+  showHeaderSaveChanges(): boolean {
+    if (!this.store.editable() || this.store.conflict()) return false;
     const key = this.store.activeStepKey();
     return (
       key !== QUESTIONNAIRE_INTRO_STEP && key !== QUESTIONNAIRE_REVIEW_STEP
@@ -891,7 +787,6 @@ export class QuestionnaireWizardShellComponent {
   }
 
   go(stepKey: string): void {
-    this.drawerOpen.set(false);
     void this.navigateTo(stepKey);
   }
 
@@ -1040,7 +935,11 @@ export class QuestionnaireWizardShellComponent {
     await this.autosave.flush();
     this.store.setActiveStep(stepKey);
     if (opts?.focusHeading === false) return;
-    queueMicrotask(() => this.stepHeading?.nativeElement.focus());
+    queueMicrotask(() => {
+      document
+        .querySelector<HTMLElement>('.step-main h1, .rail h1')
+        ?.focus({ preventScroll: true });
+    });
   }
 }
 
