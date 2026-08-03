@@ -6,7 +6,10 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import type { QuestionnaireTemplateStatus } from './questionnaire.enums';
+import type {
+  QuestionnaireTemplateStatus,
+  QuestionnaireType,
+} from './questionnaire.enums';
 import { QuestionnaireTemplateVersion } from './questionnaire-template-version.entity';
 
 @Entity({ name: 'questionnaire_templates' })
@@ -20,6 +23,9 @@ export class QuestionnaireTemplate {
 
   @Column({ type: 'varchar', length: 255 })
   title!: string;
+
+  @Column({ type: 'varchar', length: 32, default: 'general' })
+  type!: QuestionnaireType;
 
   @Column({ type: 'varchar', length: 32, default: 'draft' })
   status!: QuestionnaireTemplateStatus;

@@ -96,6 +96,8 @@ export class QuestionnaireProposalService {
         relations: { templateVersion: true },
       });
     if (!assignment?.templateVersion) return;
+    // Submissions require an attached employee (enforced in submit()).
+    if (!assignment.employeeId) return;
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     const schema = assignment.templateVersion.schemaJson as SchemaJson;

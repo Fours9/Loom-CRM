@@ -1,7 +1,6 @@
 import {
   canCancelAssignment,
   canCloseAssignment,
-  canReactivateAssignment,
   canStartRevisionFromStatus,
 } from './questionnaire-assignment-transitions';
 import { attachmentStateForStatus } from './questionnaire-assignment-attachment-state';
@@ -18,9 +17,10 @@ import type { PermissionService } from '../../../platform/permissions/permission
 import type { EmployeeAccessService } from '../../../organization/access/employee-access.service';
 
 describe('attachmentStateForStatus', () => {
-  it('maps closed / cancelled / other', () => {
+  it('maps closed / cancelled / new / other', () => {
     expect(attachmentStateForStatus('closed')).toBe('closed');
     expect(attachmentStateForStatus('cancelled')).toBe('detached');
+    expect(attachmentStateForStatus('new')).toBe('new');
     expect(attachmentStateForStatus('submitted')).toBe('attached');
   });
 });
@@ -41,7 +41,6 @@ describe('close/cancel transitions', () => {
     expect(canCloseAssignment('cancelled')).toBe(true);
     expect(canCloseAssignment('closed')).toBe(false);
     expect(canCancelAssignment('closed')).toBe(false);
-    expect(canReactivateAssignment('closed')).toBe(false);
   });
 });
 
@@ -71,16 +70,42 @@ describe('computeDetailCapabilities matrix', () => {
   const actor = { id: 'u1', role: UserRole.Admin } as User;
   const employee = { id: 'e1' } as Employee;
 
-  it('Admin can edit cancelled; owner cannot', () => {
+  it('new assignment: admin with Assign+CompleteAny can edit draft, but cannot submit', () => {
     const adminCaps = computeDetailCapabilities({
       actor,
-      employee,
-      status: 'cancelled',
+      employee: null,
+      status: 'new',
       permissions: perms(UserRole.Admin),
       access: access(false),
     });
     expect(adminCaps.canEditDraft).toBe(true);
-    expect(adminCaps.canSubmit).toBe(true);
+    expect(adminCaps.canSubmit).toBe(false);
+    expect(adminCaps.canDelete).toBe(true);
+  });
+
+  it('new assignment: non-manage actor cannot edit draft', () => {
+    const caps = computeDetailCapabilities({
+      actor: { id: 'u1', role: UserRole.Employee } as User,
+      employee: null,
+      status: 'new',
+      permissions: perms(UserRole.Employee),
+      access: access(false),
+    });
+    expect(caps.canEditDraft).toBe(false);
+    expect(caps.canDelete).toBe(false);
+  });
+
+  it('cancelled (unattached) is read-only for everyone', () => {
+    const adminCaps = computeDetailCapabilities({
+      actor,
+      employee: null,
+      status: 'cancelled',
+      permissions: perms(UserRole.Admin),
+      access: access(false),
+    });
+    expect(adminCaps.canEditDraft).toBe(false);
+    expect(adminCaps.canSubmit).toBe(false);
+    expect(adminCaps.canDelete).toBe(true);
 
     const ownerCaps = computeDetailCapabilities({
       actor: { id: 'u1', role: UserRole.Employee } as User,
@@ -90,6 +115,7 @@ describe('computeDetailCapabilities matrix', () => {
       access: access(true),
     });
     expect(ownerCaps.canEditDraft).toBe(false);
+    expect(ownerCaps.canDelete).toBe(false);
   });
 
   it('closed blocks all detail mutations', () => {
@@ -138,13 +164,52 @@ describe('computeDetailCapabilities matrix', () => {
     const caps = computeListLifecycleCapabilities({
       actor,
       status: 'closed',
+      employeeId: null,
+      detachedFromEmployeeId: null,
       permissions: perms(UserRole.Admin),
     });
     expect(caps.canDelete).toBe(true);
     expect(caps.canOpen).toBe(true);
     expect(caps.canCancel).toBe(false);
     expect(caps.canClose).toBe(false);
-    expect(caps.canReactivate).toBe(false);
+    expect(caps.canAttach).toBe(false);
+  });
+
+  it('new list caps allow attach, not cancel/close', () => {
+    const caps = computeListLifecycleCapabilities({
+      actor,
+      status: 'new',
+      employeeId: null,
+      detachedFromEmployeeId: null,
+      permissions: perms(UserRole.Admin),
+    });
+    expect(caps.canAttach).toBe(true);
+    expect(caps.canCancel).toBe(false);
+    expect(caps.canClose).toBe(false);
+  });
+
+  it('cancelled (unattached) list caps allow attach and close, not cancel', () => {
+    const caps = computeListLifecycleCapabilities({
+      actor,
+      status: 'cancelled',
+      employeeId: null,
+      detachedFromEmployeeId: 'e1',
+      permissions: perms(UserRole.Admin),
+    });
+    expect(caps.canAttach).toBe(true);
+    expect(caps.canCancel).toBe(false);
+    expect(caps.canClose).toBe(true);
+  });
+
+  it('non-manage actor never gets canAttach even when statuses allow it', () => {
+    const caps = computeListLifecycleCapabilities({
+      actor: { id: 'u1', role: UserRole.Employee } as User,
+      status: 'new',
+      employeeId: null,
+      detachedFromEmployeeId: null,
+      permissions: perms(UserRole.Employee),
+    });
+    expect(caps.canAttach).toBe(false);
   });
 });
 
@@ -235,6 +300,8 @@ describe('canDelete detail/list matrix', () => {
     const caps = computeListLifecycleCapabilities({
       actor: { id: 'u1', role: UserRole.Employee } as User,
       status: 'assigned',
+      employeeId: 'e1',
+      detachedFromEmployeeId: null,
       permissions: perms(UserRole.Employee),
     });
     expect(caps.canOpen).toBe(true);

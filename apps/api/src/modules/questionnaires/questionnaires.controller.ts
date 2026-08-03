@@ -22,6 +22,7 @@ import { QuestionnaireResponseService } from './questionnaire-response.service';
 import { QuestionnaireSubmissionService } from './questionnaire-submission.service';
 import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import {
+  AttachQuestionnaireAssignmentDto,
   CreateQuestionnaireAssignmentDto,
   PatchQuestionnaireDraftDto,
   QuestionnaireDirectoryQueryDto,
@@ -85,13 +86,14 @@ export class QuestionnairesController {
     return this.assignments.cancel(actor, id);
   }
 
-  @Post('assignments/:id/reactivate')
+  @Post('assignments/:id/attach')
   @RequirePermissions(Permission.QuestionnairesAssign)
-  reactivateAssignment(
+  attachAssignment(
     @CurrentUser() actor: User,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AttachQuestionnaireAssignmentDto,
   ) {
-    return this.assignments.reactivate(actor, id);
+    return this.assignments.attach(actor, id, dto);
   }
 
   @Post('assignments/:id/close')

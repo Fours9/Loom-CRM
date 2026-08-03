@@ -1,8 +1,4 @@
-import {
-  canCompleteOnBehalf,
-  computeDetailCapabilities,
-  requireCanSubmit,
-} from './questionnaire-assignment-access';
+import { computeDetailCapabilities, requireCanSubmit } from './questionnaire-assignment-access';
 import { Permission } from '../../../platform/permissions/permission.names';
 import { UserRole } from '../../../platform/identity/user.enums';
 import type { User } from '../../../platform/identity/user.entity';
@@ -11,23 +7,13 @@ import type { PermissionService } from '../../../platform/permissions/permission
 import type { EmployeeAccessService } from '../../../organization/access/employee-access.service';
 
 /**
- * Documents preserveCancelled semantics used by submit:
- * Admin CompleteAny on cancelled keeps status cancelled after submit.
+ * Cancelled assignments are detached (employeeId null, detachedFromEmployeeId
+ * set) and fully read-only: nobody can submit them, regardless of role.
+ * Reattaching goes through attach(), which moves the assignment back to
+ * 'assigned' before it becomes editable again.
  */
-describe('preserveCancelled submit policy', () => {
-  it('canCompleteOnBehalf is true only with CompleteAny', () => {
-    const withAny = {
-      has: (_r: string, p: string) => p === Permission.QuestionnairesCompleteAny,
-    } as unknown as PermissionService;
-    const without = {
-      has: () => false,
-    } as unknown as PermissionService;
-    const actor = { id: 'a', role: UserRole.Admin } as User;
-    expect(canCompleteOnBehalf(withAny, actor)).toBe(true);
-    expect(canCompleteOnBehalf(without, actor)).toBe(false);
-  });
-
-  it('Admin on cancelled may submit; preserveCancelled condition holds', () => {
+describe('cancelled assignments are read-only for submit', () => {
+  it('Admin with CompleteAny cannot submit a cancelled assignment', () => {
     const permissions = {
       has: (_r: string, p: string) =>
         p === Permission.QuestionnairesCompleteAny ||
@@ -45,10 +31,7 @@ describe('preserveCancelled submit policy', () => {
       permissions,
       access,
     });
-    expect(caps.canSubmit).toBe(true);
-    requireCanSubmit(caps);
-    const preserveCancelled =
-      true && canCompleteOnBehalf(permissions, actor);
-    expect(preserveCancelled).toBe(true);
+    expect(caps.canSubmit).toBe(false);
+    expect(() => requireCanSubmit(caps)).toThrow();
   });
 });

@@ -22,7 +22,7 @@
 | **Organization** | employees (Profile Core), departments, positions, schedules, access scope |
 | **Absences** | повний PW-паритетний модуль відсутностей |
 | **Documents** | MVP: `employee_documents`, People-вкладка + агрегат вкладень Absences (storage поки `content_base64`; Platform Files — planned) |
-| **Questionnaires** | Phase 3 Partially implemented: [field catalog](product/questionnaire-360-field-catalog.md), [ADR 0009](adr/0009-questionnaire-360-mvp.md); immersive chrome-less fill `/questionnaires/:id`; hard delete on fill by Assign capability |
+| **Questionnaires** | Phase 3: immersive fill; unattached `new` + attach/detach; template types (360=Загальна); print stubs; PDF layout contract in roadmap (not shipped) |
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 

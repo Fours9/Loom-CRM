@@ -31,6 +31,7 @@ import { RepairPersonalContactsBackfill1730000010000 } from './migrations/173000
 import { QuestionnairesModule1730000011000 } from './migrations/1730000011000-QuestionnairesModule';
 import { QuestionnaireProposalSuperseded1730000012000 } from './migrations/1730000012000-QuestionnaireProposalSuperseded';
 import { QuestionnaireClosedAndUpdatedAt1730000013000 } from './migrations/1730000013000-QuestionnaireClosedAndUpdatedAt';
+import { QuestionnaireUnattachedAndTypes1730000014000 } from './migrations/1730000014000-QuestionnaireUnattachedAndTypes';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -72,6 +73,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       QuestionnairesModule1730000011000,
       QuestionnaireProposalSuperseded1730000012000,
       QuestionnaireClosedAndUpdatedAt1730000013000,
+      QuestionnaireUnattachedAndTypes1730000014000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

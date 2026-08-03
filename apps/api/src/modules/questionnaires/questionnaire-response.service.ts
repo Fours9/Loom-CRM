@@ -48,8 +48,12 @@ export class QuestionnaireResponseService {
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
-    const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
-    await this.access.requireCanView(actor, employee);
+    const employee = assignment.employeeId
+      ? await this.access.getEmployeeOrFail(assignment.employeeId)
+      : null;
+    if (employee) {
+      await this.access.requireCanView(actor, employee);
+    }
 
     const caps = computeDetailCapabilities({
       actor,

@@ -12,21 +12,25 @@ import {
 import { Type } from 'class-transformer';
 import {
   QUESTIONNAIRE_DIRECTORY_SORT_BY,
+  QUESTIONNAIRE_TYPES,
   type QuestionnaireAttachmentState,
   type QuestionnaireDirectorySortBy,
+  type QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 
 export class CreateQuestionnaireAssignmentDto {
-  @IsUUID()
-  employeeId!: string;
-
   @IsOptional()
-  @IsString()
-  templateCode?: string;
+  @IsUUID()
+  employeeId?: string;
 
   @IsOptional()
   @IsDateString()
   dueAt?: string | null;
+}
+
+export class AttachQuestionnaireAssignmentDto {
+  @IsUUID()
+  employeeId!: string;
 }
 
 export class PatchQuestionnaireDraftDto {
@@ -71,8 +75,12 @@ export class QuestionnaireDirectoryQueryDto {
   createdTo?: string;
 
   @IsOptional()
-  @IsIn(['attached', 'detached', 'closed'])
+  @IsIn(['new', 'attached', 'detached', 'closed'])
   attachmentState?: QuestionnaireAttachmentState;
+
+  @IsOptional()
+  @IsIn([...QUESTIONNAIRE_TYPES])
+  templateType?: QuestionnaireType;
 
   @IsOptional()
   @IsIn([...QUESTIONNAIRE_DIRECTORY_SORT_BY])

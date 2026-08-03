@@ -17,6 +17,7 @@ import {
   buildQuestionnaireAssignmentLink,
   parseQuestionnaireStepQuery,
 } from '../navigation/questionnaire-navigation';
+import { QUESTIONNAIRE_INTRO_STEP } from '../navigation/questionnaire-step-keys';
 import { canBrowseQuestionnaireStep } from '../navigation/questionnaire-step-browse';
 import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
@@ -85,20 +86,18 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
             }
             @case ('unavailable') {
               <article class="state">
-                <p class="muted">
-                  @if (store.assignmentStatus() === 'closed') {
-                    Анкету закрито. Редагування неможливе.
-                  } @else {
-                    Призначення відкріплено.
-                  }
-                </p>
+                <p class="muted">Анкету закрито. Редагування неможливе.</p>
               </article>
             }
             @default {
-              @if (store.isAdminDetachedEdit()) {
+              @if (store.assignmentStatus() === 'cancelled') {
                 <div class="note" role="status">
-                  Відкріплено — редагує адміністратор. Після «Зберегти і закрити»
-                  анкета лишається відкріпленою, доки її не відновлять.
+                  Анкету відкріплено. Відповіді доступні лише для перегляду.
+                </div>
+              }
+              @if (store.assignmentStatus() === 'closed') {
+                <div class="note" role="status">
+                  Анкету закрито. Відповіді доступні лише для перегляду.
                 </div>
               }
               @if (actionError()) {
@@ -319,6 +318,7 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     const status = detail?.status;
     if (
       !detail ||
+      !detail.employeeId ||
       (status !== 'submitted' && status !== 'reviewed') ||
       this.store.loadState() !== 'ready'
     ) {
@@ -390,7 +390,8 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     try {
       await firstValueFrom(this.api.acceptProposal(id));
       const detail = this.store.assignment();
-      if (detail) await this.reloadProposals(detail.employeeId, detail.id);
+      const employeeId = detail?.employeeId;
+      if (detail && employeeId) await this.reloadProposals(employeeId, detail.id);
     } catch (err: unknown) {
       this.actionError.set(
         (err as { error?: { message?: string } })?.error?.message ||
@@ -408,7 +409,8 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     try {
       await firstValueFrom(this.api.rejectProposal(id));
       const detail = this.store.assignment();
-      if (detail) await this.reloadProposals(detail.employeeId, detail.id);
+      const employeeId = detail?.employeeId;
+      if (detail && employeeId) await this.reloadProposals(employeeId, detail.id);
     } catch (err: unknown) {
       this.actionError.set(
         (err as { error?: { message?: string } })?.error?.message ||
@@ -549,6 +551,7 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
         }
       }
       this.store.beginEditSession();
+      this.store.setActiveStep(QUESTIONNAIRE_INTRO_STEP);
       this.syncStepQuery(this.store.activeStepKey());
     } catch (err: unknown) {
       this.actionError.set(

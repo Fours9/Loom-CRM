@@ -39,7 +39,8 @@ CRM employee profile: `/people/:id` — tabs Дані працівника, Ро
 - **Public:** `apps/web/src/app/features/questionnaires/public-api.ts` — People panel, snapshot summary, `buildQuestionnaireAssignmentLink` (URL only).
 - **Private:** immersive chrome-less fill `/questionnaires/:id` (`fill/` — FillChrome, section progress rail under `fill/progress/`, DraftStore, AutosaveCoordinator, RevisionCoordinator, WizardShell, field widgets). Not re-exported; left sidebar stepper removed.
 - Shell hides topbar/sidebar via route `data.hideAppChrome` (leaf walk); directory `/questionnaires` keeps chrome.
-- Profile mirror: assignment `profileMirror` and/or private `QuestionnaireProfileMirrorService` (`HttpClient` + `@loom/contracts-employees`); never People page/store/`employee-data-panel`.
+- Assignments may be **unattached** (`status: new` or detached `cancelled` with `employeeId = null`, `detachedFromEmployeeId` for PII ownership). Reattach only via `POST .../attach` (same employee for cancelled; any for new). Cross-employee reattach forbidden. People list excludes `cancelled`. Template **types** (`general`/`hr`/`manager`/`full`; current 360 = `general`). Print UI stubs only; future PDF blank ≡ filled layout 1:1 with values filled in.
+- Profile mirror: assignment `profileMirror` and/or private `QuestionnaireProfileMirrorService`; skipped when `employeeId` is null.
 - Questionnaires HTTP: `QuestionnairesApiService` only (no employee endpoints on that gateway).
 
 ### Questionnaire schema library

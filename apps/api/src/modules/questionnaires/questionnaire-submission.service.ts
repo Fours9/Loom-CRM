@@ -23,7 +23,6 @@ import {
 } from './reopen/questionnaire-reopen-transition';
 import { supersedePendingForSubmission } from './proposals/questionnaire-proposal-lifecycle';
 import {
-  canCompleteOnBehalf,
   computeDetailCapabilities,
   requireCanSubmit,
 } from './assignments/questionnaire-assignment-access';
@@ -52,6 +51,12 @@ export class QuestionnaireSubmissionService {
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
+    if (!assignment.employeeId) {
+      throw new BadRequestException(
+        'Questionnaire must be attached before submission',
+      );
+    }
+
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
 
@@ -64,18 +69,11 @@ export class QuestionnaireSubmissionService {
     });
     requireCanSubmit(caps);
 
-    if (
-      !isOwnerEditableStatus(assignment.status) &&
-      assignment.status !== 'cancelled'
-    ) {
+    if (!isOwnerEditableStatus(assignment.status)) {
       throw new BadRequestException(
         `Cannot submit from status ${assignment.status}`,
       );
     }
-
-    const preserveCancelled =
-      assignment.status === 'cancelled' &&
-      canCompleteOnBehalf(this.permissions, actor);
 
     const response = await this.responseService.ensureResponse(assignmentId);
     const schema = assignment.templateVersion
@@ -106,7 +104,7 @@ export class QuestionnaireSubmissionService {
         }),
       );
 
-      assignment.status = preserveCancelled ? 'cancelled' : 'submitted';
+      assignment.status = 'submitted';
       assignment.submittedAt = now;
       assignment.reviewedAt = null;
       if (!assignment.startedAt) assignment.startedAt = now;
@@ -140,6 +138,9 @@ export class QuestionnaireSubmissionService {
       where: { id: assignmentId },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
+    if (!assignment.employeeId) {
+      throw new BadRequestException('Assignment has no attached employee');
+    }
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
@@ -164,6 +165,9 @@ export class QuestionnaireSubmissionService {
       where: { id: assignmentId },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
+    if (!assignment.employeeId) {
+      throw new BadRequestException('Assignment has no attached employee');
+    }
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     const caps = computeDetailCapabilities({
@@ -195,6 +199,9 @@ export class QuestionnaireSubmissionService {
       where: { id: assignmentId },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
+    if (!assignment.employeeId) {
+      throw new BadRequestException('Assignment has no attached employee');
+    }
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
@@ -242,6 +249,9 @@ export class QuestionnaireSubmissionService {
       where: { id: submission.response.assignmentId },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
+    if (!assignment.employeeId) {
+      throw new BadRequestException('Assignment has no attached employee');
+    }
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);

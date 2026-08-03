@@ -2,20 +2,19 @@ import { SelectQueryBuilder } from 'typeorm';
 import type {
   QuestionnaireAttachmentState,
   QuestionnaireDirectorySortBy,
+  QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 import { QuestionnaireAssignment } from '../questionnaire-assignment.entity';
-import {
-  ATTACHED_STATUSES,
-  attachmentStateForStatus,
-} from './questionnaire-assignment-attachment-state';
+import { ATTACHED_STATUSES } from './questionnaire-assignment-attachment-state';
 
 export type QuestionnaireDirectoryScope =
-  | { kind: 'all' }
-  | { kind: 'self'; userId: string }
+  | { kind: 'all'; includeUnattached: true }
+  | { kind: 'self'; userId: string; includeUnattached: false }
   | {
       kind: 'departments_and_self';
       departmentIds: string[];
       userId: string;
+      includeUnattached: false;
     };
 
 export type QuestionnaireDirectoryFilters = {
@@ -24,6 +23,7 @@ export type QuestionnaireDirectoryFilters = {
   createdFrom?: string;
   createdTo?: string;
   attachmentState?: QuestionnaireAttachmentState;
+  templateType?: QuestionnaireType;
   sortBy?: QuestionnaireDirectorySortBy;
   sortDir?: 'asc' | 'desc';
   limit: number;
@@ -53,6 +53,9 @@ export function applyDirectoryScope(
   scope: QuestionnaireDirectoryScope,
 ): void {
   if (scope.kind === 'all') return;
+
+  qb.andWhere('a.employee_id IS NOT NULL');
+
   if (scope.kind === 'self') {
     qb.andWhere('emp.user_id = :scopeUserId', { scopeUserId: scope.userId });
     return;
@@ -84,6 +87,11 @@ export function applyDirectoryFilters(
       positionId: filters.positionId,
     });
   }
+  if (filters.templateType) {
+    qb.andWhere('tmpl.type = :templateType', {
+      templateType: filters.templateType,
+    });
+  }
 
   const range = createdAtRangeBounds(filters);
   if (range.fromStart) {
@@ -101,6 +109,8 @@ export function applyDirectoryFilters(
     qb.andWhere('a.status = :closedStatus', { closedStatus: 'closed' });
   } else if (filters.attachmentState === 'detached') {
     qb.andWhere('a.status = :cancelledStatus', { cancelledStatus: 'cancelled' });
+  } else if (filters.attachmentState === 'new') {
+    qb.andWhere('a.status = :newStatus', { newStatus: 'new' });
   } else if (filters.attachmentState === 'attached') {
     qb.andWhere('a.status IN (:...attachedStatuses)', {
       attachedStatuses: [...ATTACHED_STATUSES],
@@ -116,13 +126,17 @@ export function applyDirectorySort(
   const dir = sortDir.toUpperCase() as 'ASC' | 'DESC';
   switch (sortBy) {
     case 'employeeName':
-      qb.orderBy('emp.last_name', dir).addOrderBy('emp.first_name', dir);
+      qb.orderBy('emp.last_name', dir, 'NULLS LAST').addOrderBy(
+        'emp.first_name',
+        dir,
+        'NULLS LAST',
+      );
       break;
     case 'departmentName':
-      qb.orderBy('dept.name', dir);
+      qb.orderBy('dept.name', dir, 'NULLS LAST');
       break;
     case 'positionName':
-      qb.orderBy('pos.name', dir);
+      qb.orderBy('pos.name', dir, 'NULLS LAST');
       break;
     case 'templateCode':
       qb.orderBy('tmpl.code', dir);
@@ -143,5 +157,3 @@ export function applyDirectorySort(
   }
   qb.addOrderBy('a.id', 'ASC');
 }
-
-export { attachmentStateForStatus };

@@ -91,16 +91,12 @@ export class QuestionnaireDraftStore {
       if (status === 'submitted' || status === 'reviewed') return 'read_only';
       return this.editSessionActive() ? 'editable' : 'read_only';
     }
-    if (status === 'cancelled' || status === 'closed') return 'unavailable';
+    if (status === 'closed') return 'read_only';
+    /** Detached (cancelled) is read-only — draft/submissions stay visible until reattached. */
+    if (status === 'cancelled') return 'read_only';
     if (status === 'assigned' || status === 'in_progress') return 'owner_only';
     return 'read_only';
   });
-
-  readonly isAdminDetachedEdit = computed(
-    () =>
-      this.assignment()?.status === 'cancelled' &&
-      this.uiMode() === 'editable',
-  );
 
   /** Show top-right «Редагувати» when viewing and edit is allowed / startable. */
   readonly canShowEditButton = computed(() => {
@@ -109,9 +105,6 @@ export class QuestionnaireDraftStore {
     const detail = this.assignment();
     if (!detail) return false;
     if (detail.status === 'closed') return false;
-    if (detail.status === 'cancelled' && !detail.capabilities.canEditDraft) {
-      return false;
-    }
     return (
       detail.capabilities.canEditDraft ||
       detail.capabilities.canReopenSelf ||
@@ -278,9 +271,11 @@ export class QuestionnaireDraftStore {
         return;
       }
 
-      const mirror = await firstValueFrom(
-        this.mirrorApi.resolve(detail.employeeId, detail.profileMirror),
-      );
+      const mirror = detail.employeeId
+        ? await firstValueFrom(
+            this.mirrorApi.resolve(detail.employeeId, detail.profileMirror),
+          )
+        : (detail.profileMirror ?? {});
       if (gen !== this.generation) return;
 
       this.assignment.set(detail);

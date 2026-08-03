@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Not, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserStatus } from '../../platform/identity/user.enums';
 import { UsersService } from '../../platform/identity/users.service';
@@ -26,9 +26,9 @@ import {
   EMPLOYEE_360_TEMPLATE_CODE,
 } from './seed/employee-360-v1.schema';
 import {
+  canAttachAssignment,
   canCancelAssignment,
   canCloseAssignment,
-  canReactivateAssignment,
   QUESTIONNAIRE_ASSIGNMENT_AUDIT,
 } from './assignments/questionnaire-assignment-transitions';
 import {
@@ -47,6 +47,7 @@ import { Employee } from '../../organization/employees/employee.entity';
 import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
 import { PERSONAL_CONTACT_TYPES } from '../../organization/employees/employee-personal-contacts';
 import type {
+  QuestionnaireAttachConstraint,
   QuestionnaireDirectoryQuery,
   QuestionnaireDirectoryResponse,
 } from '@loom/contracts-questionnaires';
@@ -78,13 +79,43 @@ export class QuestionnaireAssignmentService {
 
   async create(
     actor: User,
-    input: { employeeId: string; templateCode?: string; dueAt?: string | null },
+    input: { employeeId?: string; dueAt?: string | null },
   ) {
     if (!this.permissions.has(actor.role, Permission.QuestionnairesAssign)) {
       throw new ForbiddenException('Cannot assign questionnaire');
     }
 
-    const employee = await this.access.getEmployeeOrFail(input.employeeId);
+    const version = await this.resolveLatestPublishedTemplateVersion();
+
+    let employee: Employee | null = null;
+    if (input.employeeId) {
+      employee = await this.resolveAttachableEmployee(actor, input.employeeId);
+    }
+
+    const assignment = await this.assignments.save(
+      this.assignments.create({
+        templateVersionId: version.id,
+        employeeId: employee?.id ?? null,
+        detachedFromEmployeeId: null,
+        assignedByUserId: actor.id,
+        status: employee ? 'assigned' : 'new',
+        dueAt: input.dueAt ? new Date(input.dueAt) : null,
+      }),
+    );
+
+    await this.responseService.ensureResponse(assignment.id);
+    return this.getDetail(actor, assignment.id);
+  }
+
+  /**
+   * Shared validation for attaching an employee to an assignment (create + attach):
+   * the employee must exist, be viewable by the actor, and have an active linked user.
+   */
+  private async resolveAttachableEmployee(
+    actor: User,
+    employeeId: string,
+  ): Promise<Employee> {
+    const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
 
     if (!employee.userId) {
@@ -98,33 +129,33 @@ export class QuestionnaireAssignmentService {
         'Cannot assign questionnaire: employee has no active user account',
       );
     }
+    return employee;
+  }
 
-    const code = input.templateCode?.trim() || EMPLOYEE_360_TEMPLATE_CODE;
-    const template = await this.templates.findOne({ where: { code } });
-    if (!template || template.status !== 'published') {
-      throw new NotFoundException(`Questionnaire template not found: ${code}`);
+  private async resolveLatestPublishedTemplateVersion(): Promise<QuestionnaireTemplateVersion> {
+    const template = await this.templates.findOne({
+      where: {
+        code: EMPLOYEE_360_TEMPLATE_CODE,
+        status: 'published',
+        type: 'general',
+      },
+    });
+    if (!template) {
+      throw new NotFoundException(
+        `Questionnaire template not found: ${EMPLOYEE_360_TEMPLATE_CODE}`,
+      );
     }
 
-    const version = await this.versions.findOne({
-      where: { templateId: template.id },
-      order: { version: 'DESC' },
-    });
-    if (!version || !version.publishedAt) {
+    const version = await this.versions
+      .createQueryBuilder('v')
+      .where('v.template_id = :templateId', { templateId: template.id })
+      .andWhere('v.published_at IS NOT NULL')
+      .orderBy('v.version', 'DESC')
+      .getOne();
+    if (!version) {
       throw new NotFoundException('No published questionnaire template version');
     }
-
-    const assignment = await this.assignments.save(
-      this.assignments.create({
-        templateVersionId: version.id,
-        employeeId: employee.id,
-        assignedByUserId: actor.id,
-        status: 'assigned',
-        dueAt: input.dueAt ? new Date(input.dueAt) : null,
-      }),
-    );
-
-    await this.responseService.ensureResponse(assignment.id);
-    return this.getDetail(actor, assignment.id);
+    return version;
   }
 
   async listByEmployee(actor: User, employeeId: string) {
@@ -141,14 +172,12 @@ export class QuestionnaireAssignmentService {
     }
 
     const rows = await this.assignments.find({
-      where: { employeeId },
+      where: { employeeId, status: Not('cancelled') },
       relations: { templateVersion: { template: true } },
       order: { createdAt: 'DESC' },
     });
 
-    const items = await Promise.all(
-      rows.map(async (row) => this.toListItem(actor, row, employee)),
-    );
+    const items = await Promise.all(rows.map((row) => this.toListItem(actor, row)));
 
     return {
       items,
@@ -158,7 +187,9 @@ export class QuestionnaireAssignmentService {
 
   async getDetail(actor: User, assignmentId: string) {
     const assignment = await this.loadAssignmentOrFail(assignmentId);
-    const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
+    const employee = assignment.employeeId
+      ? await this.access.getEmployeeOrFail(assignment.employeeId)
+      : null;
     await this.requireCanViewAssignment(actor, employee);
 
     const draft = await this.responses.findOne({
@@ -182,7 +213,6 @@ export class QuestionnaireAssignmentService {
       }>;
     };
 
-    const isOwner = this.access.isOwner(actor, employee);
     const caps = computeDetailCapabilities({
       actor,
       employee,
@@ -192,7 +222,10 @@ export class QuestionnaireAssignmentService {
     });
 
     let profileMirror: Record<string, unknown> | null = null;
-    if (isOwner || this.access.isAdmin(actor)) {
+    if (
+      employee &&
+      (this.access.isOwner(actor, employee) || this.access.isAdmin(actor))
+    ) {
       const contacts = await this.contacts.find({
         where: {
           employeeId: employee.id,
@@ -205,10 +238,11 @@ export class QuestionnaireAssignmentService {
     return {
       id: assignment.id,
       employeeId: assignment.employeeId,
-      employeeLastName: employee.lastName,
-      employeeFirstName: employee.firstName,
+      employeeLastName: employee?.lastName ?? null,
+      employeeFirstName: employee?.firstName ?? null,
       templateCode: assignment.templateVersion.template.code,
       templateTitle: assignment.templateVersion.template.title,
+      templateType: assignment.templateVersion.template.type,
       version: assignment.templateVersion.version,
       status: assignment.status,
       dueAt: assignment.dueAt?.toISOString() ?? null,
@@ -250,8 +284,11 @@ export class QuestionnaireAssignmentService {
         );
       }
 
+      const previousEmployeeId = assignment.employeeId;
       const previousStatus = assignment.status;
       const now = new Date();
+      assignment.detachedFromEmployeeId = previousEmployeeId;
+      assignment.employeeId = null;
       assignment.status = 'cancelled';
       await manager.getRepository(QuestionnaireAssignment).save(assignment);
       await supersedePendingForAssignment(manager, assignment.id, now);
@@ -264,7 +301,7 @@ export class QuestionnaireAssignmentService {
           entityId: assignment.id,
           metadata: {
             assignmentId: assignment.id,
-            employeeId: assignment.employeeId,
+            previousEmployeeId,
             previousStatus,
           },
         },
@@ -275,17 +312,49 @@ export class QuestionnaireAssignmentService {
     return this.getDetail(actor, assignmentId);
   }
 
-  async reactivate(actor: User, assignmentId: string) {
+  async attach(
+    actor: User,
+    assignmentId: string,
+    input: { employeeId: string },
+  ) {
     await this.dataSource.transaction(async (manager) => {
       const assignment = await this.lockAssignment(manager, assignmentId);
-      await this.requireAssignmentLifecycleAccess(actor, assignment);
 
-      if (!canReactivateAssignment(assignment.status)) {
+      if (!this.permissions.has(actor.role, Permission.QuestionnairesAssign)) {
+        throw new ForbiddenException('Cannot manage questionnaire assignment');
+      }
+
+      if (
+        !canAttachAssignment({
+          status: assignment.status,
+          employeeId: assignment.employeeId,
+          detachedFromEmployeeId: assignment.detachedFromEmployeeId,
+        })
+      ) {
         throw new ConflictException(
-          `Cannot reactivate assignment in status ${assignment.status}`,
+          `Cannot attach assignment in status ${assignment.status}`,
         );
       }
 
+      const employee = await this.resolveAttachableEmployee(
+        actor,
+        input.employeeId,
+      );
+
+      if (
+        assignment.status === 'cancelled' &&
+        assignment.detachedFromEmployeeId !== employee.id
+      ) {
+        throw new BadRequestException(
+          'Cancelled assignment can only be reattached to the previously detached employee',
+        );
+      }
+
+      const attachKind: 'new' | 'same_employee_reattach' =
+        assignment.status === 'cancelled' ? 'same_employee_reattach' : 'new';
+
+      assignment.employeeId = employee.id;
+      assignment.detachedFromEmployeeId = null;
       assignment.status = 'assigned';
       assignment.reviewedAt = null;
       await manager.getRepository(QuestionnaireAssignment).save(assignment);
@@ -293,13 +362,13 @@ export class QuestionnaireAssignmentService {
       await this.audit.record(
         {
           actorId: actor.id,
-          action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.reactivated,
+          action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.attached,
           entityType: 'questionnaire_assignment',
           entityId: assignment.id,
           metadata: {
             assignmentId: assignment.id,
-            employeeId: assignment.employeeId,
-            previousStatus: 'cancelled',
+            employeeId: employee.id,
+            attachKind,
           },
         },
         manager,
@@ -312,7 +381,9 @@ export class QuestionnaireAssignmentService {
   async close(actor: User, assignmentId: string) {
     await this.dataSource.transaction(async (manager) => {
       const assignment = await this.lockAssignment(manager, assignmentId);
-      await this.requireAssignmentLifecycleAccess(actor, assignment);
+      await this.requireAssignmentLifecycleAccess(actor, assignment, {
+        allowUnattached: true,
+      });
 
       if (!canCloseAssignment(assignment.status)) {
         throw new ConflictException(
@@ -335,6 +406,7 @@ export class QuestionnaireAssignmentService {
           metadata: {
             assignmentId: assignment.id,
             employeeId: assignment.employeeId,
+            detachedFromEmployeeId: assignment.detachedFromEmployeeId,
             previousStatus,
           },
         },
@@ -361,6 +433,7 @@ export class QuestionnaireAssignmentService {
       createdFrom: query.createdFrom,
       createdTo: query.createdTo,
       attachmentState: query.attachmentState,
+      templateType: query.templateType,
       sortBy: query.sortBy,
       sortDir: query.sortDir,
       limit,
@@ -374,7 +447,8 @@ export class QuestionnaireAssignmentService {
         .createQueryBuilder('a')
         .innerJoin('a.templateVersion', 'tv')
         .innerJoin('tv.template', 'tmpl')
-        .innerJoin(Employee, 'emp', 'emp.id = a.employee_id')
+        .leftJoin(Employee, 'emp', 'emp.id = a.employee_id')
+        .leftJoin(Employee, 'detached_emp', 'detached_emp.id = a.detached_from_employee_id')
         .leftJoin('emp.department', 'dept')
         .leftJoin('emp.position', 'pos')
         .leftJoin(
@@ -396,12 +470,17 @@ export class QuestionnaireAssignmentService {
         'a.created_at AS "createdAt"',
         'a.updated_at AS "assignmentUpdatedAt"',
         'a.employee_id AS "employeeId"',
+        'a.detached_from_employee_id AS "detachedFromEmployeeId"',
         'tmpl.code AS "templateCode"',
         'tmpl.title AS "templateTitle"',
+        'tmpl.type AS "templateType"',
         'tv.version AS version',
         'emp.first_name AS "firstName"',
         'emp.last_name AS "lastName"',
         'emp.middle_name AS "middleName"',
+        'detached_emp.first_name AS "detachedFirstName"',
+        'detached_emp.last_name AS "detachedLastName"',
+        'detached_emp.middle_name AS "detachedMiddleName"',
         'dept.name AS "departmentName"',
         'pos.name AS "positionName"',
         'resp.updated_at AS "responseUpdatedAt"',
@@ -414,13 +493,18 @@ export class QuestionnaireAssignmentService {
       status: string;
       createdAt: Date;
       assignmentUpdatedAt: Date;
-      employeeId: string;
+      employeeId: string | null;
+      detachedFromEmployeeId: string | null;
       templateCode: string;
       templateTitle: string;
+      templateType: string;
       version: number;
-      firstName: string;
-      lastName: string;
+      firstName: string | null;
+      lastName: string | null;
       middleName: string | null;
+      detachedFirstName: string | null;
+      detachedLastName: string | null;
+      detachedMiddleName: string | null;
       departmentName: string | null;
       positionName: string | null;
       responseUpdatedAt: Date | null;
@@ -430,6 +514,8 @@ export class QuestionnaireAssignmentService {
       const lifecycle = computeListLifecycleCapabilities({
         actor,
         status: row.status,
+        employeeId: row.employeeId,
+        detachedFromEmployeeId: row.detachedFromEmployeeId,
         permissions: this.permissions,
       });
       const assignmentUpdated = new Date(row.assignmentUpdatedAt).getTime();
@@ -437,41 +523,68 @@ export class QuestionnaireAssignmentService {
         ? new Date(row.responseUpdatedAt).getTime()
         : new Date(row.createdAt).getTime();
       const activityMs = Math.max(assignmentUpdated, responseUpdated);
-      const displayName = [row.lastName, row.firstName, row.middleName]
-        .filter(Boolean)
-        .join(' ');
+      const employeeDisplayName = row.employeeId
+        ? [row.lastName, row.firstName, row.middleName]
+            .filter(Boolean)
+            .join(' ')
+        : null;
+
+      let attachConstraint: QuestionnaireAttachConstraint = null;
+      if (row.status === 'new') {
+        attachConstraint = { kind: 'any_employee' };
+      } else if (row.status === 'cancelled' && row.detachedFromEmployeeId) {
+        attachConstraint = {
+          kind: 'same_employee',
+          employeeId: row.detachedFromEmployeeId,
+          employeeDisplayName: [
+            row.detachedLastName,
+            row.detachedFirstName,
+            row.detachedMiddleName,
+          ]
+            .filter(Boolean)
+            .join(' '),
+        };
+      }
 
       return {
         id: row.id,
         templateCode: row.templateCode,
         templateTitle: row.templateTitle,
+        templateType: row.templateType as QuestionnaireDirectoryResponse['items'][number]['templateType'],
         version: Number(row.version),
         employeeId: row.employeeId,
-        employeeDisplayName: displayName,
+        employeeDisplayName,
         departmentName: row.departmentName,
         positionName: row.positionName,
         status: row.status as QuestionnaireDirectoryResponse['items'][number]['status'],
         attachmentState: attachmentStateForStatus(row.status),
         createdAt: new Date(row.createdAt).toISOString(),
         updatedAt: new Date(activityMs).toISOString(),
+        attachConstraint,
         capabilities: {
           canOpen: lifecycle.canOpen,
+          canAttach: lifecycle.canAttach,
           canCancel: lifecycle.canCancel,
-          canReactivate: lifecycle.canReactivate,
           canClose: lifecycle.canClose,
           canDelete: lifecycle.canDelete,
         },
       };
     });
 
-    return { items, total, limit, offset };
+    return {
+      items,
+      total,
+      limit,
+      offset,
+      capabilities: { canCreate: this.canAssign(actor) },
+    };
   }
 
   private async resolveDirectoryScope(
     actor: User,
   ): Promise<QuestionnaireDirectoryScope> {
     if (this.access.isAdmin(actor)) {
-      return { kind: 'all' };
+      return { kind: 'all', includeUnattached: true };
     }
     if (this.access.scope(actor) === 'managed_departments') {
       const departmentIds = await this.access.managedDepartmentIds(actor);
@@ -479,15 +592,18 @@ export class QuestionnaireAssignmentService {
         kind: 'departments_and_self',
         departmentIds,
         userId: actor.id,
+        includeUnattached: false,
       };
     }
-    return { kind: 'self', userId: actor.id };
+    return { kind: 'self', userId: actor.id, includeUnattached: false };
   }
 
   async deleteAssignment(actor: User, assignmentId: string): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const assignment = await this.lockAssignment(manager, assignmentId);
-      await this.requireAssignmentLifecycleAccess(actor, assignment);
+      await this.requireAssignmentLifecycleAccess(actor, assignment, {
+        allowUnattached: true,
+      });
 
       const response = await manager.getRepository(QuestionnaireResponse).findOne({
         where: { assignmentId: assignment.id },
@@ -523,6 +639,7 @@ export class QuestionnaireAssignmentService {
           metadata: {
             assignmentId: assignment.id,
             employeeId: assignment.employeeId,
+            detachedFromEmployeeId: assignment.detachedFromEmployeeId,
             templateCode: template?.code ?? null,
             version: assignment.templateVersion?.version ?? null,
             previousStatus: assignment.status,
@@ -573,12 +690,24 @@ export class QuestionnaireAssignmentService {
     return withRelations;
   }
 
+  /**
+   * Permission + view-scope guard for cancel/close/delete.
+   * Unattached assignments (employeeId null) have no employee to scope
+   * against; callers must opt in via allowUnattached (close/delete). Cancel
+   * only reaches attached assignments (enforced by canCancelAssignment), so
+   * a null employeeId there indicates a data inconsistency.
+   */
   private async requireAssignmentLifecycleAccess(
     actor: User,
     assignment: QuestionnaireAssignment,
+    options: { allowUnattached: boolean } = { allowUnattached: false },
   ): Promise<void> {
     if (!this.permissions.has(actor.role, Permission.QuestionnairesAssign)) {
       throw new ForbiddenException('Cannot manage questionnaire assignment');
+    }
+    if (!assignment.employeeId) {
+      if (options.allowUnattached) return;
+      throw new ConflictException('Assignment has no attached employee');
     }
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
@@ -590,8 +719,14 @@ export class QuestionnaireAssignmentService {
 
   private async requireCanViewAssignment(
     actor: User,
-    employee: Awaited<ReturnType<EmployeeAccessService['getEmployeeOrFail']>>,
+    employee: Employee | null,
   ): Promise<void> {
+    if (!employee) {
+      if (!this.permissions.has(actor.role, Permission.QuestionnairesAssign)) {
+        throw new ForbiddenException('Cannot view questionnaires');
+      }
+      return;
+    }
     await this.access.requireCanView(actor, employee);
     const isOwner = this.access.isOwner(actor, employee);
     if (
@@ -602,12 +737,7 @@ export class QuestionnaireAssignmentService {
     }
   }
 
-  private async toListItem(
-    actor: User,
-    row: QuestionnaireAssignment,
-    employee: Awaited<ReturnType<EmployeeAccessService['getEmployeeOrFail']>>,
-  ) {
-    void employee;
+  private async toListItem(actor: User, row: QuestionnaireAssignment) {
     const draft = await this.responses.findOne({
       where: { assignmentId: row.id },
     });
@@ -636,6 +766,8 @@ export class QuestionnaireAssignmentService {
     const lifecycle = computeListLifecycleCapabilities({
       actor,
       status: row.status,
+      employeeId: row.employeeId,
+      detachedFromEmployeeId: row.detachedFromEmployeeId,
       permissions: this.permissions,
     });
 
@@ -644,6 +776,7 @@ export class QuestionnaireAssignmentService {
       employeeId: row.employeeId,
       templateCode: row.templateVersion.template.code,
       templateTitle: row.templateVersion.template.title,
+      templateType: row.templateVersion.template.type,
       version: row.templateVersion.version,
       status: row.status,
       dueAt: row.dueAt?.toISOString() ?? null,
@@ -653,7 +786,13 @@ export class QuestionnaireAssignmentService {
       createdAt: row.createdAt.toISOString(),
       completionPercent: completionPercent(draft?.answersJson, schema),
       latestSubmission,
-      capabilities: lifecycle,
+      capabilities: {
+        canOpen: lifecycle.canOpen,
+        canAssign: lifecycle.canAssign,
+        canCancel: lifecycle.canCancel,
+        canClose: lifecycle.canClose,
+        canDelete: lifecycle.canDelete,
+      },
     };
   }
 }
