@@ -1,6 +1,6 @@
 ---
 description: Runbooks and ops docs — PW-style clarity, Postgres reality
-globs: docs/**/*,AGENTS.md,README.md,compose.yaml,docker/**/*,.env.example,.env.production.example
+globs: docs/**/*,AGENTS.md,README.md,compose.yaml,docker/**/*,.env.example,.env.production.example,start-tunnel.bat,scripts/start-tunnel.ps1,scripts/**/*.ps1
 alwaysApply: false
 ---
 
@@ -8,7 +8,7 @@ alwaysApply: false
 
 - Write runbooks step-by-step; use symptom → fix tables for troubleshooting.
 - Hub is `docs/README.md`; link instead of duplicating long procedures.
-- Document **existing** tooling only (`compose.yaml`, `start.bat`, `pnpm migration:*`, `scripts/db-snapshot.ps1`, `scripts/db-restore.ps1`). Do not invent tunnel/ngrok scripts.
+- Document **existing** tooling only: `compose.yaml`, `start.bat`, `start-tunnel.bat`, `scripts/start-tunnel.ps1`, `pnpm migration:*`, `scripts/db-snapshot.ps1`, `scripts/db-restore.ps1`. The only supported demo tunnel provider is **ngrok** through the committed LoomCRM launcher. Do not introduce other tunnel providers without an explicit architecture decision.
 - Live DB is PostgreSQL (volume / `DATABASE_URL`) — not in git. Shared state: `data/app.snapshot.sql` (PW-style snapshot/restore).
 - Production secrets: `.env.production.example` template; never commit real `.env.production`.
 - Human-facing LoomCRM ops/onboarding docs: Ukrainian. Keep claims aligned with `compose.yaml` and health endpoints (`/api/v1/health/live`, `/ready`).

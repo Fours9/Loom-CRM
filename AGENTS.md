@@ -47,7 +47,7 @@ Use the exact `packageManager` from root `package.json` (`pnpm@10.15.0`) via Cor
 - **Living status** (must match code): `docs/README.md`, `docs/architecture.md`, `docs/product/hr-profile-roadmap.md`, this file.
 - **Target / vision** (not implementation status): `docs/product/employee-profile-core.md`.
 - Practical runbooks: `docs/dev/git-sync.md`, `docs/dev/deploy.md`, `docs/dev/operations.md`.
-- Do **not** invent tunnels/ngrok scripts that do not exist; DB sync uses the PowerShell scripts above (Postgres SQL dump, not SQLite files).
+- Demo tunnel tooling (exists): `start-tunnel.bat` → `scripts/start-tunnel.ps1` (ngrok reserved domain). Do **not** invent other tunnel providers (Cloudflare, etc.) without an architecture decision. DB sync uses `db-snapshot` / `db-restore` (Postgres SQL dump, not SQLite files).
 - Do not write product docs into `ProjectWeekend/docs`.
 - Keep ADRs in `docs/adr/`; architecture overview in `docs/architecture.md`.
 
