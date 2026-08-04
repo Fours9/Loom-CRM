@@ -251,8 +251,8 @@ export class LoginPageComponent {
   readonly moduleName = MODULE_NAME;
   readonly tagline = PLATFORM_TAGLINE;
 
-  email = 'admin@loom.local';
-  password = 'Admin123!';
+  email = '';
+  password = '';
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   readonly showPassword = signal(false);

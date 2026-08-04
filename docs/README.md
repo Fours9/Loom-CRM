@@ -12,7 +12,9 @@
 
 Швидкий старт і стек — у кореневому [README.md](../README.md).
 
-**Новий ПК:** після `migration:run` обов’язково `.\scripts\db-restore.ps1` — інакше жива Postgres порожня (знімок `data/app.snapshot.sql` сам не підхоплюється). Деталі: [git-sync](dev/git-sync.md).
+**Новий ПК:** інструменти (Node **22**, pnpm 10.15, Postgres/Docker, ngrok для демо) + після `migration:run` обов’язково `.\scripts\db-restore.ps1`. Деталі: [git-sync § Налаштування нового ПК](dev/git-sync.md#налаштування-нового-пк-перший-раз).
+
+**Демо керівництву (публічний HTTPS з локальної машини):** [git-sync — Демо через тунель](dev/git-sync.md#демо-через-тунель-керівництво--зовнішній-https) (`.\start-tunnel.bat`).
 
 ## Зараз у коді
 
@@ -42,7 +44,7 @@
 
 ## Практичне
 
-- [Синхронізація через Git](dev/git-sync.md) — pull/push, новий ПК, `db-snapshot` / `db-restore`, типові проблеми
+- [Синхронізація через Git](dev/git-sync.md) — pull/push, новий ПК, `db-snapshot` / `db-restore`, **демо-тунель**, типові проблеми
 - [Reset анкет (pre-prod)](dev/questionnaire-test-reset.md) — dry-run / execute + snapshot DoD
 
 ## Розробницьке
@@ -86,6 +88,7 @@
 ## Як читати
 
 - Локальна робота / новий ПК → [git-sync](dev/git-sync.md) + кореневий README
+- Демо через ngrok-тунель → [git-sync § тунель](dev/git-sync.md#демо-через-тунель-керівництво--зовнішній-https)
 - Що вже зроблено / що далі → [roadmap](product/hr-profile-roadmap.md) + блок «Зараз у коді» вище
 - Production / VPS → [deploy](dev/deploy.md) + [operations](dev/operations.md)
 - Межі модулів → [architecture](architecture.md) + [AGENTS.md](../AGENTS.md)

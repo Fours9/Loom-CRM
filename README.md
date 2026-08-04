@@ -37,14 +37,23 @@
 
 ## Вимоги
 
-- Node.js 22.x
-- pnpm 10.15.0
+- **Node.js 22.x** (`engines`: `>=22 <23`) — не 20 (як у PW) і не 24 LTS з winget за замовчуванням
+- pnpm **10.15.0**
 - Docker (PostgreSQL) **або** локальний Postgres 16 (`psql` / `pg_dump` у PATH)
+- Для публічного демо: ngrok + reserved domain (див. [git-sync](docs/dev/git-sync.md))
 
-```bash
+```powershell
+# Node 22 (приклад)
+winget install --id OpenJS.NodeJS.22 --version 22.23.2 -e
+
+# pnpm
 corepack enable
 corepack prepare pnpm@10.15.0 --activate
+# або без адміна:
+# npm install -g pnpm@10.15.0 --prefix "$env:LOCALAPPDATA\pnpm-global"
 ```
+
+Повний чеклист нового ПК (як у PW, але під Loom): [docs/dev/git-sync.md](docs/dev/git-sync.md) § «Налаштування нового ПК».
 
 ## Швидкий старт (новий ПК)
 
@@ -63,12 +72,15 @@ pnpm migration:run
 
 На Windows `start.bat` ставить залежності й ганяє міграції; **не** робить auto-restore зі знімка (щоб не затирати живу БД). Після clone / порожньої БД один раз явно: `.\scripts\db-restore.ps1`.
 
+**Публічне демо (керівництво):** `.\start-tunnel.bat` — локальні API+web + ngrok reserved domain. Потрібен не-placeholder `JWT_SECRET` (≥32). Restore лишається ручним. Деталі: [docs/dev/git-sync.md](docs/dev/git-sync.md) § «Демо через тунель».
+
 | | URL / облікові дані |
 | --- | --- |
 | API live | http://localhost:3000/api/v1/health/live |
 | Web (dev) | http://localhost:4200 |
+| Public demo (tunnel) | https://sureness-strewn-booting.ngrok-free.dev |
 | Після restore (знімок) | див. дані в знімку; часто `hr@tier.ua` |
-| Порожня БД без restore (seed) | `admin@loom.local` / `Admin123!` |
+| Порожня БД без restore (seed, **лише localhost**) | `admin@loom.local` / `Admin123!` — **не** для публічного тунелю |
 
 Корисні скрипти:
 
@@ -77,6 +89,8 @@ pnpm migration:run
 | `pnpm dev` | Міграції, потім api + web (**без** auto-restore) |
 | `pnpm dev:apps` | Старт без міграцій |
 | `pnpm migration:run` | Застосувати pending-міграції (схема, не дані) |
+| `.\start.bat` | Локальний Windows-старт (без публічного URL) |
+| `.\start-tunnel.bat` | Supervised public demo (ngrok + readiness checks) |
 | `pnpm check:copy-source` | Fail, якщо `ProjectWeekend` має локальні зміни |
 | `.\scripts\db-snapshot.ps1` | Жива Postgres → `data/app.snapshot.sql` (у git) |
 | `.\scripts\db-restore.ps1` | Знімок → жива БД (з авто-бекапом `.bak`) |

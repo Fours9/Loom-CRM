@@ -154,6 +154,7 @@ docker compose up -d --build
 
 ## 6. Що цей runbook свідомо не покриває
 
-- Cloudflare / ngrok tunnel-скрипти (у LoomCRM їх немає — лише Compose і локальний `start.bat`).
 - Multi-instance API на спільну БД без окремого migrate-job у CI/CD.
 - Окремий TLS termination — додайте reverse proxy (Caddy/nginx/Traefik) перед `:8080` за потреби.
+
+**Демо через тунель (локальна машина + публічний HTTPS):** не Compose — див. [git-sync.md](git-sync.md) § «Демо через тунель» (`start-tunnel.bat` / ngrok). VPS/production лишається шляхом Compose нижче / вище в цьому документі.

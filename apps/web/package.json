@@ -5,6 +5,7 @@
   "scripts": {
     "ng": "ng",
     "dev": "ng serve --proxy-config proxy.conf.json",
+    "dev:tunnel": "ng serve --host 0.0.0.0 --proxy-config proxy.conf.json --allowed-hosts=sureness-strewn-booting.ngrok-free.dev",
     "build": "ng build",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
