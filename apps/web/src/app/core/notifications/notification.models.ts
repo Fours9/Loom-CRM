@@ -4,6 +4,7 @@ export interface AppNotification {
   title: string;
   body: string;
   relatedRequestId: string | null;
+  relatedAssignmentId: string | null;
   isRead: boolean;
   createdAt: string;
 }

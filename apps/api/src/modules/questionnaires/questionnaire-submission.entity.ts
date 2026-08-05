@@ -52,4 +52,26 @@ export class QuestionnaireSubmission {
 
   @Column({ name: 'review_comment', type: 'text', nullable: true })
   reviewComment!: string | null;
+
+  @Column({
+    name: 'change_request_resolution',
+    type: 'varchar',
+    length: 32,
+    nullable: true,
+  })
+  changeRequestResolution!: 'completed' | 'declined' | null;
+
+  @Column({
+    name: 'change_request_resolved_by_user_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  changeRequestResolvedByUserId!: string | null;
+
+  @Column({
+    name: 'change_request_resolved_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  changeRequestResolvedAt!: Date | null;
 }

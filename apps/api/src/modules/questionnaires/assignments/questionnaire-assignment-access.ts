@@ -13,6 +13,10 @@ import {
   canStartRevisionFromStatus,
   isOwnerEditableStatus,
 } from './questionnaire-assignment-transitions';
+import {
+  hasActiveReviewerRequest,
+  type ActiveChangeRequestSubmission,
+} from '../reopen/questionnaire-active-change-request';
 
 export type AssignmentAccessContext = {
   assignment: QuestionnaireAssignment;
@@ -26,6 +30,7 @@ export type QuestionnaireDetailCapabilities = {
   canStartRevision: boolean;
   canRequestChanges: boolean;
   canReview: boolean;
+  canResolveChangeRequest: boolean;
   canDelete: boolean;
 };
 
@@ -36,6 +41,17 @@ export type QuestionnaireListLifecycleCapabilities = {
   canCancel: boolean;
   canClose: boolean;
   canDelete: boolean;
+};
+
+const EMPTY_CAPS: QuestionnaireDetailCapabilities = {
+  canEditDraft: false,
+  canSubmit: false,
+  canReopenSelf: false,
+  canStartRevision: false,
+  canRequestChanges: false,
+  canReview: false,
+  canResolveChangeRequest: false,
+  canDelete: false,
 };
 
 export function canCompleteOnBehalf(
@@ -62,8 +78,10 @@ export function computeDetailCapabilities(input: {
   status: QuestionnaireAssignmentStatus | string;
   permissions: PermissionService;
   access: EmployeeAccessService;
+  latestSubmission?: ActiveChangeRequestSubmission | null;
 }): QuestionnaireDetailCapabilities {
-  const { actor, employee, status, permissions, access } = input;
+  const { actor, employee, status, permissions, access, latestSubmission } =
+    input;
   const manage = canManageLifecycle(permissions, actor);
   const onBehalf = canCompleteOnBehalf(permissions, actor);
   const canReviewPerm = permissions.has(
@@ -77,48 +95,22 @@ export function computeDetailCapabilities(input: {
 
   if (status === 'new') {
     return {
+      ...EMPTY_CAPS,
       canEditDraft: manage && onBehalf,
-      canSubmit: false,
-      canReopenSelf: false,
-      canStartRevision: false,
-      canRequestChanges: false,
-      canReview: false,
       canDelete: manage,
     };
   }
 
-  if (status === 'closed') {
+  if (status === 'closed' || status === 'cancelled') {
     return {
-      canEditDraft: false,
-      canSubmit: false,
-      canReopenSelf: false,
-      canStartRevision: false,
-      canRequestChanges: false,
-      canReview: false,
-      canDelete: manage,
-    };
-  }
-
-  if (status === 'cancelled') {
-    return {
-      canEditDraft: false,
-      canSubmit: false,
-      canReopenSelf: false,
-      canStartRevision: false,
-      canRequestChanges: false,
-      canReview: false,
+      ...EMPTY_CAPS,
       canDelete: manage,
     };
   }
 
   if (!employee) {
     return {
-      canEditDraft: false,
-      canSubmit: false,
-      canReopenSelf: false,
-      canStartRevision: false,
-      canRequestChanges: false,
-      canReview: false,
+      ...EMPTY_CAPS,
       canDelete: manage,
     };
   }
@@ -139,13 +131,22 @@ export function computeDetailCapabilities(input: {
   const canStartRevision = onBehalf && canStartRevisionFromStatus(status);
 
   const canRequestChanges =
-    canReviewPerm && canStartRevisionFromStatus(status);
+    canReviewPerm &&
+    canStartRevisionFromStatus(status) &&
+    !canEditDraft;
 
   const canReview =
     canReviewPerm &&
     (status === 'submitted' ||
       status === 'changes_requested' ||
       status === 'reviewed');
+
+  const canResolveChangeRequest =
+    canEditDraft &&
+    hasActiveReviewerRequest({
+      assignmentStatus: status,
+      latest: latestSubmission ?? null,
+    });
 
   return {
     canEditDraft,
@@ -154,6 +155,7 @@ export function computeDetailCapabilities(input: {
     canStartRevision,
     canRequestChanges,
     canReview,
+    canResolveChangeRequest,
     canDelete: manage,
   };
 }

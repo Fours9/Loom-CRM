@@ -158,7 +158,15 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
                         [attr.data-frame]="frameTone(n.type)"
                         (mouseenter)="markReadOnHover(n)"
                       >
-                        @if (n.relatedRequestId) {
+                        @if (n.relatedAssignmentId) {
+                          <a
+                            [routerLink]="['/questionnaires', n.relatedAssignmentId]"
+                            (click)="markNotificationRead(n)"
+                          >
+                            <strong>{{ n.title }}</strong>
+                            <span>{{ n.body }}</span>
+                          </a>
+                        } @else if (n.relatedRequestId) {
                           <a
                             [routerLink]="['/absences/requests', n.relatedRequestId]"
                             (click)="markNotificationRead(n)"

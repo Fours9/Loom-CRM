@@ -1,15 +1,19 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
+import { UserRole, UserStatus } from '../../platform/identity/user.enums';
 import { Permission } from '../../platform/permissions/permission.names';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
+import type { Employee } from '../../organization/employees/employee.entity';
+import { NotificationsService } from '../../platform/notifications/notifications.service';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
@@ -21,7 +25,10 @@ import {
   applyReopenTransition,
   toSubmissionSummaryDto,
 } from './reopen/questionnaire-reopen-transition';
-import { supersedePendingForSubmission } from './proposals/questionnaire-proposal-lifecycle';
+import {
+  collectChangesRequestedRecipientIds,
+  hasActiveReviewerRequest,
+} from './reopen/questionnaire-active-change-request';
 import {
   computeDetailCapabilities,
   requireCanSubmit,
@@ -37,10 +44,13 @@ export class QuestionnaireSubmissionService {
     private readonly responses: Repository<QuestionnaireResponse>,
     @InjectRepository(QuestionnaireSubmission)
     private readonly submissions: Repository<QuestionnaireSubmission>,
+    @InjectRepository(User)
+    private readonly users: Repository<User>,
     private readonly access: EmployeeAccessService,
     private readonly permissions: PermissionService,
     private readonly responseService: QuestionnaireResponseService,
     private readonly proposals: QuestionnaireProposalService,
+    private readonly notifications: NotificationsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -76,66 +86,111 @@ export class QuestionnaireSubmissionService {
     }
 
     const response = await this.responseService.ensureResponse(assignmentId);
+
+    const submission = await this.dataSource.transaction(async (manager) => {
+      const lockedAssignment = await manager
+        .getRepository(QuestionnaireAssignment)
+        .findOne({
+          where: { id: assignmentId },
+          lock: { mode: 'pessimistic_write' },
+        });
+      if (!lockedAssignment) {
+        throw new NotFoundException('Assignment not found');
+      }
+      if (!isOwnerEditableStatus(lockedAssignment.status)) {
+        throw new BadRequestException(
+          `Cannot submit from status ${lockedAssignment.status}`,
+        );
+      }
+      lockedAssignment.templateVersion = assignment.templateVersion;
+
+      const lockedResponse = await manager
+        .getRepository(QuestionnaireResponse)
+        .findOne({
+          where: { id: response.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+      if (!lockedResponse) throw new NotFoundException('Response not found');
+
+      return this.submitWithinTransaction(
+        manager,
+        actor,
+        lockedAssignment,
+        lockedResponse,
+      );
+    });
+
+    return toSubmissionSummaryDto(submission);
+  }
+
+  /**
+   * Creates immutable snapshot + pending submission + proposals inside an open TX.
+   * Caller must hold locks on assignment and response as needed.
+   */
+  async submitWithinTransaction(
+    manager: EntityManager,
+    actor: User,
+    assignment: QuestionnaireAssignment,
+    response: QuestionnaireResponse,
+  ): Promise<QuestionnaireSubmission> {
     const schema = assignment.templateVersion
       .schemaJson as unknown as QuestionnaireSchemaJson;
     const snapshotJson = projectVisibleQuestionnaireAnswers(
       schema,
       response.answersJson ?? {},
     );
-    const latest = await this.submissions.findOne({
+
+    const latest = await manager.getRepository(QuestionnaireSubmission).findOne({
       where: { responseId: response.id },
       order: { submissionNumber: 'DESC' },
+      lock: { mode: 'pessimistic_write' },
     });
     const nextNumber = (latest?.submissionNumber ?? 0) + 1;
     const now = new Date();
 
-    const submission = await this.dataSource.transaction(async (manager) => {
-      const submissionRepo = manager.getRepository(QuestionnaireSubmission);
-      const assignmentRepo = manager.getRepository(QuestionnaireAssignment);
+    const submissionRepo = manager.getRepository(QuestionnaireSubmission);
+    const created = await submissionRepo.save(
+      submissionRepo.create({
+        responseId: response.id,
+        submissionNumber: nextNumber,
+        snapshotJson,
+        submittedByUserId: actor.id,
+        submittedAt: now,
+        reviewStatus: 'pending',
+        changeRequestResolution: null,
+        changeRequestResolvedByUserId: null,
+        changeRequestResolvedAt: null,
+      }),
+    );
 
-      const created = await submissionRepo.save(
-        submissionRepo.create({
-          responseId: response.id,
-          submissionNumber: nextNumber,
-          snapshotJson,
-          submittedByUserId: actor.id,
-          submittedAt: now,
-          reviewStatus: 'pending',
-        }),
-      );
+    assignment.status = 'submitted';
+    assignment.submittedAt = now;
+    assignment.reviewedAt = null;
+    if (!assignment.startedAt) assignment.startedAt = now;
+    await manager.getRepository(QuestionnaireAssignment).save(assignment);
 
-      assignment.status = 'submitted';
-      assignment.submittedAt = now;
-      assignment.reviewedAt = null;
-      if (!assignment.startedAt) assignment.startedAt = now;
-      await assignmentRepo.save(assignment);
+    await this.proposals.generateFromSubmission(manager, actor, created.id);
 
-      await this.proposals.generateFromSubmission(manager, actor, created.id);
-
-      return created;
-    });
-
-    return {
-      id: submission.id,
-      submissionNumber: submission.submissionNumber,
-      submittedAt: submission.submittedAt.toISOString(),
-      reviewStatus: submission.reviewStatus,
-      reviewedAt: null,
-      reviewComment: null,
-    };
+    return created;
   }
 
   async requestChanges(
     actor: User,
     assignmentId: string,
-    input: { reviewComment?: string | null },
+    input: { reviewComment: string },
   ) {
     if (!this.permissions.has(actor.role, Permission.QuestionnairesReview)) {
       throw new ForbiddenException('Cannot request changes');
     }
 
+    const comment = input.reviewComment?.trim() ?? '';
+    if (!comment) {
+      throw new BadRequestException('Review comment is required');
+    }
+
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
+      relations: { templateVersion: { template: true } },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
     if (!assignment.employeeId) {
@@ -145,13 +200,46 @@ export class QuestionnaireSubmissionService {
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
 
-    const { submission } = await this.dataSource.transaction(async (manager) =>
-      applyReopenTransition(manager, assignment, {
+    const caps = computeDetailCapabilities({
+      actor,
+      employee,
+      status: assignment.status,
+      permissions: this.permissions,
+      access: this.access,
+    });
+    if (!caps.canRequestChanges) {
+      throw new ForbiddenException('Cannot request changes');
+    }
+
+    const templateTitle =
+      assignment.templateVersion?.template?.title ?? 'Анкета';
+
+    const { submission } = await this.dataSource.transaction(async (manager) => {
+      const locked = await manager
+        .getRepository(QuestionnaireAssignment)
+        .findOne({
+          where: { id: assignmentId },
+          lock: { mode: 'pessimistic_write' },
+        });
+      if (!locked) throw new NotFoundException('Assignment not found');
+
+      const result = await applyReopenTransition(manager, locked, {
         kind: 'reviewer_request_changes',
         actorUserId: actor.id,
-        reviewComment: input.reviewComment ?? null,
-      }),
-    );
+        reviewComment: comment,
+      });
+
+      await this.notifyChangesRequested(
+        manager,
+        actor,
+        result.assignment,
+        employee,
+        templateTitle,
+        comment,
+      );
+
+      return result;
+    });
 
     return toSubmissionSummaryDto(submission);
   }
@@ -181,12 +269,19 @@ export class QuestionnaireSubmissionService {
       throw new ForbiddenException('Cannot reopen questionnaire');
     }
 
-    const { submission } = await this.dataSource.transaction(async (manager) =>
-      applyReopenTransition(manager, assignment, {
+    const { submission } = await this.dataSource.transaction(async (manager) => {
+      const locked = await manager
+        .getRepository(QuestionnaireAssignment)
+        .findOne({
+          where: { id: assignmentId },
+          lock: { mode: 'pessimistic_write' },
+        });
+      if (!locked) throw new NotFoundException('Assignment not found');
+      return applyReopenTransition(manager, locked, {
         kind: 'owner_reopen',
         actorUserId: actor.id,
-      }),
-    );
+      });
+    });
 
     return toSubmissionSummaryDto(submission);
   }
@@ -217,14 +312,147 @@ export class QuestionnaireSubmissionService {
       throw new ForbiddenException('Cannot start questionnaire revision');
     }
 
-    const { submission } = await this.dataSource.transaction(async (manager) =>
-      applyReopenTransition(manager, assignment, {
+    const { submission } = await this.dataSource.transaction(async (manager) => {
+      const locked = await manager
+        .getRepository(QuestionnaireAssignment)
+        .findOne({
+          where: { id: assignmentId },
+          lock: { mode: 'pessimistic_write' },
+        });
+      if (!locked) throw new NotFoundException('Assignment not found');
+      return applyReopenTransition(manager, locked, {
         kind: 'admin_start_revision',
         actorUserId: actor.id,
-      }),
-    );
+      });
+    });
 
     return toSubmissionSummaryDto(submission);
+  }
+
+  async resolveChanges(
+    actor: User,
+    assignmentId: string,
+    input:
+      | { outcome: 'completed'; expectedDraftRevision: number }
+      | { outcome: 'declined' },
+  ) {
+    const assignment = await this.assignments.findOne({
+      where: { id: assignmentId },
+      relations: { templateVersion: { template: true } },
+    });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+    if (!assignment.employeeId) {
+      throw new BadRequestException('Assignment has no attached employee');
+    }
+
+    const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
+    await this.access.requireCanView(actor, employee);
+
+    const templateTitle =
+      assignment.templateVersion?.template?.title ?? 'Анкета';
+
+    return this.dataSource.transaction(async (manager) => {
+      const lockedAssignment = await manager
+        .getRepository(QuestionnaireAssignment)
+        .findOne({
+          where: { id: assignmentId },
+          lock: { mode: 'pessimistic_write' },
+        });
+      if (!lockedAssignment) {
+        throw new NotFoundException('Assignment not found');
+      }
+      lockedAssignment.templateVersion = assignment.templateVersion;
+
+      const response = await manager.getRepository(QuestionnaireResponse).findOne({
+        where: { assignmentId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!response) throw new NotFoundException('Response not found');
+
+      const latest = await manager.getRepository(QuestionnaireSubmission).findOne({
+        where: { responseId: response.id },
+        order: { submissionNumber: 'DESC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!latest) throw new NotFoundException('No submission to resolve');
+
+      const caps = computeDetailCapabilities({
+        actor,
+        employee,
+        status: lockedAssignment.status,
+        permissions: this.permissions,
+        access: this.access,
+        latestSubmission: latest,
+      });
+      if (!caps.canResolveChangeRequest) {
+        throw new ForbiddenException('Cannot resolve change request');
+      }
+
+      if (
+        !hasActiveReviewerRequest({
+          assignmentStatus: lockedAssignment.status,
+          latest,
+        })
+      ) {
+        throw new ConflictException('No active change request');
+      }
+
+      const reviewedByUserId = latest.reviewedByUserId!;
+      const now = new Date();
+
+      if (input.outcome === 'declined') {
+        latest.changeRequestResolution = 'declined';
+        latest.changeRequestResolvedByUserId = actor.id;
+        latest.changeRequestResolvedAt = now;
+        await manager.getRepository(QuestionnaireSubmission).save(latest);
+
+        lockedAssignment.status = 'submitted';
+        await manager
+          .getRepository(QuestionnaireAssignment)
+          .save(lockedAssignment);
+
+        await this.notifyResolveOutcome(
+          manager,
+          actor,
+          reviewedByUserId,
+          assignmentId,
+          templateTitle,
+          'declined',
+        );
+
+        return toSubmissionSummaryDto(latest);
+      }
+
+      if (response.revision !== input.expectedDraftRevision) {
+        throw new ConflictException({
+          message: 'Draft revision conflict',
+          currentRevision: response.revision,
+        });
+      }
+
+      await this.submitWithinTransaction(
+        manager,
+        actor,
+        lockedAssignment,
+        response,
+      );
+
+      latest.changeRequestResolution = 'completed';
+      latest.changeRequestResolvedByUserId = actor.id;
+      latest.changeRequestResolvedAt = now;
+      await manager.getRepository(QuestionnaireSubmission).save(latest);
+
+      await this.notifyResolveOutcome(
+        manager,
+        actor,
+        reviewedByUserId,
+        assignmentId,
+        templateTitle,
+        'completed',
+      );
+
+      return toSubmissionSummaryDto(latest);
+    });
   }
 
   async review(
@@ -247,6 +475,7 @@ export class QuestionnaireSubmissionService {
 
     const assignment = await this.assignments.findOne({
       where: { id: submission.response.assignmentId },
+      relations: { templateVersion: { template: true } },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
     if (!assignment.employeeId) {
@@ -257,39 +486,64 @@ export class QuestionnaireSubmissionService {
     await this.access.requireCanView(actor, employee);
 
     if (input.reviewStatus === 'changes_requested') {
-      // Prefer shared transition when the reviewed row is the latest submission.
-      const response = submission.response;
-      const latest = await this.submissions.findOne({
-        where: { responseId: response.id },
-        order: { submissionNumber: 'DESC' },
-      });
-      if (latest && latest.id === submission.id) {
-        const { submission: updated } = await this.dataSource.transaction(
-          async (manager) =>
-            applyReopenTransition(manager, assignment, {
-              kind: 'reviewer_request_changes',
-              actorUserId: actor.id,
-              reviewComment: input.reviewComment ?? null,
-            }),
-        );
-        return toSubmissionSummaryDto(updated);
+      const comment = input.reviewComment?.trim() ?? '';
+      if (!comment) {
+        throw new BadRequestException('Review comment is required');
       }
 
-      // Older submission reviewed: update that row + supersede its pending.
-      const now = new Date();
-      await this.dataSource.transaction(async (manager) => {
-        const subRepo = manager.getRepository(QuestionnaireSubmission);
-        const assignRepo = manager.getRepository(QuestionnaireAssignment);
-        submission.reviewStatus = 'changes_requested';
-        submission.reviewedByUserId = actor.id;
-        submission.reviewedAt = now;
-        submission.reviewComment = input.reviewComment?.trim() || null;
-        await subRepo.save(submission);
-        assignment.status = 'changes_requested';
-        await assignRepo.save(assignment);
-        await supersedePendingForSubmission(manager, submission.id, now);
+      const latest = await this.submissions.findOne({
+        where: { responseId: submission.response.id },
+        order: { submissionNumber: 'DESC' },
       });
-      return toSubmissionSummaryDto(submission);
+      if (!latest || latest.id !== submission.id) {
+        throw new ConflictException(
+          'Запросити зміни можна лише до останньої версії анкети',
+        );
+      }
+
+      const caps = computeDetailCapabilities({
+        actor,
+        employee,
+        status: assignment.status,
+        permissions: this.permissions,
+        access: this.access,
+      });
+      if (!caps.canRequestChanges) {
+        throw new ForbiddenException('Cannot request changes');
+      }
+
+      const templateTitle =
+        assignment.templateVersion?.template?.title ?? 'Анкета';
+
+      const { submission: updated } = await this.dataSource.transaction(
+        async (manager) => {
+          const locked = await manager
+            .getRepository(QuestionnaireAssignment)
+            .findOne({
+              where: { id: assignment.id },
+              lock: { mode: 'pessimistic_write' },
+            });
+          if (!locked) throw new NotFoundException('Assignment not found');
+
+          const result = await applyReopenTransition(manager, locked, {
+            kind: 'reviewer_request_changes',
+            actorUserId: actor.id,
+            reviewComment: comment,
+          });
+
+          await this.notifyChangesRequested(
+            manager,
+            actor,
+            result.assignment,
+            employee,
+            templateTitle,
+            comment,
+          );
+
+          return result;
+        },
+      );
+      return toSubmissionSummaryDto(updated);
     }
 
     const now = new Date();
@@ -304,5 +558,102 @@ export class QuestionnaireSubmissionService {
     await this.assignments.save(assignment);
 
     return toSubmissionSummaryDto(submission);
+  }
+
+  private async notifyChangesRequested(
+    manager: EntityManager,
+    actor: User,
+    assignment: QuestionnaireAssignment,
+    employee: Employee,
+    templateTitle: string,
+    comment: string,
+  ): Promise<void> {
+    const assignedBy = await manager.getRepository(User).findOne({
+      where: {
+        id: assignment.assignedByUserId,
+        status: UserStatus.Active,
+      },
+    });
+
+    let assignedByCanEditDraft = false;
+    if (assignedBy) {
+      const caps = computeDetailCapabilities({
+        actor: assignedBy,
+        employee,
+        status: assignment.status,
+        permissions: this.permissions,
+        access: this.access,
+      });
+      assignedByCanEditDraft = caps.canEditDraft;
+    }
+
+    const admins = await manager.getRepository(User).find({
+      where: { role: UserRole.Admin, status: UserStatus.Active },
+      select: { id: true },
+    });
+
+    const recipientIds = collectChangesRequestedRecipientIds({
+      actorId: actor.id,
+      assignedBy: assignedBy ? { id: assignedBy.id } : null,
+      assignedByCanEditDraft,
+      activeAdminIds: admins.map((u) => u.id),
+    });
+
+    const body =
+      comment.length > 280 ? `${comment.slice(0, 277)}…` : comment;
+
+    for (const recipientId of recipientIds) {
+      await this.notifications.create(
+        {
+          recipientId,
+          type: 'questionnaire.changes_requested',
+          title: 'Запрошено зміни до анкети',
+          body: `${templateTitle}: ${body}`,
+          payload: { assignmentId: assignment.id },
+        },
+        manager,
+      );
+    }
+  }
+
+  private async notifyResolveOutcome(
+    manager: EntityManager,
+    actor: User,
+    reviewedByUserId: string,
+    assignmentId: string,
+    templateTitle: string,
+    outcome: 'completed' | 'declined',
+  ): Promise<void> {
+    if (reviewedByUserId === actor.id) return;
+
+    const recipient = await manager.getRepository(User).findOne({
+      where: { id: reviewedByUserId, status: UserStatus.Active },
+    });
+    if (!recipient) return;
+
+    if (outcome === 'completed') {
+      await this.notifications.create(
+        {
+          recipientId: recipient.id,
+          type: 'questionnaire.changes_completed',
+          title: 'Правки до анкети виконано',
+          body: templateTitle,
+          payload: { assignmentId },
+        },
+        manager,
+      );
+      return;
+    }
+
+    await this.notifications.create(
+      {
+        recipientId: recipient.id,
+        type: 'questionnaire.changes_declined',
+        title: 'У правках до анкети відмовлено',
+        body: templateTitle,
+        payload: { assignmentId },
+      },
+      manager,
+    );
   }
 }

@@ -133,8 +133,38 @@ describe('computeDetailCapabilities matrix', () => {
       canStartRevision: false,
       canRequestChanges: false,
       canReview: false,
+      canResolveChangeRequest: false,
       canDelete: true,
     });
+  });
+
+  it('canRequestChanges requires review + revision status + !canEditDraft', () => {
+    const reviewer = computeDetailCapabilities({
+      actor: { id: 'u2', role: UserRole.Admin } as User,
+      employee,
+      status: 'submitted',
+      permissions: perms(UserRole.Admin),
+      access: access(false),
+    });
+    expect(reviewer.canEditDraft).toBe(false);
+    expect(reviewer.canRequestChanges).toBe(true);
+
+    const ownerEditing = computeDetailCapabilities({
+      actor: { id: 'u1', role: UserRole.Employee } as User,
+      employee,
+      status: 'changes_requested',
+      permissions: perms(UserRole.Employee),
+      access: access(true),
+      latestSubmission: {
+        reviewStatus: 'changes_requested',
+        reviewComment: 'fix dates',
+        reviewedByUserId: 'u2',
+        changeRequestResolution: null,
+      },
+    });
+    expect(ownerEditing.canEditDraft).toBe(true);
+    expect(ownerEditing.canRequestChanges).toBe(false);
+    expect(ownerEditing.canResolveChangeRequest).toBe(true);
   });
 
   it('separates canReopenSelf and canStartRevision', () => {

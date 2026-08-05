@@ -21,6 +21,7 @@ import {
   questionnaireAttachmentLabel,
   questionnaireTypeLabel,
 } from '../questionnaire-labels';
+import { hasActiveReviewerRequest } from '../core/questionnaire-active-change-request';
 import { QuestionnaireAttachPickerComponent } from './questionnaire-attach-picker.component';
 
 type Dept = { id: string; name: string };
@@ -237,7 +238,9 @@ type Pos = { id: string; name: string };
             </thead>
             <tbody>
               @for (item of items(); track item.id) {
-                <tr>
+                <tr
+                  [class.row-changes-requested]="hasActiveChangeRequest(item)"
+                >
                   <td>
                     <code>{{ item.templateCode }}</code>
                     <span class="ver">v{{ item.version }}</span>
@@ -394,6 +397,17 @@ type Pos = { id: string; name: string };
         width: 100%;
         border-collapse: collapse;
         font-size: 0.9rem;
+      }
+      tr.row-changes-requested > td {
+        background: color-mix(in srgb, #f59e0b 14%, var(--pw-surface));
+        border-top: 1px solid color-mix(in srgb, #f59e0b 55%, var(--pw-border));
+        border-bottom: 1px solid color-mix(in srgb, #f59e0b 55%, var(--pw-border));
+      }
+      tr.row-changes-requested > td:first-child {
+        border-left: 3px solid #f59e0b;
+      }
+      tr.row-changes-requested > td:last-child {
+        border-right: 1px solid color-mix(in srgb, #f59e0b 55%, var(--pw-border));
       }
       th,
       td {
@@ -582,6 +596,13 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
 
   typeLabel(type: QuestionnaireType): string {
     return questionnaireTypeLabel(type);
+  }
+
+  hasActiveChangeRequest(item: QuestionnaireDirectoryItem): boolean {
+    return hasActiveReviewerRequest({
+      assignmentStatus: item.status,
+      latest: item.latestSubmission,
+    });
   }
 
   formatDate(iso: string): string {

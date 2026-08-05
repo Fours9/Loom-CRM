@@ -28,6 +28,7 @@ import {
   QuestionnaireDirectoryQueryDto,
   QuestionnaireSnapshotSummaryQueryDto,
   RequestQuestionnaireChangesDto,
+  ResolveQuestionnaireChangesDto,
   ReviewQuestionnaireSubmissionDto,
 } from './questionnaire.dto';
 
@@ -161,6 +162,21 @@ export class QuestionnairesController {
     @Body() dto: RequestQuestionnaireChangesDto,
   ) {
     return this.submissions.requestChanges(actor, id, dto);
+  }
+
+  @Post('assignments/:id/resolve-changes')
+  resolveChanges(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResolveQuestionnaireChangesDto,
+  ) {
+    if (dto.outcome === 'completed') {
+      return this.submissions.resolveChanges(actor, id, {
+        outcome: 'completed',
+        expectedDraftRevision: dto.expectedDraftRevision!,
+      });
+    }
+    return this.submissions.resolveChanges(actor, id, { outcome: 'declined' });
   }
 
   @Post('submissions/:id/review')

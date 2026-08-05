@@ -64,12 +64,73 @@ PW-паритетна картка без змін: `/absences/employees/:id`.
 - **fill wizard (PR-4):** immersive chrome-less `/questionnaires/:id` (route `hideAppChrome`); FillChrome + section progress rail (`fill/progress/`; UX grouping ≠ linear step order); sidebar stepper removed; schema-driven wizard (Intro → schema steps → Review); serialized autosave; unified manual save via RevisionCoordinator; 409 conflict UI; `flush()` before submit; browse SoT in `questionnaire-step-browse` + DraftStore; FE entry `questionnaires/public-api.ts` (+ `buildQuestionnaireAssignmentLink` only — wizard/store private)
 - **schema UX:** steps `family` + `celebration_dates`; `visibleWhen`; layout groups; from/to periods; preferred_language multi; submit projects visible answers; `@loom/questionnaire-schema`; startup composition root; fail-safe `pnpm questionnaires:reset` ([runbook](../dev/questionnaire-test-reset.md)); `family.other_dates` repeating list (Назва/З/По, **snapshot**, не профіль)
 - **revision + proposals:** owner `POST .../reopen` vs HR request-changes (different submission review side effects); pending → `superseded` on reopen; atomic submit+proposal generate; proposals nested under assignment; UI «Зберегти і закрити» = new immutable submission
+- **request-changes UX** — див. підрозділ нижче
 - **assignment lifecycle:** create without employee → `new`; cancel detaches (`employeeId=null`, `detachedFromEmployeeId=previous`); attach (replaces reactivate) — new→any employee, cancelled→same employee only; close terminal; hard delete on fill when `canDelete`. People excludes cancelled (incl. legacy non-null). Unattached directory rows visible to Assign only.
 - **types:** template `type` (`general`/`hr`/`manager`/`full`); seed 360 = general; create always employee-360. HR/Manager/Full schemas later.
 - **directory + access:** nav «Анкети»; `canCreate` / `attachConstraint` on directory; `new` draft editable without submit; cancelled/closed fill = read-only; print stubs («Незабаром»). **PDF (planned):** blank template and filled questionnaire share one layout; filled only substitutes values — not shipped yet.
 - **directory + access (legacy note):** historical cancelled with non-null employeeId stay attach-blocked until manual detach; view/close/delete only.
 
-**Remaining:** auto-apply answers to profile (explicitly out); Phase 2 `/me` approval queue; IndexedDB offline; full Playwright matrix; template builder; production template v2 when real assignments exist.
+### Запит змін (request-changes) — living
+
+Спільний шлях ревʼюера «потрібні правки» (не плутати з owner `reopen` / admin `start-revision`). Статус assignment `changes_requested` може зʼявитися і без reviewer comment — тоді **немає** фальшивого банера «Потрібні зміни».
+
+#### Кнопка «Запросити зміни»
+
+- Capability: `QuestionnairesReview` + status ∈ `{submitted, reviewed}` + **`!canEditDraft`** (немає **прямого** редагування чернетки в **поточному** статусі). Це **не** `!canStartRevision`.
+- На поточній матриці ролей Admin у `submitted|reviewed` зазвичай уже має `canEditDraft === false`, тож кнопку бачить; далі може сам відкрити редагування через lifecycle і **сам** резолвити свій запит (self-resolve дозволено).
+- UI: popover «Що потрібно змінити?» (обовʼязковий trim-коментар, max 2000); після успіху — reload **без** `beginEditSession` (ревʼюер лишається в перегляді).
+
+#### API
+
+| Endpoint | Примітка |
+| --- | --- |
+| `POST …/assignments/:id/request-changes` | Body: `{ reviewComment: string }` (обовʼязково) |
+| `POST …/submissions/:id/review` з `reviewStatus: changes_requested` | Той самий обовʼязковий comment; **лише latest** submission, інакше **409** |
+| `POST …/assignments/:id/resolve-changes` | `{ outcome: 'completed', expectedDraftRevision }` або `{ outcome: 'declined' }` |
+
+Доменний fail-closed: whitespace-only comment → помилка навіть якщо HTTP-валідація обійдена. У `applyReopenTransition` для `reviewer_request_changes` також **скидаються** `changeRequestResolution` / `resolvedBy` / `resolvedAt` (повторний request після declined знову активний). На одному submission зберігається лише **останній** цикл запиту; повна історія циклів — окрема entity (поза скоупом).
+
+Summary (list `latestSubmission`, detail `submissions`, directory): поля `reviewComment`, **`reviewedByUserId`**, **`changeRequestResolution`** (`completed` \| `declined` \| `null`). `resolvedBy` / `resolvedAt` на FE не віддаються.
+
+#### Активний reviewer request (`hasActiveReviewerRequest`)
+
+```text
+assignment.status === 'changes_requested'
+&& latest.reviewStatus === 'changes_requested'
+&& непорожній reviewComment
+&& reviewedByUserId !== null
+&& changeRequestResolution === null
+```
+
+Якщо `reviewedByUserId` відсутній (старі/биті дані): банер не як запит ревʼюера; resolve → **409**; notify при резолві не створюється.
+
+- **Банер** fill: amber «Потрібні зміни» + коментар **лише** при активному запиті; кнопки «Правки виконано» / «В правках відмовлено» при `canResolveChangeRequest` (= активний запит + `canEditDraft`).
+- **People-картки:** amber `!` + tooltip з коментарем при активному запиті; інакше при статусі `changes_requested` — нейтральний «Анкету відкрито для редагування» (owner reopen тощо).
+- **Каталог:** підсвітка рядка (`td`) лише при активному запиті, не при голому статусі після declined+reopen.
+
+Індикатори списків — **для всіх**, хто бачить список; **не** залежать від того, хто отримав inbox.
+
+#### Inbox (лише in-app notifications)
+
+| type | Кому | Коли |
+| --- | --- | --- |
+| `questionnaire.changes_requested` | `assignedByUserId` (активний User); якщо автор відсутній/неактивний **або** після transition `canEditDraft === false` — також усі активні `admin`; без self-notify | Після успішного request у **тій самій TX**, що й transition |
+| `questionnaire.changes_completed` | `reviewedByUserId` запиту (skip якщо === actor) | Resolve `completed` |
+| `questionnaire.changes_declined` | те саме | Resolve `declined` |
+
+Оцінка `canEditDraft(assignedBy)` — **після** transition (status уже `changes_requested`). До transition у `submitted|reviewed` майже завжди `false` → хибний fan-out на всіх Admin. Крайній кейс: actor === assignedBy і після transition може редагувати → **0** notifications (очікувано).
+
+`payload.assignmentId` → deep link `/questionnaires/:id`. Absences: `payload.requestId` → `/absences/requests/:id` (FE mapper з raw `payload`).
+
+#### Resolve
+
+- **`completed`:** lock assignment + response + active submission; `response.revision === expectedDraftRevision` (інакше **409**, без snapshot/proposals/notify); `submitWithinTransaction` у тій самій TX; resolution на **тому** submission, що тримав запит; notify ревʼюеру.
+- **`declined`:** assignment → `submitted`; resolution = `declined` на submission; notify ревʼюеру; без нового snapshot.
+- Draft PATCH — атомарний CAS (`UPDATE … WHERE revision = :expected`); mismatch → 409.
+
+**Remaining (request-changes):** окрема entity циклів запиту; email/push; Playwright e2e матриця request→decline→re-request.
+
+**Remaining (загальне Phase 3):** auto-apply answers to profile (explicitly out); Phase 2 `/me` approval queue; IndexedDB offline; full Playwright matrix; template builder; production template v2 when real assignments exist.
 
 
 ## Phase 1 — відкладені polish (не блокують Done)
