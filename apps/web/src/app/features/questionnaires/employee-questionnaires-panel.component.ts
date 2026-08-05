@@ -22,6 +22,7 @@ import {
   questionnaireStatusLabel,
   questionnaireTypeLabel,
 } from './questionnaire-labels';
+import { hasActiveReviewerRequest } from './core/questionnaire-active-change-request';
 
 const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   pending: 'Очікує',
@@ -67,6 +68,27 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
               <div class="card-row">
                 <div class="card-main">
                   <strong>{{ item.templateTitle }}</strong>
+                  @if (activeReviewerRequest(item)) {
+                    <span
+                      class="change-req-mark"
+                      [attr.title]="
+                        'Запрошено зміни: ' +
+                        (item.latestSubmission?.reviewComment ?? '')
+                      "
+                      [attr.aria-label]="
+                        'Запрошено зміни: ' +
+                        (item.latestSubmission?.reviewComment ?? '')
+                      "
+                      >!</span
+                    >
+                  } @else if (item.status === 'changes_requested') {
+                    <span
+                      class="change-req-mark neutral"
+                      title="Анкету відкрито для редагування"
+                      aria-label="Анкету відкрито для редагування"
+                      >!</span
+                    >
+                  }
                   <span class="badge type">{{ typeLabel(item.templateType) }}</span>
                   <span class="badge">{{ statusLabel(item.status) }}</span>
                   <span class="pct">{{ item.completionPercent }}%</span>
@@ -275,6 +297,24 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
       }
       .card-main strong {
         font-size: 1.05rem;
+      }
+      .change-req-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 999px;
+        background: #f59e0b;
+        color: #111827;
+        font-weight: 800;
+        font-size: 0.85rem;
+        line-height: 1;
+      }
+      .change-req-mark.neutral {
+        background: color-mix(in srgb, var(--pw-border) 70%, #94a3b8);
+        color: var(--pw-text);
+        font-weight: 600;
       }
       .badge {
         border: 1.5px solid var(--pw-border);
@@ -539,6 +579,13 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
 
   typeLabel(type: string): string {
     return questionnaireTypeLabel(type);
+  }
+
+  activeReviewerRequest(item: QuestionnaireAssignmentListItem): boolean {
+    return hasActiveReviewerRequest({
+      assignmentStatus: item.status,
+      latest: item.latestSubmission,
+    });
   }
 
   proposalStatusLabel(status: string): string {

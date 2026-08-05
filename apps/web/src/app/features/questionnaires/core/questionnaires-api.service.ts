@@ -127,11 +127,23 @@ export class QuestionnairesApiService {
 
   requestChanges(
     assignmentId: string,
-    body?: { reviewComment?: string | null },
+    body: { reviewComment: string },
   ): Observable<QuestionnaireSubmissionSummary> {
     return this.http.post<QuestionnaireSubmissionSummary>(
       `/api/v1/questionnaires/assignments/${assignmentId}/request-changes`,
-      body ?? {},
+      body,
+    );
+  }
+
+  resolveChanges(
+    assignmentId: string,
+    body:
+      | { outcome: 'completed'; expectedDraftRevision: number }
+      | { outcome: 'declined' },
+  ): Observable<QuestionnaireSubmissionSummary> {
+    return this.http.post<QuestionnaireSubmissionSummary>(
+      `/api/v1/questionnaires/assignments/${assignmentId}/resolve-changes`,
+      body,
     );
   }
 

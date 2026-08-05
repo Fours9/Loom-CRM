@@ -12,6 +12,7 @@ import { questionnaireTypeLabel } from '../questionnaire-labels';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { QuestionnaireSectionRailComponent } from './progress/questionnaire-section-rail.component';
+import { QuestionnaireRequestChangesPopoverComponent } from './questionnaire-request-changes-popover.component';
 import {
   buildProgressSections,
   type ProgressSection,
@@ -20,7 +21,10 @@ import {
 @Component({
   selector: 'loom-questionnaire-fill-chrome',
   standalone: true,
-  imports: [QuestionnaireSectionRailComponent],
+  imports: [
+    QuestionnaireSectionRailComponent,
+    QuestionnaireRequestChangesPopoverComponent,
+  ],
   template: `
     <header class="step-topbar">
       <button
@@ -72,14 +76,11 @@ import {
           }
         </button>
         @if (store.canShowRequestChangesButton()) {
-          <button
-            type="button"
-            class="btn"
-            [disabled]="actionBusy()"
-            (click)="requestChanges.emit()"
-          >
-            {{ actionBusy() ? 'Запит…' : 'Запросити зміни' }}
-          </button>
+          <loom-questionnaire-request-changes-popover
+            #requestPopover
+            [busy]="actionBusy()"
+            (submitComment)="onRequestChangesSubmit($event)"
+          />
         }
         @if (store.canShowEditButton()) {
           <button
@@ -368,7 +369,7 @@ export class QuestionnaireFillChromeComponent {
 
   readonly back = output<void>();
   readonly edit = output<void>();
-  readonly requestChanges = output<void>();
+  readonly requestChanges = output<string>();
   readonly saveAndClose = output<void>();
   readonly deleteAssignment = output<void>();
   readonly saveDraft = output<void>();
@@ -377,6 +378,21 @@ export class QuestionnaireFillChromeComponent {
 
   @ViewChild(QuestionnaireSectionRailComponent)
   private rail?: QuestionnaireSectionRailComponent;
+
+  @ViewChild('requestPopover')
+  private requestPopover?: QuestionnaireRequestChangesPopoverComponent;
+
+  onRequestChangesSubmit(comment: string): void {
+    this.requestChanges.emit(comment);
+  }
+
+  markRequestChangesSuccess(): void {
+    this.requestPopover?.closeAfterSuccess();
+  }
+
+  markRequestChangesError(message: string): void {
+    this.requestPopover?.setError(message);
+  }
 
   readonly progressSections = computed(() =>
     buildProgressSections({

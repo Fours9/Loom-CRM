@@ -70,7 +70,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
             [actionBusy]="actionBusy()"
             (back)="goBack()"
             (edit)="onEditClick()"
-            (requestChanges)="requestChanges()"
+            (requestChanges)="requestChanges($event)"
             (saveAndClose)="saveAndClose()"
             (deleteAssignment)="deleteAssignment()"
             (saveDraft)="saveChanges()"
@@ -104,7 +104,10 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                 <p class="error">{{ actionError() }}</p>
               }
               <loom-questionnaire-wizard-shell
+                [resolveBusy]="actionBusy()"
                 (navigationComplete)="focusRailHeading()"
+                (resolveCompleted)="resolveChangesCompleted()"
+                (resolveDeclined)="resolveChangesDeclined()"
               />
 
               @if (showProposalsSection()) {
@@ -563,7 +566,7 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  async requestChanges(): Promise<void> {
+  async requestChanges(reviewComment: string): Promise<void> {
     const id = this.store.assignment()?.id;
     if (!id || this.actionBusy()) return;
     this.actionBusy.set(true);
@@ -571,17 +574,74 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     try {
       await firstValueFrom(
         this.api.requestChanges(id, {
-          reviewComment: 'Потрібні зміни',
+          reviewComment,
+        }),
+      );
+      this.chrome?.markRequestChangesSuccess();
+      this.autosave.resetForAssignmentSwitch();
+      await this.store.load(id, this.store.activeStepKey());
+      this.syncStepQuery(this.store.activeStepKey());
+    } catch (err: unknown) {
+      const message =
+        (err as { error?: { message?: string } })?.error?.message ||
+        'Не вдалося запросити зміни';
+      this.actionError.set(message);
+      this.chrome?.markRequestChangesError(message);
+    } finally {
+      this.actionBusy.set(false);
+    }
+  }
+
+  async resolveChangesCompleted(): Promise<void> {
+    const detail = this.store.assignment();
+    if (!detail || this.actionBusy()) return;
+    this.actionBusy.set(true);
+    this.actionError.set(null);
+    try {
+      await this.autosave.flush();
+      await firstValueFrom(
+        this.api.resolveChanges(detail.id, {
+          outcome: 'completed',
+          expectedDraftRevision: this.store.revision(),
         }),
       );
       this.autosave.resetForAssignmentSwitch();
-      await this.store.load(id, this.store.activeStepKey());
-      this.store.beginEditSession();
+      await this.store.load(detail.id, this.store.activeStepKey());
+      this.store.endEditSession();
+      this.syncStepQuery(this.store.activeStepKey());
+    } catch (err: unknown) {
+      const conflict = (err as { status?: number; error?: { message?: string } });
+      this.actionError.set(
+        conflict?.error?.message ||
+          (conflict?.status === 409
+            ? 'Чернетку змінено. Оновіть дані й спробуйте знову.'
+            : 'Не вдалося підтвердити виконання правок'),
+      );
+    } finally {
+      this.actionBusy.set(false);
+    }
+  }
+
+  async resolveChangesDeclined(): Promise<void> {
+    const detail = this.store.assignment();
+    if (!detail || this.actionBusy()) return;
+    if (!confirm('Відмовити в правках і повернути анкету на перевірку?')) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set(null);
+    try {
+      await firstValueFrom(
+        this.api.resolveChanges(detail.id, { outcome: 'declined' }),
+      );
+      this.autosave.resetForAssignmentSwitch();
+      await this.store.load(detail.id, this.store.activeStepKey());
+      this.store.endEditSession();
       this.syncStepQuery(this.store.activeStepKey());
     } catch (err: unknown) {
       this.actionError.set(
         (err as { error?: { message?: string } })?.error?.message ||
-          'Не вдалося запросити зміни',
+          'Не вдалося відмовити в правках',
       );
     } finally {
       this.actionBusy.set(false);

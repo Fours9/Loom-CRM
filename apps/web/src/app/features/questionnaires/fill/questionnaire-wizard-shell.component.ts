@@ -4,6 +4,7 @@ import {
   ViewChild,
   computed,
   inject,
+  input,
   output,
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
@@ -105,6 +106,26 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         <div class="banner review">
           <strong>Потрібні зміни</strong>
           <p>{{ msg }}</p>
+          @if (store.canResolveChangeRequest()) {
+            <div class="resolve-actions">
+              <button
+                type="button"
+                class="btn primary"
+                [disabled]="resolveBusy()"
+                (click)="resolveCompleted.emit()"
+              >
+                Правки виконано
+              </button>
+              <button
+                type="button"
+                class="btn danger"
+                [disabled]="resolveBusy()"
+                (click)="resolveDeclined.emit()"
+              >
+                В правках відмовлено
+              </button>
+            </div>
+          }
         </div>
       }
 
@@ -460,7 +481,19 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         background: #fef3f2;
       }
       .banner.review {
-        background: var(--pw-accent-soft);
+        background: color-mix(in srgb, #b45309 12%, var(--pw-surface));
+        border-color: color-mix(in srgb, #b45309 45%, var(--pw-border));
+      }
+      .resolve-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+      }
+      .btn.danger {
+        background: transparent;
+        border-color: color-mix(in srgb, #b42318 55%, var(--pw-border));
+        color: #b42318;
       }
       .warn {
         margin: 0;
@@ -564,9 +597,13 @@ export class QuestionnaireWizardShellComponent {
   readonly revision = inject(QuestionnaireRevisionCoordinator);
   private readonly api = inject(QuestionnairesApiService);
 
+  readonly resolveBusy = input(false);
+  readonly navigationComplete = output<void>();
+  readonly resolveCompleted = output<void>();
+  readonly resolveDeclined = output<void>();
+
   readonly introKey = QUESTIONNAIRE_INTRO_STEP;
   readonly reviewKey = QUESTIONNAIRE_REVIEW_STEP;
-  readonly navigationComplete = output<void>();
 
   @ViewChild('submitErrorEl') submitErrorEl?: ElementRef<HTMLElement>;
 

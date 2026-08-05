@@ -3,7 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrganizationModule } from '../../organization/organization.module';
 import { AuditModule } from '../../platform/audit/audit.module';
 import { IdentityModule } from '../../platform/identity/identity.module';
+import { NotificationsModule } from '../../platform/notifications/notifications.module';
 import { PermissionsModule } from '../../platform/permissions/permissions.module';
+import { User } from '../../platform/identity/user.entity';
 import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
 import { QuestionnaireTemplate } from './questionnaire-template.entity';
 import { QuestionnaireTemplateVersion } from './questionnaire-template-version.entity';
@@ -28,11 +30,13 @@ import { QuestionnairesController } from './questionnaires.controller';
       QuestionnaireSubmission,
       QuestionnaireProfileProposal,
       EmployeeContact,
+      User,
     ]),
     OrganizationModule,
     IdentityModule,
     PermissionsModule,
     AuditModule,
+    NotificationsModule,
   ],
   providers: [
     QuestionnaireAssignmentService,

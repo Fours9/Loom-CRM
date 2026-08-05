@@ -36,6 +36,7 @@ import {
   computeListLifecycleCapabilities,
 } from './assignments/questionnaire-assignment-access';
 import { attachmentStateForStatus } from './assignments/questionnaire-assignment-attachment-state';
+import { toSubmissionSummaryDto } from './reopen/questionnaire-reopen-transition';
 import {
   applyDirectoryFilters,
   applyDirectoryScope,
@@ -219,6 +220,7 @@ export class QuestionnaireAssignmentService {
       status: assignment.status,
       permissions: this.permissions,
       access: this.access,
+      latestSubmission: submissions[0] ?? null,
     });
 
     let profileMirror: Record<string, unknown> | null = null;
@@ -259,14 +261,7 @@ export class QuestionnaireAssignmentService {
             updatedAt: draft.updatedAt.toISOString(),
           }
         : null,
-      submissions: submissions.map((s) => ({
-        id: s.id,
-        submissionNumber: s.submissionNumber,
-        submittedAt: s.submittedAt.toISOString(),
-        reviewStatus: s.reviewStatus,
-        reviewedAt: s.reviewedAt?.toISOString() ?? null,
-        reviewComment: s.reviewComment,
-      })),
+      submissions: submissions.map((s) => toSubmissionSummaryDto(s)),
       completionPercent: completionPercent(draft?.answersJson, schema),
       profileMirror,
       capabilities: caps,
@@ -483,6 +478,7 @@ export class QuestionnaireAssignmentService {
         'detached_emp.middle_name AS "detachedMiddleName"',
         'dept.name AS "departmentName"',
         'pos.name AS "positionName"',
+        'resp.id AS "responseId"',
         'resp.updated_at AS "responseUpdatedAt"',
       ]);
     applyDirectorySort(qb, filters.sortBy ?? 'createdAt', filters.sortDir ?? 'desc');
@@ -507,8 +503,13 @@ export class QuestionnaireAssignmentService {
       detachedMiddleName: string | null;
       departmentName: string | null;
       positionName: string | null;
+      responseId: string | null;
       responseUpdatedAt: Date | null;
     }>();
+
+    const latestByResponseId = await this.latestSubmissionByResponseIds(
+      rows.map((r) => r.responseId).filter((id): id is string => !!id),
+    );
 
     const items = rows.map((row) => {
       const lifecycle = computeListLifecycleCapabilities({
@@ -560,6 +561,9 @@ export class QuestionnaireAssignmentService {
         attachmentState: attachmentStateForStatus(row.status),
         createdAt: new Date(row.createdAt).toISOString(),
         updatedAt: new Date(activityMs).toISOString(),
+        latestSubmission: row.responseId
+          ? (latestByResponseId.get(row.responseId) ?? null)
+          : null,
         attachConstraint,
         capabilities: {
           canOpen: lifecycle.canOpen,
@@ -717,6 +721,30 @@ export class QuestionnaireAssignmentService {
     return this.permissions.has(actor.role, Permission.QuestionnairesAssign);
   }
 
+  private async latestSubmissionByResponseIds(
+    responseIds: string[],
+  ): Promise<
+    Map<string, ReturnType<typeof toSubmissionSummaryDto>>
+  > {
+    const unique = [...new Set(responseIds)];
+    const map = new Map<string, ReturnType<typeof toSubmissionSummaryDto>>();
+    if (unique.length === 0) return map;
+
+    const rows = await this.submissions
+      .createQueryBuilder('s')
+      .where('s.response_id IN (:...ids)', { ids: unique })
+      .orderBy('s.response_id', 'ASC')
+      .addOrderBy('s.submission_number', 'DESC')
+      .getMany();
+
+    for (const row of rows) {
+      if (!map.has(row.responseId)) {
+        map.set(row.responseId, toSubmissionSummaryDto(row));
+      }
+    }
+    return map;
+  }
+
   private async requireCanViewAssignment(
     actor: User,
     employee: Employee | null,
@@ -748,14 +776,7 @@ export class QuestionnaireAssignmentService {
         order: { submissionNumber: 'DESC' },
       });
       if (sub) {
-        latestSubmission = {
-          id: sub.id,
-          submissionNumber: sub.submissionNumber,
-          submittedAt: sub.submittedAt.toISOString(),
-          reviewStatus: sub.reviewStatus,
-          reviewedAt: sub.reviewedAt?.toISOString() ?? null,
-          reviewComment: sub.reviewComment,
-        };
+        latestSubmission = toSubmissionSummaryDto(sub);
       }
     }
 

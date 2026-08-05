@@ -142,8 +142,14 @@ export type ReviewQuestionnaireSubmissionRequest = {
 };
 
 export type RequestQuestionnaireChangesRequest = {
-  reviewComment?: string | null;
+  reviewComment: string;
 };
+
+export type ResolveQuestionnaireChangesRequest =
+  | { outcome: 'completed'; expectedDraftRevision: number }
+  | { outcome: 'declined' };
+
+export type QuestionnaireChangeRequestResolution = 'completed' | 'declined';
 
 export type QuestionnaireSubmissionSummary = {
   id: EntityId;
@@ -152,6 +158,8 @@ export type QuestionnaireSubmissionSummary = {
   reviewStatus: QuestionnaireReviewStatus;
   reviewedAt: string | null;
   reviewComment: string | null;
+  reviewedByUserId: EntityId | null;
+  changeRequestResolution: QuestionnaireChangeRequestResolution | null;
 };
 
 export type QuestionnaireDraftDto = {
@@ -222,6 +230,8 @@ export type QuestionnaireAssignmentDetail = {
     canStartRevision: boolean;
     canRequestChanges: boolean;
     canReview: boolean;
+    /** Actor may resolve an active reviewer change request (completed / declined). */
+    canResolveChangeRequest: boolean;
     /** Admin Assign may hard-delete the assignment aggregate. */
     canDelete: boolean;
   };
@@ -255,6 +265,7 @@ export type QuestionnaireDirectoryItem = {
   createdAt: string;
   /** Last aggregate activity (assignment or draft), not draft-only. */
   updatedAt: string;
+  latestSubmission: QuestionnaireSubmissionSummary | null;
   attachConstraint: QuestionnaireAttachConstraint;
   capabilities: {
     canOpen: boolean;

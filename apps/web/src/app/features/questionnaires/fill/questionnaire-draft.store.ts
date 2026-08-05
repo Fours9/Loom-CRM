@@ -7,6 +7,7 @@ import type {
 } from '@loom/contracts-questionnaires';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { QuestionnaireProfileMirrorService } from '../core/questionnaire-profile-mirror.service';
+import { hasActiveReviewerRequest } from '../core/questionnaire-active-change-request';
 import {
   QUESTIONNAIRE_INTRO_STEP,
   QUESTIONNAIRE_REVIEW_STEP,
@@ -174,9 +175,22 @@ export class QuestionnaireDraftStore {
 
   readonly reviewerMessage = computed(() => {
     const detail = this.assignment();
-    if (!detail || detail.status !== 'changes_requested') return null;
+    if (!detail) return null;
     const latest = detail.submissions[0];
-    return latest?.reviewComment ?? null;
+    if (
+      !hasActiveReviewerRequest({
+        assignmentStatus: detail.status,
+        latest,
+      })
+    ) {
+      return null;
+    }
+    return latest!.reviewComment?.trim() || null;
+  });
+
+  readonly canResolveChangeRequest = computed(() => {
+    const detail = this.assignment();
+    return !!detail?.capabilities.canResolveChangeRequest;
   });
 
   getGeneration(): number {
@@ -207,6 +221,10 @@ export class QuestionnaireDraftStore {
   beginEditSession(): void {
     this.editSessionActive.set(true);
     this.materializeMirrorIntoProposalAnswers();
+  }
+
+  endEditSession(): void {
+    this.editSessionActive.set(false);
   }
 
   /**

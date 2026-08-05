@@ -26,6 +26,12 @@ export function notificationFrameTone(
     case 'request.created':
     case 'request.submitted':
       return 'pending';
+    case 'questionnaire.changes_requested':
+      return 'pending';
+    case 'questionnaire.changes_completed':
+      return 'completed';
+    case 'questionnaire.changes_declined':
+      return 'rejected';
     default:
       return 'neutral';
   }

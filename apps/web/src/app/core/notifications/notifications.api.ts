@@ -6,6 +6,10 @@ import {
   AppNotification,
   PaginatedNotifications,
 } from './notification.models';
+import {
+  mapRawNotification,
+  type RawNotification,
+} from './notification-mapper';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationsApi {
@@ -19,21 +23,32 @@ export class NotificationsApi {
   }): Observable<PaginatedNotifications> {
     let params = new HttpParams();
     if (filters?.page) params = params.set('page', String(filters.page));
-    if (filters?.pageSize) params = params.set('pageSize', String(filters.pageSize));
+    if (filters?.pageSize)
+      params = params.set('pageSize', String(filters.pageSize));
     if (filters?.unreadOnly) params = params.set('unreadOnly', '1');
     return this.http
-      .get<AppNotification[] | PaginatedNotifications>(this.base, { params })
+      .get<RawNotification[] | { items: RawNotification[]; page?: number; pageSize?: number; total?: number }>(
+        this.base,
+        { params },
+      )
       .pipe(
         map((res) => {
           if (Array.isArray(res)) {
+            const items = res.map(mapRawNotification);
             return {
-              items: res,
+              items,
               page: 1,
-              pageSize: res.length,
-              total: res.length,
+              pageSize: items.length,
+              total: items.length,
             };
           }
-          return res;
+          const items = (res.items ?? []).map(mapRawNotification);
+          return {
+            items,
+            page: res.page ?? 1,
+            pageSize: res.pageSize ?? items.length,
+            total: res.total ?? items.length,
+          };
         }),
       );
   }

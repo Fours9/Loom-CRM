@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
@@ -24,6 +24,7 @@ export class QuestionnaireResponseService {
     private readonly assignments: Repository<QuestionnaireAssignment>,
     private readonly access: EmployeeAccessService,
     private readonly permissions: PermissionService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async ensureResponse(assignmentId: string): Promise<QuestionnaireResponse> {
@@ -65,16 +66,31 @@ export class QuestionnaireResponseService {
     requireCanEditDraft(caps);
 
     const response = await this.ensureResponse(assignmentId);
-    if (response.revision !== input.revision) {
+
+    const result = await this.dataSource
+      .createQueryBuilder()
+      .update(QuestionnaireResponse)
+      .set({
+        answersJson: input.answers ?? {},
+        revision: () => '"revision" + 1',
+        updatedAt: () => 'NOW()',
+      })
+      .where('id = :id', { id: response.id })
+      .andWhere('revision = :revision', { revision: input.revision })
+      .execute();
+
+    if (!result.affected || result.affected !== 1) {
+      const current = await this.responses.findOne({
+        where: { id: response.id },
+      });
       throw new ConflictException({
         message: 'Draft revision conflict',
-        currentRevision: response.revision,
+        currentRevision: current?.revision ?? response.revision,
       });
     }
 
-    response.answersJson = input.answers ?? {};
-    response.revision = response.revision + 1;
-    const saved = await this.responses.save(response);
+    const saved = await this.responses.findOne({ where: { id: response.id } });
+    if (!saved) throw new NotFoundException('Response not found');
 
     // Do not flip cancelled → in_progress (Admin on-behalf keeps detached).
     if (assignment.status === 'assigned') {
