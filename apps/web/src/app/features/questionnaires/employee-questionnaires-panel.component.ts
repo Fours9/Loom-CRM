@@ -14,15 +14,23 @@ import type {
   QuestionnaireAssignmentListItem,
   QuestionnaireProfileProposalItem,
 } from '@loom/contracts-questionnaires';
+import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnairesApiService } from './core/questionnaires-api.service';
 import { QuestionnaireSnapshotSummaryComponent } from './questionnaire-snapshot-summary.component';
 import { buildQuestionnaireAssignmentLink } from './navigation/questionnaire-navigation';
 import { QUESTIONNAIRE_INTRO_STEP } from './navigation/questionnaire-step-keys';
 import {
+  QUESTIONNAIRE_STATUS_LABELS,
+  QUESTIONNAIRE_TYPE_LABELS,
   questionnaireStatusLabel,
   questionnaireTypeLabel,
 } from './questionnaire-labels';
 import { hasActiveReviewerRequest } from './core/questionnaire-active-change-request';
+import { QuestionnaireCreateDialogComponent } from './shared/questionnaire-create-dialog.component';
+import {
+  QuestionnaireFilterToolbarComponent,
+  type QuestionnaireFilterToolbarValue,
+} from './shared/questionnaire-filter-toolbar.component';
 
 const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   pending: 'Очікує',
@@ -33,7 +41,11 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
 @Component({
   selector: 'loom-employee-questionnaires-panel',
   standalone: true,
-  imports: [QuestionnaireSnapshotSummaryComponent],
+  imports: [
+    QuestionnaireSnapshotSummaryComponent,
+    QuestionnaireCreateDialogComponent,
+    QuestionnaireFilterToolbarComponent,
+  ],
   template: `
     <div class="panel">
       <div class="toolbar">
@@ -42,13 +54,20 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           <button
             type="button"
             class="btn primary"
-            [disabled]="assignBusy()"
-            (click)="assign()"
+            (click)="showCreate.set(true)"
           >
-            {{ assignBusy() ? 'Призначення…' : 'Призначити анкету 360°' }}
+            Призначити анкету
           </button>
         }
       </div>
+
+      <loom-questionnaire-filter-toolbar
+        [value]="filterValue()"
+        [availableFilters]="profileFilterFields"
+        [typeOptions]="typeOptions"
+        [statusOptions]="statusOptions"
+        (filterChange)="onFilters($event)"
+      />
 
       @if (error()) {
         <p class="error">{{ error() }}</p>
@@ -68,6 +87,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
               <div class="card-row">
                 <div class="card-main">
                   <strong>{{ item.templateTitle }}</strong>
+                  <code class="code-pill">{{ item.code }}</code>
                   @if (activeReviewerRequest(item)) {
                     <span
                       class="change-req-mark"
@@ -245,6 +265,15 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           }
         </ul>
       }
+
+      @if (showCreate()) {
+        <loom-questionnaire-create-dialog
+          dialogTitle="Призначити анкету"
+          [prefillEmployee]="prefillEmployee()"
+          (close)="showCreate.set(false)"
+          (created)="onCreated($event)"
+        />
+      }
     </div>
   `,
   styles: [
@@ -279,6 +308,12 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         display: grid;
         gap: 0.55rem;
         box-shadow: 0 1px 2px color-mix(in srgb, #0f172a 6%, transparent);
+      }
+      .code-pill {
+        font-size: 0.8rem;
+        padding: 0.05rem 0.35rem;
+        border-radius: 4px;
+        border: 1px solid var(--pw-border);
       }
       .card-row {
         display: flex;
@@ -526,18 +561,70 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   private readonly router = inject(Router);
 
   @Input({ required: true }) employeeId!: string;
+  /** Optional display name for create dialog prefill. */
+  @Input() employeeFullName: string | null = null;
 
   readonly loading = signal(false);
-  readonly assignBusy = signal(false);
   readonly busyAssignmentId = signal<string | null>(null);
   readonly error = signal<string | null>(null);
   readonly assignOk = signal(false);
+  readonly showCreate = signal(false);
   readonly items = signal<QuestionnaireAssignmentListItem[]>([]);
   readonly proposals = signal<QuestionnaireProfileProposalItem[]>([]);
   readonly canAssign = signal(false);
   readonly canApply = signal(false);
   readonly summaryExpandedIds = signal<ReadonlySet<string>>(new Set());
   readonly moreMenuAssignmentId = signal<string | null>(null);
+
+  readonly filterCode = signal('');
+  readonly filterTemplateType = signal('');
+  readonly filterStatus = signal('');
+  readonly filterCreatedFrom = signal('');
+  readonly filterCreatedTo = signal('');
+
+  readonly profileFilterFields: Array<
+    'code' | 'templateType' | 'status' | 'createdFrom' | 'createdTo'
+  > = ['code', 'templateType', 'status', 'createdFrom', 'createdTo'];
+
+  readonly typeOptions = Object.entries(QUESTIONNAIRE_TYPE_LABELS).map(
+    ([value, label]) => ({ value, label }),
+  );
+  readonly statusOptions = Object.entries(QUESTIONNAIRE_STATUS_LABELS).map(
+    ([value, label]) => ({ value, label }),
+  );
+
+  filterValue(): QuestionnaireFilterToolbarValue {
+    return {
+      code: this.filterCode() || undefined,
+      templateType: this.filterTemplateType() || undefined,
+      status: this.filterStatus() || undefined,
+      createdFrom: this.filterCreatedFrom() || undefined,
+      createdTo: this.filterCreatedTo() || undefined,
+    };
+  }
+
+  prefillEmployee(): Pick<EmployeeListItem, 'id' | 'fullName'> | null {
+    if (!this.employeeId) return null;
+    const name = this.employeeFullName?.trim() || 'Працівник';
+    return { id: this.employeeId, fullName: name };
+  }
+
+  onFilters(next: QuestionnaireFilterToolbarValue): void {
+    this.filterCode.set(next.code ?? '');
+    this.filterTemplateType.set(next.templateType ?? '');
+    this.filterStatus.set(next.status ?? '');
+    this.filterCreatedFrom.set(next.createdFrom ?? '');
+    this.filterCreatedTo.set(next.createdTo ?? '');
+    this.reload();
+  }
+
+  onCreated(event: { id: string }): void {
+    this.showCreate.set(false);
+    this.assignOk.set(true);
+    this.reload();
+    const link = buildQuestionnaireAssignmentLink({ assignmentId: event.id });
+    void this.router.navigateByUrl(link.routerLink);
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['employeeId'] && this.employeeId) {
@@ -658,22 +745,7 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   }
 
   assign(): void {
-    this.assignBusy.set(true);
-    this.assignOk.set(false);
-    this.error.set(null);
-    this.api.createAssignment({ employeeId: this.employeeId }).subscribe({
-      next: () => {
-        this.assignBusy.set(false);
-        this.assignOk.set(true);
-        this.reload();
-      },
-      error: (err) => {
-        this.assignBusy.set(false);
-        this.error.set(
-          err?.error?.message || 'Не вдалося призначити анкету',
-        );
-      },
-    });
+    this.showCreate.set(true);
   }
 
   accept(id: string): void {
@@ -745,9 +817,19 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
     this.loading.set(true);
     this.error.set(null);
     forkJoin({
-      list: this.api.listAssignments(this.employeeId).pipe(
-        catchError(() => of({ items: [], capabilities: { canAssign: false } })),
-      ),
+      list: this.api
+        .listAssignments(this.employeeId, {
+          code: this.filterCode() || undefined,
+          templateType: this.filterTemplateType() || undefined,
+          status: this.filterStatus() || undefined,
+          createdFrom: this.filterCreatedFrom() || undefined,
+          createdTo: this.filterCreatedTo() || undefined,
+        })
+        .pipe(
+          catchError(() =>
+            of({ items: [], capabilities: { canAssign: false } }),
+          ),
+        ),
       proposals: this.api.listProposals(this.employeeId).pipe(
         catchError(() => of({ items: [], capabilities: { canApply: false } })),
       ),

@@ -100,6 +100,39 @@ export class AuthService {
     return { ok: true };
   }
 
+  /**
+   * Admin sets a temporary password (PW parity).
+   * Invalidates existing sessions via tokenVersion; user must change password on next login.
+   */
+  async resetPassword(
+    actor: User,
+    userId: string,
+    temporaryPassword: string,
+  ): Promise<{ message: string }> {
+    if (actor.role !== UserRole.Admin) {
+      throw new ForbiddenException('Only admin can reset passwords');
+    }
+
+    const target = await this.users.getByIdOrFail(userId);
+    target.passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    target.mustChangePassword = true;
+    target.passwordChangedAt = new Date();
+    target.tokenVersion = (target.tokenVersion ?? 0) + 1;
+    await this.users.save(target);
+
+    await this.audit.record({
+      action: 'auth.password_reset',
+      actorId: actor.id,
+      entityType: 'user',
+      entityId: target.id,
+      metadata: { targetEmail: target.email },
+    });
+
+    return {
+      message: 'Temporary password set; user must change it on next login',
+    };
+  }
+
   private async signToken(
     user: User,
     employeeId: string | null,

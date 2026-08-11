@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -272,7 +271,8 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         expect.objectContaining({
           action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.attached,
           metadata: expect.objectContaining({
-            employeeId: 'emp-2',
+            fromEmployeeId: null,
+            toEmployeeId: 'emp-2',
             attachKind: 'new',
           }),
         }),
@@ -294,22 +294,35 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         expect.objectContaining({
           action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.attached,
           metadata: expect.objectContaining({
-            attachKind: 'same_employee_reattach',
+            fromEmployeeId: 'emp-1',
+            toEmployeeId: 'emp-1',
+            attachKind: 'reattach',
           }),
         }),
         expect.anything(),
       );
     });
 
-    it('refuses reattaching a cancelled assignment to a different employee', async () => {
+    it('allows reattaching a cancelled assignment to a different employee', async () => {
       const ctx = buildService({
         status: 'cancelled',
         employeeId: null,
         detachedFromEmployeeId: 'emp-1',
       });
-      await expect(
-        ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' });
+      expect(ctx.assignment.status).toBe('assigned');
+      expect(ctx.assignment.employeeId).toBe('emp-2');
+      expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            fromEmployeeId: 'emp-1',
+            toEmployeeId: 'emp-2',
+            attachKind: 'reattach',
+          }),
+        }),
+        expect.anything(),
+      );
     });
 
     it('rejects attach for statuses that are not new/cancelled', async () => {

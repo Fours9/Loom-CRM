@@ -16,16 +16,38 @@ import type {
   QuestionnaireSubmissionSummary,
   QuestionnaireType,
   ReviewQuestionnaireSubmissionRequest,
+  QuestionnaireTemplateListResponse,
 } from '@loom/contracts-questionnaires';
 
 @Injectable({ providedIn: 'root' })
 export class QuestionnairesApiService {
   private readonly http = inject(HttpClient);
 
-  listAssignments(employeeId: string): Observable<QuestionnaireAssignmentListResponse> {
+  listAssignments(
+    employeeId: string,
+    filters?: {
+      code?: string;
+      templateType?: string;
+      status?: string;
+      createdFrom?: string;
+      createdTo?: string;
+    },
+  ): Observable<QuestionnaireAssignmentListResponse> {
+    const params: Record<string, string> = { employeeId };
+    if (filters) {
+      for (const [k, v] of Object.entries(filters)) {
+        if (v !== undefined && v !== null && v !== '') params[k] = String(v);
+      }
+    }
     return this.http.get<QuestionnaireAssignmentListResponse>(
       `/api/v1/questionnaires/assignments`,
-      { params: { employeeId } },
+      { params },
+    );
+  }
+
+  listTemplates(): Observable<QuestionnaireTemplateListResponse> {
+    return this.http.get<QuestionnaireTemplateListResponse>(
+      `/api/v1/questionnaires/templates`,
     );
   }
 
@@ -51,6 +73,8 @@ export class QuestionnairesApiService {
     createdTo?: string;
     attachmentState?: QuestionnaireAttachmentState | string;
     templateType?: QuestionnaireType | string;
+    code?: string;
+    status?: string;
     sortBy?: QuestionnaireDirectorySortBy | string;
     sortDir?: string;
     limit?: number;

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { User } from './user.entity';
@@ -24,6 +24,14 @@ export class UsersService {
 
   findById(id: string): Promise<User | null> {
     return this.users.findOne({ where: { id } });
+  }
+
+  async getByIdOrFail(id: string): Promise<User> {
+    const user = await this.findById(id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
   }
 
   /** Batch load users by id (no N+1). Empty input → []. */

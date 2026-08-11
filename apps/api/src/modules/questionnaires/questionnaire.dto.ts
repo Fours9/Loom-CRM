@@ -14,8 +14,10 @@ import {
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import {
+  QUESTIONNAIRE_ASSIGNMENT_STATUSES,
   QUESTIONNAIRE_DIRECTORY_SORT_BY,
   QUESTIONNAIRE_TYPES,
+  type QuestionnaireAssignmentStatus,
   type QuestionnaireAttachmentState,
   type QuestionnaireDirectorySortBy,
   type QuestionnaireType,
@@ -25,6 +27,16 @@ export class CreateQuestionnaireAssignmentDto {
   @IsOptional()
   @IsUUID()
   employeeId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  templateCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  comment?: string | null;
 
   @IsOptional()
   @IsDateString()
@@ -110,6 +122,16 @@ export class QuestionnaireDirectoryQueryDto {
   templateType?: QuestionnaireType;
 
   @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(64)
+  code?: string;
+
+  @IsOptional()
+  @IsIn([...QUESTIONNAIRE_ASSIGNMENT_STATUSES])
+  status?: QuestionnaireAssignmentStatus;
+
+  @IsOptional()
   @IsIn([...QUESTIONNAIRE_DIRECTORY_SORT_BY])
   sortBy?: QuestionnaireDirectorySortBy;
 
@@ -129,6 +151,33 @@ export class QuestionnaireDirectoryQueryDto {
   @IsInt()
   @Min(0)
   offset?: number;
+}
+
+export class QuestionnaireEmployeeListQueryDto {
+  @IsUUID()
+  employeeId!: string;
+
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(64)
+  code?: string;
+
+  @IsOptional()
+  @IsIn([...QUESTIONNAIRE_TYPES])
+  templateType?: QuestionnaireType;
+
+  @IsOptional()
+  @IsIn([...QUESTIONNAIRE_ASSIGNMENT_STATUSES])
+  status?: QuestionnaireAssignmentStatus;
+
+  @IsOptional()
+  @IsDateString()
+  createdFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  createdTo?: string;
 }
 
 export class QuestionnaireSnapshotSummaryQueryDto {

@@ -33,6 +33,7 @@ import { QuestionnaireProposalSuperseded1730000012000 } from './migrations/17300
 import { QuestionnaireClosedAndUpdatedAt1730000013000 } from './migrations/1730000013000-QuestionnaireClosedAndUpdatedAt';
 import { QuestionnaireUnattachedAndTypes1730000014000 } from './migrations/1730000014000-QuestionnaireUnattachedAndTypes';
 import { QuestionnaireChangeRequestResolution1730000015000 } from './migrations/1730000015000-QuestionnaireChangeRequestResolution';
+import { QuestionnaireAssignmentCodeAndComment1730000016000 } from './migrations/1730000016000-QuestionnaireAssignmentCodeAndComment';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -76,6 +77,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       QuestionnaireClosedAndUpdatedAt1730000013000,
       QuestionnaireUnattachedAndTypes1730000014000,
       QuestionnaireChangeRequestResolution1730000015000,
+      QuestionnaireAssignmentCodeAndComment1730000016000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

@@ -10,6 +10,7 @@ import { EmployeeContact } from '../../organization/employees/employee-contact.e
 import { QuestionnaireTemplate } from './questionnaire-template.entity';
 import { QuestionnaireTemplateVersion } from './questionnaire-template-version.entity';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
+import { QuestionnaireAssignmentCodeCounter } from './questionnaire-assignment-code-counter.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
 import { QuestionnaireProfileProposal } from './questionnaire-profile-proposal.entity';
@@ -26,6 +27,7 @@ import { QuestionnairesController } from './questionnaires.controller';
       QuestionnaireTemplate,
       QuestionnaireTemplateVersion,
       QuestionnaireAssignment,
+      QuestionnaireAssignmentCodeCounter,
       QuestionnaireResponse,
       QuestionnaireSubmission,
       QuestionnaireProfileProposal,

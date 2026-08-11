@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
@@ -27,11 +27,17 @@ export class QuestionnaireResponseService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async ensureResponse(assignmentId: string): Promise<QuestionnaireResponse> {
-    const existing = await this.responses.findOne({ where: { assignmentId } });
+  async ensureResponse(
+    assignmentId: string,
+    manager?: EntityManager,
+  ): Promise<QuestionnaireResponse> {
+    const repo = manager
+      ? manager.getRepository(QuestionnaireResponse)
+      : this.responses;
+    const existing = await repo.findOne({ where: { assignmentId } });
     if (existing) return existing;
-    return this.responses.save(
-      this.responses.create({
+    return repo.save(
+      repo.create({
         assignmentId,
         answersJson: {},
         revision: 0,

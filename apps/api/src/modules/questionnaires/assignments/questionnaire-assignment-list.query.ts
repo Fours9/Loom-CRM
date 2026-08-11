@@ -1,11 +1,13 @@
 import { SelectQueryBuilder } from 'typeorm';
 import type {
+  QuestionnaireAssignmentStatus,
   QuestionnaireAttachmentState,
   QuestionnaireDirectorySortBy,
   QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 import { QuestionnaireAssignment } from '../questionnaire-assignment.entity';
 import { ATTACHED_STATUSES } from './questionnaire-assignment-attachment-state';
+import { escapeIlikePattern } from './questionnaire-assignment-code';
 
 export type QuestionnaireDirectoryScope =
   | { kind: 'all'; includeUnattached: true }
@@ -17,13 +19,19 @@ export type QuestionnaireDirectoryScope =
       includeUnattached: false;
     };
 
-export type QuestionnaireDirectoryFilters = {
-  departmentId?: string;
-  positionId?: string;
+/** Filters shared by directory and employee-scoped lists. */
+export type QuestionnaireAssignmentCommonFilters = {
+  code?: string;
+  templateType?: QuestionnaireType;
+  status?: QuestionnaireAssignmentStatus;
+  attachmentState?: QuestionnaireAttachmentState;
   createdFrom?: string;
   createdTo?: string;
-  attachmentState?: QuestionnaireAttachmentState;
-  templateType?: QuestionnaireType;
+};
+
+export type QuestionnaireDirectoryFilters = QuestionnaireAssignmentCommonFilters & {
+  departmentId?: string;
+  positionId?: string;
   sortBy?: QuestionnaireDirectorySortBy;
   sortDir?: 'asc' | 'desc';
   limit: number;
@@ -73,24 +81,34 @@ export function applyDirectoryScope(
   }
 }
 
-export function applyDirectoryFilters(
+export function applyEmployeeScope(
   qb: SelectQueryBuilder<QuestionnaireAssignment>,
-  filters: QuestionnaireDirectoryFilters,
+  employeeId: string,
 ): void {
-  if (filters.departmentId) {
-    qb.andWhere('emp.department_id = :departmentId', {
-      departmentId: filters.departmentId,
-    });
-  }
-  if (filters.positionId) {
-    qb.andWhere('emp.position_id = :positionId', {
-      positionId: filters.positionId,
+  qb.andWhere('a.employee_id = :employeeId', { employeeId });
+  qb.andWhere('a.status != :cancelledStatus', { cancelledStatus: 'cancelled' });
+}
+
+export function applyAssignmentFilters(
+  qb: SelectQueryBuilder<QuestionnaireAssignment>,
+  filters: QuestionnaireAssignmentCommonFilters,
+  options?: { includeAttachmentState?: boolean },
+): void {
+  const includeAttachmentState = options?.includeAttachmentState !== false;
+
+  const code = filters.code?.trim();
+  if (code) {
+    qb.andWhere(`a.code ILIKE :codePattern ESCAPE '\\'`, {
+      codePattern: `${escapeIlikePattern(code)}%`,
     });
   }
   if (filters.templateType) {
     qb.andWhere('tmpl.type = :templateType', {
       templateType: filters.templateType,
     });
+  }
+  if (filters.status) {
+    qb.andWhere('a.status = :filterStatus', { filterStatus: filters.status });
   }
 
   const range = createdAtRangeBounds(filters);
@@ -105,6 +123,8 @@ export function applyDirectoryFilters(
     });
   }
 
+  if (!includeAttachmentState || !filters.attachmentState) return;
+
   if (filters.attachmentState === 'closed') {
     qb.andWhere('a.status = :closedStatus', { closedStatus: 'closed' });
   } else if (filters.attachmentState === 'detached') {
@@ -116,6 +136,24 @@ export function applyDirectoryFilters(
       attachedStatuses: [...ATTACHED_STATUSES],
     });
   }
+}
+
+/** @deprecated Prefer applyAssignmentFilters + directory-only dept/pos. */
+export function applyDirectoryFilters(
+  qb: SelectQueryBuilder<QuestionnaireAssignment>,
+  filters: QuestionnaireDirectoryFilters,
+): void {
+  if (filters.departmentId) {
+    qb.andWhere('emp.department_id = :departmentId', {
+      departmentId: filters.departmentId,
+    });
+  }
+  if (filters.positionId) {
+    qb.andWhere('emp.position_id = :positionId', {
+      positionId: filters.positionId,
+    });
+  }
+  applyAssignmentFilters(qb, filters, { includeAttachmentState: true });
 }
 
 export function applyDirectorySort(

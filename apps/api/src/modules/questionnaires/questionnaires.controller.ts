@@ -26,6 +26,7 @@ import {
   CreateQuestionnaireAssignmentDto,
   PatchQuestionnaireDraftDto,
   QuestionnaireDirectoryQueryDto,
+  QuestionnaireEmployeeListQueryDto,
   QuestionnaireSnapshotSummaryQueryDto,
   RequestQuestionnaireChangesDto,
   ResolveQuestionnaireChangesDto,
@@ -51,6 +52,12 @@ export class QuestionnairesController {
     return this.assignments.listDirectory(actor, query);
   }
 
+  @Get('templates')
+  @RequirePermissions(Permission.QuestionnairesAssign)
+  listTemplates(@CurrentUser() actor: User) {
+    return this.assignments.listPublishableTemplates(actor);
+  }
+
   @Post('assignments')
   @RequirePermissions(Permission.QuestionnairesAssign)
   createAssignment(
@@ -64,9 +71,10 @@ export class QuestionnairesController {
   @RequirePermissions(Permission.QuestionnairesView)
   listAssignments(
     @CurrentUser() actor: User,
-    @Query('employeeId', ParseUUIDPipe) employeeId: string,
+    @Query() query: QuestionnaireEmployeeListQueryDto,
   ) {
-    return this.assignments.listByEmployee(actor, employeeId);
+    const { employeeId, ...filters } = query;
+    return this.assignments.listByEmployee(actor, employeeId, filters);
   }
 
   @Get('assignments/:id')

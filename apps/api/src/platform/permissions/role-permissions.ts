@@ -32,6 +32,7 @@ const ADMIN: Permission[] = [
   Permission.QuestionnairesCompleteAny,
   Permission.QuestionnairesReview,
   Permission.QuestionnairesApplyProfileChanges,
+  Permission.QuestionnairesReadAssignmentComment,
   Permission.DepartmentsManage,
   Permission.PositionsManage,
   Permission.SettingsManage,

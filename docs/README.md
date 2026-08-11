@@ -28,11 +28,11 @@
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
-**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий графік** (Графік роботи · Заявки · Календар; Absences `public-api`), Документи, **Анкети** (Questionnaires — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [catalog](product/questionnaire-360-field-catalog.md); fill wizard `/questionnaires/:id`), Показники (stub), Історія, Згодом (stub); visibility gated by permissions/capabilities. Історія: актор + UA summary. Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
+**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий графік** (Графік роботи · Заявки · Календар; Absences `public-api`), Документи, **Анкети** (Questionnaires — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [catalog](product/questionnaire-360-field-catalog.md); fill wizard `/questionnaires/:id`), Показники (stub), **Адміністрування** (підвкладка Історія), Згодом (stub); visibility gated by permissions/capabilities. Історія: актор + UA summary. Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 
-**Анкета 360°:** policy catalog → seed → `schema_json`; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)). Fill UI = schema-driven wizard на `/questionnaires/:id` (не HTML reference). Pre-prod schema refresh: [questionnaire-test-reset](dev/questionnaire-test-reset.md) + snapshot DoD.
+**Анкета 360°:** policy catalog → seed → `schema_json`; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)). Fill UI = schema-driven wizard на `/questionnaires/:id`. Кожне призначення має людський `code` (напр. `360-002`); створення через попап (шаблон / працівник / службова примітка); каталог + профіль — пошук за кодом.
 
 | Тип документа | Призначення |
 | --- | --- |

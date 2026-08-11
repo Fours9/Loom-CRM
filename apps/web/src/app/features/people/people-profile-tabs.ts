@@ -8,7 +8,7 @@ export type PeopleProfileTabId =
   | 'documents'
   | 'questionnaires'
   | 'metrics'
-  | 'history'
+  | 'administration'
   | 'later';
 
 export type PeopleProfileTab = {
@@ -22,7 +22,7 @@ const ALL_TABS: readonly PeopleProfileTab[] = [
   { id: 'documents', label: 'Документи' },
   { id: 'questionnaires', label: 'Анкети' },
   { id: 'metrics', label: 'Показники' },
-  { id: 'history', label: 'Історія' },
+  { id: 'administration', label: 'Адміністрування' },
   { id: 'later', label: 'Згодом' },
 ];
 
@@ -56,7 +56,8 @@ export function visiblePeopleProfileTabs(input: {
         return hasPermission(perms, P.DocumentsView);
       case 'questionnaires':
         return hasPermission(perms, P.QuestionnairesView);
-      case 'history':
+      case 'administration':
+        // Currently only hosts the audit timeline; gate with canViewHistory.
         return Boolean(caps?.canViewHistory);
       default:
         return false;

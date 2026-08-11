@@ -55,20 +55,22 @@ describe('visiblePeopleProfileTabs', () => {
     expect(tabs.find((t) => t.id === 'questionnaires')?.label).toBe('Анкети');
   });
 
-  it('hides history when canViewHistory is false', () => {
+  it('hides administration when canViewHistory is false', () => {
     const tabs = visiblePeopleProfileTabs({
       capabilities: capsNoHistory,
       permissions: allPerms,
     });
-    expect(tabs.some((t) => t.id === 'history')).toBe(false);
+    expect(tabs.some((t) => t.id === 'administration')).toBe(false);
   });
 
-  it('shows history when canViewHistory is true', () => {
+  it('shows administration when canViewHistory is true', () => {
     const tabs = visiblePeopleProfileTabs({
       capabilities: capsViewHistory,
       permissions: allPerms,
     });
-    expect(tabs.some((t) => t.id === 'history')).toBe(true);
+    expect(tabs.find((t) => t.id === 'administration')?.label).toBe(
+      'Адміністрування',
+    );
   });
 
   it('hides documents without documents.view', () => {
@@ -102,8 +104,8 @@ describe('resolvePeopleProfileTab', () => {
     permissions: [Permission.DocumentsView],
   });
 
-  it('falls back to data when history is hidden', () => {
-    expect(resolvePeopleProfileTab('history', visible)).toBe('data');
+  it('falls back to data when administration is hidden', () => {
+    expect(resolvePeopleProfileTab('administration', visible)).toBe('data');
   });
 
   it('keeps visible documents', () => {
