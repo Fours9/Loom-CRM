@@ -1,7 +1,16 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { User } from '../identity/user.entity';
@@ -29,5 +38,16 @@ export class AuthController {
       dto.currentPassword,
       dto.newPassword,
     );
+  }
+
+  /** Admin-only temporary password reset (PW parity). */
+  @Post('reset-password/:userId')
+  @UseGuards(JwtAuthGuard)
+  resetPassword(
+    @CurrentUser() actor: User,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: ResetPasswordDto,
+  ) {
+    return this.auth.resetPassword(actor, userId, dto.temporaryPassword);
   }
 }

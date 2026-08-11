@@ -26,6 +26,15 @@ export class QuestionnaireAssignment {
   @JoinColumn({ name: 'template_version_id' })
   templateVersion!: QuestionnaireTemplateVersion;
 
+  /** Immutable human code, e.g. 360-001. */
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 32 })
+  code!: string;
+
+  /** Service HR note; read via questionnaires.read_assignment_comment. */
+  @Column({ type: 'text', nullable: true })
+  comment!: string | null;
+
   @Index()
   @Column({ name: 'employee_id', type: 'uuid', nullable: true })
   employeeId!: string | null;

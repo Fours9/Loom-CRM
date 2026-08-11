@@ -6,7 +6,7 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { firstValueFrom, of } from 'rxjs';
+import { of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import type {
   QuestionnaireAttachmentState,
@@ -23,6 +23,11 @@ import {
 } from '../questionnaire-labels';
 import { hasActiveReviewerRequest } from '../core/questionnaire-active-change-request';
 import { QuestionnaireAttachPickerComponent } from './questionnaire-attach-picker.component';
+import { QuestionnaireCreateDialogComponent } from '../shared/questionnaire-create-dialog.component';
+import {
+  QuestionnaireFilterToolbarComponent,
+  type QuestionnaireFilterToolbarValue,
+} from '../shared/questionnaire-filter-toolbar.component';
 
 type Dept = { id: string; name: string };
 type Pos = { id: string; name: string };
@@ -30,7 +35,12 @@ type Pos = { id: string; name: string };
 @Component({
   selector: 'loom-questionnaire-directory-page',
   standalone: true,
-  imports: [RouterLink, QuestionnaireAttachPickerComponent],
+  imports: [
+    RouterLink,
+    QuestionnaireAttachPickerComponent,
+    QuestionnaireCreateDialogComponent,
+    QuestionnaireFilterToolbarComponent,
+  ],
   template: `
     <div class="page">
       <header class="header">
@@ -51,82 +61,22 @@ type Pos = { id: string; name: string };
             <button
               type="button"
               class="btn primary"
-              [disabled]="createBusy()"
-              (click)="createBlank()"
+              (click)="showCreate.set(true)"
             >
-              {{ createBusy() ? 'Створення…' : 'Створити анкету' }}
+              Створити анкету
             </button>
           }
         </div>
       </header>
 
-      <div class="filters">
-        <label>
-          Відділ
-          <select
-            [value]="departmentId()"
-            (change)="setFilter('departmentId', $any($event.target).value)"
-          >
-            <option value="">Усі</option>
-            @for (d of departments(); track d.id) {
-              <option [value]="d.id">{{ d.name }}</option>
-            }
-          </select>
-        </label>
-        <label>
-          Посада
-          <select
-            [value]="positionId()"
-            (change)="setFilter('positionId', $any($event.target).value)"
-          >
-            <option value="">Усі</option>
-            @for (p of positions(); track p.id) {
-              <option [value]="p.id">{{ p.name }}</option>
-            }
-          </select>
-        </label>
-        <label>
-          Тип
-          <select
-            [value]="templateType()"
-            (change)="setFilter('templateType', $any($event.target).value)"
-          >
-            <option value="">Усі</option>
-            @for (t of typeOptions; track t.value) {
-              <option [value]="t.value">{{ t.label }}</option>
-            }
-          </select>
-        </label>
-        <label>
-          Стан
-          <select
-            [value]="attachmentState()"
-            (change)="setFilter('attachmentState', $any($event.target).value)"
-          >
-            <option value="">Усі</option>
-            <option value="new">Нова</option>
-            <option value="attached">Прикріплено</option>
-            <option value="detached">Відкріплено</option>
-            <option value="closed">Закрито</option>
-          </select>
-        </label>
-        <label>
-          Від
-          <input
-            type="date"
-            [value]="createdFrom()"
-            (change)="setFilter('createdFrom', $any($event.target).value)"
-          />
-        </label>
-        <label>
-          До
-          <input
-            type="date"
-            [value]="createdTo()"
-            (change)="setFilter('createdTo', $any($event.target).value)"
-          />
-        </label>
-      </div>
+      <loom-questionnaire-filter-toolbar
+        [value]="filterValue()"
+        [availableFilters]="directoryFilterFields"
+        [typeOptions]="typeOptions"
+        [departments]="departments()"
+        [positions]="positions()"
+        (filterChange)="onFilters($event)"
+      />
 
       @if (error()) {
         <p class="error">{{ error() }}</p>
@@ -141,19 +91,7 @@ type Pos = { id: string; name: string };
           <table>
             <thead>
               <tr>
-                <th>
-                  <button
-                    type="button"
-                    class="th-sort"
-                    [class.active]="sortBy() === 'templateCode'"
-                    (click)="toggleSort('templateCode')"
-                  >
-                    Код
-                    <span class="sort-mark" aria-hidden="true">{{
-                      sortMark('templateCode')
-                    }}</span>
-                  </button>
-                </th>
+                <th>Код</th>
                 <th>Тип</th>
                 <th>
                   <button
@@ -242,8 +180,13 @@ type Pos = { id: string; name: string };
                   [class.row-changes-requested]="hasActiveChangeRequest(item)"
                 >
                   <td>
-                    <code>{{ item.templateCode }}</code>
-                    <span class="ver">v{{ item.version }}</span>
+                    <code>{{ item.code }}</code>
+                    <div class="secondary">
+                      {{ item.templateTitle }}
+                      <span class="ver"
+                        >{{ item.templateCode }} · v{{ item.version }}</span
+                      >
+                    </div>
                   </td>
                   <td>{{ typeLabel(item.templateType) }}</td>
                   <td>
@@ -326,6 +269,14 @@ type Pos = { id: string; name: string };
             Далі
           </button>
         </div>
+      }
+
+      @if (showCreate()) {
+        <loom-questionnaire-create-dialog
+          dialogTitle="Створити анкету"
+          (close)="showCreate.set(false)"
+          (created)="onCreated($event)"
+        />
       }
 
       @if (attachTarget(); as target) {
@@ -450,6 +401,13 @@ type Pos = { id: string; name: string };
       code {
         font-size: 0.85rem;
       }
+      .secondary {
+        display: grid;
+        gap: 0.1rem;
+        font-size: 0.75rem;
+        color: var(--pw-muted);
+        margin-top: 0.2rem;
+      }
       .ver {
         margin-left: 0.35rem;
         color: var(--pw-muted);
@@ -544,15 +502,34 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   readonly items = signal<QuestionnaireDirectoryItem[]>([]);
   readonly total = signal(0);
   readonly canCreate = signal(false);
-  readonly createBusy = signal(false);
+  readonly showCreate = signal(false);
 
   readonly departments = signal<Dept[]>([]);
   readonly positions = signal<Pos[]>([]);
+
+  readonly directoryFilterFields: Array<
+    | 'code'
+    | 'departmentId'
+    | 'positionId'
+    | 'templateType'
+    | 'attachmentState'
+    | 'createdFrom'
+    | 'createdTo'
+  > = [
+    'code',
+    'departmentId',
+    'positionId',
+    'templateType',
+    'attachmentState',
+    'createdFrom',
+    'createdTo',
+  ];
 
   readonly departmentId = signal('');
   readonly positionId = signal('');
   readonly templateType = signal('');
   readonly attachmentState = signal('');
+  readonly code = signal('');
   readonly createdFrom = signal('');
   readonly createdTo = signal('');
   readonly sortBy = signal<QuestionnaireDirectorySortBy>('createdAt');
@@ -563,6 +540,18 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   readonly attachTarget = signal<QuestionnaireDirectoryItem | null>(null);
   readonly attachBusy = signal(false);
   readonly attachError = signal<string | null>(null);
+
+  filterValue(): QuestionnaireFilterToolbarValue {
+    return {
+      code: this.code() || undefined,
+      departmentId: this.departmentId() || undefined,
+      positionId: this.positionId() || undefined,
+      templateType: this.templateType() || undefined,
+      attachmentState: this.attachmentState() || undefined,
+      createdFrom: this.createdFrom() || undefined,
+      createdTo: this.createdTo() || undefined,
+    };
+  }
 
   ngOnInit(): void {
     this.http
@@ -579,6 +568,7 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
       this.positionId.set(q.get('positionId') ?? '');
       this.templateType.set(q.get('templateType') ?? '');
       this.attachmentState.set(q.get('attachmentState') ?? '');
+      this.code.set(q.get('code') ?? '');
       this.createdFrom.set(q.get('createdFrom') ?? '');
       this.createdTo.set(q.get('createdTo') ?? '');
       this.sortBy.set(
@@ -618,6 +608,24 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
     });
   }
 
+  onFilters(next: QuestionnaireFilterToolbarValue): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        ...this.currentQuery(),
+        code: next.code || null,
+        departmentId: next.departmentId || null,
+        positionId: next.positionId || null,
+        templateType: next.templateType || null,
+        attachmentState: next.attachmentState || null,
+        createdFrom: next.createdFrom || null,
+        createdTo: next.createdTo || null,
+        offset: '0',
+      },
+      queryParamsHandling: 'merge',
+    });
+  }
+
   toggleSort(column: QuestionnaireDirectorySortBy): void {
     const same = this.sortBy() === column;
     const nextDir = same && this.sortDir() === 'desc' ? 'asc' : 'desc';
@@ -651,24 +659,12 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
     void this.router.navigateByUrl(link.routerLink);
   }
 
-  async createBlank(): Promise<void> {
-    if (this.createBusy()) return;
-    this.createBusy.set(true);
-    this.error.set(null);
-    try {
-      const created = await firstValueFrom(this.api.createAssignment({}));
-      const link = buildQuestionnaireAssignmentLink({
-        assignmentId: created.id,
-      });
-      await this.router.navigateByUrl(link.routerLink);
-    } catch (err: unknown) {
-      this.error.set(
-        (err as { error?: { message?: string } })?.error?.message ||
-          'Не вдалося створити анкету',
-      );
-    } finally {
-      this.createBusy.set(false);
-    }
+  async onCreated(event: { id: string }): Promise<void> {
+    this.showCreate.set(false);
+    const link = buildQuestionnaireAssignmentLink({
+      assignmentId: event.id,
+    });
+    await this.router.navigateByUrl(link.routerLink);
   }
 
   openAttachPicker(item: QuestionnaireDirectoryItem): void {
@@ -707,6 +703,7 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
       positionId: this.positionId() || null,
       templateType: this.templateType() || null,
       attachmentState: this.attachmentState() || null,
+      code: this.code() || null,
       createdFrom: this.createdFrom() || null,
       createdTo: this.createdTo() || null,
       sortBy: this.sortBy(),
@@ -724,6 +721,7 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
         positionId: this.positionId() || undefined,
         templateType: this.templateType() || undefined,
         attachmentState: this.attachmentState() || undefined,
+        code: this.code() || undefined,
         createdFrom: this.createdFrom() || undefined,
         createdTo: this.createdTo() || undefined,
         sortBy: this.sortBy(),

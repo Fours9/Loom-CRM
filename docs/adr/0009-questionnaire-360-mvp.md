@@ -56,14 +56,14 @@ Phase 2 `/me` + generic approval is deferred. Fill wizard UI integrates submit a
 12. **Do not** add `employees.photo_consent_status`. Photo legal consent → future Consents; `photoUrl` remains admin-managed until Platform Files.
 13. **FE entry:** `apps/web/.../questionnaires/public-api.ts` for People assign/summary panels + `buildQuestionnaireAssignmentLink`. Fill page / DraftStore / Autosave / RevisionCoordinator / field widgets stay feature-private.
 14. **Assignment lifecycle (admin `questionnaires.assign`):**
-    - **Cancel** → `cancelled`; keeps draft/submissions; supersedes **all** pending proposals for the assignment (any revision); audit `questionnaire.assignment.cancelled`.
-    - **Reactivate** → same row back to `assigned` on the same employee; clears assignment `reviewedAt` (current-cycle marker); does **not** restore superseded proposals; audit `questionnaire.assignment.reactivated`. Submit also sets `assignment.reviewedAt = null`.
-    - **Close** → terminal `closed` (≠ `reviewed`); supersede all pending; no reactivate; no edit/submit/revision; hard delete still allowed; audit `questionnaire.assignment.closed`. Migration `down` fails if closed rows exist.
-    - **Hard delete** → removes assignment aggregate via FK CASCADE; audit before delete; **does not** roll back profile fields already applied via accepted proposals.
-    - MVP **allows** multiple active assignments of the same template for one employee; reactivate does not check for another active row.
-15. **Printable questionnaire identity:** `questionnaire_templates.code` (e.g. `employee-360`) — stable across assignments; **no** per-assignment serial codes.
-16. **Fill-on-behalf:** `questionnaires.complete.any` (Admin) separate from Assign. Owner uses `complete.self`. Admin may edit/submit while `cancelled`; **`preserveCancelled`**: submit creates submission + proposals but **status stays `cancelled`** (reactivate is the only re-attach). `canReopenSelf` is owner-only; `canStartRevision` is CompleteAny on submitted/reviewed (shared revision → also opens owner).
-17. **Directory:** `GET /questionnaires/directory` (not under `assignments/:id`); scope applied in SQL before pagination; `attachmentState` helper; aggregate `updatedAt` = `GREATEST(assignment.updated_at, response.updated_at)`.
+    - **Cancel / detach** → `cancelled`; `employeeId = null`, `detachedFromEmployeeId = previous` (**provenance of current detached state**, not long-term history); keeps draft/submissions; supersedes pending proposals; audit `questionnaire.assignment.cancelled`.
+    - **Attach** (replaces historical “reactivate”) → `POST .../attach` for `new` or detached `cancelled`; **any** attachable employee; clears `detachedFromEmployeeId`; status `assigned`; audit `questionnaire.assignment.attached` with `fromEmployeeId` / `toEmployeeId` / `attachKind` (`new` | `reattach`). Long-term from→to history lives in **audit_log**.
+    - **Close** → terminal `closed` (≠ `reviewed`); supersede all pending; no attach; no edit/submit/revision; hard delete still allowed; audit `questionnaire.assignment.closed`. Migration `down` fails if closed rows exist.
+    - **Hard delete** → removes assignment aggregate via FK CASCADE; audit before delete; **does not** roll back profile fields already applied via accepted proposals. Hard delete **does not** rewind assignment code counters.
+    - MVP **allows** multiple active assignments of the same template for one employee.
+15. **Questionnaire identity:** template `code` (e.g. `employee-360`) is catalog identity. Each **assignment** has immutable human `code` `{PREFIX}-{NNN}` (e.g. `360-002`) from a monotonic per-prefix counter (`questionnaire_assignment_code_counters`); search/filter by assignment code; template code remains secondary. Service HR `comment` is written on create; readable only with `questionnaires.read_assignment_comment` (Admin today).
+16. **Fill-on-behalf:** `questionnaires.complete.any` (Admin) separate from Assign. Owner uses `complete.self`. Admin may edit/submit while `cancelled`; **`preserveCancelled`**: submit creates submission + proposals but **status stays `cancelled`** (attach is the only re-attach). `canReopenSelf` is owner-only; `canStartRevision` is CompleteAny on submitted/reviewed (shared revision → also opens owner).
+17. **Directory:** `GET /questionnaires/directory` (not under `assignments/:id`); scope applied in SQL before pagination; `attachmentState` helper; aggregate `updatedAt` = `GREATEST(assignment.updated_at, response.updated_at)`. Create dialog lists templates via `GET /questionnaires/templates` (published template + published version SoT).
 
 ## Consequences
 
@@ -73,7 +73,7 @@ Phase 2 `/me` + generic approval is deferred. Fill wizard UI integrates submit a
 - Applied profile changes from accepted proposals survive assignment delete — confirm UI and ops must say so.
 - Multiple concurrent active 360 assignments per employee are possible until a uniqueness rule is added.
 - Lifecycle actions leave an audit trail even when the assignment row is gone (delete).
-- Admin detached submit does **not** implicitly reactivate — owner stays blocked until explicit reactivate.
+- Admin detached submit does **not** implicitly reattach — owner stays blocked until explicit attach.
 - Granting Assign alone does **not** grant answer access; CompleteAny does.
 - Catalog and seed can drift — PR-2/seed docs must call out manual sync.
 - Managers never see as “HR role”; permissions + scope + capabilities cover HR-like actions via `admin` (and future permission grants).

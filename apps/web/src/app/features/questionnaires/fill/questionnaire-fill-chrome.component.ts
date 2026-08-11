@@ -46,8 +46,17 @@ import {
         <h2>{{ store.pageTitle() }}</h2>
         <p class="code-line">
           Тип: {{ templateTypeLabel() }} · Код:
-          <code>{{ store.assignment()?.templateCode }}</code>
+          <code>{{ store.assignment()?.code || store.assignment()?.templateCode }}</code>
         </p>
+        @if (
+          store.assignment()?.capabilities?.canViewAssignmentComment &&
+          store.assignment()?.comment
+        ) {
+          <p class="service-note">
+            <span class="service-note-label">Службова примітка:</span>
+            {{ store.assignment()?.comment }}
+          </p>
+        }
       </div>
       <div class="step-topbar-actions">
         <button
@@ -265,6 +274,15 @@ import {
         font-size: 0.9rem;
         color: inherit;
         overflow-wrap: anywhere;
+      }
+      .service-note {
+        margin: 0.35rem 0 0;
+        font-size: 0.85rem;
+        color: var(--pw-muted);
+        max-width: 40rem;
+      }
+      .service-note-label {
+        font-weight: 600;
       }
       .chrome-actions {
         justify-self: end;

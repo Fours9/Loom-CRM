@@ -35,12 +35,12 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 | Документи | Documents MVP + агрегат вкладень time-event (Absences) | `documents.view` |
 | Анкети | Directory `/questionnaires` + People panel; assign/cancel/reactivate/close/delete; fill wizard | `questionnaires.view` |
 | Показники | Stub (roadmap Phase 5 / 8) | завжди |
-| Історія | Audit timeline: дата · актор · UA summary (`EmployeeProfileHistoryItem`) | `capabilities.canViewHistory` |
+| Адміністрування | Підвкладка **Історія**: audit timeline (дата · актор · UA summary, `EmployeeProfileHistoryItem`) | `capabilities.canViewHistory` |
 | Згодом | Stub (майбутні модулі) | завжди |
 
 Недоступні вкладки **ховаються** (не disabled empty-state). Після reload / зміни permissions активна недоступна вкладка скидається на «Дані працівника».
 
-### Історія (living)
+### Адміністрування → Історія (living)
 
 - Endpoint: `GET /api/v1/employees/:id/history?limit=` (1–100, default 50; **cursor pagination ще немає**).
 - Response item: `action`, `summary` (статична UA-мапа), `actor: { userId, label } | null` (`null` = «Система»), `createdAt` ISO, redacted `metadata`.
@@ -65,7 +65,7 @@ PW-паритетна картка без змін: `/absences/employees/:id`.
 - **schema UX:** steps `family` + `celebration_dates`; `visibleWhen`; layout groups; from/to periods; preferred_language multi; submit projects visible answers; `@loom/questionnaire-schema`; startup composition root; fail-safe `pnpm questionnaires:reset` ([runbook](../dev/questionnaire-test-reset.md)); `family.other_dates` repeating list (Назва/З/По, **snapshot**, не профіль)
 - **revision + proposals:** owner `POST .../reopen` vs HR request-changes (different submission review side effects); pending → `superseded` on reopen; atomic submit+proposal generate; proposals nested under assignment; UI «Зберегти і закрити» = new immutable submission
 - **request-changes UX** — див. підрозділ нижче
-- **assignment lifecycle:** create without employee → `new`; cancel detaches (`employeeId=null`, `detachedFromEmployeeId=previous`); attach (replaces reactivate) — new→any employee, cancelled→same employee only; close terminal; hard delete on fill when `canDelete`. People excludes cancelled (incl. legacy non-null). Unattached directory rows visible to Assign only.
+- **assignment lifecycle:** create without employee → `new` (optional employee + service `comment` + immutable `assignment.code`); cancel detaches (`employeeId=null`, `detachedFromEmployeeId=previous` provenance); attach — **any** employee for `new` and cancelled; audit from→to; close terminal; hard delete on fill when `canDelete`. People excludes cancelled (incl. legacy non-null). Unattached directory rows visible to Assign only. Comment read: `questionnaires.read_assignment_comment` (Admin). Templates create list: published template + published version.
 - **types:** template `type` (`general`/`hr`/`manager`/`full`); seed 360 = general; create always employee-360. HR/Manager/Full schemas later.
 - **directory + access:** nav «Анкети»; `canCreate` / `attachConstraint` on directory; `new` draft editable without submit; cancelled/closed fill = read-only; print stubs («Незабаром»). **PDF (planned):** blank template and filled questionnaire share one layout; filled only substitutes values — not shipped yet.
 - **directory + access (legacy note):** historical cancelled with non-null employeeId stay attach-blocked until manual detach; view/close/delete only.

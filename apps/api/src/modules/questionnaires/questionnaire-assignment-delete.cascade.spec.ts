@@ -72,10 +72,10 @@ runDb('Questionnaire assignment hard-delete (live DB)', () => {
 
       const [assignment] = await qr.query(
         `INSERT INTO questionnaire_assignments
-          (template_version_id, employee_id, assigned_by_user_id, status)
-         VALUES ($1, $2, $3, 'assigned')
+          (template_version_id, employee_id, assigned_by_user_id, status, code)
+         VALUES ($1, $2, $3, 'assigned', $4)
          RETURNING id`,
-        [versionId, employeeId, actorId],
+        [versionId, employeeId, actorId, `TST-${Date.now()}`],
       );
       const assignmentId = assignment.id as string;
 

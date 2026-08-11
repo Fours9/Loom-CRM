@@ -5,7 +5,6 @@ import type { EmployeeProfileHistoryItem } from '@loom/contracts-employees';
   selector: 'loom-employee-history-panel',
   standalone: true,
   template: `
-    <h2>Історія</h2>
     @if (!items.length) {
       <p class="muted">Подій ще немає.</p>
     } @else {
@@ -26,9 +25,6 @@ import type { EmployeeProfileHistoryItem } from '@loom/contracts-employees';
   `,
   styles: [
     `
-      h2 {
-        margin: 0 0 0.5rem;
-      }
       .muted {
         color: var(--pw-muted);
       }

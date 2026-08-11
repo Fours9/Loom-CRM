@@ -48,6 +48,7 @@ import {
 } from './people-profile-tabs';
 
 type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
+type AdminTabId = 'history';
 
 @Component({
   selector: 'loom-people-profile-page',
@@ -212,7 +213,10 @@ type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
             }
             @case ('questionnaires') {
               @defer (on immediate) {
-                <loom-employee-questionnaires-panel [employeeId]="profile()!.header.id" />
+                <loom-employee-questionnaires-panel
+                  [employeeId]="profile()!.header.id"
+                  [employeeFullName]="profile()!.header.displayName"
+                />
               } @placeholder {
                 <p class="muted">Підготовка анкет…</p>
               } @loading (after 100ms) {
@@ -225,8 +229,28 @@ type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
               <h2>Показники</h2>
               <p class="muted">Розділ у розробці. Тут з’являться KPI, цілі та метрики працівника.</p>
             }
-            @case ('history') {
-              <loom-employee-history-panel [items]="audit()" />
+            @case ('administration') {
+              <nav
+                class="tabs subtabs"
+                role="tablist"
+                aria-label="Адміністрування працівника"
+              >
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
+                  [attr.aria-selected]="adminTab() === 'history'"
+                  [class.active]="adminTab() === 'history'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setAdminTab('history')"
+                >
+                  Історія
+                </button>
+              </nav>
+
+              @if (adminTab() === 'history') {
+                <loom-employee-history-panel [items]="audit()" />
+              }
             }
             @default {
               <h2>Наступні модулі</h2>
@@ -422,6 +446,7 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly profile = signal<EmployeeProfileResponse | null>(null);
   readonly tab = signal<PeopleProfileTabId>('data');
   readonly absenceTab = signal<AbsenceTabId>('schedule');
+  readonly adminTab = signal<AdminTabId>('history');
   readonly audit = signal<EmployeeProfileHistoryItem[]>([]);
   readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
 
@@ -487,6 +512,11 @@ export class PeopleProfilePageComponent implements OnInit {
   setAbsenceTab(id: AbsenceTabId): void {
     if (this.absenceTab() === id) return;
     this.withPreservedScroll(() => this.absenceTab.set(id));
+  }
+
+  setAdminTab(id: AdminTabId): void {
+    if (this.adminTab() === id) return;
+    this.withPreservedScroll(() => this.adminTab.set(id));
   }
 
   onDataProfileChange(next: EmployeeProfileResponse): void {

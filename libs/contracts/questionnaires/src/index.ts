@@ -115,6 +115,10 @@ export type QuestionnaireSchemaJson = {
 
 export type CreateQuestionnaireAssignmentRequest = {
   employeeId?: EntityId;
+  /** Template code; default employee-360 when omitted. */
+  templateCode?: string;
+  /** Service HR note (not shown to fill owner). */
+  comment?: string | null;
   dueAt?: string | null;
 };
 
@@ -124,12 +128,18 @@ export type AttachQuestionnaireAssignmentRequest = {
 
 export type QuestionnaireAttachConstraint =
   | { kind: 'any_employee' }
-  | {
-      kind: 'same_employee';
-      employeeId: EntityId;
-      employeeDisplayName: string;
-    }
   | null;
+
+export type QuestionnaireTemplateListItem = {
+  code: string;
+  title: string;
+  type: QuestionnaireType;
+  version: number;
+};
+
+export type QuestionnaireTemplateListResponse = {
+  items: QuestionnaireTemplateListItem[];
+};
 
 export type PatchQuestionnaireDraftRequest = {
   answers: Record<string, unknown>;
@@ -171,6 +181,7 @@ export type QuestionnaireDraftDto = {
 
 export type QuestionnaireAssignmentListItem = {
   id: EntityId;
+  code: string;
   employeeId: EntityId;
   templateCode: string;
   templateTitle: string;
@@ -183,6 +194,8 @@ export type QuestionnaireAssignmentListItem = {
   reviewedAt: string | null;
   createdAt: string;
   completionPercent: number;
+  /** Present only with questionnaires.read_assignment_comment. */
+  comment?: string | null;
   latestSubmission: QuestionnaireSubmissionSummary | null;
   capabilities: {
     canOpen: boolean;
@@ -202,6 +215,7 @@ export type QuestionnaireAssignmentListResponse = {
 
 export type QuestionnaireAssignmentDetail = {
   id: EntityId;
+  code: string;
   employeeId: EntityId | null;
   /** Display name parts for fill chrome (null when unattached). */
   employeeLastName: string | null;
@@ -216,6 +230,8 @@ export type QuestionnaireAssignmentDetail = {
   submittedAt: string | null;
   reviewedAt: string | null;
   createdAt: string;
+  /** Present only with questionnaires.read_assignment_comment. */
+  comment?: string | null;
   schema: QuestionnaireSchemaJson;
   draft: QuestionnaireDraftDto | null;
   submissions: QuestionnaireSubmissionSummary[];
@@ -234,6 +250,7 @@ export type QuestionnaireAssignmentDetail = {
     canResolveChangeRequest: boolean;
     /** Admin Assign may hard-delete the assignment aggregate. */
     canDelete: boolean;
+    canViewAssignmentComment: boolean;
   };
 };
 
@@ -244,6 +261,9 @@ export type QuestionnaireDirectoryQuery = {
   createdTo?: string;
   attachmentState?: QuestionnaireAttachmentState;
   templateType?: QuestionnaireType;
+  /** Prefix search on assignment.code (ILIKE, wildcards escaped). */
+  code?: string;
+  status?: QuestionnaireAssignmentStatus;
   sortBy?: QuestionnaireDirectorySortBy;
   sortDir?: 'asc' | 'desc';
   limit?: number;
@@ -252,6 +272,7 @@ export type QuestionnaireDirectoryQuery = {
 
 export type QuestionnaireDirectoryItem = {
   id: EntityId;
+  code: string;
   templateCode: string;
   templateTitle: string;
   templateType: QuestionnaireType;
@@ -265,6 +286,8 @@ export type QuestionnaireDirectoryItem = {
   createdAt: string;
   /** Last aggregate activity (assignment or draft), not draft-only. */
   updatedAt: string;
+  /** Present only with questionnaires.read_assignment_comment. */
+  comment?: string | null;
   latestSubmission: QuestionnaireSubmissionSummary | null;
   attachConstraint: QuestionnaireAttachConstraint;
   capabilities: {

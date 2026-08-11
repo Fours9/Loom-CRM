@@ -26,7 +26,7 @@ last_updated: "2026-07-27"
 ### Shipped (Phase 1 + Documents MVP)
 
 - Organization Profile Core: `/people/:id`, section APIs (basic/contacts/personal/emergency/important-dates/assignments), capabilities, completeness, audit history API, employment history.
-- UI вкладки: **Дані працівника** (Основні · Контакти · Дати · Посада), **Робочий графік** (Графік роботи · Заявки · Календар), **Документи**, **Показники** (stub), **Історія**, **Згодом** (stub). Visibility gated (calendar/documents permissions, `canViewHistory`); history UI = actor + UA summary.
+- UI вкладки: **Дані працівника** (Основні · Контакти · Дати · Посада), **Робочий графік** (Графік роботи · Заявки · Календар), **Документи**, **Показники** (stub), **Адміністрування** (підвкладка Історія), **Згодом** (stub). Visibility gated (calendar/documents permissions, `canViewHistory`); history UI = actor + UA summary.
 - Підвкладка **Графік роботи**: Absences `EmployeeWorkSchedulePanel` через `public-api` (той самий `work_schedule_days` / `PUT /employees/:id/schedule`, UI = `ScheduleEditor`). Load = `getEmployee` (schedule + `canEditSchedule`; окремого schedule+capability endpoint немає). View не підставляє `cloneSchedule` — порожній schedule з API лишається empty state до чернетки редагування.
 - **Questionnaires Phase 3 (PR-0):** policy SoT [questionnaire-360-field-catalog.md](./questionnaire-360-field-catalog.md); decisions [ADR 0009](../adr/0009-questionnaire-360-mvp.md). MVP uses `schema_json` + immutable `questionnaire_submissions` (not relational questions). Fill wizard UI is out of foundation PRs.
 - People list: flat `EmployeeListItem` + core `completenessPercent`, server `sortBy=completeness` / `maxCompleteness`.

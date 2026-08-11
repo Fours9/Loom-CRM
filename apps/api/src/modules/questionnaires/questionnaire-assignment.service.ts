@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserStatus } from '../../platform/identity/user.enums';
 import { UsersService } from '../../platform/identity/users.service';
@@ -41,17 +41,25 @@ import {
   applyDirectoryFilters,
   applyDirectoryScope,
   applyDirectorySort,
+  applyAssignmentFilters,
+  applyEmployeeScope,
   type QuestionnaireDirectoryFilters,
   type QuestionnaireDirectoryScope,
+  type QuestionnaireAssignmentCommonFilters,
 } from './assignments/questionnaire-assignment-list.query';
-import { Employee } from '../../organization/employees/employee.entity';
-import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
-import { PERSONAL_CONTACT_TYPES } from '../../organization/employees/employee-personal-contacts';
+import {
+  allocateNextAssignmentCode,
+  questionnaireAssignmentCodePrefix,
+} from './assignments/questionnaire-assignment-code';
 import type {
   QuestionnaireAttachConstraint,
   QuestionnaireDirectoryQuery,
   QuestionnaireDirectoryResponse,
+  QuestionnaireTemplateListResponse,
 } from '@loom/contracts-questionnaires';
+import { Employee } from '../../organization/employees/employee.entity';
+import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
+import { PERSONAL_CONTACT_TYPES } from '../../organization/employees/employee-personal-contacts';
 import { buildQuestionnaireProfileMirror } from './proposals/questionnaire-profile-mirror';
 import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
 
@@ -80,32 +88,114 @@ export class QuestionnaireAssignmentService {
 
   async create(
     actor: User,
-    input: { employeeId?: string; dueAt?: string | null },
+    input: {
+      employeeId?: string;
+      templateCode?: string;
+      comment?: string | null;
+      dueAt?: string | null;
+    },
   ) {
     if (!this.permissions.has(actor.role, Permission.QuestionnairesAssign)) {
       throw new ForbiddenException('Cannot assign questionnaire');
     }
 
-    const version = await this.resolveLatestPublishedTemplateVersion();
+    const templateCode =
+      input.templateCode?.trim() || EMPLOYEE_360_TEMPLATE_CODE;
+    const comment =
+      typeof input.comment === 'string' && input.comment.trim()
+        ? input.comment.trim()
+        : null;
 
-    let employee: Employee | null = null;
-    if (input.employeeId) {
-      employee = await this.resolveAttachableEmployee(actor, input.employeeId);
+    const assignmentId = await this.dataSource.transaction(async (manager) => {
+      const version =
+        await this.resolveLatestPublishedTemplateVersion(templateCode);
+      const template = version.template;
+      if (!template) {
+        const loaded = await manager
+          .getRepository(QuestionnaireTemplate)
+          .findOne({ where: { id: version.templateId } });
+        if (!loaded) {
+          throw new NotFoundException(
+            `Questionnaire template not found for version`,
+          );
+        }
+        version.template = loaded;
+      }
+
+      let employee: Employee | null = null;
+      if (input.employeeId) {
+        employee = await this.resolveAttachableEmployee(actor, input.employeeId);
+      }
+
+      const prefix = questionnaireAssignmentCodePrefix(
+        version.template.code,
+        version.template.type,
+      );
+      const code = await allocateNextAssignmentCode(manager, prefix);
+
+      const assignment = await manager
+        .getRepository(QuestionnaireAssignment)
+        .save(
+          manager.getRepository(QuestionnaireAssignment).create({
+            templateVersionId: version.id,
+            code,
+            comment,
+            employeeId: employee?.id ?? null,
+            detachedFromEmployeeId: null,
+            assignedByUserId: actor.id,
+            status: employee ? 'assigned' : 'new',
+            dueAt: input.dueAt ? new Date(input.dueAt) : null,
+          }),
+        );
+
+      await this.responseService.ensureResponse(assignment.id, manager);
+      return assignment.id;
+    });
+
+    return this.getDetail(actor, assignmentId);
+  }
+
+  async listPublishableTemplates(
+    actor: User,
+  ): Promise<QuestionnaireTemplateListResponse> {
+    if (!this.permissions.has(actor.role, Permission.QuestionnairesAssign)) {
+      throw new ForbiddenException('Cannot list questionnaire templates');
     }
 
-    const assignment = await this.assignments.save(
-      this.assignments.create({
-        templateVersionId: version.id,
-        employeeId: employee?.id ?? null,
-        detachedFromEmployeeId: null,
-        assignedByUserId: actor.id,
-        status: employee ? 'assigned' : 'new',
-        dueAt: input.dueAt ? new Date(input.dueAt) : null,
-      }),
-    );
+    const rows = await this.templates
+      .createQueryBuilder('tmpl')
+      .innerJoin(
+        QuestionnaireTemplateVersion,
+        'v',
+        'v.template_id = tmpl.id AND v.published_at IS NOT NULL',
+      )
+      .where('tmpl.status = :status', { status: 'published' })
+      .select([
+        'tmpl.code AS code',
+        'tmpl.title AS title',
+        'tmpl.type AS type',
+        'MAX(v.version) AS version',
+      ])
+      .groupBy('tmpl.id')
+      .addGroupBy('tmpl.code')
+      .addGroupBy('tmpl.title')
+      .addGroupBy('tmpl.type')
+      .orderBy('tmpl.title', 'ASC')
+      .getRawMany<{
+        code: string;
+        title: string;
+        type: string;
+        version: string;
+      }>();
 
-    await this.responseService.ensureResponse(assignment.id);
-    return this.getDetail(actor, assignment.id);
+    return {
+      items: rows.map((r) => ({
+        code: r.code,
+        title: r.title,
+        type: r.type as QuestionnaireTemplateListResponse['items'][number]['type'],
+        version: Number(r.version),
+      })),
+    };
   }
 
   /**
@@ -133,33 +223,44 @@ export class QuestionnaireAssignmentService {
     return employee;
   }
 
-  private async resolveLatestPublishedTemplateVersion(): Promise<QuestionnaireTemplateVersion> {
+  private async resolveLatestPublishedTemplateVersion(
+    templateCode: string = EMPLOYEE_360_TEMPLATE_CODE,
+  ): Promise<QuestionnaireTemplateVersion> {
     const template = await this.templates.findOne({
       where: {
-        code: EMPLOYEE_360_TEMPLATE_CODE,
+        code: templateCode,
         status: 'published',
-        type: 'general',
       },
     });
     if (!template) {
       throw new NotFoundException(
-        `Questionnaire template not found: ${EMPLOYEE_360_TEMPLATE_CODE}`,
+        `Questionnaire template not found or not published: ${templateCode}`,
       );
     }
 
     const version = await this.versions
       .createQueryBuilder('v')
+      .leftJoinAndSelect('v.template', 'tmpl')
       .where('v.template_id = :templateId', { templateId: template.id })
       .andWhere('v.published_at IS NOT NULL')
       .orderBy('v.version', 'DESC')
       .getOne();
     if (!version) {
-      throw new NotFoundException('No published questionnaire template version');
+      throw new NotFoundException(
+        `No published questionnaire template version for ${templateCode}`,
+      );
+    }
+    if (!version.template) {
+      version.template = template;
     }
     return version;
   }
 
-  async listByEmployee(actor: User, employeeId: string) {
+  async listByEmployee(
+    actor: User,
+    employeeId: string,
+    filters: QuestionnaireAssignmentCommonFilters = {},
+  ) {
     const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
 
@@ -172,12 +273,15 @@ export class QuestionnaireAssignmentService {
       throw new ForbiddenException('Cannot view questionnaires');
     }
 
-    const rows = await this.assignments.find({
-      where: { employeeId, status: Not('cancelled') },
-      relations: { templateVersion: { template: true } },
-      order: { createdAt: 'DESC' },
-    });
+    const qb = this.assignments
+      .createQueryBuilder('a')
+      .innerJoinAndSelect('a.templateVersion', 'tv')
+      .innerJoinAndSelect('tv.template', 'tmpl');
+    applyEmployeeScope(qb, employeeId);
+    applyAssignmentFilters(qb, filters, { includeAttachmentState: false });
+    qb.orderBy('a.created_at', 'DESC').addOrderBy('a.id', 'ASC');
 
+    const rows = await qb.getMany();
     const items = await Promise.all(rows.map((row) => this.toListItem(actor, row)));
 
     return {
@@ -222,6 +326,10 @@ export class QuestionnaireAssignmentService {
       access: this.access,
       latestSubmission: submissions[0] ?? null,
     });
+    const canViewAssignmentComment = this.permissions.has(
+      actor.role,
+      Permission.QuestionnairesReadAssignmentComment,
+    );
 
     let profileMirror: Record<string, unknown> | null = null;
     if (
@@ -239,6 +347,7 @@ export class QuestionnaireAssignmentService {
 
     return {
       id: assignment.id,
+      code: assignment.code,
       employeeId: assignment.employeeId,
       employeeLastName: employee?.lastName ?? null,
       employeeFirstName: employee?.firstName ?? null,
@@ -252,6 +361,9 @@ export class QuestionnaireAssignmentService {
       submittedAt: assignment.submittedAt?.toISOString() ?? null,
       reviewedAt: assignment.reviewedAt?.toISOString() ?? null,
       createdAt: assignment.createdAt.toISOString(),
+      ...(canViewAssignmentComment
+        ? { comment: assignment.comment ?? null }
+        : {}),
       schema,
       draft: draft
         ? {
@@ -264,7 +376,10 @@ export class QuestionnaireAssignmentService {
       submissions: submissions.map((s) => toSubmissionSummaryDto(s)),
       completionPercent: completionPercent(draft?.answersJson, schema),
       profileMirror,
-      capabilities: caps,
+      capabilities: {
+        ...caps,
+        canViewAssignmentComment,
+      },
     };
   }
 
@@ -336,17 +451,9 @@ export class QuestionnaireAssignmentService {
         input.employeeId,
       );
 
-      if (
-        assignment.status === 'cancelled' &&
-        assignment.detachedFromEmployeeId !== employee.id
-      ) {
-        throw new BadRequestException(
-          'Cancelled assignment can only be reattached to the previously detached employee',
-        );
-      }
-
-      const attachKind: 'new' | 'same_employee_reattach' =
-        assignment.status === 'cancelled' ? 'same_employee_reattach' : 'new';
+      const previousDetachedEmployeeId = assignment.detachedFromEmployeeId;
+      const attachKind: 'new' | 'reattach' =
+        assignment.status === 'cancelled' ? 'reattach' : 'new';
 
       assignment.employeeId = employee.id;
       assignment.detachedFromEmployeeId = null;
@@ -362,7 +469,8 @@ export class QuestionnaireAssignmentService {
           entityId: assignment.id,
           metadata: {
             assignmentId: assignment.id,
-            employeeId: employee.id,
+            fromEmployeeId: previousDetachedEmployeeId,
+            toEmployeeId: employee.id,
             attachKind,
           },
         },
@@ -429,6 +537,8 @@ export class QuestionnaireAssignmentService {
       createdTo: query.createdTo,
       attachmentState: query.attachmentState,
       templateType: query.templateType,
+      code: query.code,
+      status: query.status,
       sortBy: query.sortBy,
       sortDir: query.sortDir,
       limit,
@@ -443,7 +553,6 @@ export class QuestionnaireAssignmentService {
         .innerJoin('a.templateVersion', 'tv')
         .innerJoin('tv.template', 'tmpl')
         .leftJoin(Employee, 'emp', 'emp.id = a.employee_id')
-        .leftJoin(Employee, 'detached_emp', 'detached_emp.id = a.detached_from_employee_id')
         .leftJoin('emp.department', 'dept')
         .leftJoin('emp.position', 'pos')
         .leftJoin(
@@ -461,6 +570,8 @@ export class QuestionnaireAssignmentService {
     const qb = baseQb()
       .select([
         'a.id AS id',
+        'a.code AS code',
+        'a.comment AS comment',
         'a.status AS status',
         'a.created_at AS "createdAt"',
         'a.updated_at AS "assignmentUpdatedAt"',
@@ -473,9 +584,6 @@ export class QuestionnaireAssignmentService {
         'emp.first_name AS "firstName"',
         'emp.last_name AS "lastName"',
         'emp.middle_name AS "middleName"',
-        'detached_emp.first_name AS "detachedFirstName"',
-        'detached_emp.last_name AS "detachedLastName"',
-        'detached_emp.middle_name AS "detachedMiddleName"',
         'dept.name AS "departmentName"',
         'pos.name AS "positionName"',
         'resp.id AS "responseId"',
@@ -486,6 +594,8 @@ export class QuestionnaireAssignmentService {
 
     const rows = await qb.getRawMany<{
       id: string;
+      code: string;
+      comment: string | null;
       status: string;
       createdAt: Date;
       assignmentUpdatedAt: Date;
@@ -498,9 +608,6 @@ export class QuestionnaireAssignmentService {
       firstName: string | null;
       lastName: string | null;
       middleName: string | null;
-      detachedFirstName: string | null;
-      detachedLastName: string | null;
-      detachedMiddleName: string | null;
       departmentName: string | null;
       positionName: string | null;
       responseId: string | null;
@@ -509,6 +616,11 @@ export class QuestionnaireAssignmentService {
 
     const latestByResponseId = await this.latestSubmissionByResponseIds(
       rows.map((r) => r.responseId).filter((id): id is string => !!id),
+    );
+
+    const canViewAssignmentComment = this.permissions.has(
+      actor.role,
+      Permission.QuestionnairesReadAssignmentComment,
     );
 
     const items = rows.map((row) => {
@@ -531,24 +643,16 @@ export class QuestionnaireAssignmentService {
         : null;
 
       let attachConstraint: QuestionnaireAttachConstraint = null;
-      if (row.status === 'new') {
+      if (
+        (row.status === 'new' || row.status === 'cancelled') &&
+        !row.employeeId
+      ) {
         attachConstraint = { kind: 'any_employee' };
-      } else if (row.status === 'cancelled' && row.detachedFromEmployeeId) {
-        attachConstraint = {
-          kind: 'same_employee',
-          employeeId: row.detachedFromEmployeeId,
-          employeeDisplayName: [
-            row.detachedLastName,
-            row.detachedFirstName,
-            row.detachedMiddleName,
-          ]
-            .filter(Boolean)
-            .join(' '),
-        };
       }
 
       return {
         id: row.id,
+        code: row.code,
         templateCode: row.templateCode,
         templateTitle: row.templateTitle,
         templateType: row.templateType as QuestionnaireDirectoryResponse['items'][number]['templateType'],
@@ -561,6 +665,7 @@ export class QuestionnaireAssignmentService {
         attachmentState: attachmentStateForStatus(row.status),
         createdAt: new Date(row.createdAt).toISOString(),
         updatedAt: new Date(activityMs).toISOString(),
+        ...(canViewAssignmentComment ? { comment: row.comment ?? null } : {}),
         latestSubmission: row.responseId
           ? (latestByResponseId.get(row.responseId) ?? null)
           : null,
@@ -792,8 +897,14 @@ export class QuestionnaireAssignmentService {
       permissions: this.permissions,
     });
 
+    const canViewAssignmentComment = this.permissions.has(
+      actor.role,
+      Permission.QuestionnairesReadAssignmentComment,
+    );
+
     return {
       id: row.id,
+      code: row.code,
       employeeId: row.employeeId,
       templateCode: row.templateVersion.template.code,
       templateTitle: row.templateVersion.template.title,
@@ -806,6 +917,7 @@ export class QuestionnaireAssignmentService {
       reviewedAt: row.reviewedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
       completionPercent: completionPercent(draft?.answersJson, schema),
+      ...(canViewAssignmentComment ? { comment: row.comment ?? null } : {}),
       latestSubmission,
       capabilities: {
         canOpen: lifecycle.canOpen,
