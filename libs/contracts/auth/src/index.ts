@@ -22,6 +22,8 @@ export const Permission = {
   DocumentsManage: 'documents.manage',
   QuestionnairesView: 'questionnaires.view',
   QuestionnairesAssign: 'questionnaires.assign',
+  QuestionnairesManageLifecycle: 'questionnaires.manage_lifecycle',
+  QuestionnairesDelete: 'questionnaires.delete',
   QuestionnairesCompleteSelf: 'questionnaires.complete.self',
   QuestionnairesCompleteAny: 'questionnaires.complete.any',
   QuestionnairesReview: 'questionnaires.review',

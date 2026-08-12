@@ -10,9 +10,11 @@ import {
 describe('buildProgressSections', () => {
   const seedLike = [
     { key: 'profile_mirror', label: 'Особисті дані' },
+    { key: 'contacts', label: 'Контакти' },
     { key: 'family', label: 'Сімейний стан' },
     { key: 'celebration_dates', label: 'Святкові дати' },
     { key: 'experience', label: 'Професійний досвід' },
+    { key: 'company_work', label: 'Робота в компанії' },
     { key: 'education', label: 'Освіта та навчання' },
     { key: 'strengths', label: 'Сильні сторони та потенціал' },
     { key: 'hobbies', label: 'Хобі' },
@@ -33,10 +35,22 @@ describe('buildProgressSections', () => {
       'review',
     ]);
     expect(sections.find((s) => s.id === 'personal')!.steps.map((t) => t.key)).toEqual(
-      ['profile_mirror', 'family', 'celebration_dates', 'education'],
+      [
+        'profile_mirror',
+        'contacts',
+        'family',
+        'celebration_dates',
+        'education',
+        'hobbies',
+      ],
     );
     expect(sections.find((s) => s.id === 'work')!.steps.map((t) => t.key)).toEqual(
-      ['experience', 'strengths', 'hobbies', 'work_style'],
+      [
+        'experience',
+        'company_work',
+        'strengths',
+        'work_style',
+      ],
     );
     expect(sections.at(-1)?.id).toBe('review');
   });
@@ -78,8 +92,10 @@ describe('buildProgressSections', () => {
     const personal = sections.find((s) => s.id === 'personal')!;
     expect(personal.steps.map((t) => t.key)).toEqual([
       'profile_mirror',
+      'contacts',
       'family',
       'celebration_dates',
+      'hobbies',
     ]);
     expect(sections.every((s) => s.steps.length > 0)).toBe(true);
   });

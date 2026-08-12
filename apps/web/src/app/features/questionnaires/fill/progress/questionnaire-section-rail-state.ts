@@ -1,10 +1,6 @@
-import {
-  QUESTIONNAIRE_INTRO_STEP,
-  QUESTIONNAIRE_REVIEW_STEP,
-} from '../../navigation/questionnaire-step-keys';
 import type { ProgressSection } from './questionnaire-section-map';
 
-/** Spine fill = position along sections (not completion). */
+/** Spine fill = position along sections (not visit/completion). */
 export function sectionSpineProgress(
   sections: ProgressSection[],
   activeSectionId: string | undefined,
@@ -25,7 +21,7 @@ export function substepSpineProgress(
   return `${(idx / (steps.length - 1)) * 100}%`;
 }
 
-/** Position relative to active section only (trail). */
+/** Position relative to active section only (trail / spine). */
 export function isSectionPassed(
   sections: ProgressSection[],
   activeSectionId: string | undefined,
@@ -39,22 +35,19 @@ export function isSectionPassed(
 }
 
 /**
- * Completion from schema step keys only.
- * Intro / Review alone never count as completed.
+ * Section dot fill: user opened at least one page in this section.
+ * Intro / Review count when visited.
  */
-export function isSectionCompleted(
+export function isSectionVisited(
   section: ProgressSection | undefined,
-  completedStepKeys: ReadonlySet<string>,
+  visitedStepKeys: ReadonlySet<string>,
 ): boolean {
-  if (!section) return false;
-  const schemaSteps = section.steps.filter(
-    (s) =>
-      s.key !== QUESTIONNAIRE_INTRO_STEP &&
-      s.key !== QUESTIONNAIRE_REVIEW_STEP,
-  );
-  if (!schemaSteps.length) return false;
-  return schemaSteps.every((s) => completedStepKeys.has(s.key));
+  if (!section?.steps.length) return false;
+  return section.steps.some((s) => visitedStepKeys.has(s.key));
 }
+
+/** @deprecated Use isSectionVisited — kept for call-site rename clarity. */
+export const isSectionCompleted = isSectionVisited;
 
 export function isStepPassed(
   steps: { key: string }[],
@@ -67,15 +60,13 @@ export function isStepPassed(
   return idx >= 0 && activeIdx >= 0 && idx < activeIdx;
 }
 
-export function isStepCompleted(
+/** Step dot fill: user opened this page this session. */
+export function isStepVisited(
   stepKey: string,
-  completedStepKeys: ReadonlySet<string>,
+  visitedStepKeys: ReadonlySet<string>,
 ): boolean {
-  if (
-    stepKey === QUESTIONNAIRE_INTRO_STEP ||
-    stepKey === QUESTIONNAIRE_REVIEW_STEP
-  ) {
-    return false;
-  }
-  return completedStepKeys.has(stepKey);
+  return visitedStepKeys.has(stepKey);
 }
+
+/** @deprecated Use isStepVisited */
+export const isStepCompleted = isStepVisited;

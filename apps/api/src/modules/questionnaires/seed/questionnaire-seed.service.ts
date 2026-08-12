@@ -5,6 +5,8 @@ import {
   schemasStructurallyEqual,
   validateQuestionnaireSchema,
 } from '@loom/questionnaire-schema';
+import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
+import type { QuestionnaireType } from '../questionnaire.enums';
 import { QuestionnaireTemplate } from '../questionnaire-template.entity';
 import { QuestionnaireTemplateVersion } from '../questionnaire-template-version.entity';
 import { QuestionnaireAssignment } from '../questionnaire-assignment.entity';
@@ -13,6 +15,23 @@ import {
   EMPLOYEE_360_TEMPLATE_TITLE,
   EMPLOYEE_360_V1_SCHEMA,
 } from './employee-360-v1.schema';
+import {
+  EMPLOYEE_DOCS_TEMPLATE_CODE,
+  EMPLOYEE_DOCS_TEMPLATE_TITLE,
+  EMPLOYEE_DOCS_V1_SCHEMA,
+  EMPLOYEE_MANAGING_TEMPLATE_CODE,
+  EMPLOYEE_MANAGING_TEMPLATE_TITLE,
+  EMPLOYEE_MANAGING_V1_SCHEMA,
+} from './questionnaire-stub-schemas';
+
+type SeedTemplateSpec = {
+  code: string;
+  title: string;
+  type: QuestionnaireType;
+  schema: QuestionnaireSchemaJson;
+  /** Full 360 seed has fail-closed prod drift; stubs may refresh when 0 assignments. */
+  failClosedOnSchemaDrift: boolean;
+};
 
 @Injectable()
 export class QuestionnaireSeedService {
@@ -29,37 +48,56 @@ export class QuestionnaireSeedService {
 
   /**
    * Called from ApplicationStartupService (single OnModuleInit).
-   * Production: fail-closed if published v1 differs from seed.
-   * Non-production: overwrite schema only when assignment count is 0.
    */
   async ensureEmployee360V1(): Promise<void> {
-    const validation = validateQuestionnaireSchema(EMPLOYEE_360_V1_SCHEMA);
+    await this.ensurePublishedTemplate({
+      code: EMPLOYEE_360_TEMPLATE_CODE,
+      title: EMPLOYEE_360_TEMPLATE_TITLE,
+      type: 'full',
+      schema: EMPLOYEE_360_V1_SCHEMA,
+      failClosedOnSchemaDrift: true,
+    });
+    await this.ensurePublishedTemplate({
+      code: EMPLOYEE_MANAGING_TEMPLATE_CODE,
+      title: EMPLOYEE_MANAGING_TEMPLATE_TITLE,
+      type: 'managing',
+      schema: EMPLOYEE_MANAGING_V1_SCHEMA,
+      failClosedOnSchemaDrift: false,
+    });
+    await this.ensurePublishedTemplate({
+      code: EMPLOYEE_DOCS_TEMPLATE_CODE,
+      title: EMPLOYEE_DOCS_TEMPLATE_TITLE,
+      type: 'docs',
+      schema: EMPLOYEE_DOCS_V1_SCHEMA,
+      failClosedOnSchemaDrift: false,
+    });
+  }
+
+  private async ensurePublishedTemplate(spec: SeedTemplateSpec): Promise<void> {
+    const validation = validateQuestionnaireSchema(spec.schema);
     if (!validation.ok) {
       throw new Error(
-        `Invalid employee-360 seed schema: ${validation.errors.join('; ')}`,
+        `Invalid ${spec.code} seed schema: ${validation.errors.join('; ')}`,
       );
     }
 
     const isProd = process.env.NODE_ENV === 'production';
-    const seedSchema = EMPLOYEE_360_V1_SCHEMA as unknown as Record<
-      string,
-      unknown
-    >;
+    const seedSchema = spec.schema as unknown as Record<string, unknown>;
 
     let template = await this.templates.findOne({
-      where: { code: EMPLOYEE_360_TEMPLATE_CODE },
+      where: { code: spec.code },
     });
 
     if (!template) {
       template = await this.templates.save(
         this.templates.create({
-          code: EMPLOYEE_360_TEMPLATE_CODE,
-          title: EMPLOYEE_360_TEMPLATE_TITLE,
-          type: 'general',
+          code: spec.code,
+          title: spec.title,
+          type: spec.type,
           status: 'published',
         }),
       );
-      this.logger.log(`Created questionnaire template ${EMPLOYEE_360_TEMPLATE_CODE}`);
+      this.logger.log(`Created questionnaire template ${spec.code}`);
     }
 
     const existing = await this.versions.findOne({
@@ -77,15 +115,15 @@ export class QuestionnaireSeedService {
       );
       if (
         template.status !== 'published' ||
-        template.title !== EMPLOYEE_360_TEMPLATE_TITLE ||
-        template.type !== 'general'
+        template.title !== spec.title ||
+        template.type !== spec.type
       ) {
         template.status = 'published';
-        template.title = EMPLOYEE_360_TEMPLATE_TITLE;
-        template.type = 'general';
+        template.title = spec.title;
+        template.type = spec.type;
         await this.templates.save(template);
       }
-      this.logger.log('Published employee-360 template version 1');
+      this.logger.log(`Published ${spec.code} template version 1`);
       return;
     }
 
@@ -93,25 +131,27 @@ export class QuestionnaireSeedService {
       existing.schemaJson,
       seedSchema,
     );
-    const titleOk = template.title === EMPLOYEE_360_TEMPLATE_TITLE;
+    const titleOk = template.title === spec.title;
     const statusOk = template.status === 'published';
     const publishedAtOk = !!existing.publishedAt;
-    const typeOk = template.type === 'general';
+    const typeOk = template.type === spec.type;
 
     if (schemaEqual && titleOk && statusOk && publishedAtOk && typeOk) {
       return;
     }
 
-    // Type is metadata-only (not part of the immutable published schema):
-    // safe to normalize in every environment, including production, without
-    // tripping the fail-closed check below.
-    if (!typeOk) {
-      template.type = 'general';
+    // Type/title/status are metadata-only (not part of immutable published schema).
+    if (!typeOk || !titleOk || !statusOk) {
+      template.type = spec.type;
+      template.title = spec.title;
+      template.status = 'published';
       await this.templates.save(template);
-      this.logger.log('Normalized employee-360 template type to general');
+      this.logger.log(
+        `Normalized ${spec.code} template metadata (type/title/status)`,
+      );
     }
 
-    if (schemaEqual && titleOk && statusOk && publishedAtOk) {
+    if (schemaEqual && publishedAtOk) {
       return;
     }
 
@@ -119,16 +159,16 @@ export class QuestionnaireSeedService {
       where: { templateVersionId: existing.id },
     });
 
-    if (isProd) {
+    if (!schemaEqual && isProd && spec.failClosedOnSchemaDrift) {
       throw new Error(
-        'Published questionnaire employee-360 v1 differs from checked-in seed. ' +
+        `Published questionnaire ${spec.code} v1 differs from checked-in seed. ` +
           'Published versions are immutable in production. Create version 2.',
       );
     }
 
     if (!schemaEqual && assignmentCount > 0) {
       throw new Error(
-        `employee-360 v1 schema differs from seed but ${assignmentCount} assignment(s) exist. ` +
+        `${spec.code} v1 schema differs from seed but ${assignmentCount} assignment(s) exist. ` +
           'Run `pnpm questionnaires:reset -- --execute` (non-prod) or publish version 2.',
       );
     }
@@ -137,14 +177,9 @@ export class QuestionnaireSeedService {
       existing.schemaJson = seedSchema;
       if (!existing.publishedAt) existing.publishedAt = new Date();
       await this.versions.save(existing);
-      this.logger.log('Refreshed employee-360 v1 schema_json from seed (0 assignments)');
-    }
-
-    if (!titleOk || !statusOk) {
-      template.title = EMPLOYEE_360_TEMPLATE_TITLE;
-      template.status = 'published';
-      await this.templates.save(template);
-      this.logger.log('Normalized employee-360 template title/status');
+      this.logger.log(
+        `Refreshed ${spec.code} v1 schema_json from seed (0 assignments)`,
+      );
     }
 
     if (!publishedAtOk) {

@@ -1,4 +1,8 @@
 import { ForbiddenException } from '@nestjs/common';
+import {
+  EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES,
+  type QuestionnaireType,
+} from '@loom/contracts-questionnaires';
 import type { User } from '../../../platform/identity/user.entity';
 import { Permission } from '../../../platform/permissions/permission.names';
 import type { PermissionService } from '../../../platform/permissions/permission.service';
@@ -54,6 +58,27 @@ const EMPTY_CAPS: QuestionnaireDetailCapabilities = {
   canDelete: false,
 };
 
+export function canAssignQuestionnaires(
+  permissions: PermissionService,
+  actor: User,
+): boolean {
+  return permissions.has(actor.role, Permission.QuestionnairesAssign);
+}
+
+export function canManageLifecycle(
+  permissions: PermissionService,
+  actor: User,
+): boolean {
+  return permissions.has(actor.role, Permission.QuestionnairesManageLifecycle);
+}
+
+export function canDeleteQuestionnaire(
+  permissions: PermissionService,
+  actor: User,
+): boolean {
+  return permissions.has(actor.role, Permission.QuestionnairesDelete);
+}
+
 export function canCompleteOnBehalf(
   permissions: PermissionService,
   actor: User,
@@ -61,11 +86,59 @@ export function canCompleteOnBehalf(
   return permissions.has(actor.role, Permission.QuestionnairesCompleteAny);
 }
 
-export function canManageLifecycle(
+export function isElevatedQuestionnaireActor(
   permissions: PermissionService,
   actor: User,
 ): boolean {
-  return permissions.has(actor.role, Permission.QuestionnairesAssign);
+  return (
+    canAssignQuestionnaires(permissions, actor) ||
+    canManageLifecycle(permissions, actor) ||
+    canCompleteOnBehalf(permissions, actor) ||
+    canDeleteQuestionnaire(permissions, actor)
+  );
+}
+
+/**
+ * Single type-visibility policy for all assignment read/write paths.
+ * Non-owner: caller must already have passed employee/detached scope.
+ * Plain owner: full only.
+ * Elevated owner (Assign / ManageLifecycle / CompleteAny / Delete): allow all types.
+ */
+export function canActorAccessAssignmentType(input: {
+  actor: User;
+  employee: Employee | null;
+  templateType: QuestionnaireType | string;
+  permissions: PermissionService;
+  access: EmployeeAccessService;
+}): boolean {
+  const { actor, employee, templateType, permissions, access } = input;
+  if (!employee) {
+    return true;
+  }
+  const isOwner = access.isOwner(actor, employee);
+  if (!isOwner) {
+    return true;
+  }
+  if (isElevatedQuestionnaireActor(permissions, actor)) {
+    return true;
+  }
+  return (EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES as readonly string[]).includes(
+    templateType,
+  );
+}
+
+export function requireActorAccessAssignmentType(input: {
+  actor: User;
+  employee: Employee | null;
+  templateType: QuestionnaireType | string;
+  permissions: PermissionService;
+  access: EmployeeAccessService;
+}): void {
+  if (!canActorAccessAssignmentType(input)) {
+    throw new ForbiddenException(
+      'Cannot access this questionnaire type',
+    );
+  }
 }
 
 /**
@@ -82,7 +155,8 @@ export function computeDetailCapabilities(input: {
 }): QuestionnaireDetailCapabilities {
   const { actor, employee, status, permissions, access, latestSubmission } =
     input;
-  const manage = canManageLifecycle(permissions, actor);
+  const canDelete = canDeleteQuestionnaire(permissions, actor);
+  const canAssign = canAssignQuestionnaires(permissions, actor);
   const onBehalf = canCompleteOnBehalf(permissions, actor);
   const canReviewPerm = permissions.has(
     actor.role,
@@ -96,22 +170,22 @@ export function computeDetailCapabilities(input: {
   if (status === 'new') {
     return {
       ...EMPTY_CAPS,
-      canEditDraft: manage && onBehalf,
-      canDelete: manage,
+      canEditDraft: canAssign && onBehalf,
+      canDelete,
     };
   }
 
   if (status === 'closed' || status === 'cancelled') {
     return {
       ...EMPTY_CAPS,
-      canDelete: manage,
+      canDelete,
     };
   }
 
   if (!employee) {
     return {
       ...EMPTY_CAPS,
-      canDelete: manage,
+      canDelete,
     };
   }
 
@@ -156,7 +230,7 @@ export function computeDetailCapabilities(input: {
     canRequestChanges,
     canReview,
     canResolveChangeRequest,
-    canDelete: manage,
+    canDelete,
   };
 }
 
@@ -169,26 +243,37 @@ export function computeListLifecycleCapabilities(input: {
 }): QuestionnaireListLifecycleCapabilities {
   const { actor, status, employeeId, detachedFromEmployeeId, permissions } =
     input;
-  const manage = canManageLifecycle(permissions, actor);
+  const canAssign = canAssignQuestionnaires(permissions, actor);
+  const canManage = canManageLifecycle(permissions, actor);
+  const canDelete = canDeleteQuestionnaire(permissions, actor);
+  const attachOk = canAttachAssignment({
+    status,
+    employeeId,
+    detachedFromEmployeeId,
+  });
+
   if (status === 'closed') {
     return {
       canOpen: true,
-      canAssign: manage,
+      canAssign,
       canAttach: false,
       canCancel: false,
       canClose: false,
-      canDelete: manage,
+      canDelete,
     };
   }
+
+  const canAttachNew = status === 'new' && canAssign && attachOk;
+  const canAttachReattach =
+    status === 'cancelled' && canManage && attachOk;
+
   return {
     canOpen: true,
-    canAssign: manage,
-    canAttach:
-      manage &&
-      canAttachAssignment({ status, employeeId, detachedFromEmployeeId }),
-    canCancel: manage && canCancelAssignment(status),
-    canClose: manage && canCloseAssignment(status),
-    canDelete: manage,
+    canAssign,
+    canAttach: canAttachNew || canAttachReattach,
+    canCancel: canManage && canCancelAssignment(status),
+    canClose: canManage && canCloseAssignment(status),
+    canDelete,
   };
 }
 

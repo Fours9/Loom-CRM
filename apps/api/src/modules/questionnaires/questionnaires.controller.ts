@@ -87,7 +87,7 @@ export class QuestionnairesController {
   }
 
   @Post('assignments/:id/cancel')
-  @RequirePermissions(Permission.QuestionnairesAssign)
+  @RequirePermissions(Permission.QuestionnairesManageLifecycle)
   cancelAssignment(
     @CurrentUser() actor: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -95,8 +95,9 @@ export class QuestionnairesController {
     return this.assignments.cancel(actor, id);
   }
 
+  /** Assign (new) or ManageLifecycle (reattach) enforced in service. */
   @Post('assignments/:id/attach')
-  @RequirePermissions(Permission.QuestionnairesAssign)
+  @RequirePermissions(Permission.QuestionnairesView)
   attachAssignment(
     @CurrentUser() actor: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -106,7 +107,7 @@ export class QuestionnairesController {
   }
 
   @Post('assignments/:id/close')
-  @RequirePermissions(Permission.QuestionnairesAssign)
+  @RequirePermissions(Permission.QuestionnairesManageLifecycle)
   closeAssignment(
     @CurrentUser() actor: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -116,7 +117,7 @@ export class QuestionnairesController {
 
   @Delete('assignments/:id')
   @HttpCode(204)
-  @RequirePermissions(Permission.QuestionnairesAssign)
+  @RequirePermissions(Permission.QuestionnairesDelete)
   async deleteAssignment(
     @CurrentUser() actor: User,
     @Param('id', ParseUUIDPipe) id: string,

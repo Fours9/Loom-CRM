@@ -31,6 +31,7 @@ import {
 } from './reopen/questionnaire-active-change-request';
 import {
   computeDetailCapabilities,
+  requireActorAccessAssignmentType,
   requireCanSubmit,
 } from './assignments/questionnaire-assignment-access';
 import { isOwnerEditableStatus } from './assignments/questionnaire-assignment-transitions';
@@ -69,6 +70,13 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
+    requireActorAccessAssignmentType({
+      actor,
+      employee,
+      templateType: assignment.templateVersion.template.type,
+      permissions: this.permissions,
+      access: this.access,
+    });
 
     const caps = computeDetailCapabilities({
       actor,
@@ -199,6 +207,13 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
+    requireActorAccessAssignmentType({
+      actor,
+      employee,
+      templateType: assignment.templateVersion.template.type,
+      permissions: this.permissions,
+      access: this.access,
+    });
 
     const caps = computeDetailCapabilities({
       actor,
@@ -251,6 +266,7 @@ export class QuestionnaireSubmissionService {
   async reopenSelf(actor: User, assignmentId: string) {
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
+      relations: { templateVersion: { template: true } },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
     if (!assignment.employeeId) {
@@ -258,6 +274,13 @@ export class QuestionnaireSubmissionService {
     }
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
+    requireActorAccessAssignmentType({
+      actor,
+      employee,
+      templateType: assignment.templateVersion.template.type,
+      permissions: this.permissions,
+      access: this.access,
+    });
     const caps = computeDetailCapabilities({
       actor,
       employee,
@@ -292,6 +315,7 @@ export class QuestionnaireSubmissionService {
   async startRevision(actor: User, assignmentId: string) {
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
+      relations: { templateVersion: { template: true } },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
     if (!assignment.employeeId) {
@@ -300,6 +324,13 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
+    requireActorAccessAssignmentType({
+      actor,
+      employee,
+      templateType: assignment.templateVersion.template.type,
+      permissions: this.permissions,
+      access: this.access,
+    });
 
     const caps = computeDetailCapabilities({
       actor,
@@ -347,6 +378,13 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
+    requireActorAccessAssignmentType({
+      actor,
+      employee,
+      templateType: assignment.templateVersion.template.type,
+      permissions: this.permissions,
+      access: this.access,
+    });
 
     const templateTitle =
       assignment.templateVersion?.template?.title ?? 'Анкета';

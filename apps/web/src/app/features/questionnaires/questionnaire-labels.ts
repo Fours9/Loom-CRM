@@ -1,14 +1,15 @@
-import type {
-  QuestionnaireAssignmentStatus,
-  QuestionnaireAttachmentState,
-  QuestionnaireType,
+import {
+  EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES,
+  QUESTIONNAIRE_TYPE_CATALOG,
+  type QuestionnaireAssignmentStatus,
+  type QuestionnaireAttachmentState,
+  type QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 
 export const QUESTIONNAIRE_TYPE_LABELS = {
-  general: 'Загальна',
-  hr: 'HR',
-  manager: 'Менеджер',
-  full: 'Повна',
+  full: QUESTIONNAIRE_TYPE_CATALOG.full.labelUa,
+  managing: QUESTIONNAIRE_TYPE_CATALOG.managing.labelUa,
+  docs: QUESTIONNAIRE_TYPE_CATALOG.docs.labelUa,
 } satisfies Record<QuestionnaireType, string>;
 
 export const QUESTIONNAIRE_STATUS_LABELS = {
@@ -32,6 +33,17 @@ export const QUESTIONNAIRE_ATTACHMENT_LABELS = {
 export function questionnaireTypeLabel(type: string): string {
   return (
     QUESTIONNAIRE_TYPE_LABELS[type as QuestionnaireType] ?? type
+  );
+}
+
+export function questionnaireTypeDescription(type: string): string {
+  const entry = QUESTIONNAIRE_TYPE_CATALOG[type as QuestionnaireType];
+  return entry?.descriptionUa ?? '';
+}
+
+export function isEmployeeOwnerVisibleType(type: string): boolean {
+  return (EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES as readonly string[]).includes(
+    type,
   );
 }
 

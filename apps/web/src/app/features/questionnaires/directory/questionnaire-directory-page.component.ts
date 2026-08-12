@@ -208,36 +208,38 @@ type Pos = { id: string; name: string };
                     }}</span>
                   </td>
                   <td class="actions">
-                    @if (item.capabilities.canAttach) {
+                    <div class="actions-row">
+                      @if (item.capabilities.canAttach) {
+                        <button
+                          type="button"
+                          class="icon-btn"
+                          title="Прикріпити"
+                          aria-label="Прикріпити анкету до працівника"
+                          (click)="openAttachPicker(item)"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path
+                              fill="currentColor"
+                              d="M16.5 6.5l-7.6 7.6a2.5 2.5 0 003.54 3.54l7.6-7.6a4.5 4.5 0 10-6.36-6.36l-7.6 7.6a6.5 6.5 0 109.19 9.19l6.6-6.6-1.41-1.42-6.6 6.6a4.5 4.5 0 11-6.36-6.36l7.6-7.6a2.5 2.5 0 013.54 3.54l-7.6 7.6a.5.5 0 01-.71-.71l6.6-6.6-1.41-1.42z"
+                            />
+                          </svg>
+                        </button>
+                      }
                       <button
                         type="button"
                         class="icon-btn"
-                        title="Прикріпити"
-                        aria-label="Прикріпити анкету до працівника"
-                        (click)="openAttachPicker(item)"
+                        title="Відкрити"
+                        aria-label="Відкрити анкету"
+                        (click)="open(item.id)"
                       >
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path
                             fill="currentColor"
-                            d="M16.5 6.5l-7.6 7.6a2.5 2.5 0 003.54 3.54l7.6-7.6a4.5 4.5 0 10-6.36-6.36l-7.6 7.6a6.5 6.5 0 109.19 9.19l6.6-6.6-1.41-1.42-6.6 6.6a4.5 4.5 0 11-6.36-6.36l7.6-7.6a2.5 2.5 0 013.54 3.54l-7.6 7.6a.5.5 0 01-.71-.71l6.6-6.6-1.41-1.42z"
+                            d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3zM5 5h6v2H7v10h10v-4h2v6H5V5z"
                           />
                         </svg>
                       </button>
-                    }
-                    <button
-                      type="button"
-                      class="icon-btn"
-                      title="Відкрити"
-                      aria-label="Відкрити анкету"
-                      (click)="open(item.id)"
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                          fill="currentColor"
-                          d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3zM5 5h6v2H7v10h10v-4h2v6H5V5z"
-                        />
-                      </svg>
-                    </button>
+                    </div>
                   </td>
                 </tr>
               }
@@ -421,7 +423,13 @@ type Pos = { id: string; name: string };
         white-space: nowrap;
       }
       .actions {
-        display: flex;
+        width: 1%;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      /* Flex on <td> breaks border-collapse and draws the row border through buttons. */
+      .actions-row {
+        display: inline-flex;
         flex-direction: row;
         flex-wrap: nowrap;
         align-items: center;

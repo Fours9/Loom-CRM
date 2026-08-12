@@ -24,7 +24,7 @@ export class QuestionnaireTemplate {
   @Column({ type: 'varchar', length: 255 })
   title!: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'general' })
+  @Column({ type: 'varchar', length: 32, default: 'full' })
   type!: QuestionnaireType;
 
   @Column({ type: 'varchar', length: 32, default: 'draft' })

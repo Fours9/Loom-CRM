@@ -14,6 +14,10 @@ import type {
 import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { QuestionnaireEmployeeTypeaheadComponent } from '../shared/questionnaire-employee-typeahead.component';
+import {
+  questionnaireTypeDescription,
+  questionnaireTypeLabel,
+} from '../questionnaire-labels';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
@@ -42,10 +46,16 @@ import { firstValueFrom } from 'rxjs';
             (change)="onTemplateChange($any($event.target).value)"
           >
             @for (t of templates(); track t.code) {
-              <option [value]="t.code">{{ t.title }} ({{ t.type }})</option>
+              <option [value]="t.code">
+                {{ typeLabel(t.type) }} — {{ t.title }}
+              </option>
             }
           </select>
         </label>
+
+        @if (selectedTypeDescription()) {
+          <p class="type-desc">{{ selectedTypeDescription() }}</p>
+        }
 
         <label class="field">
           Назва
@@ -121,6 +131,12 @@ import { firstValueFrom } from 'rxjs';
         font-size: 0.8rem;
         color: var(--pw-muted);
       }
+      .type-desc {
+        margin: -0.35rem 0 0;
+        font-size: 0.85rem;
+        color: var(--pw-muted);
+        line-height: 1.35;
+      }
       input,
       select,
       textarea {
@@ -188,7 +204,17 @@ export class QuestionnaireCreateDialogComponent implements OnInit {
     return this.templates().find((t) => t.code === code)?.title ?? '';
   });
 
+  readonly selectedTypeDescription = computed(() => {
+    const code = this.selectedTemplateCode();
+    const type = this.templates().find((t) => t.code === code)?.type;
+    return type ? questionnaireTypeDescription(type) : '';
+  });
+
   private backdropPress = false;
+
+  typeLabel(type: string): string {
+    return questionnaireTypeLabel(type);
+  }
 
   /** Close only on a full click that both starts and ends on the backdrop. */
   onBackdropPointerDown(event: MouseEvent): void {
