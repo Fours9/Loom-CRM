@@ -12,6 +12,7 @@ import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import {
   computeDetailCapabilities,
+  requireActorAccessAssignmentType,
   requireCanEditDraft,
 } from './assignments/questionnaire-assignment-access';
 
@@ -52,6 +53,7 @@ export class QuestionnaireResponseService {
   ) {
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
+      relations: { templateVersion: { template: true } },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
@@ -61,6 +63,13 @@ export class QuestionnaireResponseService {
     if (employee) {
       await this.access.requireCanView(actor, employee);
     }
+    requireActorAccessAssignmentType({
+      actor,
+      employee,
+      templateType: assignment.templateVersion.template.type,
+      permissions: this.permissions,
+      access: this.access,
+    });
 
     const caps = computeDetailCapabilities({
       actor,

@@ -67,6 +67,8 @@ export class QuestionnaireDraftStore {
   readonly activeStepKey = signal<QuestionnaireWizardStepKey>(
     QUESTIONNAIRE_INTRO_STEP,
   );
+  /** Steps opened in this fill session — drives progress-rail filled dots. */
+  readonly visitedStepKeys = signal<ReadonlySet<string>>(new Set());
   readonly saveState = signal<SaveState>('idle');
   readonly lastSavedAt = signal<string | null>(null);
   readonly saveError = signal<string | null>(null);
@@ -207,6 +209,7 @@ export class QuestionnaireDraftStore {
     this.profileMirror.set({});
     this.revision.set(0);
     this.activeStepKey.set(QUESTIONNAIRE_INTRO_STEP);
+    this.visitedStepKeys.set(new Set());
     this.saveState.set('idle');
     this.lastSavedAt.set(null);
     this.saveError.set(null);
@@ -328,6 +331,7 @@ export class QuestionnaireDraftStore {
       completedStepKeys: this.completedSteps(),
     });
     this.activeStepKey.set(resolved);
+    this.markStepVisited(resolved);
   }
 
   setActiveStep(stepKey: QuestionnaireWizardStepKey): void {
@@ -338,6 +342,16 @@ export class QuestionnaireDraftStore {
       completedStepKeys: this.completedSteps(),
     });
     this.activeStepKey.set(resolved);
+    this.markStepVisited(resolved);
+  }
+
+  private markStepVisited(stepKey: string): void {
+    this.visitedStepKeys.update((prev) => {
+      if (prev.has(stepKey)) return prev;
+      const next = new Set(prev);
+      next.add(stepKey);
+      return next;
+    });
   }
 
   setAnswer(fieldKey: string, value: unknown): void {

@@ -1,22 +1,29 @@
 import { SelectQueryBuilder } from 'typeorm';
-import type {
-  QuestionnaireAssignmentStatus,
-  QuestionnaireAttachmentState,
-  QuestionnaireDirectorySortBy,
-  QuestionnaireType,
+import {
+  EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES,
+  type QuestionnaireAssignmentStatus,
+  type QuestionnaireAttachmentState,
+  type QuestionnaireDirectorySortBy,
+  type QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 import { QuestionnaireAssignment } from '../questionnaire-assignment.entity';
 import { ATTACHED_STATUSES } from './questionnaire-assignment-attachment-state';
 import { escapeIlikePattern } from './questionnaire-assignment-code';
 
 export type QuestionnaireDirectoryScope =
-  | { kind: 'all'; includeUnattached: true }
-  | { kind: 'self'; userId: string; includeUnattached: false }
+  | { kind: 'all' }
+  | {
+      kind: 'self';
+      userId: string;
+      /** Restrict to owner-visible template types. */
+      ownerTypeFilter: true;
+    }
   | {
       kind: 'departments_and_self';
       departmentIds: string[];
       userId: string;
-      includeUnattached: false;
+      /** Include status=new with both employee ids null (Assign pool). */
+      includeNewUnattached: boolean;
     };
 
 /** Filters shared by directory and employee-scoped lists. */
@@ -62,23 +69,43 @@ export function applyDirectoryScope(
 ): void {
   if (scope.kind === 'all') return;
 
-  qb.andWhere('a.employee_id IS NOT NULL');
-
   if (scope.kind === 'self') {
+    qb.andWhere('a.employee_id IS NOT NULL');
     qb.andWhere('emp.user_id = :scopeUserId', { scopeUserId: scope.userId });
+    if (scope.ownerTypeFilter) {
+      qb.andWhere('tmpl.type IN (:...ownerTypes)', {
+        ownerTypes: [...EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES],
+      });
+    }
     return;
   }
+
+  // departments_and_self (+ optional new pool + cancelled via detached employee)
+  const deptClause =
+    scope.departmentIds.length > 0
+      ? '(detached_emp.department_id IN (:...scopeDeptIds) OR detached_emp.user_id = :scopeUserId)'
+      : 'detached_emp.user_id = :scopeUserId';
+  const empClause =
+    scope.departmentIds.length > 0
+      ? '(emp.department_id IN (:...scopeDeptIds) OR emp.user_id = :scopeUserId)'
+      : 'emp.user_id = :scopeUserId';
+
+  const params: Record<string, unknown> = { scopeUserId: scope.userId };
   if (scope.departmentIds.length) {
-    qb.andWhere(
-      '(emp.department_id IN (:...scopeDeptIds) OR emp.user_id = :scopeUserId)',
-      {
-        scopeDeptIds: scope.departmentIds,
-        scopeUserId: scope.userId,
-      },
-    );
-  } else {
-    qb.andWhere('emp.user_id = :scopeUserId', { scopeUserId: scope.userId });
+    params.scopeDeptIds = scope.departmentIds;
   }
+
+  const parts = [
+    `(a.employee_id IS NOT NULL AND ${empClause})`,
+    `(a.status = 'cancelled' AND a.employee_id IS NULL AND a.detached_from_employee_id IS NOT NULL AND ${deptClause})`,
+  ];
+  if (scope.includeNewUnattached) {
+    parts.push(
+      `(a.status = 'new' AND a.employee_id IS NULL AND a.detached_from_employee_id IS NULL)`,
+    );
+  }
+
+  qb.andWhere(`(${parts.join(' OR ')})`, params);
 }
 
 export function applyEmployeeScope(
@@ -87,6 +114,14 @@ export function applyEmployeeScope(
 ): void {
   qb.andWhere('a.employee_id = :employeeId', { employeeId });
   qb.andWhere('a.status != :cancelledStatus', { cancelledStatus: 'cancelled' });
+}
+
+export function applyOwnerVisibleTypeFilter(
+  qb: SelectQueryBuilder<QuestionnaireAssignment>,
+): void {
+  qb.andWhere('tmpl.type IN (:...ownerTypes)', {
+    ownerTypes: [...EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES],
+  });
 }
 
 export function applyAssignmentFilters(

@@ -24,7 +24,7 @@
 | **Organization** | employees (Profile Core), departments, positions, schedules, access scope |
 | **Absences** | повний PW-паритетний модуль відсутностей |
 | **Documents** | MVP: `employee_documents`, People-вкладка + агрегат вкладень Absences (storage поки `content_base64`; Platform Files — planned) |
-| **Questionnaires** | Phase 3: immersive fill; unattached `new` + attach/detach; template types (360=Загальна); print stubs; PDF layout contract in roadmap (not shipped) |
+| **Questionnaires** | Phase 3: immersive fill; unattached `new` + attach/detach; template types (360=Повна); print stubs; PDF layout contract in roadmap (not shipped) |
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
@@ -32,7 +32,7 @@
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 
-**Анкета 360°:** policy catalog → seed → `schema_json`; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)). Fill UI = schema-driven wizard на `/questionnaires/:id`. Кожне призначення має людський `code` (напр. `360-002`); створення через попап (шаблон / працівник / службова примітка); каталог + профіль — пошук за кодом.
+**Анкета 360°:** types `full`/`managing`/`docs`; seed `employee-360` = full («Повна») + Variant A stubs managing/docs; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)). Fill UI = schema-driven wizard на `/questionnaires/:id`. Кожне призначення має людський `code` (напр. `360-002`); створення через попап (тип+опис / працівник / службова примітка); каталог + профіль — пошук за кодом. Permissions: Assign (DM+Admin) vs ManageLifecycle/Delete (Admin).
 
 | Тип документа | Призначення |
 | --- | --- |

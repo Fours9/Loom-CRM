@@ -96,10 +96,11 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | # | sectionKey | sectionLabel | destination (primary) | mvpStatus |
 |---|------------|--------------|----------------------|-----------|
 | 1 | `personal` | Особисті дані | employee_profile | in_mvp (mirror + proposals) |
+| 1b | `contacts` | Контакти | employee_profile | in_mvp (split from personal; mirror + proposals) |
 | 2 | `family` | Сімейний стан | questionnaire_snapshot | in_mvp (voluntary; stay in snapshot) |
 | 2b | `celebration_dates` | Святкові дати | questionnaire_snapshot | in_mvp (split from family; gifts + ДН) |
 | 3 | `emergency` | Контакт на екстрений випадок | employee_profile | excluded from fill MVP (already Profile Core) |
-| 4 | `employment` | Робота в компанії | employment_assignment | excluded from fill MVP (Profile Core) |
+| 4 | `company_work` | Робота в компанії | questionnaire_snapshot | in_mvp (fill snapshot; Profile Core assignment remains SoT for org fields later) |
 | 5 | `grade` | Грейд і рівень посади | later compensation | later_module |
 | 6 | `experience` | Професійний досвід | questionnaire_snapshot | in_mvp |
 | 7 | `skills` | Матриця навичок | skills | later_module |
@@ -117,7 +118,7 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | 19 | `crm_control` | Контроль внесення в CRM | process | excluded (computed/process) |
 
 **MVP wizard steps (seed):**  
-1 profile_mirror · 2 family · 3 celebration_dates · 4 experience · 5 education · 6 strengths · 7 hobbies · 8 work_style · 9 consents_review.
+1 profile_mirror · 2 contacts · 3 family · 4 celebration_dates · 5 experience · 6 company_work · 7 education · 8 strengths · 9 hobbies · 10 work_style · 11 consents_review.
 
 ---
 
@@ -132,14 +133,21 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | personal.birth_date | 40 | Дата народження | date | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | personal.birthDate | |
 | personal.city | 50 | Місто проживання | text | recommended | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | personal.city | |
 | personal.photo_status | 60 | Фото для профілю | single_choice | voluntary | employee_owner | employee_owner, admin | personal | consents | later_module | false | — | options: added, later, declined — legal consent → Consents; not employees.photo_consent_status |
+| personal.preferred_language | 110 | Бажана мова | multi_choice | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | personal.preferredLanguage | options: uk, en, other; profile canonical `uk,en,other:Текст` |
+| personal.preferred_language_other | 111 | Інша мова | text | voluntary | employee_owner | employee_owner, admin | normal | employee_profile | in_mvp | false | — | visibleWhen includes `other`; no separate proposal |
+
+`preferred_language` options: `{uk,en,other}` / labels Українська, Англійська, Інша.
+
+---
+
+## Fields — block 1b `contacts` (mirror / proposals; step `contacts`)
+
+| key | order | label | valueType | requiredPolicy | filledBy | visibility | sensitivity | destination | mvpStatus | createsProfileProposal | proposalMapping / profileField | notes |
+|-----|-------|-------|-----------|----------------|----------|------------|-------------|-------------|-----------|------------------------|--------------------------------|-------|
 | personal.phone_primary | 70 | Основний телефон | text | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_phone | via employee_contacts |
 | personal.phone_secondary | 80 | Додатковий телефон | text | voluntary | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_phone | additional row |
 | personal.email | 90 | Особиста email | text | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_email | |
 | personal.telegram | 100 | Telegram | text | voluntary | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_telegram | |
-| personal.preferred_language | 110 | Бажана мова | multi_choice | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | personal.preferredLanguage | options: uk, en, other; profile canonical `uk,en,other:Текст` |
-| personal.preferred_language_other | 111 | Інша мова | text | voluntary | employee_owner | employee_owner, admin | normal | employee_profile | in_mvp | false | — | visibleWhen includes `other`; no separate proposal |
-
-`preferred_language` options: `{uk,en,other}` / labels Українська, Англійська, Інша. Phones/email/telegram: `uiGroup: contacts`.
 
 ---
 
@@ -174,9 +182,30 @@ Documented for completeness; `mvpStatus: excluded`. Existing `employee_emergency
 
 ---
 
-## Fields — block 4 `employment` (Profile Core; not fill MVP)
+## Fields — block 4 `company_work` (in_mvp snapshot)
 
-Documented mapping only (`mvpStatus: excluded`): company/direction/department/position → assignment refs; schedule → work_schedule_days SoT (not free text 09:00–18:00); employment type / contract / location / manager / mentor / HR responsible → assignment / refs.
+Fill step «Робота в компанії». Snapshot-only for MVP (org assignment SoT remains Profile Core; may mirror later).
+
+| key | order | label | valueType | notes |
+|-----|-------|-------|-----------|-------|
+| company_work.company_direction | 10 | Компанія / напрямок | text | |
+| company_work.department | 20 | Підрозділ | text | |
+| company_work.position | 30 | Посада | text | |
+| company_work.functional_role | 40 | Функціональна роль | text | |
+| company_work.manager | 50 | Безпосередній керівник | text | |
+| company_work.mentor | 60 | Наставник | text | |
+| company_work.hr_responsible | 70 | HR-відповідальний | text | |
+| company_work.start_date | 80 | Дата виходу на роботу | date | |
+| company_work.probation_end | 90 | Кінець випроб. терміну | date | |
+| company_work.status | 100 | Статус | multi_choice | internship, probation, active, leave |
+| company_work.work_format | 110 | Формат роботи | multi_choice | office, production, hybrid, remote |
+| company_work.schedule | 120 | Графік | multi_choice | nine_to_six, shifts, flexible, other |
+| company_work.schedule_other | 121 | Інший графік | text | visibleWhen includes `other` |
+| company_work.employment_type | 130 | Тип зайнятості | multi_choice | full_time, part_time, project, hourly |
+| company_work.contract_type | 140 | Тип оформлення | multi_choice | staff, fop, gph |
+| company_work.location | 150 | Локація роботи | text | |
+
+All: voluntary, questionnaire_snapshot, in_mvp, filledBy employee_owner.
 
 ---
 
@@ -249,10 +278,12 @@ Single catalog entry representing matrix (not 26 hardcoded employee columns):
 | strengths.energizers | 30 | Що дає енергію | textarea |
 | strengths.dislike | 40 | Що не подобається | textarea |
 | strengths.blockers | 50 | Що заважає | textarea |
-| strengths.ask_me_about | 60 | За якими питаннями звертатись | textarea |
-| strengths.in_two_years | 70 | Через 2 роки бачу себе | text |
+| strengths.in_one_year | 60 | Ким ви бачите себе через 1 рік | textarea |
+| strengths.in_two_to_three_years | 70 | Ким ви бачите себе через 2–3 роки | textarea |
+| strengths.ready_responsibility | 80 | Яку відповідальність готові взяти | textarea |
 
-All: voluntary, personal/normal, questionnaire_snapshot, in_mvp, filledBy employee_owner.
+All: voluntary, personal/normal, questionnaire_snapshot, in_mvp, filledBy employee_owner.  
+Removed: `strengths.ask_me_about`, `strengths.in_two_years` (replaced by 1 рік / 2–3 роки + відповідальність).
 
 ---
 

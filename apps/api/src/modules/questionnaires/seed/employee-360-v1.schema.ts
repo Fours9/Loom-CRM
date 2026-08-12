@@ -11,12 +11,18 @@ import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
 import { completionPercentVisible } from '@loom/questionnaire-schema';
 
 export const EMPLOYEE_360_TEMPLATE_CODE = 'employee-360';
-export const EMPLOYEE_360_TEMPLATE_TITLE = 'Анкета 360° співробітника';
+/** Template row / catalog title (metadata; safe to normalize anytime). */
+export const EMPLOYEE_360_TEMPLATE_TITLE = 'Повна анкета';
+/**
+ * Published v1 form title inside schema_json — immutable while assignments exist.
+ * Do not retarget this without publishing version 2 (or reset with 0 assignments).
+ */
+export const EMPLOYEE_360_V1_SCHEMA_TITLE = 'Анкета 360° співробітника';
 
 export const EMPLOYEE_360_V1_SCHEMA = {
   code: 'employee-360',
   version: 1,
-  title: EMPLOYEE_360_TEMPLATE_TITLE,
+  title: EMPLOYEE_360_V1_SCHEMA_TITLE,
   steps: [
     {
       key: 'profile_mirror',
@@ -78,49 +84,6 @@ export const EMPLOYEE_360_V1_SCHEMA = {
           proposalMapping: { section: 'personal', field: 'city' },
         },
         {
-          key: 'personal.phone_primary',
-          label: 'Основний телефон',
-          valueType: 'text',
-          requiredPolicy: 'recommended',
-          uiGroup: 'contacts',
-          uiGroupLabel: 'Контакти',
-          createsProfileProposal: true,
-          proposalMapping: { section: 'contacts', field: 'personal_phone' },
-        },
-        {
-          key: 'personal.phone_secondary',
-          label: 'Додатковий телефон',
-          valueType: 'text',
-          requiredPolicy: 'voluntary',
-          uiGroup: 'contacts',
-          uiGroupLabel: 'Контакти',
-          createsProfileProposal: true,
-          proposalMapping: {
-            section: 'contacts',
-            field: 'personal_phone_secondary',
-          },
-        },
-        {
-          key: 'personal.email',
-          label: 'Особиста email',
-          valueType: 'text',
-          requiredPolicy: 'recommended',
-          uiGroup: 'contacts',
-          uiGroupLabel: 'Контакти',
-          createsProfileProposal: true,
-          proposalMapping: { section: 'contacts', field: 'personal_email' },
-        },
-        {
-          key: 'personal.telegram',
-          label: 'Telegram',
-          valueType: 'text',
-          requiredPolicy: 'voluntary',
-          uiGroup: 'contacts',
-          uiGroupLabel: 'Контакти',
-          createsProfileProposal: true,
-          proposalMapping: { section: 'contacts', field: 'personal_telegram' },
-        },
-        {
           key: 'personal.preferred_language',
           label: 'Бажана мова',
           valueType: 'multi_choice',
@@ -142,6 +105,47 @@ export const EMPLOYEE_360_V1_SCHEMA = {
             answerKey: 'personal.preferred_language',
             includes: 'other',
           },
+        },
+      ],
+    },
+    {
+      key: 'contacts',
+      label: 'Контакти',
+      fields: [
+        {
+          key: 'personal.phone_primary',
+          label: 'Основний телефон',
+          valueType: 'text',
+          requiredPolicy: 'recommended',
+          createsProfileProposal: true,
+          proposalMapping: { section: 'contacts', field: 'personal_phone' },
+        },
+        {
+          key: 'personal.phone_secondary',
+          label: 'Додатковий телефон',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+          createsProfileProposal: true,
+          proposalMapping: {
+            section: 'contacts',
+            field: 'personal_phone_secondary',
+          },
+        },
+        {
+          key: 'personal.email',
+          label: 'Особиста email',
+          valueType: 'text',
+          requiredPolicy: 'recommended',
+          createsProfileProposal: true,
+          proposalMapping: { section: 'contacts', field: 'personal_email' },
+        },
+        {
+          key: 'personal.telegram',
+          label: 'Telegram',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+          createsProfileProposal: true,
+          proposalMapping: { section: 'contacts', field: 'personal_telegram' },
         },
       ],
     },
@@ -310,6 +314,141 @@ export const EMPLOYEE_360_V1_SCHEMA = {
       ],
     },
     {
+      key: 'company_work',
+      label: 'Робота в компанії',
+      fields: [
+        {
+          key: 'company_work.company_direction',
+          label: 'Компанія / напрямок',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.department',
+          label: 'Підрозділ',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.position',
+          label: 'Посада',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.functional_role',
+          label: 'Функціональна роль',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.manager',
+          label: 'Безпосередній керівник',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.mentor',
+          label: 'Наставник',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.hr_responsible',
+          label: 'HR-відповідальний',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.start_date',
+          label: 'Дата виходу на роботу',
+          valueType: 'date',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.probation_end',
+          label: 'Кінець випроб. терміну',
+          valueType: 'date',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'company_work.status',
+          label: 'Статус',
+          valueType: 'multi_choice',
+          requiredPolicy: 'voluntary',
+          options: [
+            { value: 'internship', label: 'Стажування' },
+            { value: 'probation', label: 'Випробувальний' },
+            { value: 'active', label: 'Активний' },
+            { value: 'leave', label: 'Відпустка' },
+          ],
+        },
+        {
+          key: 'company_work.work_format',
+          label: 'Формат роботи',
+          valueType: 'multi_choice',
+          requiredPolicy: 'voluntary',
+          options: [
+            { value: 'office', label: 'Офіс' },
+            { value: 'production', label: 'Виробництво' },
+            { value: 'hybrid', label: 'Гібрид' },
+            { value: 'remote', label: 'Дистанційно' },
+          ],
+        },
+        {
+          key: 'company_work.schedule',
+          label: 'Графік',
+          valueType: 'multi_choice',
+          requiredPolicy: 'voluntary',
+          options: [
+            { value: 'nine_to_six', label: '09:00–18:00' },
+            { value: 'shifts', label: 'Позмінний' },
+            { value: 'flexible', label: 'Гнучкий' },
+            { value: 'other', label: 'Інший' },
+          ],
+        },
+        {
+          key: 'company_work.schedule_other',
+          label: 'Інший графік',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+          visibleWhen: {
+            answerKey: 'company_work.schedule',
+            includes: 'other',
+          },
+        },
+        {
+          key: 'company_work.employment_type',
+          label: 'Тип зайнятості',
+          valueType: 'multi_choice',
+          requiredPolicy: 'voluntary',
+          options: [
+            { value: 'full_time', label: 'Повна' },
+            { value: 'part_time', label: 'Часткова' },
+            { value: 'project', label: 'Проєктна' },
+            { value: 'hourly', label: 'Погодинна' },
+          ],
+        },
+        {
+          key: 'company_work.contract_type',
+          label: 'Тип оформлення',
+          valueType: 'multi_choice',
+          requiredPolicy: 'voluntary',
+          options: [
+            { value: 'staff', label: 'Штат' },
+            { value: 'fop', label: 'ФОП' },
+            { value: 'gph', label: 'ЦПХ' },
+          ],
+        },
+        {
+          key: 'company_work.location',
+          label: 'Локація роботи',
+          valueType: 'text',
+          requiredPolicy: 'voluntary',
+        },
+      ],
+    },
+    {
       key: 'education',
       label: 'Освіта та навчання',
       fields: [
@@ -428,15 +567,21 @@ export const EMPLOYEE_360_V1_SCHEMA = {
           requiredPolicy: 'voluntary',
         },
         {
-          key: 'strengths.ask_me_about',
-          label: 'За якими питаннями звертатись',
+          key: 'strengths.in_one_year',
+          label: 'Ким ви бачите себе через 1 рік',
           valueType: 'textarea',
           requiredPolicy: 'voluntary',
         },
         {
-          key: 'strengths.in_two_years',
-          label: 'Через 2 роки бачу себе',
-          valueType: 'text',
+          key: 'strengths.in_two_to_three_years',
+          label: 'Ким ви бачите себе через 2–3 роки',
+          valueType: 'textarea',
+          requiredPolicy: 'voluntary',
+        },
+        {
+          key: 'strengths.ready_responsibility',
+          label: 'Яку відповідальність готові взяти',
+          valueType: 'textarea',
           requiredPolicy: 'voluntary',
         },
       ],

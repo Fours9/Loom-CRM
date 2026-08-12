@@ -1,8 +1,8 @@
 import {
-  isSectionCompleted,
   isSectionPassed,
-  isStepCompleted,
+  isSectionVisited,
   isStepPassed,
+  isStepVisited,
   sectionSpineProgress,
 } from './questionnaire-section-rail-state';
 import type { ProgressSection } from './questionnaire-section-map';
@@ -33,28 +33,26 @@ const sections: ProgressSection[] = [
   },
 ];
 
-describe('questionnaire section rail passed vs done', () => {
-  it('read-only: last section → prior sections passed; incomplete substeps not done', () => {
-    const completed = new Set<string>(['identity']); // education missing
-    const activeSectionId = 'review';
+describe('questionnaire section rail visit vs passed', () => {
+  it('section/step dots fill only from visits, not position', () => {
+    const visited = new Set<string>(['__intro__', 'identity']);
+    const activeSectionId = 'personal';
 
     expect(isSectionPassed(sections, activeSectionId, 'intro')).toBe(true);
-    expect(isSectionPassed(sections, activeSectionId, 'personal')).toBe(true);
-    expect(isSectionPassed(sections, activeSectionId, 'work')).toBe(true);
-    expect(isSectionPassed(sections, activeSectionId, 'review')).toBe(false);
+    expect(isSectionPassed(sections, activeSectionId, 'work')).toBe(false);
 
-    expect(isSectionCompleted(sections[0], completed)).toBe(false); // intro only
-    expect(isSectionCompleted(sections[1], completed)).toBe(false); // education incomplete
-    expect(isSectionCompleted(sections[2], completed)).toBe(false);
-    expect(isSectionCompleted(sections[3], completed)).toBe(false); // review only
+    expect(isSectionVisited(sections[0], visited)).toBe(true);
+    expect(isSectionVisited(sections[1], visited)).toBe(true); // identity visited
+    expect(isSectionVisited(sections[2], visited)).toBe(false);
+    expect(isSectionVisited(sections[3], visited)).toBe(false);
 
-    expect(isStepCompleted('identity', completed)).toBe(true);
-    expect(isStepCompleted('education', completed)).toBe(false);
-    expect(isStepCompleted('__intro__', completed)).toBe(false);
-    expect(isStepCompleted('__review__', completed)).toBe(false);
+    expect(isStepVisited('__intro__', visited)).toBe(true);
+    expect(isStepVisited('identity', visited)).toBe(true);
+    expect(isStepVisited('education', visited)).toBe(false);
+    expect(isStepVisited('work', visited)).toBe(false);
   });
 
-  it('spine progress follows position, not completion', () => {
+  it('spine progress follows position, not visit', () => {
     expect(sectionSpineProgress(sections, 'intro')).toBe('0%');
     expect(sectionSpineProgress(sections, 'review')).toBe('100%');
   });

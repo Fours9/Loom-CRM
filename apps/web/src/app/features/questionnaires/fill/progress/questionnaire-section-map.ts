@@ -36,15 +36,22 @@ const EMPLOYEE_360_SECTION_DEFS: ProgressSectionDefinition[] = [
     label: 'Особисті',
     stepKeys: [
       'profile_mirror',
+      'contacts',
       'family',
       'celebration_dates',
       'education',
+      'hobbies',
     ],
   },
   {
     id: 'work',
     label: 'Робота',
-    stepKeys: ['experience', 'strengths', 'hobbies', 'work_style'],
+    stepKeys: [
+      'experience',
+      'company_work',
+      'strengths',
+      'work_style',
+    ],
   },
   {
     id: 'consents',

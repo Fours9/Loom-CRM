@@ -56,7 +56,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         id: 'tv1',
         version: 1,
         schemaJson: { steps: [] },
-        template: { code: 'employee-360', title: '360' },
+        template: { code: 'employee-360', title: '360', type: 'full' },
       },
     } as unknown as QuestionnaireAssignment;
 
@@ -149,8 +149,12 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
 
     const permissions = {
       has: jest.fn((_role: string, perm: string) => {
-        if (opts.hasAssign === false) return false;
+        if (opts.hasAssign === false) {
+          return false;
+        }
         if (perm === Permission.QuestionnairesAssign) return true;
+        if (perm === Permission.QuestionnairesManageLifecycle) return true;
+        if (perm === Permission.QuestionnairesDelete) return true;
         return true;
       }),
     };
@@ -241,10 +245,17 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
     );
   });
 
-  it('forbids lifecycle without QuestionnairesAssign', async () => {
+  it('forbids cancel without ManageLifecycle (Assign alone insufficient)', async () => {
     const ctx = buildService({ status: 'assigned', hasAssign: false });
     await expect(
       ctx.service.cancel(employeeActor(), 'a1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('forbids delete without QuestionnairesDelete', async () => {
+    const ctx = buildService({ status: 'assigned', hasAssign: false });
+    await expect(
+      ctx.service.deleteAssignment(employeeActor(), 'a1'),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 

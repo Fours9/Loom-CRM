@@ -8,6 +8,7 @@ import { createdAtRangeBounds } from './questionnaire-assignment-list.query';
 import {
   computeDetailCapabilities,
   computeListLifecycleCapabilities,
+  canActorAccessAssignmentType,
 } from './questionnaire-assignment-access';
 import { Permission } from '../../../platform/permissions/permission.names';
 import { UserRole } from '../../../platform/identity/user.enums';
@@ -52,6 +53,8 @@ describe('computeDetailCapabilities matrix', () => {
             Permission.QuestionnairesCompleteSelf,
             Permission.QuestionnairesCompleteAny,
             Permission.QuestionnairesAssign,
+            Permission.QuestionnairesManageLifecycle,
+            Permission.QuestionnairesDelete,
             Permission.QuestionnairesReview,
           ]
         : [Permission.QuestionnairesCompleteSelf],
@@ -241,6 +244,113 @@ describe('computeDetailCapabilities matrix', () => {
     });
     expect(caps.canAttach).toBe(false);
   });
+
+  it('Assign-only (DM): can attach new, cannot cancel/close/delete/reattach', () => {
+    const assignOnly = {
+      has: (_r: string, p: string) => p === Permission.QuestionnairesAssign,
+    } as unknown as PermissionService;
+
+    const neu = computeListLifecycleCapabilities({
+      actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
+      status: 'new',
+      employeeId: null,
+      detachedFromEmployeeId: null,
+      permissions: assignOnly,
+    });
+    expect(neu.canAttach).toBe(true);
+    expect(neu.canCancel).toBe(false);
+    expect(neu.canClose).toBe(false);
+    expect(neu.canDelete).toBe(false);
+
+    const cancelled = computeListLifecycleCapabilities({
+      actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
+      status: 'cancelled',
+      employeeId: null,
+      detachedFromEmployeeId: 'e1',
+      permissions: assignOnly,
+    });
+    expect(cancelled.canAttach).toBe(false);
+    expect(cancelled.canClose).toBe(false);
+
+    const assigned = computeListLifecycleCapabilities({
+      actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
+      status: 'assigned',
+      employeeId: 'e1',
+      detachedFromEmployeeId: null,
+      permissions: assignOnly,
+    });
+    expect(assigned.canCancel).toBe(false);
+  });
+});
+
+describe('canActorAccessAssignmentType', () => {
+  function perms(elevated: boolean): PermissionService {
+    const set = new Set<string>(
+      elevated
+        ? [
+            Permission.QuestionnairesAssign,
+            Permission.QuestionnairesCompleteSelf,
+          ]
+        : [Permission.QuestionnairesCompleteSelf],
+    );
+    return {
+      has: (_r: string, p: string) => set.has(p),
+    } as unknown as PermissionService;
+  }
+
+  function access(isOwner: boolean): EmployeeAccessService {
+    return {
+      isOwner: () => isOwner,
+    } as unknown as EmployeeAccessService;
+  }
+
+  const actor = { id: 'u1', role: UserRole.Employee } as User;
+  const employee = { id: 'e1' } as Employee;
+
+  it('non-owner may access any type after scope', () => {
+    expect(
+      canActorAccessAssignmentType({
+        actor,
+        employee,
+        templateType: 'managing',
+        permissions: perms(false),
+        access: access(false),
+      }),
+    ).toBe(true);
+  });
+
+  it('plain owner blocked on managing/docs', () => {
+    expect(
+      canActorAccessAssignmentType({
+        actor,
+        employee,
+        templateType: 'managing',
+        permissions: perms(false),
+        access: access(true),
+      }),
+    ).toBe(false);
+    expect(
+      canActorAccessAssignmentType({
+        actor,
+        employee,
+        templateType: 'full',
+        permissions: perms(false),
+        access: access(true),
+      }),
+    ).toBe(true);
+  });
+
+  it('elevated owner may access managing', () => {
+    expect(
+      canActorAccessAssignmentType({
+        actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
+        employee,
+        templateType: 'managing',
+        permissions: perms(true),
+        access: access(true),
+      }),
+    ).toBe(true);
+  });
 });
 
 describe('canDelete detail/list matrix', () => {
@@ -251,11 +361,17 @@ describe('canDelete detail/list matrix', () => {
             Permission.QuestionnairesCompleteSelf,
             Permission.QuestionnairesCompleteAny,
             Permission.QuestionnairesAssign,
+            Permission.QuestionnairesManageLifecycle,
+            Permission.QuestionnairesDelete,
             Permission.QuestionnairesReview,
             ...extra,
           ]
         : role === UserRole.DepartmentManager
-          ? [Permission.QuestionnairesCompleteSelf, ...extra]
+          ? [
+              Permission.QuestionnairesCompleteSelf,
+              Permission.QuestionnairesAssign,
+              ...extra,
+            ]
           : [Permission.QuestionnairesCompleteSelf, ...extra],
     );
     return {

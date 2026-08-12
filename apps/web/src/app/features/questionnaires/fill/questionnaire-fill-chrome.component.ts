@@ -133,7 +133,7 @@ import {
         <loom-questionnaire-section-rail
           [sections]="progressSections()"
           [activeStepKey]="store.activeStepKey()"
-          [completedStepKeys]="store.completedSteps()"
+          [visitedStepKeys]="store.visitedStepKeys()"
           [canOpenStep]="canOpenRailStep"
           [canOpenSection]="canOpenRailSection"
           (stepSelect)="stepSelect.emit($event)"
@@ -420,7 +420,7 @@ export class QuestionnaireFillChromeComponent {
   );
 
   readonly templateTypeLabel = computed(() =>
-    questionnaireTypeLabel(this.store.assignment()?.templateType ?? 'general'),
+    questionnaireTypeLabel(this.store.assignment()?.templateType ?? 'full'),
   );
 
   readonly canOpenRailStep = (stepKey: string): boolean =>

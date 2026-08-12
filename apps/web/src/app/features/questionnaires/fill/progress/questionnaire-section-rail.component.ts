@@ -11,10 +11,10 @@ import {
   type ProgressSection,
 } from './questionnaire-section-map';
 import {
-  isSectionCompleted as sectionCompleted,
   isSectionPassed as sectionPassed,
-  isStepCompleted as stepCompleted,
+  isSectionVisited as sectionVisited,
   isStepPassed as stepPassed,
+  isStepVisited as stepVisited,
   sectionSpineProgress,
   substepSpineProgress,
 } from './questionnaire-section-rail-state';
@@ -43,7 +43,7 @@ import {
                 class="mark"
                 [class.current]="section.id === activeSection()?.id"
                 [class.passed]="isSectionPassed(section.id)"
-                [class.done]="isSectionCompleted(section.id)"
+                [class.visited]="isSectionVisited(section.id)"
               >
                 <button
                   type="button"
@@ -92,7 +92,7 @@ import {
                   class="mark"
                   [class.current]="sub.key === activeStepKey()"
                   [class.passed]="isStepPassed(sub.key)"
-                  [class.done]="isStepCompleted(sub.key)"
+                  [class.visited]="isStepVisited(sub.key)"
                 >
                   <button
                     type="button"
@@ -234,16 +234,12 @@ import {
         box-shadow: 0 0 0 4px
           color-mix(in srgb, var(--pw-accent) 28%, transparent);
       }
-      .mark.passed .dot {
-        border-color: var(--pw-accent);
-        background: color-mix(in srgb, var(--pw-accent) 55%, var(--pw-surface));
-      }
-      .mark.done .dot {
+      /* Fill only after the user opened the page — not by position trail. */
+      .mark.visited .dot {
         border-color: var(--pw-accent);
         background: color-mix(in srgb, var(--pw-accent) 78%, var(--pw-surface));
       }
-      .mark.passed.current .dot,
-      .mark.done.current .dot {
+      .mark.visited.current .dot {
         background: var(--pw-accent);
       }
       .captions {
@@ -274,7 +270,8 @@ export class QuestionnaireSectionRailComponent {
 
   readonly sections = input.required<ProgressSection[]>();
   readonly activeStepKey = input.required<string>();
-  readonly completedStepKeys = input<ReadonlySet<string>>(new Set());
+  /** Steps the user opened in this fill session. */
+  readonly visitedStepKeys = input<ReadonlySet<string>>(new Set());
   readonly canOpenStep = input<(stepKey: string) => boolean>((_k) => true);
   readonly canOpenSection = input<(sectionId: string) => boolean>((_id) => true);
 
@@ -325,10 +322,10 @@ export class QuestionnaireSectionRailComponent {
     return sectionPassed(this.sections(), this.activeSection()?.id, sectionId);
   }
 
-  isSectionCompleted(sectionId: string): boolean {
-    return sectionCompleted(
+  isSectionVisited(sectionId: string): boolean {
+    return sectionVisited(
       this.sections().find((s) => s.id === sectionId),
-      this.completedStepKeys(),
+      this.visitedStepKeys(),
     );
   }
 
@@ -338,7 +335,7 @@ export class QuestionnaireSectionRailComponent {
     return stepPassed(section.steps, this.activeStepKey(), stepKey);
   }
 
-  isStepCompleted(stepKey: string): boolean {
-    return stepCompleted(stepKey, this.completedStepKeys());
+  isStepVisited(stepKey: string): boolean {
+    return stepVisited(stepKey, this.visitedStepKeys());
   }
 }

@@ -34,6 +34,8 @@ import { QuestionnaireClosedAndUpdatedAt1730000013000 } from './migrations/17300
 import { QuestionnaireUnattachedAndTypes1730000014000 } from './migrations/1730000014000-QuestionnaireUnattachedAndTypes';
 import { QuestionnaireChangeRequestResolution1730000015000 } from './migrations/1730000015000-QuestionnaireChangeRequestResolution';
 import { QuestionnaireAssignmentCodeAndComment1730000016000 } from './migrations/1730000016000-QuestionnaireAssignmentCodeAndComment';
+import { QuestionnaireTypeTaxonomy1730000017000 } from './migrations/1730000017000-QuestionnaireTypeTaxonomy';
+import { QuestionnaireTypeFullCollapse1730000018000 } from './migrations/1730000018000-QuestionnaireTypeFullCollapse';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -78,6 +80,8 @@ export function getDataSourceOptions(): DataSourceOptions {
       QuestionnaireUnattachedAndTypes1730000014000,
       QuestionnaireChangeRequestResolution1730000015000,
       QuestionnaireAssignmentCodeAndComment1730000016000,
+      QuestionnaireTypeTaxonomy1730000017000,
+      QuestionnaireTypeFullCollapse1730000018000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

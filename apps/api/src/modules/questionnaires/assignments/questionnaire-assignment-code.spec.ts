@@ -7,16 +7,18 @@ import {
 
 describe('questionnaireAssignmentCodePrefix', () => {
   it('maps employee-360 and types', () => {
-    expect(questionnaireAssignmentCodePrefix('employee-360', 'general')).toBe(
+    expect(questionnaireAssignmentCodePrefix('employee-360', 'full')).toBe(
       '360',
     );
-    expect(questionnaireAssignmentCodePrefix('other', 'general')).toBe('ZAG');
-    expect(questionnaireAssignmentCodePrefix('x', 'hr')).toBe('HR');
-    expect(questionnaireAssignmentCodePrefix('x', 'manager')).toBe('MAN');
-    expect(questionnaireAssignmentCodePrefix('x', 'full')).toBe('POV');
+    expect(questionnaireAssignmentCodePrefix('other', 'full')).toBe('POV');
+    expect(questionnaireAssignmentCodePrefix('x', 'managing')).toBe('MAN');
+    expect(questionnaireAssignmentCodePrefix('x', 'docs')).toBe('DOC');
   });
 
   it('throws on unknown type', () => {
+    expect(() =>
+      questionnaireAssignmentCodePrefix('unknown-tmpl', 'primary'),
+    ).toThrow();
     expect(() =>
       questionnaireAssignmentCodePrefix('unknown-tmpl', 'nope'),
     ).toThrow();
@@ -26,7 +28,7 @@ describe('questionnaireAssignmentCodePrefix', () => {
 describe('formatAssignmentCode', () => {
   it('pads to at least 3 digits and grows past 999', () => {
     expect(formatAssignmentCode('360', 1)).toBe('360-001');
-    expect(formatAssignmentCode('ZAG', 42)).toBe('ZAG-042');
+    expect(formatAssignmentCode('POV', 42)).toBe('POV-042');
     expect(formatAssignmentCode('360', 1000)).toBe('360-1000');
   });
 });

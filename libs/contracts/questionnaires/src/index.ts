@@ -12,13 +12,45 @@ export const QUESTIONNAIRE_ASSIGNMENT_STATUSES = [
 ] as const;
 
 export const QUESTIONNAIRE_TYPES = [
-  'general',
-  'hr',
-  'manager',
   'full',
+  'managing',
+  'docs',
 ] as const;
 
 export type QuestionnaireType = (typeof QUESTIONNAIRE_TYPES)[number];
+
+export type QuestionnaireTypeCatalogEntry = {
+  code: QuestionnaireType;
+  labelUa: string;
+  descriptionUa: string;
+};
+
+/** Fail-closed product catalog — single source for labels/descriptions. */
+export const QUESTIONNAIRE_TYPE_CATALOG: Record<
+  QuestionnaireType,
+  QuestionnaireTypeCatalogEntry
+> = {
+  full: {
+    code: 'full',
+    labelUa: 'Повна',
+    descriptionUa:
+      '360 для нових, майбутніх або вже працевлаштованих співробітників',
+  },
+  managing: {
+    code: 'managing',
+    labelUa: 'Managing',
+    descriptionUa: 'статистика, навички, грейди робітника',
+  },
+  docs: {
+    code: 'docs',
+    labelUa: 'Docs',
+    descriptionUa: 'які документи, дозволи та інформацію потрібно оформити',
+  },
+};
+
+/** Types a plain employee-owner may see/fill (not elevated). */
+export const EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES: readonly QuestionnaireType[] =
+  ['full'] as const;
 
 export type QuestionnaireAttachmentState =
   | 'new'

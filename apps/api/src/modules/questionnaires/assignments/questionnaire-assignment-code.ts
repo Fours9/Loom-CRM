@@ -12,14 +12,12 @@ export function questionnaireAssignmentCodePrefix(
     return '360';
   }
   switch (type) {
-    case 'general':
-      return 'ZAG';
-    case 'hr':
-      return 'HR';
-    case 'manager':
-      return 'MAN';
     case 'full':
       return 'POV';
+    case 'managing':
+      return 'MAN';
+    case 'docs':
+      return 'DOC';
     default:
       throw new BadRequestException(
         `Unknown questionnaire code prefix for template=${templateCode} type=${type}`,
