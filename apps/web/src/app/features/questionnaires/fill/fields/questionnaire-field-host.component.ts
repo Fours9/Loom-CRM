@@ -261,8 +261,8 @@ let rowUiSeq = 0;
         box-sizing: border-box;
         padding: 0.55rem 0.65rem;
         border-radius: 8px;
-        border: 1px solid var(--pw-border);
-        background: var(--pw-surface);
+        border: var(--q-input-border, 1px solid var(--pw-border));
+        background: var(--q-input-bg, var(--pw-surface));
         color: inherit;
         min-height: 44px;
       }
@@ -272,12 +272,13 @@ let rowUiSeq = 0;
       }
       .choice,
       .repeating {
-        border: 1px solid var(--pw-border);
+        border: var(--q-panel-border, 1px solid var(--pw-border));
         border-radius: 10px;
         padding: 0.75rem;
         display: grid;
         gap: 0.45rem;
         margin: 0;
+        background: var(--q-panel-bg, var(--pw-surface));
       }
       .radio,
       .check {
@@ -288,11 +289,12 @@ let rowUiSeq = 0;
         min-height: 44px;
       }
       .row {
-        border: 1px dashed var(--pw-border);
+        border: var(--q-row-border, 1px dashed var(--pw-border));
         border-radius: 8px;
         padding: 0.65rem;
         display: grid;
         gap: 0.5rem;
+        background: var(--q-panel-bg-alt, transparent);
       }
       .row-head {
         display: flex;

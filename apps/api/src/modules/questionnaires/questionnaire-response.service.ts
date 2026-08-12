@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -8,6 +9,8 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
+import { InvalidEmployeeContactsBundle } from '@loom/employee-contacts';
+import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import {
@@ -15,6 +18,7 @@ import {
   requireActorAccessAssignmentType,
   requireCanEditDraft,
 } from './assignments/questionnaire-assignment-access';
+import { normalizeDraftAnswersForPatch } from './questionnaire-answers-validation';
 
 @Injectable()
 export class QuestionnaireResponseService {
@@ -80,13 +84,28 @@ export class QuestionnaireResponseService {
     });
     requireCanEditDraft(caps);
 
+    const schema = assignment.templateVersion
+      .schemaJson as unknown as QuestionnaireSchemaJson;
+    let normalizedAnswers: Record<string, unknown>;
+    try {
+      normalizedAnswers = normalizeDraftAnswersForPatch(
+        schema,
+        input.answers ?? {},
+      );
+    } catch (err) {
+      if (err instanceof InvalidEmployeeContactsBundle) {
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
+
     const response = await this.ensureResponse(assignmentId);
 
     const result = await this.dataSource
       .createQueryBuilder()
       .update(QuestionnaireResponse)
       .set({
-        answersJson: input.answers ?? {},
+        answersJson: normalizedAnswers,
         revision: () => '"revision" + 1',
         updatedAt: () => 'NOW()',
       })

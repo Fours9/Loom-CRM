@@ -3,6 +3,10 @@ import type {
   QuestionnaireSchemaJson,
   QuestionnaireSchemaStep,
 } from '@loom/contracts-questionnaires';
+import {
+  isEmployeeContactsBundleMeaningful,
+  parseEmployeeContactsBundleStrict,
+} from '@loom/employee-contacts';
 import { isQuestionnaireFieldVisible } from './field-visibility';
 
 function isMeaningfulScalar(value: unknown): boolean {
@@ -17,6 +21,14 @@ export function isFieldAnswered(
   field: QuestionnaireSchemaField,
   value: unknown,
 ): boolean {
+  if (field.valueType === 'contacts_bundle') {
+    try {
+      const bundle = parseEmployeeContactsBundleStrict(value);
+      return isEmployeeContactsBundleMeaningful(bundle);
+    } catch {
+      return false;
+    }
+  }
   if (field.valueType === 'repeating_group') {
     if (!Array.isArray(value) || value.length === 0) return false;
     const childKeys = (field.children ?? []).map((c) => c.key);

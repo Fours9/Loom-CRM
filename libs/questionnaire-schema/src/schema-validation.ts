@@ -4,6 +4,18 @@ import type {
   QuestionnaireVisibleWhen,
 } from '@loom/contracts-questionnaires';
 
+const ALLOWED_VALUE_TYPES = new Set([
+  'text',
+  'textarea',
+  'date',
+  'number',
+  'boolean',
+  'single_choice',
+  'multi_choice',
+  'repeating_group',
+  'contacts_bundle',
+]);
+
 export type SchemaValidationResult =
   | { ok: true }
   | { ok: false; errors: string[] };
@@ -57,6 +69,13 @@ export function validateQuestionnaireSchema(
         errors.push(`Duplicate field key "${fk}"`);
       }
       fieldKeys.add(fk);
+
+      const valueType = field.valueType?.trim();
+      if (!valueType || !ALLOWED_VALUE_TYPES.has(valueType)) {
+        errors.push(
+          `Field "${fk}" in step "${sk}" has unknown valueType "${field.valueType ?? ''}"`,
+        );
+      }
 
       if (field.visibleWhen) {
         const vwErrors = validateVisibleWhenShape(field.key, field.visibleWhen);

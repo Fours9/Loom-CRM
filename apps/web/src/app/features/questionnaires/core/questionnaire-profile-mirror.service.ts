@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import type { EmployeeProfileResponse } from '@loom/contracts-employees';
+import { contactsBundleFromProfile } from '../../../shared/employee-contacts/public-api';
 
 /**
  * Feature-private adapter for profile mirror display defaults.
@@ -74,5 +75,6 @@ export function flattenEmployeeProfileMirror(
     personal_phone_secondary: secondaryPhone,
     personal_email: email,
     personal_telegram: telegram,
+    contactsBundle: contactsBundleFromProfile(profile),
   };
 }

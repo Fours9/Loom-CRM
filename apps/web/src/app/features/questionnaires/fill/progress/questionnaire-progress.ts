@@ -20,6 +20,11 @@ import {
   reviewSourceLabel,
 } from '../display/questionnaire-display-value';
 import { fieldsByKey } from '@loom/questionnaire-schema';
+import {
+  emptyEmployeeContactsBundle,
+  normalizeEmployeeContactsBundle,
+  formatContactsBundleReviewSummary,
+} from '@loom/employee-contacts';
 
 export type QuestionnaireStepUiState =
   | 'not_started'
@@ -234,6 +239,15 @@ function formatReviewDisplay(
   field: QuestionnaireSchemaField,
   value: unknown,
 ): string {
+  if (field.valueType === 'contacts_bundle') {
+    try {
+      return formatContactsBundleReviewSummary(
+        normalizeEmployeeContactsBundle(value ?? emptyEmployeeContactsBundle()),
+      );
+    } catch {
+      return '—';
+    }
+  }
   if (field.valueType === 'repeating_group') {
     const rows = Array.isArray(value) ? value : [];
     if (!rows.length) return '—';

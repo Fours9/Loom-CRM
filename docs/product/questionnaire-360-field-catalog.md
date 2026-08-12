@@ -144,10 +144,7 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 
 | key | order | label | valueType | requiredPolicy | filledBy | visibility | sensitivity | destination | mvpStatus | createsProfileProposal | proposalMapping / profileField | notes |
 |-----|-------|-------|-----------|----------------|----------|------------|-------------|-------------|-----------|------------------------|--------------------------------|-------|
-| personal.phone_primary | 70 | Основний телефон | text | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_phone | via employee_contacts |
-| personal.phone_secondary | 80 | Додатковий телефон | text | voluntary | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_phone | additional row |
-| personal.email | 90 | Особиста email | text | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_email | |
-| personal.telegram | 100 | Telegram | text | voluntary | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | contacts.personal_telegram | |
+| contacts.bundle | 10 | Контакти | contacts_bundle | voluntary | employee_owner | employee_owner, admin (+ questionnaire ACL for submitted snapshot) | personal | employee_profile | in_mvp | true | work scalars + personal_replace + emergency_replace | Draft SoT; shared editor; mirror `contactsBundle` owner/admin only; `@loom/employee-contacts` + Organization facade |
 
 ---
 

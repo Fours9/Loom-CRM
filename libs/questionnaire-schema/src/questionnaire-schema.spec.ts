@@ -185,3 +185,68 @@ describe('schemasStructurallyEqual', () => {
     ).toBe(true);
   });
 });
+
+describe('contacts_bundle snapshot', () => {
+  const contactsSchema: QuestionnaireSchemaJson = {
+    code: 't',
+    version: 1,
+    title: 'T',
+    steps: [
+      {
+        key: 'contacts',
+        label: 'Contacts',
+        fields: [
+          {
+            key: 'contacts.bundle',
+            label: 'Contacts',
+            valueType: 'contacts_bundle',
+            requiredPolicy: 'voluntary',
+          },
+        ],
+      },
+    ],
+  };
+
+  it('preserves own empty bundle in snapshot', () => {
+    const empty = {
+      work: { email: null, phone: null, telegram: null },
+      personal: [],
+      emergency: [],
+    };
+    const out = projectVisibleQuestionnaireAnswers(contactsSchema, {
+      'contacts.bundle': empty,
+    });
+    expect(out['contacts.bundle']).toEqual(empty);
+  });
+
+  it('omits absent bundle key', () => {
+    const out = projectVisibleQuestionnaireAnswers(contactsSchema, {});
+    expect(Object.keys(out)).toHaveLength(0);
+  });
+});
+
+describe('valueType allowlist', () => {
+  it('rejects unknown valueType', () => {
+    const bad: QuestionnaireSchemaJson = {
+      code: 't',
+      version: 1,
+      title: 'T',
+      steps: [
+        {
+          key: 's',
+          label: 'S',
+          fields: [
+            {
+              key: 'x',
+              label: 'X',
+              valueType: 'contacts_bunlde',
+              requiredPolicy: 'voluntary',
+            },
+          ],
+        },
+      ],
+    };
+    const r = validateQuestionnaireSchema(bad);
+    expect(r.ok).toBe(false);
+  });
+});

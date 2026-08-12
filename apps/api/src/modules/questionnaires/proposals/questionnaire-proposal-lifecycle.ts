@@ -72,7 +72,6 @@ export async function supersedePendingForSameField(
       field?: string;
       answerKey?: string;
     };
-    if (input.answerKey && c.answerKey === input.answerKey) return true;
     return c.section === input.section && c.field === input.field;
   });
   if (!obsolete.length) return 0;

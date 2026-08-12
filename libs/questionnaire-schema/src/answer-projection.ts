@@ -2,6 +2,10 @@ import type {
   QuestionnaireSchemaField,
   QuestionnaireSchemaJson,
 } from '@loom/contracts-questionnaires';
+import {
+  canonicalEmployeeContactsBundle,
+  parseEmployeeContactsBundleStrict,
+} from '@loom/employee-contacts';
 import { isQuestionnaireFieldVisible } from './field-visibility';
 import { listTopLevelFields } from './schema-validation';
 
@@ -53,6 +57,12 @@ export function projectVisibleQuestionnaireAnswers(
 
     const raw = draftAnswers[field.key];
 
+    if (field.valueType === 'contacts_bundle') {
+      const parsed = parseEmployeeContactsBundleStrict(raw);
+      out[field.key] = canonicalEmployeeContactsBundle(parsed);
+      continue;
+    }
+
     if (field.valueType === 'repeating_group') {
       const rows = projectRepeatingRows(field, raw);
       if (rows) out[field.key] = rows;
@@ -76,6 +86,10 @@ export function listInactiveOwnAnswers(
     if (!Object.prototype.hasOwnProperty.call(draftAnswers, field.key)) continue;
     if (isQuestionnaireFieldVisible(field, draftAnswers)) continue;
     const raw = draftAnswers[field.key];
+    if (field.valueType === 'contacts_bundle') {
+      inactive.push(field.key);
+      continue;
+    }
     if (field.valueType === 'repeating_group') {
       if (!Array.isArray(raw) || !projectRepeatingRows(field, raw)) continue;
       inactive.push(field.key);

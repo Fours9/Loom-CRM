@@ -25,6 +25,7 @@ import {
   type FieldValidationIssue,
 } from './validation/questionnaire-validation';
 import { resolveQuestionnaireFieldDisplay } from './display/questionnaire-display-value';
+import { mergeLegacyContactsIntoDraft } from '../../../shared/employee-contacts/public-api';
 import {
   areStepVisibleRequiredValid,
   fieldsByKey,
@@ -251,6 +252,17 @@ export class QuestionnaireDraftStore {
     let changed = false;
 
     for (const field of byKey.values()) {
+      if (field.valueType === 'contacts_bundle') {
+        if (Object.prototype.hasOwnProperty.call(next, field.key)) continue;
+        if (
+          !Object.prototype.hasOwnProperty.call(mirror, 'contactsBundle')
+        ) {
+          continue;
+        }
+        next[field.key] = mirror['contactsBundle'];
+        changed = true;
+        continue;
+      }
       if (!field.createsProfileProposal || !field.proposalMapping) continue;
       if (Object.prototype.hasOwnProperty.call(next, field.key)) continue;
 
@@ -301,7 +313,11 @@ export class QuestionnaireDraftStore {
 
       this.assignment.set(detail);
       this.schemaSteps.set(normalized.steps);
-      this.answers.set({ ...(detail.draft?.answers ?? {}) });
+      const loadedAnswers = mergeLegacyContactsIntoDraft(
+        { ...(detail.draft?.answers ?? {}) },
+        mirror,
+      );
+      this.answers.set(loadedAnswers);
       this.revision.set(detail.draft?.revision ?? 0);
       this.profileMirror.set(mirror);
       this.loadState.set('ready');

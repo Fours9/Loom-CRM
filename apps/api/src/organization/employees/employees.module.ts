@@ -20,6 +20,7 @@ import { EmployeeProfileService } from './employee-profile.service';
 import { EmployeesController } from './employees.controller';
 import { EmployeeSerializer } from './employee.serializer';
 import { EmployeeProfileExportService } from './employee-profile-export.service';
+import { EmployeeContactsFacade } from './employee-contacts.facade';
 import { PdfRenderer } from '../../platform/pdf/pdf-renderer';
 import { OrganizationEmployeeIdentityLookup } from '../identity/organization-employee-identity.lookup';
 import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
@@ -49,6 +50,7 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
     EmployeeAccessService,
     EmployeeSerializer,
     EmployeeProfileExportService,
+    EmployeeContactsFacade,
     PdfRenderer,
     OrganizationEmployeeIdentityLookup,
     {
@@ -62,6 +64,7 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
     EmployeeProfileService,
     EmployeeAccessService,
     EmployeeIdentityLookup,
+    EmployeeContactsFacade,
   ],
 })
 export class EmployeesModule {}

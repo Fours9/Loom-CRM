@@ -1,18 +1,18 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { Permission } from '../../platform/permissions/permission.names';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
+import { EmployeeContactsFacade } from '../../organization/employees/employee-contacts.facade';
 import { EmployeeProfileService } from '../../organization/employees/employee-profile.service';
-import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
-import { PERSONAL_CONTACT_TYPES } from '../../organization/employees/employee-personal-contacts';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireProfileProposal } from './questionnaire-profile-proposal.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
@@ -21,12 +21,23 @@ import {
   parsePreferredLanguage,
   serializePreferredLanguage,
 } from '@loom/questionnaire-schema';
+import {
+  InvalidEmployeeContactsBundle,
+  parseEmployeeContactsBundleStrict,
+  validateEmployeeContactsBundleForWrite,
+  type EmployeeContactsBundle,
+  type EmployeeContactsEmergencyItem,
+} from '@loom/employee-contacts';
 import type { QuestionnaireProfileProposalItem } from '@loom/contracts-questionnaires';
 import {
   proposalMatchesCurrentValue,
   valuesEqual,
 } from './proposals/questionnaire-proposal-comparison';
 import { supersedePendingForSameField } from './proposals/questionnaire-proposal-lifecycle';
+import {
+  buildContactsBundleProposalCandidates,
+  contactsReplaceSetStale,
+} from './proposals/contacts-bundle-projector';
 
 type ProposalMapping = { section: string; field: string };
 type SchemaField = {
@@ -65,17 +76,13 @@ export class QuestionnaireProposalService {
     private readonly responses: Repository<QuestionnaireResponse>,
     @InjectRepository(QuestionnaireAssignment)
     private readonly assignments: Repository<QuestionnaireAssignment>,
-    @InjectRepository(EmployeeContact)
-    private readonly contacts: Repository<EmployeeContact>,
     private readonly access: EmployeeAccessService,
     private readonly permissions: PermissionService,
+    private readonly contactsFacade: EmployeeContactsFacade,
     private readonly profiles: EmployeeProfileService,
+    private readonly dataSource: DataSource,
   ) {}
 
-  /**
-   * Build and persist proposals for a new submission.
-   * Must run inside the same transaction as submission create when called from submit.
-   */
   async generateFromSubmission(
     manager: EntityManager,
     _actor: User,
@@ -96,7 +103,6 @@ export class QuestionnaireProposalService {
         relations: { templateVersion: true },
       });
     if (!assignment?.templateVersion) return;
-    // Submissions require an attached employee (enforced in submit()).
     if (!assignment.employeeId) return;
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
@@ -108,17 +114,24 @@ export class QuestionnaireProposalService {
         .map((f) => [f.key, f] as const),
     );
 
-    const fields = schema.steps
+    const scalarFields = schema.steps
       .flatMap((s) => s.fields ?? [])
       .filter((f) => f.createsProfileProposal && f.proposalMapping);
 
-    const contacts = await manager.getRepository(EmployeeContact).find({
-      where: {
-        employeeId: employee.id,
-        type: In([...PERSONAL_CONTACT_TYPES]),
-      },
-    });
-    const current = this.readCurrentProfileValues(employee, contacts);
+    const bundleFields = schema.steps
+      .flatMap((s) => s.fields ?? [])
+      .filter(
+        (f) => f.createsProfileProposal && f.valueType === 'contacts_bundle',
+      );
+
+    const currentBundle = await this.contactsFacade.readContactsBundle(
+      manager,
+      employee.id,
+    );
+    const current = {
+      ...this.readScalarCurrentProfileValues(employee),
+      ...this.readContactsProfileValues(currentBundle),
+    };
 
     const proposalRepo = manager.getRepository(QuestionnaireProfileProposal);
     const languageField = fieldsByKey.get('personal.preferred_language');
@@ -139,7 +152,7 @@ export class QuestionnaireProposalService {
       };
     }> = [];
 
-    for (const field of fields) {
+    for (const field of scalarFields) {
       const mapping = field.proposalMapping!;
       if (field.key === 'personal.preferred_language_other') continue;
 
@@ -188,9 +201,29 @@ export class QuestionnaireProposalService {
       });
     }
 
+    for (const field of bundleFields) {
+      if (!Object.prototype.hasOwnProperty.call(answers, field.key)) continue;
+      let bundle: EmployeeContactsBundle;
+      try {
+        bundle = parseEmployeeContactsBundleStrict(answers[field.key]);
+        validateEmployeeContactsBundleForWrite(bundle);
+      } catch (err) {
+        if (err instanceof InvalidEmployeeContactsBundle) {
+          throw new BadRequestException(err.message);
+        }
+        throw new BadRequestException('Invalid contacts bundle');
+      }
+      candidates.push(
+        ...buildContactsBundleProposalCandidates({
+          bundle,
+          current: currentBundle,
+          answerKey: field.key,
+        }),
+      );
+    }
+
     const now = new Date();
 
-    // Supersede pending that already match current profile (any submission).
     const allPending = await proposalRepo.find({
       where: { employeeId: employee.id, status: 'pending' },
     });
@@ -221,13 +254,11 @@ export class QuestionnaireProposalService {
     }
     if (profileEqual.length) await proposalRepo.save(profileEqual);
 
-    // Supersede older pending for the same target fields we are about to insert.
     for (const c of candidates) {
       await supersedePendingForSameField(manager, {
         employeeId: employee.id,
         section: c.proposedChanges.section,
         field: c.proposedChanges.field,
-        answerKey: c.proposedChanges.answerKey,
         now,
       });
     }
@@ -269,10 +300,14 @@ export class QuestionnaireProposalService {
       ...assignmentBySubmission.values(),
     ]);
 
-    const current = this.readCurrentProfileValues(
-      employee,
-      await this.loadContacts(employeeId),
+    const currentBundle = await this.contactsFacade.readContactsBundle(
+      this.dataSource.manager,
+      employeeId,
     );
+    const current = {
+      ...this.readScalarCurrentProfileValues(employee),
+      ...this.readContactsProfileValues(currentBundle),
+    };
 
     const dtos: QuestionnaireProfileProposalItem[] = [];
     for (const p of items) {
@@ -300,7 +335,7 @@ export class QuestionnaireProposalService {
           schemaField,
         })
       ) {
-        continue; // read-time suppression only
+        continue;
       }
 
       dtos.push(this.toDto(p, assignmentId));
@@ -348,25 +383,39 @@ export class QuestionnaireProposalService {
       section: string;
       field: string;
       answerKey?: string;
+      from?: unknown;
       to: unknown;
     };
 
-    await this.applyChange(actor, proposal.employeeId, change);
+    await this.dataSource.transaction(async (manager) => {
+      const locked = await manager
+        .getRepository(QuestionnaireProfileProposal)
+        .findOne({
+          where: { id: proposalId },
+          lock: { mode: 'pessimistic_write' },
+        });
+      if (!locked || locked.status !== 'pending') {
+        throw new BadRequestException('Proposal is no longer pending');
+      }
 
-    proposal.status = 'accepted';
-    proposal.reviewedByUserId = actor.id;
-    proposal.reviewedAt = new Date();
-    await this.proposals.save(proposal);
+      await this.applyChangeInTransaction(manager, actor, proposal.employeeId, change);
 
-    await supersedePendingForSameField(this.proposals.manager, {
-      employeeId: proposal.employeeId,
-      section: change.section,
-      field: change.field,
-      answerKey: change.answerKey,
-      exceptProposalId: proposal.id,
+      locked.status = 'accepted';
+      locked.reviewedByUserId = actor.id;
+      locked.reviewedAt = new Date();
+      await manager.getRepository(QuestionnaireProfileProposal).save(locked);
+
+      await supersedePendingForSameField(manager, {
+        employeeId: proposal.employeeId,
+        section: change.section,
+        field: change.field,
+        exceptProposalId: proposal.id,
+      });
     });
 
-    return this.toDto(proposal, assignmentId);
+    const saved = await this.proposals.findOne({ where: { id: proposalId } });
+    if (!saved) throw new NotFoundException('Proposal not found');
+    return this.toDto(saved, assignmentId);
   }
 
   async reject(actor: User, proposalId: string) {
@@ -457,19 +506,24 @@ export class QuestionnaireProposalService {
     return empty;
   }
 
-  private async applyChange(
+  private async applyChangeInTransaction(
+    manager: EntityManager,
     actor: User,
     employeeId: string,
-    change: { section: string; field: string; to: unknown },
+    change: {
+      section: string;
+      field: string;
+      from?: unknown;
+      to: unknown;
+    },
   ): Promise<void> {
-    const value =
-      typeof change.to === 'string'
-        ? change.to
-        : change.to == null
-          ? null
-          : String(change.to);
-
     if (change.section === 'overview' || change.section === 'header') {
+      const value =
+        typeof change.to === 'string'
+          ? change.to
+          : change.to == null
+            ? null
+            : String(change.to);
       const dto: Record<string, string | null> = {};
       if (change.field === 'lastName') dto.lastName = value ?? '';
       if (change.field === 'firstName') dto.firstName = value ?? '';
@@ -480,6 +534,12 @@ export class QuestionnaireProposalService {
     }
 
     if (change.section === 'personal') {
+      const value =
+        typeof change.to === 'string'
+          ? change.to
+          : change.to == null
+            ? null
+            : String(change.to);
       const dto: Record<string, string | null> = {};
       if (change.field === 'birthDate') dto.birthDate = value;
       if (change.field === 'city') dto.city = value;
@@ -490,7 +550,12 @@ export class QuestionnaireProposalService {
     }
 
     if (change.section === 'contacts') {
-      await this.applyContactChange(actor, employeeId, change.field, value);
+      await this.applyContactChangeInTransaction(
+        manager,
+        actor,
+        employeeId,
+        change,
+      );
       return;
     }
 
@@ -499,96 +564,143 @@ export class QuestionnaireProposalService {
     );
   }
 
-  private async applyContactChange(
+  private async applyContactChangeInTransaction(
+    manager: EntityManager,
     actor: User,
     employeeId: string,
-    field: string,
-    value: string | null,
-  ): Promise<void> {
-    const existing = await this.loadContacts(employeeId);
-    const next = existing.map((c) => ({
-      type: c.type as 'personal_phone' | 'personal_email' | 'personal_telegram',
-      value: c.value,
-      isPrimary: c.isPrimary,
-    }));
-
-    const upsert = (
-      type: 'personal_phone' | 'personal_email' | 'personal_telegram',
-      val: string | null,
-      asPrimary: boolean,
-    ) => {
-      if (!val) {
-        for (let i = next.length - 1; i >= 0; i--) {
-          if (next[i].type === type && next[i].isPrimary === asPrimary) {
-            next.splice(i, 1);
-          }
-        }
-        return;
-      }
-      const idx = next.findIndex(
-        (c) => c.type === type && c.isPrimary === asPrimary,
-      );
-      if (idx >= 0) next[idx].value = val;
-      else next.push({ type, value: val, isPrimary: asPrimary });
-    };
-
-    if (field === 'personal_phone') upsert('personal_phone', value, true);
-    else if (field === 'personal_phone_secondary')
-      upsert('personal_phone', value, false);
-    else if (field === 'personal_email') upsert('personal_email', value, true);
-    else if (field === 'personal_telegram')
-      upsert('personal_telegram', value, true);
-    else {
-      throw new BadRequestException(`Unsupported contact field: ${field}`);
-    }
-
-    for (const type of PERSONAL_CONTACT_TYPES) {
-      const ofType = next.filter((c) => c.type === type);
-      if (ofType.length && !ofType.some((c) => c.isPrimary)) {
-        ofType[0].isPrimary = true;
-      }
-    }
-
-    await this.profiles.replacePersonalContacts(actor, employeeId, next);
-  }
-
-  private async loadContacts(employeeId: string): Promise<EmployeeContact[]> {
-    return this.contacts.find({
-      where: {
-        employeeId,
-        type: In([...PERSONAL_CONTACT_TYPES]),
-      },
-    });
-  }
-
-  private readCurrentProfileValues(
-    employee: {
-      lastName: string;
-      firstName: string;
-      middleName: string | null;
-      preferredName: string | null;
-      birthDate: string | null;
-      city: string | null;
-      preferredLanguage: string | null;
-      personalPhoneNumber: string | null;
-      personalEmail: string | null;
-      personalTelegram: string | null;
+    change: {
+      field: string;
+      from?: unknown;
+      to: unknown;
     },
-    contacts: EmployeeContact[],
-  ): Record<string, unknown> {
-    const primaryPhone =
-      contacts.find((c) => c.type === 'personal_phone' && c.isPrimary)?.value ??
-      employee.personalPhoneNumber;
-    const secondaryPhone =
-      contacts.find((c) => c.type === 'personal_phone' && !c.isPrimary)?.value ??
-      null;
-    const email =
-      contacts.find((c) => c.type === 'personal_email' && c.isPrimary)?.value ??
-      employee.personalEmail;
-    const telegram =
-      contacts.find((c) => c.type === 'personal_telegram' && c.isPrimary)
-        ?.value ?? employee.personalTelegram;
+  ): Promise<void> {
+    const current = await this.contactsFacade.readContactsBundle(
+      manager,
+      employeeId,
+    );
 
+    if (
+      change.field === 'workEmail' ||
+      change.field === 'workPhone' ||
+      change.field === 'workTelegram'
+    ) {
+      const key =
+        change.field === 'workEmail'
+          ? 'email'
+          : change.field === 'workPhone'
+            ? 'phone'
+            : 'telegram';
+      const currentVal = current.work[key];
+      const nextVal =
+        typeof change.to === 'string'
+          ? change.to.trim() || null
+          : change.to == null
+            ? null
+            : String(change.to);
+      if (valuesEqual(currentVal, nextVal)) return;
+      if (
+        change.from !== undefined &&
+        !valuesEqual(currentVal, change.from)
+      ) {
+        throw new ConflictException('PROFILE_CHANGED');
+      }
+      await this.contactsFacade.applyWorkContacts(
+        manager,
+        actor,
+        employeeId,
+        { ...current.work, [key]: nextVal },
+      );
+      return;
+    }
+
+    if (change.field === 'personal_replace') {
+      const verdict = contactsReplaceSetStale(
+        current.personal,
+        change.from,
+        change.to,
+      );
+      if (verdict === 'already_satisfied') return;
+      if (verdict === 'stale') {
+        throw new ConflictException('PROFILE_CHANGED');
+      }
+      const personal = Array.isArray(change.to) ? change.to : [];
+      try {
+        await this.contactsFacade.replacePersonalContacts(
+          manager,
+          actor,
+          employeeId,
+          personal.map((row) => {
+            const item = row as Record<string, unknown>;
+            return {
+              type: String(item.type) as
+                | 'personal_phone'
+                | 'personal_email'
+                | 'personal_telegram',
+              value: String(item.value ?? ''),
+              isPrimary: Boolean(item.isPrimary),
+            };
+          }),
+        );
+      } catch {
+        throw new BadRequestException('Invalid personal contacts proposal');
+      }
+      return;
+    }
+
+    if (change.field === 'emergency_replace') {
+      const verdict = contactsReplaceSetStale(
+        current.emergency,
+        change.from,
+        change.to,
+      );
+      if (verdict === 'already_satisfied') return;
+      if (verdict === 'stale') {
+        throw new ConflictException('PROFILE_CHANGED');
+      }
+      const emergency = (Array.isArray(change.to) ? change.to : []).map(
+        (row) => {
+          const item = row as Record<string, unknown>;
+          return {
+            fullName: String(item.fullName ?? ''),
+            relationship: String(item.relationship ?? ''),
+            primaryPhone: String(item.primaryPhone ?? ''),
+            secondaryPhone: String(item.secondaryPhone ?? ''),
+            notes: String(item.notes ?? ''),
+          } satisfies EmployeeContactsEmergencyItem;
+        },
+      );
+      try {
+        validateEmployeeContactsBundleForWrite({
+          ...current,
+          emergency,
+        });
+      } catch (err) {
+        if (err instanceof InvalidEmployeeContactsBundle) {
+          throw new BadRequestException(err.message);
+        }
+        throw new BadRequestException('Invalid emergency contacts proposal');
+      }
+      await this.contactsFacade.replaceEmergencyContacts(
+        manager,
+        actor,
+        employeeId,
+        emergency,
+      );
+      return;
+    }
+
+    throw new BadRequestException(`Unsupported contact field: ${change.field}`);
+  }
+
+  private readScalarCurrentProfileValues(employee: {
+    lastName: string;
+    firstName: string;
+    middleName: string | null;
+    preferredName: string | null;
+    birthDate: string | null;
+    city: string | null;
+    preferredLanguage: string | null;
+  }): Record<string, unknown> {
     return {
       'overview.lastName': employee.lastName,
       'overview.firstName': employee.firstName,
@@ -597,10 +709,18 @@ export class QuestionnaireProposalService {
       'personal.birthDate': employee.birthDate,
       'personal.city': employee.city,
       'personal.preferredLanguage': employee.preferredLanguage,
-      'contacts.personal_phone': primaryPhone,
-      'contacts.personal_phone_secondary': secondaryPhone,
-      'contacts.personal_email': email,
-      'contacts.personal_telegram': telegram,
+    };
+  }
+
+  private readContactsProfileValues(
+    bundle: EmployeeContactsBundle,
+  ): Record<string, unknown> {
+    return {
+      'contacts.workEmail': bundle.work.email,
+      'contacts.workPhone': bundle.work.phone,
+      'contacts.workTelegram': bundle.work.telegram,
+      'contacts.personal_replace': bundle.personal,
+      'contacts.emergency_replace': bundle.emergency,
     };
   }
 

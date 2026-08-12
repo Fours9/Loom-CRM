@@ -32,6 +32,9 @@ export function resolveQuestionnaireFieldDisplay(
 
   if (hasOwn(answers, field.key)) {
     let value = answers[field.key];
+    if (field.valueType === 'contacts_bundle') {
+      return { value, source: 'answer' };
+    }
     if (field.key === 'personal.preferred_language') {
       const parsed = normalizePreferredLanguageMirror(
         value,
@@ -59,6 +62,16 @@ export function resolveQuestionnaireFieldDisplay(
         };
       }
     }
+  }
+
+  if (field.valueType === 'contacts_bundle') {
+    if (hasOwn(profileMirror, 'contactsBundle')) {
+      return {
+        value: profileMirror['contactsBundle'],
+        source: 'profile_mirror',
+      };
+    }
+    return { value: undefined, source: 'none' };
   }
 
   const mirrorKey = field.proposalMapping?.field;
