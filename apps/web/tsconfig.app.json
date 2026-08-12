@@ -15,6 +15,9 @@
       "@loom/questionnaire-schema": [
         "../../libs/questionnaire-schema/src/index.ts"
       ],
+      "@loom/employee-contacts": [
+        "../../libs/employee-contacts/src/index.ts"
+      ],
       "@loom/ui": ["../../libs/frontend/ui/src/index.ts"]
     }
   },

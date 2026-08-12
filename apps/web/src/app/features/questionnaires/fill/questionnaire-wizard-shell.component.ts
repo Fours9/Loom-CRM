@@ -20,6 +20,7 @@ import {
 import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireFieldHostComponent } from './fields/questionnaire-field-host.component';
+import { QuestionnaireContactsBundleFieldComponent } from './fields/questionnaire-contacts-bundle-field.component';
 import { QuestionnaireSaveStatusComponent } from './questionnaire-save-status.component';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { validateFieldValue } from './validation/questionnaire-validation';
@@ -33,6 +34,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
   standalone: true,
   imports: [
     QuestionnaireFieldHostComponent,
+    QuestionnaireContactsBundleFieldComponent,
     QuestionnaireSaveStatusComponent,
   ],
   template: `
@@ -41,34 +43,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
       [class.read-only]="!store.editable()"
     >
       <header class="top">
-        @if (showHeaderSaveChanges()) {
-          <div class="top-actions">
-            <loom-questionnaire-save-status
-              [text]="saveStatusText()"
-              [visual]="saveStatusVisual()"
-            />
-            <button
-              type="button"
-              class="btn"
-              [class.saving]="store.saveState() === 'saving' || revision.manualSaveBusy()"
-              [disabled]="
-                store.saveState() === 'saving' ||
-                revision.manualSaveBusy() ||
-                !!store.conflict()
-              "
-              [attr.aria-busy]="
-                store.saveState() === 'saving' || revision.manualSaveBusy()
-              "
-              (click)="saveNow()"
-            >
-              {{
-                store.saveState() === 'saving' || revision.manualSaveBusy()
-                  ? 'Збереження…'
-                  : 'Зберегти зміни'
-              }}
-            </button>
-          </div>
-        } @else if (store.editable()) {
+        @if (store.editable()) {
           <loom-questionnaire-save-status
             class="save-slot"
             [text]="saveStatusText()"
@@ -242,16 +217,34 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
                         [class.row]="block.layout === 'row'"
                       >
                         @for (field of block.fields; track field.key) {
-                          <loom-questionnaire-field-host
-                            [field]="field"
-                            [value]="fieldValue(field.key)"
-                            [disabled]="!store.editable() || !!store.conflict()"
-                            [error]="fieldError(field.key)"
-                            (valueChange)="onFieldChange(field.key, $event)"
-                          />
+                          @if (field.valueType === 'contacts_bundle') {
+                            <loom-questionnaire-contacts-bundle-field
+                              [answers]="store.answers()"
+                              [profileMirror]="store.profileMirror()"
+                              [employeeId]="store.assignment()?.employeeId ?? null"
+                              [editable]="store.editable() && !store.conflict()"
+                              (bundleChange)="onContactsBundleChange($event)"
+                            />
+                          } @else {
+                            <loom-questionnaire-field-host
+                              [field]="field"
+                              [value]="fieldValue(field.key)"
+                              [disabled]="!store.editable() || !!store.conflict()"
+                              [error]="fieldError(field.key)"
+                              (valueChange)="onFieldChange(field.key, $event)"
+                            />
+                          }
                         }
                       </div>
                     </fieldset>
+                  } @else if (block.field.valueType === 'contacts_bundle') {
+                    <loom-questionnaire-contacts-bundle-field
+                      [answers]="store.answers()"
+                      [profileMirror]="store.profileMirror()"
+                      [employeeId]="store.assignment()?.employeeId ?? null"
+                      [editable]="store.editable() && !store.conflict()"
+                      (bundleChange)="onContactsBundleChange($event)"
+                    />
                   } @else {
                     <loom-questionnaire-field-host
                       [field]="block.field"
@@ -296,27 +289,6 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
           Назад
         </button>
         <div class="footer-right">
-          @if (
-            store.editable() &&
-            !store.conflict() &&
-            store.activeStepKey() !== introKey &&
-            store.activeStepKey() !== reviewKey &&
-            !showHeaderSaveChanges()
-          ) {
-            @if (footerSaveHint(); as hint) {
-              <span class="footer-save" aria-live="polite">{{ hint }}</span>
-            }
-            <button
-              type="button"
-              class="btn"
-              [class.saving]="store.saveState() === 'saving'"
-              [disabled]="store.saveState() === 'saving'"
-              [attr.aria-busy]="store.saveState() === 'saving'"
-              (click)="saveNow()"
-            >
-              {{ saveButtonLabel() }}
-            </button>
-          }
           @if (store.activeStepKey() !== reviewKey) {
             <button
               type="button"
@@ -347,12 +319,28 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
   styles: [
     `
       .wizard {
+        --q-panel-border: 1.5px solid var(--pw-border-strong);
+        --q-panel-bg: var(--pw-surface);
+        --q-panel-bg-alt: var(--pw-surface-2);
+        --q-input-border: 1.5px solid var(--pw-border-strong);
+        --q-input-bg: var(--pw-input-bg, var(--pw-surface));
+        --q-divider: 1.5px solid var(--pw-border-strong);
+        --q-row-border: 1.5px dashed var(--pw-border-strong);
         display: flex;
         flex-direction: column;
         min-height: calc(100dvh - 5.5rem);
         min-height: calc(100vh - 5.5rem);
         gap: 0.75rem;
         position: relative;
+      }
+      html[data-theme='dark'] .wizard {
+        --q-panel-border: 1.5px solid #64748b;
+        --q-panel-bg: #1a2438;
+        --q-panel-bg-alt: #121c2e;
+        --q-input-border: 1.5px solid #64748b;
+        --q-input-bg: #0a101c;
+        --q-divider: 1.5px solid #64748b;
+        --q-row-border: 1.5px dashed #64748b;
       }
       .wizard .viewport {
         padding-bottom: 5.5rem;
@@ -363,20 +351,12 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         gap: 0.75rem;
         align-items: center;
         padding: 0.35rem 0 0.5rem;
-        border-bottom: 1px solid var(--pw-border);
+        border-bottom: var(--q-divider);
         flex: 0 0 auto;
       }
       .muted {
         margin: 0;
         color: var(--pw-muted);
-      }
-      .top-actions {
-        margin-left: auto;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-        justify-content: flex-end;
       }
       .save-slot {
         margin-left: auto;
@@ -422,7 +402,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         gap: 0.75rem;
         padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom));
         background: var(--pw-bg, #f6f8fb);
-        border-top: 1px solid var(--pw-border);
+        border-top: var(--q-divider);
       }
       .footer-right {
         display: flex;
@@ -431,18 +411,13 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         gap: 0.5rem;
         margin-left: auto;
       }
-      .footer-save {
-        font-size: 0.85rem;
-        color: var(--pw-muted);
-        min-width: 7rem;
-        text-align: right;
-      }
       .btn {
         min-height: 44px;
         min-width: 44px;
         padding: 0.45rem 0.9rem;
         border-radius: 8px;
-        border: 1px solid var(--pw-border);
+        border: var(--q-panel-border);
+        background: var(--q-panel-bg);
         background: var(--pw-surface);
         cursor: pointer;
         color: inherit;
@@ -450,11 +425,6 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         display: inline-flex;
         align-items: center;
         justify-content: center;
-      }
-      .btn.saving {
-        border-color: #0b57d0;
-        color: #0b57d0;
-        font-weight: 600;
       }
       .btn.primary {
         background: var(--pw-accent);
@@ -471,7 +441,8 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
       .banner {
         border-radius: 10px;
         padding: 0.75rem;
-        border: 1px solid var(--pw-border);
+        border: var(--q-panel-border);
+        background: var(--q-panel-bg);
         display: grid;
         gap: 0.4rem;
         flex: 0 0 auto;
@@ -501,7 +472,8 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         font-size: 0.9rem;
       }
       .review-block {
-        border: 1px solid var(--pw-border);
+        border: var(--q-panel-border);
+        background: var(--q-panel-bg);
         border-radius: 10px;
         padding: 0.75rem;
       }
@@ -517,6 +489,10 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         display: grid;
         grid-template-columns: minmax(8rem, 40%) 1fr;
         gap: 0.5rem;
+        padding: 0.45rem 0.55rem;
+        border: var(--q-panel-border);
+        border-radius: 8px;
+        background: var(--q-panel-bg-alt);
       }
       .dl-row.inactive {
         opacity: 0.75;
@@ -530,7 +506,8 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
         color: #b42318;
       }
       .field-group {
-        border: 1px solid var(--pw-border);
+        border: var(--q-panel-border);
+        background: var(--q-panel-bg);
         border-radius: 10px;
         padding: 0.75rem;
         margin: 0;
@@ -572,14 +549,6 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
       @media (max-width: 480px) {
         .top {
           gap: 0.5rem;
-        }
-        .top-actions {
-          width: 100%;
-          margin-left: 0;
-          justify-content: stretch;
-        }
-        .top-actions .btn {
-          flex: 1;
         }
         .save-slot {
           margin-left: 0;
@@ -687,39 +656,8 @@ export class QuestionnaireWizardShellComponent {
     }
   }
 
-  saveButtonLabel(): string {
-    if (this.store.saveState() === 'saving' || this.revision.manualSaveBusy()) {
-      return 'Збереження…';
-    }
-    const flash = this.revision.manualSaveMessage();
-    if (flash) return flash;
-    return this.isRevisionEdit() ? 'Зберегти' : 'Зберегти зараз';
-  }
-
   isRevisionEdit(): boolean {
     return this.revision.isRevisionEdit();
-  }
-
-  /** Middle steps (not intro / review): draft «Зберегти зміни» in the header. */
-  showHeaderSaveChanges(): boolean {
-    if (!this.store.editable() || this.store.conflict()) return false;
-    const key = this.store.activeStepKey();
-    return (
-      key !== QUESTIONNAIRE_INTRO_STEP && key !== QUESTIONNAIRE_REVIEW_STEP
-    );
-  }
-
-  footerSaveHint(): string {
-    if (this.store.saveState() === 'saving' || this.revision.manualSaveBusy()) {
-      return 'Зачекайте…';
-    }
-    const flash = this.revision.manualSaveMessage();
-    if (flash) return flash;
-    if (this.store.saveState() === 'dirty') return 'Є зміни';
-    if (this.store.saveState() === 'error') {
-      return this.store.saveError() ?? 'Помилка';
-    }
-    return '';
   }
 
   fieldValue(fieldKey: string): unknown {
@@ -758,6 +696,11 @@ export class QuestionnaireWizardShellComponent {
 
   onFieldChange(fieldKey: string, value: unknown): void {
     this.store.setAnswer(fieldKey, value);
+    this.autosave.scheduleSave();
+  }
+
+  onContactsBundleChange(value: unknown): void {
+    this.store.setAnswer('contacts.bundle', value);
     this.autosave.scheduleSave();
   }
 
@@ -809,10 +752,6 @@ export class QuestionnaireWizardShellComponent {
     const idx = order.indexOf(this.store.activeStepKey());
     if (idx < 0 || idx >= order.length - 1) return;
     await this.navigateTo(order[idx + 1]!);
-  }
-
-  async saveNow(): Promise<void> {
-    await this.revision.saveDraftWithFeedback();
   }
 
   acceptServer(): void {

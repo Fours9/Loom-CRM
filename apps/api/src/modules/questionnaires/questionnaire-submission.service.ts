@@ -20,7 +20,9 @@ import { QuestionnaireSubmission } from './questionnaire-submission.entity';
 import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import { QuestionnaireResponseService } from './questionnaire-response.service';
 import { projectVisibleQuestionnaireAnswers } from '@loom/questionnaire-schema';
+import { InvalidEmployeeContactsBundle } from '@loom/employee-contacts';
 import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
+import { validateDraftAnswersForSubmit } from './questionnaire-answers-validation';
 import {
   applyReopenTransition,
   toSubmissionSummaryDto,
@@ -143,6 +145,14 @@ export class QuestionnaireSubmissionService {
   ): Promise<QuestionnaireSubmission> {
     const schema = assignment.templateVersion
       .schemaJson as unknown as QuestionnaireSchemaJson;
+    try {
+      validateDraftAnswersForSubmit(schema, response.answersJson ?? {});
+    } catch (err) {
+      if (err instanceof InvalidEmployeeContactsBundle) {
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
     const snapshotJson = projectVisibleQuestionnaireAnswers(
       schema,
       response.answersJson ?? {},

@@ -37,6 +37,7 @@ import {
   resolvePrimaryPersonalValue,
   type PersonalContactWriteInput,
 } from './employee-personal-contacts';
+import { EmployeeContactsFacade } from './employee-contacts.facade';
 
 type AssignmentWriteDto = {
   companyId?: string | null;
@@ -95,6 +96,7 @@ export class EmployeeProfileService {
     private readonly audit: AuditService,
     private readonly users: UsersService,
     private readonly dataSource: DataSource,
+    private readonly contactsFacade: EmployeeContactsFacade,
   ) {}
 
   private hasPerm(user: User, perm: Permission): boolean {
@@ -481,66 +483,12 @@ export class EmployeeProfileService {
       }
     }
 
-    let normalized: ReturnType<typeof normalizePersonalContactsForWrite>;
-    try {
-      normalized = normalizePersonalContactsForWrite(contacts);
-    } catch {
-      throw new BadRequestException('Invalid personal contact payload');
-    }
-
     await this.dataSource.transaction(async (manager) => {
-      const employeeRepository = manager.getRepository(Employee);
-      const contactRepository = manager.getRepository(EmployeeContact);
-
-      await employeeRepository.findOneOrFail({
-        where: { id: employeeId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      const previous = await contactRepository.find({
-        where: { employeeId, type: In([...PERSONAL_CONTACT_TYPES]) },
-      });
-
-      await contactRepository
-        .createQueryBuilder()
-        .delete()
-        .where('employee_id = :employeeId', { employeeId })
-        .andWhere('type IN (:...types)', { types: [...PERSONAL_CONTACT_TYPES] })
-        .execute();
-
-      const rows = normalized.map((contact) =>
-        contactRepository.create({
-          employeeId,
-          type: contact.type,
-          value: contact.value,
-          isPrimary: contact.isPrimary,
-          visibility: 'personal',
-        }),
-      );
-
-      const saved = rows.length ? await contactRepository.save(rows) : [];
-
-      const legacy = legacyPersonalFromContacts(saved);
-      await employeeRepository.update(employeeId, {
-        personalPhoneNumber: legacy.personalPhoneNumber,
-        personalEmail: legacy.personalEmail,
-        personalTelegram: legacy.personalTelegram,
-      });
-
-      await this.audit.record(
-        {
-          actorId: actor.id,
-          action: 'employee.personal_contacts_updated',
-          entityType: 'Employee',
-          entityId: employeeId,
-          metadata: {
-            previousCount: previous.length,
-            count: saved.length,
-            deletedIds: previous.map((row) => row.id),
-            createdIds: saved.map((row) => row.id),
-          },
-        },
+      await this.contactsFacade.replacePersonalContacts(
         manager,
+        actor,
+        employeeId,
+        contacts,
       );
     });
 
@@ -560,31 +508,15 @@ export class EmployeeProfileService {
     await this.access.requireCanEdit(actor, employee);
 
     await this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(Employee);
-      const row = await repo.findOneByOrFail({ id });
-      if (dto.workPhone !== undefined) {
-        row.phoneNumber = dto.workPhone?.trim() || null;
-        await this.upsertContact(id, 'work_phone', row.phoneNumber, 'work', manager);
-      }
-      if (dto.workEmail !== undefined) {
-        row.workEmail = dto.workEmail?.trim() || null;
-        await this.upsertContact(id, 'work_email', row.workEmail, 'work', manager);
-      }
-      if (dto.workTelegram !== undefined) {
-        row.telegram = dto.workTelegram?.trim() || null;
-        await this.upsertContact(id, 'work_telegram', row.telegram, 'work', manager);
-      }
-      await repo.save(row);
-      await this.audit.record(
-        {
-          actorId: actor.id,
-          action: 'employee.contacts_updated',
-          entityType: 'Employee',
-          entityId: id,
-          metadata: { fields: Object.keys(dto) },
-        },
-        manager,
-      );
+      const current = await this.contactsFacade.readContactsBundle(manager, id);
+      await this.contactsFacade.applyWorkContacts(manager, actor, id, {
+        email: dto.workEmail !== undefined ? dto.workEmail : current.work.email,
+        phone: dto.workPhone !== undefined ? dto.workPhone : current.work.phone,
+        telegram:
+          dto.workTelegram !== undefined
+            ? dto.workTelegram
+            : current.work.telegram,
+      });
     });
     return this.getProfile(actor, id);
   }
@@ -607,52 +539,17 @@ export class EmployeeProfileService {
     }
 
     await this.dataSource.transaction(async (manager) => {
-      const employeeRepository = manager.getRepository(Employee);
-      const emergencyRepository = manager.getRepository(EmployeeEmergencyContact);
-
-      await employeeRepository.findOneOrFail({
-        where: { id: employeeId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      const previous = await emergencyRepository.find({
-        where: { employeeId, isActive: true },
-      });
-
-      await emergencyRepository.update(
-        { employeeId, isActive: true },
-        { isActive: false },
-      );
-
-      const rows = contacts.map((contact, index) =>
-        emergencyRepository.create({
-          employeeId,
-          fullName: contact.fullName.trim(),
-          relationship: contact.relationship?.trim() || null,
-          primaryPhone: contact.primaryPhone.trim(),
-          secondaryPhone: contact.secondaryPhone?.trim() || null,
-          notes: contact.notes?.trim() || null,
-          priority: index + 1,
-          isActive: true,
-        }),
-      );
-
-      const saved = rows.length ? await emergencyRepository.save(rows) : [];
-
-      await this.audit.record(
-        {
-          actorId: actor.id,
-          action: 'employee.emergency_updated',
-          entityType: 'Employee',
-          entityId: employeeId,
-          metadata: {
-            previousCount: previous.length,
-            count: saved.length,
-            deactivatedIds: previous.map((row) => row.id),
-            createdIds: saved.map((row) => row.id),
-          },
-        },
+      await this.contactsFacade.replaceEmergencyContacts(
         manager,
+        actor,
+        employeeId,
+        contacts.map((contact) => ({
+          fullName: contact.fullName,
+          relationship: contact.relationship ?? '',
+          primaryPhone: contact.primaryPhone,
+          secondaryPhone: contact.secondaryPhone ?? '',
+          notes: contact.notes ?? '',
+        })),
       );
     });
 

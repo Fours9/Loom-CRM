@@ -15,6 +15,7 @@ Accepted.
 - Owner self-reopen vs HR request-changes (parameterized reopen cause); revision UX; proposal `superseded` + atomic generate: shipped
 - Assignment lifecycle (cancel / reactivate / hard delete + audit): shipped
 - Directory «Анкети», terminal `closed`, `QuestionnairesCompleteAny`, Admin fill-on-behalf / preserveCancelled submit: shipped
+- Contacts step: `contacts.bundle` (`contacts_bundle`), shared editor with People profile, draft SoT, `@loom/employee-contacts` + Organization `EmployeeContactsFacade`, proposal apply via work scalars + replace-sets: shipped
 
 ## Versioning (pre-production)
 

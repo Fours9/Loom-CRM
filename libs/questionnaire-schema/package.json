@@ -7,11 +7,12 @@
   "scripts": {
     "lint": "echo \"no lint\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "jest",
+    "test": "pnpm --filter @loom/employee-contacts build && jest",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@loom/contracts-questionnaires": "workspace:*"
+    "@loom/contracts-questionnaires": "workspace:*",
+    "@loom/employee-contacts": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

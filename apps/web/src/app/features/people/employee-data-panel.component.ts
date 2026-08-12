@@ -12,30 +12,20 @@ import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import type {
-  EmployeeEmergencyContactItem,
-  EmployeePersonalContactType,
   EmployeeProfileResponse,
   ImportantDateItem,
   NamedReference,
 } from '@loom/contracts-employees';
+import {
+  EmployeeContactsEditorComponent,
+  contactsBundleFromProfile,
+  emptyEmployeeContactsBundle,
+  normalizeEmployeeContactsBundle,
+  profileContactsAccess,
+  type EmployeeContactsBundle,
+} from '../../shared/employee-contacts/public-api';
 
 type DataTabId = 'basics' | 'contacts' | 'dates' | 'position';
-
-type EmergencyContactDraft = {
-  key: string;
-  fullName: string;
-  relationship: string;
-  primaryPhone: string;
-  secondaryPhone: string;
-  notes: string;
-};
-
-type PersonalContactDraft = {
-  key: string;
-  type: EmployeePersonalContactType;
-  value: string;
-  isPrimary: boolean;
-};
 
 type ImportantDateDraft = {
   key: string;
@@ -73,7 +63,7 @@ export type AssignmentHistoryItem = {
 @Component({
   selector: 'loom-employee-data-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, EmployeeContactsEditorComponent],
   template: `
 <nav class="tabs subtabs" role="tablist" aria-label="Дані працівника">
   <button
@@ -197,336 +187,12 @@ export type AssignmentHistoryItem = {
     }
   </div>
 
-  <div class="contacts-stack">
-    <details
-      class="section-block disclose"
-      open
-    >
-      <summary>Робочі контакти</summary>
-      <div class="disclose-body">
-        @if (editingContacts() && profile.capabilities.canEditBasic) {
-          <div class="personal-contact-groups">
-            <div class="personal-contact-group">
-              <div class="emergency-list">
-                <fieldset class="emergency-row personal-contact-row">
-                  <legend>Email</legend>
-                  <div class="emergency-fields">
-                    <label>
-                      Значення
-                      <input
-                        [(ngModel)]="workContactsForm.workEmail"
-                        name="wem"
-                        type="email"
-                        maxlength="320"
-                      />
-                    </label>
-                  </div>
-                </fieldset>
-                <fieldset class="emergency-row personal-contact-row">
-                  <legend>Телефон</legend>
-                  <div class="emergency-fields">
-                    <label>
-                      Значення
-                      <input
-                        [(ngModel)]="workContactsForm.workPhone"
-                        name="wph"
-                        inputmode="tel"
-                        maxlength="64"
-                      />
-                    </label>
-                  </div>
-                </fieldset>
-                <fieldset class="emergency-row personal-contact-row">
-                  <legend>Telegram</legend>
-                  <div class="emergency-fields">
-                    <label>
-                      Значення
-                      <input
-                        [(ngModel)]="workContactsForm.workTelegram"
-                        name="wtg"
-                        maxlength="120"
-                      />
-                    </label>
-                  </div>
-                </fieldset>
-              </div>
-            </div>
-          </div>
-        } @else {
-          <div class="personal-contact-group view">
-            <div class="emergency-list">
-              <div class="emergency-row view">
-                <label>
-                  Email
-                  <div class="value">{{ profile.header.workEmail || '—' }}</div>
-                </label>
-              </div>
-              <div class="emergency-row view">
-                <label>
-                  Телефон
-                  <div class="value">{{ profile.header.workPhone || '—' }}</div>
-                </label>
-              </div>
-              <div class="emergency-row view">
-                <label>
-                  Telegram
-                  <div class="value">{{ profile.header.workTelegram || '—' }}</div>
-                </label>
-              </div>
-            </div>
-          </div>
-        }
-      </div>
-    </details>
-
-    @if (!profile.capabilities.canViewPersonal) {
-      <div class="section-block">
-        <h3>Особисті контакти</h3>
-        <p class="muted">Немає доступу до особистих контактів.</p>
-      </div>
-    } @else {
-      <details
-        class="section-block disclose"
-        [attr.open]="editingContacts() ? '' : null"
-      >
-        <summary>Особисті контакти</summary>
-        <div class="disclose-body">
-          @if (editingContacts() && profile.capabilities.canEditPersonal) {
-            <div class="personal-contact-groups">
-              @for (group of personalContactGroups; track group.type) {
-                <div class="personal-contact-group">
-                  <h4>{{ group.label }}</h4>
-                  <div class="emergency-list">
-                    @for (
-                      contact of personalContactsOfType(group.type);
-                      track contact.key;
-                      let index = $index
-                    ) {
-                      <fieldset class="emergency-row personal-contact-row">
-                        <legend>{{ group.label }} {{ index + 1 }}</legend>
-                        <button
-                          type="button"
-                          class="icon-btn danger emergency-remove"
-                          title="Прибрати"
-                          [attr.aria-label]="'Прибрати ' + group.label + ' ' + (index + 1)"
-                          (click)="removePersonalContact(contact.key)"
-                        >
-                          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                            <path
-                              fill="currentColor"
-                              d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
-                            />
-                          </svg>
-                        </button>
-                        <div class="emergency-fields">
-                          <label>
-                            Значення
-                            <input
-                              [(ngModel)]="contact.value"
-                              [name]="'personalValue_' + contact.key"
-                              [attr.inputmode]="group.inputMode"
-                              maxlength="320"
-                            />
-                          </label>
-                          <label class="primary-toggle">
-                            <input
-                              type="radio"
-                              [name]="'personalPrimary_' + group.type"
-                              [checked]="contact.isPrimary"
-                              (change)="setPersonalContactPrimary(group.type, contact.key)"
-                            />
-                            Основний
-                          </label>
-                        </div>
-                      </fieldset>
-                    }
-                  </div>
-                  <div class="emergency-actions">
-                    <button
-                      type="button"
-                      class="btn ghost"
-                      [disabled]="personalContactsOfType(group.type).length >= 10"
-                      (click)="addPersonalContact(group.type)"
-                    >
-                      + Додати {{ group.addLabel }}
-                    </button>
-                  </div>
-                </div>
-              }
-            </div>
-          } @else {
-            @for (group of personalContactGroups; track group.type) {
-              @if (personalContactsOfType(group.type, true).length > 0) {
-                <div class="personal-contact-group view">
-                  <h4>{{ group.label }}</h4>
-                  <div class="emergency-list">
-                    @for (
-                      contact of personalContactsOfType(group.type, true);
-                      track contact.key;
-                      let index = $index
-                    ) {
-                      <div class="emergency-row view">
-                        <label>
-                          {{ group.label }} {{ index + 1 }}
-                          @if (contact.isPrimary) {
-                            <span class="primary-badge">основний</span>
-                          }
-                          <div class="value">{{ contact.value || '—' }}</div>
-                        </label>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
-            }
-            @if (!hasVisiblePersonalContacts()) {
-              <p class="muted">Не вказано.</p>
-            }
-          }
-        </div>
-      </details>
-    }
-
-    @if (!profile.capabilities.canViewEmergencyContact) {
-      <div class="section-block">
-        <h3>Екстрений контакт</h3>
-        <p class="muted">Немає доступу.</p>
-      </div>
-    } @else {
-      <details
-        class="section-block disclose"
-        [attr.open]="editingContacts() ? '' : null"
-      >
-        <summary>Екстрені контакти</summary>
-        <div class="disclose-body">
-          @if (editingContacts() && profile.capabilities.canEditEmergencyContact) {
-            <div class="emergency-list">
-              @for (
-                contact of emergencyForms;
-                track contact.key;
-                let index = $index
-              ) {
-                <fieldset class="emergency-row">
-                  <legend>Екстрений контакт {{ index + 1 }}</legend>
-                  <button
-                    type="button"
-                    class="icon-btn danger emergency-remove"
-                    title="Прибрати контакт"
-                    [attr.aria-label]="'Прибрати екстрений контакт ' + (index + 1)"
-                    (click)="removeEmergencyContact(contact.key)"
-                  >
-                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
-                      />
-                    </svg>
-                  </button>
-                  <div class="emergency-fields">
-                    <label>
-                      ПІБ
-                      <input
-                        [(ngModel)]="contact.fullName"
-                        [name]="'emergencyFullName_' + contact.key"
-                        required
-                        maxlength="255"
-                      />
-                    </label>
-                    <label>
-                      Зв'язок
-                      <input
-                        [(ngModel)]="contact.relationship"
-                        [name]="'emergencyRelationship_' + contact.key"
-                        maxlength="120"
-                      />
-                    </label>
-                    <label>
-                      Основний телефон
-                      <input
-                        [(ngModel)]="contact.primaryPhone"
-                        [name]="'emergencyPrimaryPhone_' + contact.key"
-                        inputmode="tel"
-                        required
-                        maxlength="64"
-                      />
-                    </label>
-                    <label>
-                      Додатковий телефон
-                      <input
-                        [(ngModel)]="contact.secondaryPhone"
-                        [name]="'emergencySecondaryPhone_' + contact.key"
-                        inputmode="tel"
-                        maxlength="64"
-                      />
-                    </label>
-                    <label class="emergency-notes">
-                      Примітки
-                      <textarea
-                        [(ngModel)]="contact.notes"
-                        [name]="'emergencyNotes_' + contact.key"
-                        rows="2"
-                        maxlength="5000"
-                      ></textarea>
-                    </label>
-                  </div>
-                </fieldset>
-              }
-            </div>
-            <div class="emergency-actions">
-              <button
-                type="button"
-                class="btn ghost"
-                [disabled]="emergencyForms.length >= 5"
-                (click)="addEmergencyContact()"
-              >
-                + Додати контакт
-              </button>
-            </div>
-          } @else if ((profile.sections.emergencyContact?.length ?? 0) > 0) {
-            <div class="emergency-list">
-              @for (
-                e of profile.sections.emergencyContact!;
-                track e.id;
-                let index = $index
-              ) {
-                <div class="emergency-row view">
-                  <h4>Екстрений контакт {{ index + 1 }}</h4>
-                  <div class="emergency-fields">
-                    <label>
-                      ПІБ
-                      <div class="value">{{ e.fullName || '—' }}</div>
-                    </label>
-                    <label>
-                      Зв'язок
-                      <div class="value">{{ e.relationship || '—' }}</div>
-                    </label>
-                    <label>
-                      Основний телефон
-                      <div class="value">{{ e.primaryPhone || '—' }}</div>
-                    </label>
-                    @if (e.secondaryPhone) {
-                      <label>
-                        Додатковий телефон
-                        <div class="value">{{ e.secondaryPhone }}</div>
-                      </label>
-                    }
-                    @if (e.notes) {
-                      <label class="emergency-notes">
-                        Примітки
-                        <div class="value">{{ e.notes }}</div>
-                      </label>
-                    }
-                  </div>
-                </div>
-              }
-            </div>
-          } @else {
-            <p class="muted">Не вказано.</p>
-          }
-        </div>
-      </details>
-    }
-  </div>
+  <loom-employee-contacts-editor
+    [bundle]="contactsBundleDraft()"
+    [access]="profileContactsAccess(profile)"
+    [editing]="editingContacts()"
+    (bundleChange)="onContactsBundleDraftChange($event)"
+  />
 }
 
 @if (dataTab() === 'dates') {
@@ -1328,23 +994,10 @@ export class EmployeeDataPanelComponent implements OnChanges {
     preferredLanguage: '',
   };
   hiredAtForm = '';
-  personalContactForms: PersonalContactDraft[] = [];
-  readonly personalContactGroups: Array<{
-    type: EmployeePersonalContactType;
-    label: string;
-    addLabel: string;
-    inputMode?: string;
-  }> = [
-    { type: 'personal_email', label: 'Email', addLabel: 'email', inputMode: 'email' },
-    { type: 'personal_phone', label: 'Телефон', addLabel: 'телефон', inputMode: 'tel' },
-    { type: 'personal_telegram', label: 'Telegram', addLabel: 'telegram' },
-  ];
-  workContactsForm = {
-    workEmail: '',
-    workPhone: '',
-    workTelegram: '',
-  };
-  emergencyForms: EmergencyContactDraft[] = [];
+  readonly contactsBundleDraft = signal<EmployeeContactsBundle>(
+    emptyEmployeeContactsBundle(),
+  );
+  readonly profileContactsAccess = profileContactsAccess;
   importantDateForms: ImportantDateDraft[] = [];
   assignmentForm = {
     workFormat: '',
@@ -1396,7 +1049,6 @@ export class EmployeeDataPanelComponent implements OnChanges {
   startBasicsEditing(): void {
     this.editingContacts.set(false);
     this.editingDates.set(false);
-    this.emergencyForms = [];
     this.resetEmploymentEditing();
     this.applyProfile(this.profile);
     this.editingBasics.set(true);
@@ -1411,25 +1063,24 @@ export class EmployeeDataPanelComponent implements OnChanges {
     this.editingBasics.set(false);
     this.editingDates.set(false);
     this.resetEmploymentEditing();
-    this.applyProfile(this.profile);
-    this.hydrateEmergencyDrafts();
-    this.hydratePersonalContactDrafts();
+    this.contactsBundleDraft.set(contactsBundleFromProfile(this.profile));
     this.errorChange.emit(null);
     this.editingContacts.set(true);
   }
 
   cancelContactsEditing(): void {
-    this.applyProfile(this.profile);
-    this.emergencyForms = [];
-    this.personalContactForms = [];
+    this.contactsBundleDraft.set(contactsBundleFromProfile(this.profile));
     this.errorChange.emit(null);
     this.editingContacts.set(false);
+  }
+
+  onContactsBundleDraftChange(bundle: EmployeeContactsBundle): void {
+    this.contactsBundleDraft.set(normalizeEmployeeContactsBundle(bundle));
   }
 
   startDatesEditing(): void {
     this.editingBasics.set(false);
     this.editingContacts.set(false);
-    this.emergencyForms = [];
     this.resetEmploymentEditing();
     this.applyProfile(this.profile);
     if (this.profile.capabilities.canEditPersonal) {
@@ -1457,63 +1108,10 @@ export class EmployeeDataPanelComponent implements OnChanges {
     this.importantDateForms = this.importantDateForms.filter((item) => item.key !== key);
   }
 
-  addEmergencyContact(): void {
-    if (this.emergencyForms.length >= 5) return;
-    this.emergencyForms = [...this.emergencyForms, this.createEmergencyDraft()];
-  }
-
-  removeEmergencyContact(key: string): void {
-    this.emergencyForms = this.emergencyForms.filter((contact) => contact.key !== key);
-  }
-
-  addPersonalContact(type: EmployeePersonalContactType): void {
-    if (this.personalContactsOfType(type).length >= 10) return;
-    this.personalContactForms = [
-      ...this.personalContactForms,
-      this.createPersonalContactDraft(type),
-    ];
-  }
-
-  removePersonalContact(key: string): void {
-    this.personalContactForms = this.personalContactForms.filter(
-      (contact) => contact.key !== key,
-    );
-  }
-
-  setPersonalContactPrimary(
-    type: EmployeePersonalContactType,
-    key: string,
-  ): void {
-    this.personalContactForms = this.personalContactForms.map((contact) => ({
-      ...contact,
-      isPrimary:
-        contact.type === type
-          ? contact.key === key
-          : contact.isPrimary,
-    }));
-  }
-
-  personalContactsOfType(
-    type: EmployeePersonalContactType,
-    fromProfile = false,
-  ): PersonalContactDraft[] {
-    if (fromProfile) {
-      return this.profilePersonalContactDrafts(type);
-    }
-    return this.personalContactForms.filter((contact) => contact.type === type);
-  }
-
-  hasVisiblePersonalContacts(): boolean {
-    return this.personalContactGroups.some(
-      (group) => this.personalContactsOfType(group.type, true).length > 0,
-    );
-  }
-
   startCreatingAssignment(): void {
     this.editingBasics.set(false);
     this.editingContacts.set(false);
     this.editingDates.set(false);
-    this.emergencyForms = [];
     this.importantDateForms = [];
     this.editingAssignmentId.set(null);
     this.creatingAssignment.set(true);
@@ -1574,7 +1172,6 @@ export class EmployeeDataPanelComponent implements OnChanges {
     this.editingBasics.set(false);
     this.editingContacts.set(false);
     this.editingDates.set(false);
-    this.emergencyForms = [];
     this.importantDateForms = [];
     this.resetEmploymentEditing();
   }
@@ -1610,11 +1207,7 @@ export class EmployeeDataPanelComponent implements OnChanges {
       preferredLanguage: pers?.preferredLanguage ?? '',
     };
     this.hiredAtForm = p.header.hiredAt ?? '';
-    this.workContactsForm = {
-      workEmail: p.header.workEmail ?? '',
-      workPhone: p.header.workPhone ?? '',
-      workTelegram: p.header.workTelegram ?? '',
-    };
+    this.contactsBundleDraft.set(contactsBundleFromProfile(p));
     const emp = p.sections.employment;
     this.assignmentForm = {
       workFormat: emp?.workFormat ?? '',
@@ -1753,28 +1346,26 @@ export class EmployeeDataPanelComponent implements OnChanges {
     const caps = this.profile?.capabilities;
     if (!caps) return;
 
-    let emergencyContacts:
-      | Array<{
-          fullName: string;
-          relationship: string | null;
-          primaryPhone: string;
-          secondaryPhone: string | null;
-          notes: string | null;
-        }>
-      | null = null;
+    const bundle = normalizeEmployeeContactsBundle(this.contactsBundleDraft());
+    const emergencyContacts = bundle.emergency
+      .filter(
+        (contact) =>
+          contact.fullName.trim() ||
+          contact.relationship.trim() ||
+          contact.primaryPhone.trim() ||
+          contact.secondaryPhone.trim() ||
+          contact.notes.trim(),
+      )
+      .map((contact) => ({
+        fullName: contact.fullName.trim(),
+        relationship: contact.relationship.trim() || null,
+        primaryPhone: contact.primaryPhone.trim(),
+        secondaryPhone: contact.secondaryPhone.trim() || null,
+        notes: contact.notes.trim() || null,
+      }));
 
     if (caps.canEditEmergencyContact) {
-      const contacts = this.emergencyForms
-        .filter((contact) => !this.isEmergencyContactCompletelyEmpty(contact))
-        .map((contact) => ({
-          fullName: contact.fullName.trim(),
-          relationship: contact.relationship.trim() || null,
-          primaryPhone: contact.primaryPhone.trim(),
-          secondaryPhone: contact.secondaryPhone.trim() || null,
-          notes: contact.notes.trim() || null,
-        }));
-
-      const invalid = contacts.some(
+      const invalid = emergencyContacts.some(
         (contact) => !contact.fullName || !contact.primaryPhone,
       );
       if (invalid) {
@@ -1783,8 +1374,6 @@ export class EmployeeDataPanelComponent implements OnChanges {
         );
         return;
       }
-
-      emergencyContacts = contacts;
     }
 
     this.errorChange.emit(null);
@@ -1794,28 +1383,24 @@ export class EmployeeDataPanelComponent implements OnChanges {
     if (caps.canEditBasic) {
       requests.push(
         this.http.patch(`/api/v1/employees/${this.employeeId}/contacts`, {
-          workEmail: this.workContactsForm.workEmail || null,
-          workPhone: this.workContactsForm.workPhone || null,
-          workTelegram: this.workContactsForm.workTelegram || null,
+          workEmail: bundle.work.email,
+          workPhone: bundle.work.phone,
+          workTelegram: bundle.work.telegram,
         }),
       );
     }
     if (caps.canEditPersonal) {
-      const contacts = this.personalContactForms
-        .filter((contact) => contact.value.trim())
-        .map((contact) => ({
-          type: contact.type,
-          value: contact.value.trim(),
-          isPrimary: contact.isPrimary,
-        }));
-
       requests.push(
         this.http.put(`/api/v1/employees/${this.employeeId}/personal-contacts`, {
-          contacts,
+          contacts: bundle.personal.map((contact) => ({
+            type: contact.type,
+            value: contact.value,
+            isPrimary: contact.isPrimary,
+          })),
         }),
       );
     }
-    if (emergencyContacts !== null) {
+    if (caps.canEditEmergencyContact) {
       requests.push(
         this.http.put(`/api/v1/employees/${this.employeeId}/emergency-contact`, {
           contacts: emergencyContacts,
@@ -1833,8 +1418,6 @@ export class EmployeeDataPanelComponent implements OnChanges {
         const last = results[results.length - 1] as EmployeeProfileResponse;
         this.applyProfile(last);
         this.profileChange.emit(last);
-        this.emergencyForms = [];
-        this.personalContactForms = [];
         this.editingContacts.set(false);
         this.busy.set(false);
       },
@@ -1845,111 +1428,12 @@ export class EmployeeDataPanelComponent implements OnChanges {
     });
   }
 
-  private hydratePersonalContactDrafts(): void {
-    const fromContacts =
-      this.profile?.sections.contacts.filter((contact) =>
-        contact.type.startsWith('personal_'),
-      ) ?? [];
-
-    if (fromContacts.length) {
-      this.personalContactForms = fromContacts.map((contact) =>
-        this.createPersonalContactDraft(
-          contact.type as EmployeePersonalContactType,
-          contact,
-        ),
-      );
-      return;
-    }
-
-    const pers = this.profile?.sections.personal;
-    const legacy: Array<{
-      type: EmployeePersonalContactType;
-      value: string | null | undefined;
-    }> = [
-      { type: 'personal_email', value: pers?.personalEmail },
-      { type: 'personal_phone', value: pers?.personalPhone },
-      { type: 'personal_telegram', value: pers?.personalTelegram },
-    ];
-
-    this.personalContactForms = legacy
-      .filter((item) => Boolean(item.value?.trim()))
-      .map((item) =>
-        this.createPersonalContactDraft(item.type, {
-          value: item.value!.trim(),
-          isPrimary: true,
-        }),
-      );
-  }
-
-  private profilePersonalContactDrafts(
-    type: EmployeePersonalContactType,
-  ): PersonalContactDraft[] {
-    const fromContacts =
-      this.profile?.sections.contacts.filter((contact) => contact.type === type) ??
-      [];
-
-    if (fromContacts.length) {
-      return fromContacts.map((contact) =>
-        this.createPersonalContactDraft(type, contact),
-      );
-    }
-
-    const pers = this.profile?.sections.personal;
-    const fallbackByType: Record<EmployeePersonalContactType, string | null | undefined> = {
-      personal_phone: pers?.personalPhone,
-      personal_email: pers?.personalEmail,
-      personal_telegram: pers?.personalTelegram,
-    };
-    const value = fallbackByType[type];
-    if (!value?.trim()) return [];
-
-    return [
-      this.createPersonalContactDraft(type, {
-        value: value.trim(),
-        isPrimary: true,
-      }),
-    ];
-  }
-
-  private createPersonalContactDraft(
-    type: EmployeePersonalContactType,
-    source?: { id?: string; value?: string; isPrimary?: boolean },
-  ): PersonalContactDraft {
-    return {
-      key: source?.id || crypto.randomUUID(),
-      type,
-      value: source?.value ?? '',
-      isPrimary: source?.isPrimary ?? false,
-    };
-  }
-
-  private hydrateEmergencyDrafts(): void {
-    const source = this.profile?.sections.emergencyContact ?? [];
-    this.emergencyForms = source.map((contact) => this.createEmergencyDraft(contact));
-    if (!this.emergencyForms.length) {
-      this.addEmergencyContact();
-    }
-  }
-
   private hydrateImportantDateDrafts(): void {
     const source = this.profile?.sections.importantDates ?? [];
     this.importantDateForms = source.map((item) => this.createImportantDateDraft(item));
     if (!this.importantDateForms.length) {
       this.addImportantDate();
     }
-  }
-
-  private createEmergencyDraft(
-    source?: EmployeeEmergencyContactItem,
-  ): EmergencyContactDraft {
-    return {
-      key: source?.id || crypto.randomUUID(),
-      fullName: source?.fullName ?? '',
-      relationship: source?.relationship ?? '',
-      primaryPhone: source?.primaryPhone ?? '',
-      secondaryPhone: source?.secondaryPhone ?? '',
-      notes: source?.notes ?? '',
-    };
   }
 
   private createImportantDateDraft(source?: ImportantDateItem): ImportantDateDraft {
@@ -1959,16 +1443,6 @@ export class EmployeeDataPanelComponent implements OnChanges {
       startDate: source?.startDate ?? '',
       endDate: source?.endDate ?? '',
     };
-  }
-
-  private isEmergencyContactCompletelyEmpty(contact: EmergencyContactDraft): boolean {
-    return [
-      contact.fullName,
-      contact.relationship,
-      contact.primaryPhone,
-      contact.secondaryPhone,
-      contact.notes,
-    ].every((value) => !value.trim());
   }
 
   private isImportantDateCompletelyEmpty(item: ImportantDateDraft): boolean {

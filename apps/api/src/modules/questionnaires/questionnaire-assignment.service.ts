@@ -63,8 +63,7 @@ import type {
   QuestionnaireTemplateListResponse,
 } from '@loom/contracts-questionnaires';
 import { Employee } from '../../organization/employees/employee.entity';
-import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
-import { PERSONAL_CONTACT_TYPES } from '../../organization/employees/employee-personal-contacts';
+import { EmployeeContactsFacade } from '../../organization/employees/employee-contacts.facade';
 import { buildQuestionnaireProfileMirror } from './proposals/questionnaire-profile-mirror';
 import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
 
@@ -81,8 +80,7 @@ export class QuestionnaireAssignmentService {
     private readonly responses: Repository<QuestionnaireResponse>,
     @InjectRepository(QuestionnaireSubmission)
     private readonly submissions: Repository<QuestionnaireSubmission>,
-    @InjectRepository(EmployeeContact)
-    private readonly contacts: Repository<EmployeeContact>,
+    private readonly contactsFacade: EmployeeContactsFacade,
     private readonly access: EmployeeAccessService,
     private readonly users: UsersService,
     private readonly permissions: PermissionService,
@@ -351,13 +349,20 @@ export class QuestionnaireAssignmentService {
       employee &&
       (this.access.isOwner(actor, employee) || this.access.isAdmin(actor))
     ) {
-      const contacts = await this.contacts.find({
-        where: {
-          employeeId: employee.id,
-          type: In([...PERSONAL_CONTACT_TYPES]),
+      const contactsBundle = await this.contactsFacade.readContactsBundle(
+        this.dataSource.manager,
+        employee.id,
+      );
+      profileMirror = buildQuestionnaireProfileMirror(
+        {
+          ...employee,
+          workEmail: employee.workEmail,
+          workPhone: employee.phoneNumber,
+          workTelegram: employee.telegram,
         },
-      });
-      profileMirror = buildQuestionnaireProfileMirror(employee, contacts);
+        [],
+        contactsBundle,
+      );
     }
 
     return {

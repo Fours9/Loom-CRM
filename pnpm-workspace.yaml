@@ -3,3 +3,4 @@ packages:
   - 'libs/contracts/*'
   - 'libs/frontend/*'
   - 'libs/questionnaire-schema'
+  - 'libs/employee-contacts'
