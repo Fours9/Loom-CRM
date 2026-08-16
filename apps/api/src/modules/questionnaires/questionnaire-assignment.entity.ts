@@ -31,6 +31,10 @@ export class QuestionnaireAssignment {
   @Column({ type: 'varchar', length: 32 })
   code!: string;
 
+  /** Optional display title; null → template.title. */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  title!: string | null;
+
   /** Service HR note; read via questionnaires.read_assignment_comment. */
   @Column({ type: 'text', nullable: true })
   comment!: string | null;
@@ -60,6 +64,10 @@ export class QuestionnaireAssignment {
 
   @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
   reviewedAt!: Date | null;
+
+  /** Frozen QuestionnaireContextV1; null = legacy registry mode (ADR 0010). */
+  @Column({ name: 'context_json', type: 'jsonb', nullable: true })
+  contextJson!: Record<string, unknown> | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

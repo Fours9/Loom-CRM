@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
@@ -22,7 +23,11 @@ class CreatePositionDto {
 
   @IsOptional()
   @IsUUID()
-  departmentId?: string;
+  departmentId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  directionId?: string | null;
 
   @IsOptional()
   @IsString()
@@ -40,6 +45,10 @@ class UpdatePositionDto {
   departmentId?: string | null;
 
   @IsOptional()
+  @IsUUID()
+  directionId?: string | null;
+
+  @IsOptional()
   @IsString()
   description?: string;
 
@@ -55,8 +64,18 @@ export class PositionsController {
 
   @Get()
   @RequirePermissions(Permission.EmployeesView)
-  findAll() {
-    return this.positions.findAll();
+  findAll(
+    @Query('all') all?: string,
+    @Query('departmentId') departmentId?: string,
+    @Query('directionId') directionId?: string,
+    @Query('globalsOnly') globalsOnly?: string,
+  ) {
+    return this.positions.findAll({
+      all: all === '1' || all === 'true',
+      departmentId: departmentId || undefined,
+      directionId: directionId || undefined,
+      globalsOnly: globalsOnly === '1' || globalsOnly === 'true',
+    });
   }
 
   @Post()
@@ -74,7 +93,7 @@ export class PositionsController {
   @Delete(':id')
   @RequirePermissions(Permission.PositionsManage)
   async remove(@Param('id') id: string) {
-    await this.positions.softDelete(id);
+    await this.positions.hardDelete(id);
     return { ok: true };
   }
 }

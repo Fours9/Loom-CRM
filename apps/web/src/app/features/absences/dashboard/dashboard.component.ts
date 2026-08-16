@@ -45,11 +45,13 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
             </div>
             <div class="hero-row hero-meta">
               <p>#{{ employee.employeeNumber }} · {{ employee.departmentName }} · {{ employee.positionName }}</p>
-              <a
-                class="ghost-btn"
-                [routerLink]="['/people', employee.id]"
-                [queryParams]="{ edit: '1' }"
-              >Редагувати</a>
+              @if (employee.permissions?.canEditProfile) {
+                <a
+                  class="ghost-btn"
+                  [routerLink]="['/absences/employees', employee.id]"
+                  [queryParams]="{ edit: '1' }"
+                >Редагувати</a>
+              }
             </div>
           </div>
         </header>
@@ -59,6 +61,7 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
             <article class="card">
               <div class="card-head">
                 <h2>Анкета</h2>
+                <a class="ghost-btn" [routerLink]="['/people', employee.id]">Профіль Loom</a>
               </div>
 
               <div class="fields">

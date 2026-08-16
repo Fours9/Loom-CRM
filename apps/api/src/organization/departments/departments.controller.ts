@@ -8,7 +8,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 import { Permission } from '../../platform/permissions/permission.names';
 import { JwtAuthGuard } from '../../platform/auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../platform/permissions/permissions.guard';
@@ -23,6 +23,10 @@ class CreateDepartmentDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsUUID()
+  directionId?: string | null;
 }
 
 class UpdateDepartmentDto {
@@ -34,6 +38,10 @@ class UpdateDepartmentDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsUUID()
+  directionId?: string | null;
 
   @IsOptional()
   @IsBoolean()
@@ -70,7 +78,7 @@ export class DepartmentsController {
   @Delete(':id')
   @RequirePermissions(Permission.DepartmentsManage)
   async remove(@Param('id') id: string) {
-    await this.departments.softDelete(id);
+    await this.departments.hardDelete(id);
     return { ok: true };
   }
 }

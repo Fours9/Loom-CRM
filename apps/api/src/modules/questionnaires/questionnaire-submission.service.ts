@@ -19,9 +19,13 @@ import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
 import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import { QuestionnaireResponseService } from './questionnaire-response.service';
-import { projectVisibleQuestionnaireAnswers } from '@loom/questionnaire-schema';
+import {
+  InvalidPositionSkillsMatrix,
+  projectVisibleQuestionnaireAnswers,
+} from '@loom/questionnaire-schema';
 import { InvalidEmployeeContactsBundle } from '@loom/employee-contacts';
 import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
+import { parseQuestionnaireContext } from '@loom/contracts-questionnaires';
 import { validateDraftAnswersForSubmit } from './questionnaire-answers-validation';
 import {
   applyReopenTransition,
@@ -146,9 +150,22 @@ export class QuestionnaireSubmissionService {
     const schema = assignment.templateVersion
       .schemaJson as unknown as QuestionnaireSchemaJson;
     try {
-      validateDraftAnswersForSubmit(schema, response.answersJson ?? {});
+      const parsed = parseQuestionnaireContext(assignment.contextJson);
+      const contextSkills = parsed.ok
+        ? parsed.context.positionCatalog.skills
+        : [];
+      const allowedSkillCodes =
+        contextSkills.length > 0
+          ? contextSkills.map((s) => s.code)
+          : undefined;
+      validateDraftAnswersForSubmit(schema, response.answersJson ?? {}, {
+        allowedSkillCodes,
+      });
     } catch (err) {
-      if (err instanceof InvalidEmployeeContactsBundle) {
+      if (
+        err instanceof InvalidEmployeeContactsBundle ||
+        err instanceof InvalidPositionSkillsMatrix
+      ) {
         throw new BadRequestException(err.message);
       }
       throw err;
@@ -172,6 +189,7 @@ export class QuestionnaireSubmissionService {
         responseId: response.id,
         submissionNumber: nextNumber,
         snapshotJson,
+        contextJson: assignment.contextJson ?? null,
         submittedByUserId: actor.id,
         submittedAt: now,
         reviewStatus: 'pending',
@@ -237,7 +255,9 @@ export class QuestionnaireSubmissionService {
     }
 
     const templateTitle =
-      assignment.templateVersion?.template?.title ?? 'Анкета';
+      assignment.title?.trim() ||
+      assignment.templateVersion?.template?.title ||
+      'Анкета';
 
     const { submission } = await this.dataSource.transaction(async (manager) => {
       const locked = await manager
@@ -397,7 +417,9 @@ export class QuestionnaireSubmissionService {
     });
 
     const templateTitle =
-      assignment.templateVersion?.template?.title ?? 'Анкета';
+      assignment.title?.trim() ||
+      assignment.templateVersion?.template?.title ||
+      'Анкета';
 
     return this.dataSource.transaction(async (manager) => {
       const lockedAssignment = await manager
@@ -561,7 +583,9 @@ export class QuestionnaireSubmissionService {
       }
 
       const templateTitle =
-        assignment.templateVersion?.template?.title ?? 'Анкета';
+        assignment.title?.trim() ||
+        assignment.templateVersion?.template?.title ||
+        'Анкета';
 
       const { submission: updated } = await this.dataSource.transaction(
         async (manager) => {

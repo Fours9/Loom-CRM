@@ -1,20 +1,11 @@
-import type {
-  QuestionnaireSchemaField,
-  QuestionnaireSchemaJson,
-  QuestionnaireVisibleWhen,
+import {
+  QUESTIONNAIRE_VALUE_TYPES,
+  type QuestionnaireSchemaField,
+  type QuestionnaireSchemaJson,
+  type QuestionnaireVisibleWhen,
 } from '@loom/contracts-questionnaires';
 
-const ALLOWED_VALUE_TYPES = new Set([
-  'text',
-  'textarea',
-  'date',
-  'number',
-  'boolean',
-  'single_choice',
-  'multi_choice',
-  'repeating_group',
-  'contacts_bundle',
-]);
+const ALLOWED_VALUE_TYPES = new Set<string>(QUESTIONNAIRE_VALUE_TYPES);
 
 export type SchemaValidationResult =
   | { ok: true }

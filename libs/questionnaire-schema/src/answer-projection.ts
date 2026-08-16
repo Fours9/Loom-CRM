@@ -8,6 +8,10 @@ import {
 } from '@loom/employee-contacts';
 import { isQuestionnaireFieldVisible } from './field-visibility';
 import { listTopLevelFields } from './schema-validation';
+import {
+  canonicalizePositionSkillsMatrix,
+  parsePositionSkillsMatrixStrict,
+} from './position-skills-matrix';
 
 function isMeaningfulScalar(value: unknown): boolean {
   if (value === false || value === 0) return true;
@@ -63,6 +67,12 @@ export function projectVisibleQuestionnaireAnswers(
       continue;
     }
 
+    if (field.valueType === 'position_skills_matrix') {
+      const parsed = parsePositionSkillsMatrixStrict(raw);
+      out[field.key] = canonicalizePositionSkillsMatrix(parsed);
+      continue;
+    }
+
     if (field.valueType === 'repeating_group') {
       const rows = projectRepeatingRows(field, raw);
       if (rows) out[field.key] = rows;
@@ -87,6 +97,19 @@ export function listInactiveOwnAnswers(
     if (isQuestionnaireFieldVisible(field, draftAnswers)) continue;
     const raw = draftAnswers[field.key];
     if (field.valueType === 'contacts_bundle') {
+      inactive.push(field.key);
+      continue;
+    }
+    if (field.valueType === 'position_skills_matrix') {
+      try {
+        const parsed = parsePositionSkillsMatrixStrict(raw);
+        if (!canonicalizePositionSkillsMatrix(parsed).ratings.length &&
+            !canonicalizePositionSkillsMatrix(parsed).custom.length) {
+          continue;
+        }
+      } catch {
+        continue;
+      }
       inactive.push(field.key);
       continue;
     }

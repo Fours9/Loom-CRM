@@ -17,6 +17,11 @@ import { EmployeeImportantDate } from '../../organization/employees/employee-imp
 import { EmploymentAssignment } from '../../organization/employees/employment-assignment.entity';
 import { Company } from '../../organization/companies/company.entity';
 import { Direction } from '../../organization/companies/direction.entity';
+import { SkillGroup } from '../../organization/skills/skill-group.entity';
+import { Skill } from '../../organization/skills/skill.entity';
+import { PositionSkillRequirement } from '../../organization/position-requirements/position-skill-requirement.entity';
+import { PositionDuty } from '../../organization/position-requirements/position-duty.entity';
+import { PositionGoalTemplate } from '../../organization/position-requirements/position-goal-template.entity';
 import { InitialPlatformBaseline1730000000000 } from './migrations/1730000000000-InitialPlatformBaseline';
 import { IdentityAndPlatform1730000001000 } from './migrations/1730000001000-IdentityAndPlatform';
 import { OrganizationCore1730000002000 } from './migrations/1730000002000-OrganizationCore';
@@ -36,6 +41,12 @@ import { QuestionnaireChangeRequestResolution1730000015000 } from './migrations/
 import { QuestionnaireAssignmentCodeAndComment1730000016000 } from './migrations/1730000016000-QuestionnaireAssignmentCodeAndComment';
 import { QuestionnaireTypeTaxonomy1730000017000 } from './migrations/1730000017000-QuestionnaireTypeTaxonomy';
 import { QuestionnaireTypeFullCollapse1730000018000 } from './migrations/1730000018000-QuestionnaireTypeFullCollapse';
+import { PositionsDirectionId1730000019000 } from './migrations/1730000019000-PositionsDirectionId';
+import { PositionSkillCatalog1730000020000 } from './migrations/1730000020000-PositionSkillCatalog';
+import { QuestionnaireContextJson1730000021000 } from './migrations/1730000021000-QuestionnaireContextJson';
+import { DepartmentBelongsToDirection1730000022000 } from './migrations/1730000022000-DepartmentBelongsToDirection';
+import { RestorePositionDirectionId1730000023000 } from './migrations/1730000023000-RestorePositionDirectionId';
+import { QuestionnaireAssignmentTitle1730000024000 } from './migrations/1730000024000-QuestionnaireAssignmentTitle';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -61,6 +72,11 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmploymentAssignment,
       Company,
       Direction,
+      SkillGroup,
+      Skill,
+      PositionSkillRequirement,
+      PositionDuty,
+      PositionGoalTemplate,
     ],
     migrations: [
       InitialPlatformBaseline1730000000000,
@@ -82,6 +98,12 @@ export function getDataSourceOptions(): DataSourceOptions {
       QuestionnaireAssignmentCodeAndComment1730000016000,
       QuestionnaireTypeTaxonomy1730000017000,
       QuestionnaireTypeFullCollapse1730000018000,
+      PositionsDirectionId1730000019000,
+      PositionSkillCatalog1730000020000,
+      QuestionnaireContextJson1730000021000,
+      DepartmentBelongsToDirection1730000022000,
+      RestorePositionDirectionId1730000023000,
+      QuestionnaireAssignmentTitle1730000024000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

@@ -40,7 +40,10 @@ import {
   requireActorAccessAssignmentType,
 } from './assignments/questionnaire-assignment-access';
 import { attachmentStateForStatus } from './assignments/questionnaire-assignment-attachment-state';
-import { toSubmissionSummaryDto } from './reopen/questionnaire-reopen-transition';
+import {
+  parseAssignmentContext,
+  toSubmissionSummaryDto,
+} from './reopen/questionnaire-reopen-transition';
 import {
   applyDirectoryFilters,
   applyDirectoryScope,
@@ -56,6 +59,7 @@ import {
   allocateNextAssignmentCode,
   questionnaireAssignmentCodePrefix,
 } from './assignments/questionnaire-assignment-code';
+import { isEmptyForDifferentEmployeeReattach } from './assignments/questionnaire-reattach-empty';
 import type {
   QuestionnaireAttachConstraint,
   QuestionnaireDirectoryQuery,
@@ -64,6 +68,7 @@ import type {
 } from '@loom/contracts-questionnaires';
 import { Employee } from '../../organization/employees/employee.entity';
 import { EmployeeContactsFacade } from '../../organization/employees/employee-contacts.facade';
+import { PositionCatalogFacade } from '../../organization/position-catalog/position-catalog.facade';
 import { buildQuestionnaireProfileMirror } from './proposals/questionnaire-profile-mirror';
 import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
 
@@ -81,6 +86,7 @@ export class QuestionnaireAssignmentService {
     @InjectRepository(QuestionnaireSubmission)
     private readonly submissions: Repository<QuestionnaireSubmission>,
     private readonly contactsFacade: EmployeeContactsFacade,
+    private readonly positionCatalog: PositionCatalogFacade,
     private readonly access: EmployeeAccessService,
     private readonly users: UsersService,
     private readonly permissions: PermissionService,
@@ -94,6 +100,7 @@ export class QuestionnaireAssignmentService {
     input: {
       employeeId?: string;
       templateCode?: string;
+      title?: string | null;
       comment?: string | null;
       dueAt?: string | null;
     },
@@ -107,6 +114,10 @@ export class QuestionnaireAssignmentService {
     const comment =
       typeof input.comment === 'string' && input.comment.trim()
         ? input.comment.trim()
+        : null;
+    const customTitle =
+      typeof input.title === 'string' && input.title.trim()
+        ? input.title.trim()
         : null;
 
     const assignmentId = await this.dataSource.transaction(async (manager) => {
@@ -136,18 +147,30 @@ export class QuestionnaireAssignmentService {
       );
       const code = await allocateNextAssignmentCode(manager, prefix);
 
+      let contextJson: Record<string, unknown> | null = null;
+      if (employee) {
+        const positionCatalog =
+          await this.positionCatalog.buildSnapshotForEmployee(
+            employee.id,
+            manager,
+          );
+        contextJson = { version: 1, positionCatalog };
+      }
+
       const assignment = await manager
         .getRepository(QuestionnaireAssignment)
         .save(
           manager.getRepository(QuestionnaireAssignment).create({
             templateVersionId: version.id,
             code,
+            title: customTitle,
             comment,
             employeeId: employee?.id ?? null,
             detachedFromEmployeeId: null,
             assignedByUserId: actor.id,
             status: employee ? 'assigned' : 'new',
             dueAt: input.dueAt ? new Date(input.dueAt) : null,
+            contextJson,
           }),
         );
 
@@ -374,7 +397,7 @@ export class QuestionnaireAssignmentService {
       employeeLastName: employee?.lastName ?? null,
       employeeFirstName: employee?.firstName ?? null,
       templateCode: assignment.templateVersion.template.code,
-      templateTitle: assignment.templateVersion.template.title,
+      templateTitle: assignmentDisplayTitle(assignment),
       templateType: assignment.templateVersion.template.type,
       version: assignment.templateVersion.version,
       status: assignment.status,
@@ -398,6 +421,7 @@ export class QuestionnaireAssignmentService {
       submissions: submissions.map((s) => toSubmissionSummaryDto(s)),
       completionPercent: completionPercent(draft?.answersJson, schema),
       profileMirror,
+      context: parseAssignmentContext(assignment.contextJson),
       capabilities: {
         ...caps,
         canViewAssignmentComment,
@@ -507,6 +531,43 @@ export class QuestionnaireAssignmentService {
       const previousDetachedEmployeeId = assignment.detachedFromEmployeeId;
       const attachKind: 'new' | 'reattach' =
         assignment.status === 'cancelled' ? 'reattach' : 'new';
+
+      const sameEmployeeReattach =
+        attachKind === 'reattach' &&
+        previousDetachedEmployeeId != null &&
+        previousDetachedEmployeeId === employee.id;
+
+      if (attachKind === 'reattach' && !sameEmployeeReattach) {
+        const response = await manager
+          .getRepository(QuestionnaireResponse)
+          .findOne({ where: { assignmentId: assignment.id } });
+        const submissions = response
+          ? await manager.getRepository(QuestionnaireSubmission).find({
+              where: { responseId: response.id },
+              select: ['id'],
+            })
+          : [];
+        if (
+          !isEmptyForDifferentEmployeeReattach({
+            submissions,
+            response,
+          })
+        ) {
+          throw new ConflictException(
+            'Cannot reattach to a different employee when the assignment has draft answers or submissions. Create a new assignment instead.',
+          );
+        }
+        assignment.contextJson = null;
+      }
+
+      if (!sameEmployeeReattach) {
+        const positionCatalog =
+          await this.positionCatalog.buildSnapshotForEmployee(
+            employee.id,
+            manager,
+          );
+        assignment.contextJson = { version: 1, positionCatalog };
+      }
 
       assignment.employeeId = employee.id;
       assignment.detachedFromEmployeeId = null;
@@ -648,7 +709,7 @@ export class QuestionnaireAssignmentService {
         'a.employee_id AS "employeeId"',
         'a.detached_from_employee_id AS "detachedFromEmployeeId"',
         'tmpl.code AS "templateCode"',
-        'tmpl.title AS "templateTitle"',
+        'COALESCE(NULLIF(TRIM(a.title), \'\'), tmpl.title) AS "templateTitle"',
         'tmpl.type AS "templateType"',
         'tv.version AS version',
         'emp.first_name AS "firstName"',
@@ -1057,7 +1118,7 @@ export class QuestionnaireAssignmentService {
       code: row.code,
       employeeId: row.employeeId,
       templateCode: row.templateVersion.template.code,
-      templateTitle: row.templateVersion.template.title,
+      templateTitle: assignmentDisplayTitle(row),
       templateType: row.templateVersion.template.type,
       version: row.templateVersion.version,
       status: row.status,
@@ -1079,4 +1140,14 @@ export class QuestionnaireAssignmentService {
       },
     };
   }
+}
+
+/** Display title for an assignment: custom title or template title. */
+export function assignmentDisplayTitle(assignment: {
+  title?: string | null;
+  templateVersion?: { template?: { title?: string | null } | null } | null;
+}): string {
+  const custom = assignment.title?.trim();
+  if (custom) return custom;
+  return assignment.templateVersion?.template?.title?.trim() || 'Анкета';
 }

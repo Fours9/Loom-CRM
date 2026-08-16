@@ -3,13 +3,13 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && node ./scripts/dev.mjs",
-    "build": "pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json",
+    "dev": "pnpm --filter @loom/position-skill-catalog build && pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && node ./scripts/dev.mjs",
+    "build": "pnpm --filter @loom/position-skill-catalog build && pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
-    "start:nest": "pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json && nest start --watch",
+    "start:nest": "pnpm --filter @loom/position-skill-catalog build && pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json && nest start --watch",
     "lint": "eslint \"{src,test}/**/*.ts\"",
-    "typecheck": "pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json --noEmit",
+    "typecheck": "pnpm --filter @loom/position-skill-catalog build && pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json --noEmit",
     "test": "jest",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/platform/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/platform/database/data-source.ts",
@@ -39,7 +39,8 @@
     "uuid": "^11.1.0",
     "@loom/contracts-questionnaires": "workspace:*",
     "@loom/questionnaire-schema": "workspace:*",
-    "@loom/employee-contacts": "workspace:*"
+    "@loom/employee-contacts": "workspace:*",
+    "@loom/position-skill-catalog": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

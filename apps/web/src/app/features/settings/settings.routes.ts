@@ -1,10 +1,18 @@
 import { Routes } from '@angular/router';
-import { PlaceholderPageComponent } from '../../shared/placeholder-page.component';
+import { SettingsShellComponent } from './settings-shell.component';
+import { PositionManagementPageComponent } from './positions/position-management-page.component';
 
 export const SETTINGS_ROUTES: Routes = [
   {
     path: '',
-    component: PlaceholderPageComponent,
-    data: { title: 'Налаштування', note: 'Platform settings — Deliverable 2+' },
+    component: SettingsShellComponent,
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'positions' },
+      {
+        path: 'positions',
+        component: PositionManagementPageComponent,
+        data: { title: 'Керування посадами' },
+      },
+    ],
   },
 ];

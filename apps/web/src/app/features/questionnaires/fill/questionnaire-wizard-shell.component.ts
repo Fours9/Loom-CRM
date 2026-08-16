@@ -21,6 +21,7 @@ import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coord
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireFieldHostComponent } from './fields/questionnaire-field-host.component';
 import { QuestionnaireContactsBundleFieldComponent } from './fields/questionnaire-contacts-bundle-field.component';
+import { QuestionnaireSkillsMatrixFieldComponent } from './fields/questionnaire-skills-matrix-field.component';
 import { QuestionnaireSaveStatusComponent } from './questionnaire-save-status.component';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { shouldShowReviewSubmit } from './questionnaire-fill-session.policy';
@@ -29,6 +30,7 @@ import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { fieldsByKey, listInactiveOwnAnswers } from '@loom/questionnaire-schema';
 import { resolveQuestionnaireFieldDisplay } from './display/questionnaire-display-value';
 import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
+import type { PositionSkillsMatrixAnswer } from '@loom/questionnaire-schema';
 
 @Component({
   selector: 'loom-questionnaire-wizard-shell',
@@ -36,6 +38,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
   imports: [
     QuestionnaireFieldHostComponent,
     QuestionnaireContactsBundleFieldComponent,
+    QuestionnaireSkillsMatrixFieldComponent,
     QuestionnaireSaveStatusComponent,
   ],
   template: `
@@ -226,6 +229,13 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
                               [editable]="store.editable() && !store.conflict()"
                               (bundleChange)="onContactsBundleChange($event)"
                             />
+                          } @else if (field.valueType === 'position_skills_matrix') {
+                            <loom-questionnaire-skills-matrix-field
+                              [value]="fieldValue(field.key)"
+                              [availableSkills]="contextSkills()"
+                              [disabled]="!store.editable() || !!store.conflict()"
+                              (matrixChange)="onSkillsMatrixChange(field.key, $event)"
+                            />
                           } @else {
                             <loom-questionnaire-field-host
                               [field]="field"
@@ -245,6 +255,13 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
                       [employeeId]="store.assignment()?.employeeId ?? null"
                       [editable]="store.editable() && !store.conflict()"
                       (bundleChange)="onContactsBundleChange($event)"
+                    />
+                  } @else if (block.field.valueType === 'position_skills_matrix') {
+                    <loom-questionnaire-skills-matrix-field
+                      [value]="fieldValue(block.field.key)"
+                      [availableSkills]="contextSkills()"
+                      [disabled]="!store.editable() || !!store.conflict()"
+                      (matrixChange)="onSkillsMatrixChange(block.field.key, $event)"
                     />
                   } @else {
                     <loom-questionnaire-field-host
@@ -609,6 +626,14 @@ export class QuestionnaireWizardShellComponent {
     return buildFieldBlocks(visible);
   });
 
+  /** Frozen position skills for matrix rows; null → full registry (legacy). */
+  readonly contextSkills = computed(() => {
+    const skills =
+      this.store.assignment()?.context?.positionCatalog?.skills ?? null;
+    if (!skills || skills.length === 0) return null;
+    return skills.map((s) => ({ code: s.code, labelUa: s.labelUa }));
+  });
+
   saveStatusText(): string {
     const flash = this.revision.manualSaveMessage();
     if (flash) return flash;
@@ -712,15 +737,44 @@ export class QuestionnaireWizardShellComponent {
     this.autosave.scheduleSave();
   }
 
+  onSkillsMatrixChange(
+    fieldKey: string,
+    value: PositionSkillsMatrixAnswer,
+  ): void {
+    this.store.setAnswer(fieldKey, value);
+    this.autosave.scheduleSave();
+  }
+
   reviewRows(stepKey: string) {
     const step = this.store.schemaSteps().find((s) => s.key === stepKey);
     if (!step) return [];
+    const labelByCode = this.skillLabelByCode();
     return reviewRowsForStep(
       step,
       this.store.answers(),
       this.store.profileMirror(),
       this.store.schemaSteps(),
+      labelByCode
+        ? { skillLabelByCode: (code) => labelByCode.get(code) ?? code }
+        : undefined,
     );
+  }
+
+  /**
+   * Draft / editable Review → assignment.context.
+   * Read-only historical (has submissions, not editable) → latest submission.context when set.
+   */
+  private skillLabelByCode(): Map<string, string> | null {
+    const detail = this.store.assignment();
+    if (!detail) return null;
+    const fromSubmission =
+      !this.store.editable() && detail.submissions[0]?.context?.positionCatalog?.skills;
+    const skills =
+      fromSubmission ??
+      detail.context?.positionCatalog?.skills ??
+      null;
+    if (!skills || skills.length === 0) return null;
+    return new Map(skills.map((s) => [s.code, s.labelUa]));
   }
 
   canBack(): boolean {

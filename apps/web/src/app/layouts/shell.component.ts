@@ -219,51 +219,87 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
           <div class="side-nav-links">
             @for (item of nav.visibleTree(); track item.path) {
               <a
+                class="side-link"
                 [routerLink]="item.path"
                 routerLinkActive="active"
                 [routerLinkActiveOptions]="{ exact: item.path === '/' }"
+                [attr.title]="item.label"
+                [attr.aria-label]="item.label"
                 (click)="onNavLinkClick()"
               >
-                {{ item.label }}
+                <svg class="nav-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                  <path fill="currentColor" [attr.d]="navIconPath(item.path)" />
+                </svg>
+                <span class="nav-label">{{ item.label }}</span>
               </a>
               @if (item.path === '/absences' && inAbsences()) {
                 <div class="side-nav-children" role="group" aria-label="Робочий календар">
                   <a
+                    class="side-link side-link-child"
                     routerLink="/absences"
                     routerLinkActive="active"
                     [routerLinkActiveOptions]="{ exact: true }"
+                    [attr.title]="'nav.home' | t"
+                    [attr.aria-label]="'nav.home' | t"
                     (click)="onNavLinkClick()"
                   >
-                    {{ 'nav.home' | t }}
+                    <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path fill="currentColor" [attr.d]="navIconPath('/absences')" />
+                    </svg>
+                    <span class="nav-label">{{ 'nav.home' | t }}</span>
                   </a>
                   <a
+                    class="side-link side-link-child"
                     routerLink="/absences/employees"
                     routerLinkActive="active"
+                    [attr.title]="'nav.employees' | t"
+                    [attr.aria-label]="'nav.employees' | t"
                     (click)="onNavLinkClick()"
                   >
-                    {{ 'nav.employees' | t }}
+                    <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path fill="currentColor" [attr.d]="navIconPath('/people')" />
+                    </svg>
+                    <span class="nav-label">{{ 'nav.employees' | t }}</span>
                   </a>
                   <a
+                    class="side-link side-link-child"
                     routerLink="/absences/requests"
                     routerLinkActive="active"
+                    [attr.title]="'nav.requests' | t"
+                    [attr.aria-label]="'nav.requests' | t"
                     (click)="onNavLinkClick()"
                   >
-                    {{ 'nav.requests' | t }}
+                    <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path fill="currentColor" [attr.d]="navIconPath('requests')" />
+                    </svg>
+                    <span class="nav-label">{{ 'nav.requests' | t }}</span>
                   </a>
                   <a
+                    class="side-link side-link-child"
                     routerLink="/absences/calendar"
                     routerLinkActive="active"
+                    [attr.title]="'nav.calendar' | t"
+                    [attr.aria-label]="'nav.calendar' | t"
                     (click)="onNavLinkClick()"
                   >
-                    {{ 'nav.calendar' | t }}
+                    <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path fill="currentColor" [attr.d]="navIconPath('/absences/calendar')" />
+                    </svg>
+                    <span class="nav-label">{{ 'nav.calendar' | t }}</span>
                   </a>
                   @if (isAdmin()) {
                     <a
+                      class="side-link side-link-child"
                       routerLink="/absences/admin"
                       routerLinkActive="active"
+                      [attr.title]="'nav.admin' | t"
+                      [attr.aria-label]="'nav.admin' | t"
                       (click)="onNavLinkClick()"
                     >
-                      {{ 'nav.admin' | t }}
+                      <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path fill="currentColor" [attr.d]="navIconPath('/settings')" />
+                      </svg>
+                      <span class="nav-label">{{ 'nav.admin' | t }}</span>
                     </a>
                   }
                 </div>
@@ -582,29 +618,105 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         flex: 1;
         overflow: auto;
       }
-      .side-nav-links a {
+      .side-nav-links a.side-link {
         padding: 0.85rem 1rem;
         border-radius: 8px;
         min-height: 2.75rem;
         display: flex;
         align-items: center;
+        gap: 0.75rem;
       }
-      .side-nav-links a:hover,
-      .side-nav-links a.active {
+      .side-nav-links a.side-link:hover,
+      .side-nav-links a.side-link.active {
         background: color-mix(in srgb, var(--pw-accent) 10%, var(--pw-surface));
+      }
+      .nav-icon {
+        flex-shrink: 0;
+        display: block;
+      }
+      .nav-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* Docked rail: icons only — title attribute shows the name on hover. */
+      .shell.side-pinned .side-nav-links {
+        padding: 0 0.45rem;
+        align-items: stretch;
+      }
+      .shell.side-pinned .side-nav-links a.side-link {
+        justify-content: center;
+        padding: 0.7rem 0.35rem;
+        gap: 0;
+      }
+      .shell.side-pinned .side-nav-links .nav-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
       .side-nav-children {
         display: flex;
         flex-direction: column;
-        gap: 0.15rem;
-        padding: 0.15rem 0 0.35rem 0.75rem;
-        margin: 0 0 0.25rem 0.5rem;
-        border-left: 2px solid var(--pw-border);
+        gap: 0.2rem;
+        padding: 0.2rem 0 0.4rem 0.85rem;
+        margin: 0.1rem 0 0.35rem 0.55rem;
+        border-left: 2px solid color-mix(in srgb, var(--pw-accent) 35%, var(--pw-border));
       }
-      .side-nav-children a {
-        padding: 0.65rem 0.85rem;
-        min-height: 2.5rem;
-        font-size: 0.92rem;
+      .side-nav-children a.side-link-child {
+        padding: 0.55rem 0.75rem;
+        min-height: 2.35rem;
+        font-size: 0.9rem;
+        color: var(--pw-muted);
+        border-radius: 8px;
+      }
+      .side-nav-children a.side-link-child .nav-icon {
+        width: 18px;
+        height: 18px;
+        opacity: 0.85;
+      }
+      .side-nav-children a.side-link-child:hover,
+      .side-nav-children a.side-link-child.active {
+        color: var(--pw-text);
+        background: color-mix(in srgb, var(--pw-accent) 12%, var(--pw-surface));
+      }
+      .side-nav-children a.side-link-child.active .nav-icon {
+        opacity: 1;
+        color: var(--pw-accent);
+      }
+      /* Docked icon rail: indent children so hierarchy reads clearly. */
+      .shell.side-pinned .side-nav-children {
+        padding: 0.25rem 0.25rem 0.4rem 0;
+        margin: 0.15rem 0.2rem 0.4rem 0.55rem;
+        border-left: 2px solid color-mix(in srgb, var(--pw-accent) 40%, var(--pw-border));
+        align-items: stretch;
+        gap: 0.15rem;
+      }
+      .shell.side-pinned .side-nav-children a.side-link-child {
+        justify-content: center;
+        padding: 0.45rem 0.2rem 0.45rem 0.55rem;
+        min-height: 2.15rem;
+        margin-left: 0.15rem;
+      }
+      .shell.side-pinned .side-nav-children a.side-link-child .nav-icon {
+        width: 17px;
+        height: 17px;
+      }
+      .shell.side-pinned .side-nav-footer .drawer-email {
+        display: none;
+      }
+      .shell.side-pinned .side-nav-footer {
+        padding: 0.75rem 0.35rem;
+      }
+      .shell.side-pinned .side-nav-footer button {
+        padding: 0.5rem;
+        font-size: 0.75rem;
       }
       .nav-section {
         margin: 0.75rem 0 0.25rem;
@@ -739,6 +851,29 @@ export class ShellComponent implements OnInit, OnDestroy {
   );
   readonly accountEmail = computed(() => this.session.user()?.email ?? '');
   readonly isAdmin = computed(() => this.session.user()?.role === 'admin');
+
+  /** SVG path `d` for a nav route (24×24 viewBox). */
+  navIconPath(path: string): string {
+    switch (path) {
+      case '/':
+        return 'M12 3 4 9v12h5v-7h6v7h5V9l-8-6z';
+      case '/people':
+        return 'M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-8 0a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 8 11zm8 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4zM8 13c-.29 0-.62.02-.97.05C4.84 13.42 2 14.53 2 17v2h6v-2c0-.7.18-2.32 2.39-3.47C9.5 13.18 8.74 13 8 13z';
+      case '/questionnaires':
+        return 'M7 3h10a2 2 0 0 1 2 2v14l-3-2-2 2-2-2-2 2-2-2-3 2V5a2 2 0 0 1 2-2zm2 5v2h6V8H9zm0 4v2h6v-2H9z';
+      case '/absences':
+      case '/absences/calendar':
+        return 'M7 2h2v2h6V2h2v2h3a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3V2zm12 7H5v10h14V9zM7 11h4v4H7v-4z';
+      case 'requests':
+        return 'M4 4h16v2H4V4zm0 5h16v2H4V9zm0 5h10v2H4v-2zm0 5h8v2H4v-2z';
+      case '/statistics':
+        return 'M4 19h16v2H4v-2zm2-2V9h3v8H6zm5 0V5h3v12h-3zm5 0v-6h3v6h-3z';
+      case '/settings':
+        return 'M19.14 12.94a7.43 7.43 0 0 0 .05-.94 7.43 7.43 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.23-1.12.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.66 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.05.62-.05.94s.02.63.05.94L2.78 14.5a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.23 1.12-.54 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z';
+      default:
+        return 'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z';
+    }
+  }
 
   private hasScrollLock = false;
   private routerSub?: Subscription;

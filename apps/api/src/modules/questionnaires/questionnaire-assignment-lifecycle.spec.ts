@@ -33,6 +33,11 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
     deleteAffected?: number;
     employeeId?: string | null;
     detachedFromEmployeeId?: string | null;
+    /** Draft answers for reattach emptiness checks (manager TX). */
+    answersJson?: Record<string, unknown>;
+    /** Submission rows for reattach emptiness checks. */
+    submissionRows?: Array<{ id: string }>;
+    contextJson?: Record<string, unknown> | null;
   }) {
     const assignment = {
       id: 'a1',
@@ -52,6 +57,8 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       dueAt: null,
       assignedByUserId: 'admin-1',
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      contextJson:
+        opts.contextJson === undefined ? null : opts.contextJson,
       templateVersion: {
         id: 'tv1',
         version: 1,
@@ -62,6 +69,8 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
 
     const deleted: string[] = [];
     const deleteOrder: string[] = [];
+    const answersJson = opts.answersJson ?? {};
+    const submissionRows = opts.submissionRows ?? [{ id: 's1' }, { id: 's2' }];
 
     const makeManager = (): EntityManager =>
       ({
@@ -92,15 +101,15 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
               findOne: async () => ({
                 id: 'r1',
                 assignmentId: 'a1',
-                answersJson: {},
+                answersJson,
                 revision: 2,
               }),
             };
           }
           if (entity === QuestionnaireSubmission) {
             return {
-              count: async () => 2,
-              find: async () => [{ id: 's1' }, { id: 's2' }],
+              count: async () => submissionRows.length,
+              find: async () => submissionRows,
               findOne: async () => null,
             };
           }
@@ -194,6 +203,22 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       } as never,
       { find: jest.fn(async () => []), findOne: jest.fn() } as never,
       { find: jest.fn(async () => []) } as never,
+      {
+        buildSnapshotForEmployee: jest.fn(async (employeeId: string) => ({
+          employeeId,
+          employmentAssignmentId: null,
+          positionId: null,
+          positionName: null,
+          departmentId: null,
+          departmentName: null,
+          directionId: null,
+          directionName: null,
+          capturedAt: '2026-01-01T00:00:00.000Z',
+          skills: [],
+          goalTemplates: [],
+          duties: [],
+        })),
+      } as never,
       access as never,
       users as never,
       permissions as never,
@@ -278,6 +303,12 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       expect(ctx.assignment.employeeId).toBe('emp-2');
       expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
       expect(ctx.assignment.reviewedAt).toBeNull();
+      expect(ctx.assignment.contextJson).toEqual(
+        expect.objectContaining({
+          version: 1,
+          positionCatalog: expect.objectContaining({ employeeId: 'emp-2' }),
+        }),
+      );
       expect(ctx.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.attached,
@@ -296,11 +327,19 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         status: 'cancelled',
         employeeId: null,
         detachedFromEmployeeId: 'emp-1',
+        contextJson: {
+          version: 1,
+          positionCatalog: { employeeId: 'emp-1', skills: [] },
+        },
       });
       await ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-1' });
       expect(ctx.assignment.status).toBe('assigned');
       expect(ctx.assignment.employeeId).toBe('emp-1');
       expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
+      expect(ctx.assignment.contextJson).toEqual({
+        version: 1,
+        positionCatalog: { employeeId: 'emp-1', skills: [] },
+      });
       expect(ctx.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           action: QUESTIONNAIRE_ASSIGNMENT_AUDIT.attached,
@@ -314,16 +353,41 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       );
     });
 
-    it('allows reattaching a cancelled assignment to a different employee', async () => {
+    it('rejects reattach to a different employee when not empty', async () => {
       const ctx = buildService({
         status: 'cancelled',
         employeeId: null,
         detachedFromEmployeeId: 'emp-1',
+        answersJson: { 'skills.matrix': { ratings: [], custom: [] } },
+        submissionRows: [],
+      });
+      await expect(
+        ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('allows reattach to a different employee when empty and captures fresh context', async () => {
+      const ctx = buildService({
+        status: 'cancelled',
+        employeeId: null,
+        detachedFromEmployeeId: 'emp-1',
+        answersJson: {},
+        submissionRows: [],
+        contextJson: {
+          version: 1,
+          positionCatalog: { employeeId: 'emp-1', skills: [] },
+        },
       });
       await ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' });
       expect(ctx.assignment.status).toBe('assigned');
       expect(ctx.assignment.employeeId).toBe('emp-2');
       expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
+      expect(ctx.assignment.contextJson).toEqual(
+        expect.objectContaining({
+          version: 1,
+          positionCatalog: expect.objectContaining({ employeeId: 'emp-2' }),
+        }),
+      );
       expect(ctx.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: expect.objectContaining({

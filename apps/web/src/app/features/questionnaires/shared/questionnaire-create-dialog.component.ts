@@ -7,13 +7,14 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import type {
   CreateQuestionnaireAssignmentRequest,
   QuestionnaireTemplateListItem,
 } from '@loom/contracts-questionnaires';
 import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
-import { QuestionnaireEmployeeTypeaheadComponent } from '../shared/questionnaire-employee-typeahead.component';
+import { QuestionnaireEmployeeTypeaheadComponent } from './questionnaire-employee-typeahead.component';
 import {
   questionnaireTypeDescription,
   questionnaireTypeLabel,
@@ -23,7 +24,7 @@ import { firstValueFrom } from 'rxjs';
 @Component({
   selector: 'loom-questionnaire-create-dialog',
   standalone: true,
-  imports: [QuestionnaireEmployeeTypeaheadComponent],
+  imports: [FormsModule, QuestionnaireEmployeeTypeaheadComponent],
   template: `
     <div
       class="backdrop"
@@ -42,11 +43,12 @@ import { firstValueFrom } from 'rxjs';
         <label class="field">
           Тип / шаблон
           <select
-            [value]="selectedTemplateCode()"
-            (change)="onTemplateChange($any($event.target).value)"
+            [ngModel]="selectedTemplateCode()"
+            (ngModelChange)="onTemplateChange($event)"
+            name="templateCode"
           >
             @for (t of templates(); track t.code) {
-              <option [value]="t.code">
+              <option [ngValue]="t.code">
                 {{ typeLabel(t.type) }} — {{ t.title }}
               </option>
             }
@@ -59,7 +61,13 @@ import { firstValueFrom } from 'rxjs';
 
         <label class="field">
           Назва
-          <input type="text" [value]="derivedTitle()" readonly />
+          <input
+            type="text"
+            [ngModel]="title()"
+            (ngModelChange)="onTitleInput($event)"
+            name="title"
+            placeholder="Назва анкети"
+          />
         </label>
 
         <loom-questionnaire-employee-typeahead
@@ -71,8 +79,9 @@ import { firstValueFrom } from 'rxjs';
           Службова примітка
           <textarea
             rows="3"
-            [value]="comment()"
-            (input)="comment.set($any($event.target).value)"
+            [ngModel]="comment()"
+            (ngModelChange)="comment.set($event)"
+            name="comment"
             placeholder="Видно лише з правом читання службової примітки"
           ></textarea>
         </label>
@@ -88,7 +97,7 @@ import { firstValueFrom } from 'rxjs';
           <button
             type="button"
             class="btn primary"
-            [disabled]="busy() || !selectedTemplateCode()"
+            [disabled]="busy() || !selectedTemplateCode() || !title().trim()"
             (click)="submit()"
           >
             {{ busy() ? 'Створення…' : 'Створити' }}
@@ -147,9 +156,6 @@ import { firstValueFrom } from 'rxjs';
         font-size: 0.95rem;
         font-family: inherit;
       }
-      input[readonly] {
-        opacity: 0.85;
-      }
       .error {
         margin: 0;
         color: #b42318;
@@ -194,15 +200,14 @@ export class QuestionnaireCreateDialogComponent implements OnInit {
 
   readonly templates = signal<QuestionnaireTemplateListItem[]>([]);
   readonly selectedTemplateCode = signal('');
+  readonly title = signal('');
   readonly comment = signal('');
   readonly employeeId = signal<string | null>(null);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
 
-  readonly derivedTitle = computed(() => {
-    const code = this.selectedTemplateCode();
-    return this.templates().find((t) => t.code === code)?.title ?? '';
-  });
+  /** When false, changing template resets the title to the template default. */
+  private titleEdited = false;
 
   readonly selectedTypeDescription = computed(() => {
     const code = this.selectedTemplateCode();
@@ -214,6 +219,10 @@ export class QuestionnaireCreateDialogComponent implements OnInit {
 
   typeLabel(type: string): string {
     return questionnaireTypeLabel(type);
+  }
+
+  private templateTitleFor(code: string): string {
+    return this.templates().find((t) => t.code === code)?.title ?? '';
   }
 
   /** Close only on a full click that both starts and ends on the backdrop. */
@@ -237,14 +246,30 @@ export class QuestionnaireCreateDialogComponent implements OnInit {
         this.templates.set(res.items);
         const preferred =
           res.items.find((t) => t.code === 'employee-360') ?? res.items[0];
-        if (preferred) this.selectedTemplateCode.set(preferred.code);
+        if (preferred) {
+          this.selectedTemplateCode.set(preferred.code);
+          this.title.set(preferred.title);
+          this.titleEdited = false;
+        }
       },
       error: () => this.error.set('Не вдалося завантажити шаблони'),
     });
   }
 
   onTemplateChange(code: string): void {
+    const previousCode = this.selectedTemplateCode();
+    const previousDefault = this.templateTitleFor(previousCode);
     this.selectedTemplateCode.set(code);
+    // Reset title when user hasn't customized it, or it still matches the previous template default.
+    if (!this.titleEdited || this.title().trim() === previousDefault) {
+      this.title.set(this.templateTitleFor(code));
+      this.titleEdited = false;
+    }
+  }
+
+  onTitleInput(value: string): void {
+    this.title.set(value);
+    this.titleEdited = true;
   }
 
   onEmployee(emp: Pick<EmployeeListItem, 'id' | 'fullName'> | null): void {
@@ -253,12 +278,17 @@ export class QuestionnaireCreateDialogComponent implements OnInit {
 
   async submit(): Promise<void> {
     if (this.busy()) return;
-    const templateCode = this.selectedTemplateCode();
-    if (!templateCode) return;
+    const templateCode = this.selectedTemplateCode().trim();
+    const title = this.title().trim();
+    if (!templateCode || !title) {
+      this.error.set('Оберіть шаблон і вкажіть назву');
+      return;
+    }
     this.busy.set(true);
     this.error.set(null);
     const body: CreateQuestionnaireAssignmentRequest = {
       templateCode,
+      title,
       employeeId: this.employeeId() ?? undefined,
       comment: this.comment().trim() || undefined,
     };
