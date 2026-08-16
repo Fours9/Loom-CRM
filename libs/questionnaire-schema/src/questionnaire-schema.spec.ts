@@ -8,7 +8,10 @@ import {
   validateQuestionnaireSchema,
   schemasStructurallyEqual,
 } from './index';
-import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
+import type {
+  QuestionnaireSchemaField,
+  QuestionnaireSchemaJson,
+} from '@loom/contracts-questionnaires';
 
 const OPTIONS = [
   { value: 'uk', label: 'Українська' },
@@ -239,7 +242,7 @@ describe('valueType allowlist', () => {
             {
               key: 'x',
               label: 'X',
-              valueType: 'contacts_bunlde',
+              valueType: 'contacts_bunlde' as QuestionnaireSchemaField['valueType'],
               requiredPolicy: 'voluntary',
             },
           ],

@@ -196,6 +196,28 @@ let rowUiSeq = 0;
                         [ngModel]="asString(row[child.key])"
                         (ngModelChange)="onChildChange(i, child.key, $event)"
                       />
+                    } @else if (child.valueType === 'boolean') {
+                      <input
+                        [id]="childInputId(child.key, i)"
+                        type="checkbox"
+                        [disabled]="disabled"
+                        [checked]="row[child.key] === true"
+                        (change)="
+                          onChildChange(
+                            i,
+                            child.key,
+                            $any($event.target).checked
+                          )
+                        "
+                      />
+                    } @else if (child.valueType === 'number') {
+                      <input
+                        [id]="childInputId(child.key, i)"
+                        type="number"
+                        [disabled]="disabled"
+                        [ngModel]="asNumber(row[child.key])"
+                        (ngModelChange)="onChildNumberChange(i, child.key, $event)"
+                      />
                     } @else {
                       <input
                         [id]="childInputId(child.key, i)"
@@ -394,6 +416,13 @@ export class QuestionnaireFieldHostComponent implements OnChanges {
     return String(value);
   }
 
+  asNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
   onText(raw: string): void {
     this.emitValue(raw);
   }
@@ -468,6 +497,15 @@ export class QuestionnaireFieldHostComponent implements OnChanges {
     );
     this.rows = next;
     this.emitRows();
+  }
+
+  onChildNumberChange(index: number, childKey: string, raw: unknown): void {
+    if (raw === '' || raw === null || raw === undefined) {
+      this.onChildChange(index, childKey, null);
+      return;
+    }
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    this.onChildChange(index, childKey, Number.isFinite(n) ? n : null);
   }
 
   emitValue(value: unknown): void {

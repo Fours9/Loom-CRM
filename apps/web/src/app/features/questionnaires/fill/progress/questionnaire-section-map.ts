@@ -65,8 +65,51 @@ const EMPLOYEE_360_SECTION_DEFS: ProgressSectionDefinition[] = [
   },
 ];
 
+const EMPLOYEE_DOCS_SECTION_DEFS: ProgressSectionDefinition[] = [
+  {
+    id: 'intro',
+    label: 'Вступ',
+    stepKeys: [QUESTIONNAIRE_INTRO_STEP],
+  },
+  {
+    id: 'docs',
+    label: 'Документи',
+    stepKeys: ['profile_mirror', 'onboarding', 'hr_documents'],
+  },
+  {
+    id: 'review',
+    label: 'Перегляд',
+    stepKeys: [QUESTIONNAIRE_REVIEW_STEP],
+  },
+];
+
+const EMPLOYEE_MANAGING_SECTION_DEFS: ProgressSectionDefinition[] = [
+  {
+    id: 'intro',
+    label: 'Вступ',
+    stepKeys: [QUESTIONNAIRE_INTRO_STEP],
+  },
+  {
+    id: 'profile',
+    label: 'Профіль',
+    stepKeys: ['profile_mirror', 'company_work', 'grade'],
+  },
+  {
+    id: 'skills_goals',
+    label: 'Навички та цілі',
+    stepKeys: ['skills', 'career_goals', 'probation_goals'],
+  },
+  {
+    id: 'review',
+    label: 'Перегляд',
+    stepKeys: [QUESTIONNAIRE_REVIEW_STEP],
+  },
+];
+
 const TEMPLATE_PROGRESS_SECTION_MAPS = {
   'employee-360': EMPLOYEE_360_SECTION_DEFS,
+  'employee-docs': EMPLOYEE_DOCS_SECTION_DEFS,
+  'employee-managing': EMPLOYEE_MANAGING_SECTION_DEFS,
 } satisfies Record<string, ProgressSectionDefinition[]>;
 
 const INTRO_LABEL = 'Вступ';

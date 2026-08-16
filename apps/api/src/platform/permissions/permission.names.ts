@@ -12,6 +12,7 @@ export const Permission = {
   EmployeesViewHistory: 'employees.view_history',
   DepartmentsManage: 'departments.manage',
   PositionsManage: 'positions.manage',
+  DirectionsManage: 'directions.manage',
   AbsencesCreate: 'absences.create',
   AbsencesApprove: 'absences.approve',
   AbsencesCancel: 'absences.cancel',

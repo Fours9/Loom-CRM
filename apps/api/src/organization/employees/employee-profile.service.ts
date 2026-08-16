@@ -38,6 +38,8 @@ import {
   type PersonalContactWriteInput,
 } from './employee-personal-contacts';
 import { EmployeeContactsFacade } from './employee-contacts.facade';
+import { PositionsService } from '../positions/positions.service';
+import { Position } from '../positions/position.entity';
 
 type AssignmentWriteDto = {
   companyId?: string | null;
@@ -97,10 +99,59 @@ export class EmployeeProfileService {
     private readonly users: UsersService,
     private readonly dataSource: DataSource,
     private readonly contactsFacade: EmployeeContactsFacade,
+    private readonly positions: PositionsService,
   ) {}
 
   private hasPerm(user: User, perm: Permission): boolean {
     return permissionsForRole(user.role).includes(perm);
+  }
+
+  /**
+   * Hierarchy: Position → optional Department → optional Direction on dept;
+   * Position.directionId is stored: inherited from dept when dept set, else manual.
+   * Assignment must match position.departmentId / position.directionId when set.
+   */
+  private async applyPositionAssignmentInvariant(input: {
+    positionId: string | null;
+    departmentId: string | null;
+    directionId: string | null;
+  }): Promise<{
+    positionId: string | null;
+    departmentId: string | null;
+    directionId: string | null;
+  }> {
+    if (!input.positionId) {
+      return input;
+    }
+    const position: Position = await this.positions.getOrFail(input.positionId);
+    let { departmentId, directionId } = input;
+
+    if (position.departmentId != null) {
+      if (
+        departmentId != null &&
+        departmentId !== position.departmentId
+      ) {
+        throw new BadRequestException(
+          'Assignment departmentId must match position.departmentId',
+        );
+      }
+      departmentId = position.departmentId;
+    }
+
+    if (position.directionId != null) {
+      if (directionId != null && directionId !== position.directionId) {
+        throw new BadRequestException(
+          'Assignment directionId must match position.directionId',
+        );
+      }
+      directionId = position.directionId;
+    }
+
+    return {
+      positionId: input.positionId,
+      departmentId,
+      directionId,
+    };
   }
 
   async capabilities(actor: User, target: Employee): Promise<ProfileCapabilities> {
@@ -641,6 +692,12 @@ export class EmployeeProfileService {
       throw new BadRequestException('Manager cannot be the same employee');
     }
 
+    const resolved = await this.applyPositionAssignmentInvariant({
+      positionId: dto.positionId ?? null,
+      departmentId: dto.departmentId ?? null,
+      directionId: dto.directionId ?? null,
+    });
+
     await this.dataSource.transaction(async (manager) => {
       const employeeRepo = manager.getRepository(Employee);
       const assignmentRepo = manager.getRepository(EmploymentAssignment);
@@ -654,9 +711,9 @@ export class EmployeeProfileService {
       const assignment = assignmentRepo.create({
         employeeId: id,
         companyId: dto.companyId ?? null,
-        directionId: dto.directionId ?? null,
-        departmentId: dto.departmentId ?? null,
-        positionId: dto.positionId ?? null,
+        directionId: resolved.directionId,
+        departmentId: resolved.departmentId,
+        positionId: resolved.positionId,
         functionalRole: dto.functionalRole ?? null,
         managerEmployeeId: dto.managerEmployeeId ?? null,
         mentorEmployeeId: dto.mentorEmployeeId ?? null,
@@ -731,6 +788,17 @@ export class EmployeeProfileService {
     };
     this.assertAssignmentDates(merged, existing.status);
 
+    const resolved = await this.applyPositionAssignmentInvariant({
+      positionId:
+        dto.positionId !== undefined ? dto.positionId : existing.positionId,
+      departmentId:
+        dto.departmentId !== undefined
+          ? dto.departmentId
+          : existing.departmentId,
+      directionId:
+        dto.directionId !== undefined ? dto.directionId : existing.directionId,
+    });
+
     await this.dataSource.transaction(async (manager) => {
       const employeeRepo = manager.getRepository(Employee);
       const assignmentRepo = manager.getRepository(EmploymentAssignment);
@@ -740,9 +808,9 @@ export class EmployeeProfileService {
       });
 
       if (dto.companyId !== undefined) row.companyId = dto.companyId;
-      if (dto.directionId !== undefined) row.directionId = dto.directionId;
-      if (dto.departmentId !== undefined) row.departmentId = dto.departmentId;
-      if (dto.positionId !== undefined) row.positionId = dto.positionId;
+      row.directionId = resolved.directionId;
+      row.departmentId = resolved.departmentId;
+      row.positionId = resolved.positionId;
       if (dto.functionalRole !== undefined) row.functionalRole = dto.functionalRole;
       if (dto.managerEmployeeId !== undefined) {
         row.managerEmployeeId = dto.managerEmployeeId;

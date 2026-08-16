@@ -38,7 +38,7 @@
 | --- | --- |
 | **Living status** | цей hub, [roadmap](product/hr-profile-roadmap.md), [work calendar](product/work-calendar-roadmap.md), [architecture](architecture.md), [AGENTS.md](../AGENTS.md) |
 | **Target / vision** | [employee-profile-core.md](product/employee-profile-core.md) — **не** статус імплементації |
-| **Frozen decisions** | [ADR](adr/) 0001–0009 (рішення зафіксовані) |
+| **Frozen decisions** | [ADR](adr/) 0001–0010 (рішення зафіксовані) |
 
 Відкладено (Phase 1 polish): photo upload у профілі (потрібен Platform Files). History cursor pagination — поза поточним polish.
 
@@ -46,6 +46,7 @@
 
 - [Синхронізація через Git](dev/git-sync.md) — pull/push, новий ПК, `db-snapshot` / `db-restore`, **демо-тунель**, типові проблеми
 - [Reset анкет (pre-prod)](dev/questionnaire-test-reset.md) — dry-run / execute + snapshot DoD
+- [Position Catalog](dev/position-catalog.md) — skill registry, context envelope ([ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md))
 
 ## Розробницьке
 

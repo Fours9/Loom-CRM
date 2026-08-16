@@ -1,0 +1,19 @@
+{
+  "name": "@loom/position-skill-catalog",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "lint": "echo \"no lint\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "~5.7.2"
+  }
+}

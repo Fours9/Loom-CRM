@@ -1,12 +1,11 @@
 # Questionnaire 360° — field catalog (policy SoT)
 
-**Status:** product/policy source of truth (PR-0).  
+**Status:** product/policy source of truth (PR-0 + Track B sync).  
 **Not runtime:** API/FE read published `questionnaire_template_versions.schema_json` only.  
-**Not seed:** checked-in typed seed appears in PR-2 (manually synced from this catalog).  
+**Seeds (manually synced):** `employee-360` (full), `employee-managing`, `employee-docs` under `apps/api/.../seed/`.  
 **Reference HTML:** [references/anketa_360.html](./references/anketa_360.html) — human prototype only.  
 **Vision mapping:** [employee-profile-core.md](./employee-profile-core.md) §44.  
-**ADR:** [0009-questionnaire-360-mvp.md](../adr/0009-questionnaire-360-mvp.md).
-
+**ADR:** [0009-questionnaire-360-mvp.md](../adr/0009-questionnaire-360-mvp.md), [0010-position-catalog](../adr/0010-position-catalog-and-questionnaire-context.md).
 ---
 
 ## Pseudo-contract (documentation only)
@@ -29,7 +28,9 @@ type Questionnaire360ValueType =
   | 'multi_choice'
   | 'employee_reference'
   | 'catalog_reference'
-  | 'repeating_group';
+  | 'repeating_group'
+  | 'contacts_bundle'
+  | 'position_skills_matrix';
 
 type Questionnaire360FieldDefinition = {
   key: string;
@@ -101,24 +102,31 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | 2b | `celebration_dates` | Святкові дати | questionnaire_snapshot | in_mvp (split from family; gifts + ДН) |
 | 3 | `emergency` | Контакт на екстрений випадок | employee_profile | excluded from fill MVP (already Profile Core) |
 | 4 | `company_work` | Робота в компанії | questionnaire_snapshot | in_mvp (fill snapshot; Profile Core assignment remains SoT for org fields later) |
-| 5 | `grade` | Грейд і рівень посади | later compensation | later_module |
-| 6 | `experience` | Професійний досвід | questionnaire_snapshot | in_mvp |
-| 7 | `skills` | Матриця навичок | skills | later_module |
-| 8 | `education` | Освіта та навчання | questionnaire_snapshot | in_mvp |
-| 9 | `strengths` | Сильні сторони та потенціал | questionnaire_snapshot | in_mvp |
-| 10 | `hobbies` | Хобі, інтереси та корпоративне життя | questionnaire_snapshot | in_mvp |
-| 11 | `work_style` | Стиль роботи та комунікація | questionnaire_snapshot | in_mvp |
-| 12 | `safety` | Безпека праці | safety | later_module |
-| 13 | `career_goals` | Кар'єрні цілі | goals | later_module |
-| 14 | `probation_goals` | Цілі випробувального | goals | later_module |
-| 15 | `manager_review` | Оцінка керівника | reviews | later_module |
-| 16 | `onboarding` | Онбординг | onboarding | later_module |
-| 17 | `hr_documents` | Кадрові документи | documents | later_module |
-| 18 | `consents` | Згода та підписи | consents + questionnaire_snapshot | in_mvp (answers in snapshot; legal consents later module) |
+| 5 | `grade` | Грейд і рівень посади | questionnaire_snapshot | **managing** (no `net_salary`) |
+| 6 | `experience` | Професійний досвід | questionnaire_snapshot | in_mvp (full) |
+| 7 | `skills` | Матриця навичок | skills / questionnaire_snapshot | **managing** (`position_skills_matrix`) |
+| 8 | `education` | Освіта та навчання | questionnaire_snapshot | in_mvp (full) |
+| 9 | `strengths` | Сильні сторони та потенціал | questionnaire_snapshot | in_mvp (full) |
+| 10 | `hobbies` | Хобі, інтереси та корпоративне життя | questionnaire_snapshot | in_mvp (full) |
+| 11 | `work_style` | Стиль роботи та комунікація | questionnaire_snapshot | in_mvp (full) |
+| 12 | `safety` | Безпека праці | safety | later_module (not seeded) |
+| 13 | `career_goals` | Кар'єрні цілі | goals / questionnaire_snapshot | **managing** |
+| 14 | `probation_goals` | Цілі випробувального | goals / questionnaire_snapshot | **managing** |
+| 15 | `manager_review` | Оцінка керівника | reviews | **not shipped** (deferred — ADR 0010 §14) |
+| 16 | `onboarding` | Онбординг | onboarding / questionnaire_snapshot | **docs** |
+| 17 | `hr_documents` | Кадрові документи | documents / questionnaire_snapshot | **docs** |
+| 18 | `consents` | Згода та підписи | consents + questionnaire_snapshot | in_mvp (full; answers in snapshot; legal consents later module) |
 | 19 | `crm_control` | Контроль внесення в CRM | process | excluded (computed/process) |
 
-**MVP wizard steps (seed):**  
-1 profile_mirror · 2 contacts · 3 family · 4 celebration_dates · 5 experience · 6 company_work · 7 education · 8 strengths · 9 hobbies · 10 work_style · 11 consents_review.
+**Template inclusion**
+
+| Template | Blocks / steps |
+| --- | --- |
+| `employee-360` (full) | profile_mirror · contacts · family · celebration_dates · experience · company_work · education · strengths · hobbies · work_style · consents |
+| `employee-managing` | profile_mirror · company_work · grade · skills · career_goals · probation_goals |
+| `employee-docs` | profile_mirror · onboarding · hr_documents |
+
+**Not shipped (policy):** `grade.net_salary` (restricted compensation); entire `manager_review` block — wait for field/step sensitivity + scoped manager completion ACL.
 
 ---
 
@@ -206,17 +214,19 @@ All: voluntary, questionnaire_snapshot, in_mvp, filledBy employee_owner.
 
 ---
 
-## Fields — block 5 `grade` (`later_module`)
+## Fields — block 5 `grade` (**managing** seed; compensation later)
+
+Seeded in `employee-managing` (voluntary snapshot). **`grade.net_salary` is not shipped** (restricted; compensation module + sensitive ACL).
 
 | key | label | valueType | notes |
 |-----|-------|-----------|-------|
 | grade.current | Поточний грейд | single_choice | g0…g5 |
 | grade.assigned_at | Дата присвоєння | date | |
 | grade.assigned_by | Хто присвоїв | text | |
-| grade.next | Наступний грейд | single_choice | |
+| grade.next | Наступний грейд | single_choice | g1…g5 |
 | grade.criteria | Критерії переходу | textarea | |
 | grade.review_at | Дата перегляду | date | |
-| grade.net_salary | ЗП на руки | number | restricted; compensation module |
+| ~~grade.net_salary~~ | ЗП на руки | number | **excluded from seed** — deferred |
 
 ---
 
@@ -236,15 +246,22 @@ All: voluntary, questionnaire_snapshot, in_mvp, filledBy employee_owner.
 
 ---
 
-## Fields — block 7 `skills` (`later_module`)
+## Fields — block 7 `skills` (**managing** — `position_skills_matrix`)
 
-Single catalog entry representing matrix (not 26 hardcoded employee columns):
+Managing does **not** use separate `skills.self_assessment` / `skills.custom` / `skills.manager_assessment` keys. One field:
 
 | key | valueType | notes |
 |-----|-----------|-------|
-| skills.self_assessment | repeating_group | skill_code + rating 0–5; position requirements drive list later |
-| skills.custom | repeating_group | name + rating |
-| skills.manager_assessment | repeating_group | separate from self; Reviews/Skills module |
+| skills.matrix | `position_skills_matrix` | Answer = map/list of `{ skillCode, rating 0–5 }` against registry codes |
+
+**Row source / validation** ([ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](../dev/position-catalog.md)):
+
+| Mode | Rows | Validation |
+| --- | --- | --- |
+| Legacy (`assignment.context_json == null`) | full `@loom/position-skill-catalog` | `skillCode ∈ registry` |
+| Context (`version === 1`) | frozen `context.positionCatalog.skills` | ∈ registry ∧ ⊆ context codes |
+
+Future Skills module may still introduce manager assessment / custom skills as separate keys; not in managing v1.
 
 ---
 
@@ -315,9 +332,56 @@ Gifts / ДН greeting live under `celebration_dates` (not hobbies). All voluntar
 
 ---
 
-## Fields — blocks 12–17, 19 (later / excluded)
+## Fields — blocks 12–15, 19 (later / excluded / deferred)
 
-Documented at section matrix only. Do not seed into employee-360 v1 schema. Safety: no diagnoses. Documents: Documents module only. Onboarding/goals/reviews: own modules.
+| Block | Status |
+| --- | --- |
+| `safety` | later_module — do not seed; no diagnoses |
+| `manager_review` | **not shipped** — deferred until sensitive step ACL (ADR 0010 §14) |
+| `crm_control` | excluded (computed/process) |
+
+---
+
+## Fields — block 13 `career_goals` (**managing**)
+
+| key | valueType | children | notes |
+|-----|-----------|----------|-------|
+| career_goals.plan | repeating_group | `title` (text), `description` (textarea), `targetDate` (date) | voluntary snapshot |
+
+Frozen `context.positionCatalog.goalTemplates` (titles / `goalKind`) are available for a future non-blocking suggestions panel — **not** wired in fill UI yet.
+
+---
+
+## Fields — block 14 `probation_goals` (**managing**)
+
+| key | valueType | children | notes |
+|-----|-----------|----------|-------|
+| probation_goals.items | repeating_group | `title`, `description`, `dueDate` (date), `status` (`planned`\|`active`\|`done`) | voluntary snapshot |
+
+Same optional `goalTemplates` context hook as career goals (future UI).
+
+---
+
+## Fields — block 16 `onboarding` (**docs**)
+
+| key | valueType | children |
+|-----|-----------|----------|
+| onboarding.items | repeating_group | `item` (text), `responsible` (text), `completed` (boolean/checkbox), `completedAt` (date) |
+| onboarding.equipment | repeating_group | `equipment`, `modelNumber`, `issuedAt` (date), `condition`, `returnedAt` (date) |
+| onboarding.systemAccess | repeating_group | `system`, `role`, `grantedBy`, `grantedAt` (date), `revoke` (boolean/checkbox) |
+
+All voluntary → questionnaire_snapshot for docs v1 (Onboarding module later).
+
+---
+
+## Fields — block 17 `hr_documents` (**docs**)
+
+| key | valueType | notes |
+|-----|-----------|-------|
+| hr_documents.checklist | multi_choice | passport_id, rnokpp, education_doc, labor_docs, military, bank_details, contract_order, nda, job_description, material_liability, safety_briefings |
+| hr_documents.other | text | free-form |
+
+Snapshot checklist only — Documents module remains SoT for file storage.
 
 ---
 
@@ -345,7 +409,8 @@ Legal versioned consents → future Consents module. MVP stores attestation bool
 5. **Step gating:** linear Intro → schema steps → Review. `visibleWhen` (strict equals|includes union). Navigation = visible required valid; completion % = answered visible / visible (`@loom/questionnaire-schema`).
 6. **Preferred language:** multi_choice in answers; profile/proposal canonical `uk,en,other:Текст` (`other:` last segment).
 7. FE: People via `questionnaires/public-api.ts`; fill private. Domain pure helpers in `@loom/questionnaire-schema` (not contracts).
-8. **Pre-prod schema refresh:** [`docs/dev/questionnaire-test-reset.md`](../dev/questionnaire-test-reset.md) + snapshot DoD before/after breaking v1 changes.
+8. **Pre-prod schema refresh:** [`docs/dev/questionnaire-test-reset.md`](../dev/questionnaire-test-reset.md) + snapshot DoD before/after breaking v1 changes. After Track B Managing/Docs schema changes, if local MAN/DOC assignments exist → `pnpm questionnaires:reset -- --execute` (see also [position-catalog.md](../dev/position-catalog.md)).
+9. **Position Catalog context:** fill uses frozen `assignment.context` for `position_skills_matrix` when present; `goalTemplates` / `duties` captured but not yet surfaced in wizard suggestions.
 
 ---
 
@@ -354,7 +419,10 @@ Legal versioned consents → future Consents module. MVP stores attestation bool
 | Artifact | Role |
 |----------|------|
 | This catalog | policy SoT |
-| `employee-360-v1` seed | code seed synced manually from catalog `in_mvp` rows (`satisfies QuestionnaireSchemaJson`) |
+| `employee-360-v1` seed | full template — catalog `in_mvp` rows |
+| `employee-managing-v1` seed | managing — grade / skills.matrix / career+probation goals |
+| `employee-docs-v1` seed | docs — onboarding repeating_groups / hr_documents |
 | `schema_json` in DB | runtime SoT after publish |
 | `@loom/questionnaire-schema` | pure helpers (not contracts); API uses built `dist/` |
+| `@loom/position-skill-catalog` | skill codes for `position_skills_matrix` |
 | HTML reference | human UX reference only |

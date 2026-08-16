@@ -37,6 +37,7 @@ const ADMIN: Permission[] = [
   Permission.QuestionnairesReadAssignmentComment,
   Permission.DepartmentsManage,
   Permission.PositionsManage,
+  Permission.DirectionsManage,
   Permission.SettingsManage,
   Permission.AuditView,
 ];

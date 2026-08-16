@@ -30,6 +30,10 @@ export class QuestionnaireSubmission {
   @Column({ name: 'snapshot_json', type: 'jsonb' })
   snapshotJson!: Record<string, unknown>;
 
+  /** Copy of assignment.contextJson at submit; null when assignment had no context. */
+  @Column({ name: 'context_json', type: 'jsonb', nullable: true })
+  contextJson!: Record<string, unknown> | null;
+
   @Column({ name: 'submitted_by_user_id', type: 'uuid' })
   submittedByUserId!: string;
 

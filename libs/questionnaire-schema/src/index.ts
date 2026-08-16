@@ -33,3 +33,19 @@ export type {
   PreferredLanguageOption,
   PreferredLanguageParsed,
 } from './preferred-language';
+
+export {
+  InvalidPositionSkillsMatrix,
+  POSITION_SKILLS_MATRIX_LIMITS,
+  emptyPositionSkillsMatrix,
+  canonicalizePositionSkillsMatrix,
+  parsePositionSkillsMatrixStrict,
+  isPositionSkillsMatrixMeaningful,
+  validatePositionSkillsMatrixForSubmit,
+  formatPositionSkillsMatrixReviewSummary,
+} from './position-skills-matrix';
+export type {
+  PositionSkillsMatrixAnswer,
+  PositionSkillRating,
+  PositionSkillCustom,
+} from './position-skills-matrix';

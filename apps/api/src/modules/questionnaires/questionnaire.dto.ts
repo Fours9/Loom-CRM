@@ -33,6 +33,12 @@ export class CreateQuestionnaireAssignmentDto {
   @MaxLength(64)
   templateCode?: string;
 
+  /** Display title for this assignment; defaults to template title when omitted. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  title?: string | null;
+
   @IsOptional()
   @IsString()
   @MaxLength(4000)

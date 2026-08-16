@@ -10,6 +10,7 @@ import { User } from '../../platform/identity/user.entity';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
 import { InvalidEmployeeContactsBundle } from '@loom/employee-contacts';
+import { InvalidPositionSkillsMatrix } from '@loom/questionnaire-schema';
 import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
@@ -93,7 +94,10 @@ export class QuestionnaireResponseService {
         input.answers ?? {},
       );
     } catch (err) {
-      if (err instanceof InvalidEmployeeContactsBundle) {
+      if (
+        err instanceof InvalidEmployeeContactsBundle ||
+        err instanceof InvalidPositionSkillsMatrix
+      ) {
         throw new BadRequestException(err.message);
       }
       throw err;

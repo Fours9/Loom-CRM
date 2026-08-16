@@ -8,6 +8,10 @@ import {
   parseEmployeeContactsBundleStrict,
 } from '@loom/employee-contacts';
 import { isQuestionnaireFieldVisible } from './field-visibility';
+import {
+  isPositionSkillsMatrixMeaningful,
+  parsePositionSkillsMatrixStrict,
+} from './position-skills-matrix';
 
 function isMeaningfulScalar(value: unknown): boolean {
   if (value === false || value === 0) return true;
@@ -25,6 +29,14 @@ export function isFieldAnswered(
     try {
       const bundle = parseEmployeeContactsBundleStrict(value);
       return isEmployeeContactsBundleMeaningful(bundle);
+    } catch {
+      return false;
+    }
+  }
+  if (field.valueType === 'position_skills_matrix') {
+    try {
+      const matrix = parsePositionSkillsMatrixStrict(value);
+      return isPositionSkillsMatrixMeaningful(matrix);
     } catch {
       return false;
     }

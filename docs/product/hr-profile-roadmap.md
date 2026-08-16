@@ -6,7 +6,8 @@
 | --- | --- | --- |
 | **1. Employee Profile Core** | Header, section edit (basics/contacts/personal/dates/employment), assignment history, capabilities, audit/history API, completeness, `/people/:id` | **Done** |
 | 2. Self-service + approval | `/me/profile`, change requests, approval queue | Planned |
-| 3. Questionnaires MVP | Seeded 360 template, assign, draft autosave, immutable submissions, review, profile proposals, fill wizard ([field catalog](./questionnaire-360-field-catalog.md), [ADR 0009](../adr/0009-questionnaire-360-mvp.md)). | **In progress / Partially implemented** (foundation + fill wizard shipped; see Phase 3) |
+| 3. Questionnaires MVP | Seeded 360 template, assign, draft autosave, immutable submissions, review, profile proposals, fill wizard ([field catalog](./questionnaire-360-field-catalog.md), [ADR 0009](../adr/0009-questionnaire-360-mvp.md)). Track B: published Managing/Docs content. | **In progress / Partially implemented** (foundation + fill + Track B content shipped; see Remaining below) |
+| 3b. Position Catalog | Settings «Керування посадами», position↔direction/dept, skills requirements, frozen questionnaire context | **Shipped (PR1–PR6)** — closeout docs PR7; optional fill suggestions from `goalTemplates`/`duties` deferred ([ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](../dev/position-catalog.md)) |
 | 4. Onboarding | Templates, tasks, progress widget | Planned |
 | 5. Goals + probation reviews | Goals, manager review cycles | Planned |
 | 6. Skills + development | Catalogs, position requirements, assessments | Planned |
@@ -67,7 +68,8 @@ PW-паритетна картка без змін: `/absences/employees/:id`.
 - **request-changes UX** — див. підрозділ нижче
 - **assignment lifecycle:** create without employee → `new` (optional employee + service `comment` + immutable `assignment.code`); cancel detaches (`employeeId=null`, `detachedFromEmployeeId=previous` auth provenance); attach — **any** employee for `new` (Assign) and cancelled (ManageLifecycle); audit from→to; close terminal; hard delete when `canDelete`. People excludes cancelled. Detached: `new` pool for Assign; cancelled scoped by `detachedFromEmployeeId`. Comment read: `questionnaires.read_assignment_comment` (Admin). Templates create list: published + version.
 - **permissions split:** `questionnaires.assign` (create + attach new; Admin + DM); `questionnaires.manage_lifecycle` (cancel/close/reattach; Admin); `questionnaires.delete` (Admin). DM does **not** get CompleteAny — may assign Managing/Docs; Admin fills.
-- **types:** `full` | `managing` | `docs` (`QUESTIONNAIRE_TYPE_CATALOG`). `employee-360` = `full` («Повна анкета»). Published stubs Variant A: `employee-managing` / `employee-docs`. Owner ACL: plain owner sees/fills only `full`; elevated (Assign/ManageLifecycle/CompleteAny/Delete) all types. No `hr` role — product «HR» = Admin.
+- **types:** `full` | `managing` | `docs` (`QUESTIONNAIRE_TYPE_CATALOG`). `employee-360` = `full` («Повна анкета»). **Track B content schemas shipped:** published `employee-managing` (grade without `net_salary`, `skills.matrix` / `position_skills_matrix`, career + probation goals) and `employee-docs` (onboarding repeating_groups + hr_documents checklist). `manager_review` / `grade.net_salary` **not** shipped. Owner ACL: plain owner sees/fills only `full`; elevated (Assign/ManageLifecycle/CompleteAny/Delete) all types. No `hr` role — product «HR» = Admin.
+- **Position Catalog (Phase 3b):** Settings `/settings/positions`; Organization skill catalog + position requirements/duties/goal templates; assign/attach freezes `QuestionnaireContextV1` on assignment (+ submission copy). Matrix modes: legacy null = full registry; context v1 = frozen skills. See [ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md).
 - **directory + access:** nav «Анкети»; `canCreate` / `attachConstraint` on directory; `new` draft editable without submit (CompleteAny); cancelled/closed fill = read-only; print stubs («Незабаром»). **PDF (planned):** blank template and filled questionnaire share one layout; filled only substitutes values — not shipped yet.
 - **directory + access (legacy note):** historical cancelled with non-null employeeId stay attach-blocked until manual detach; view/close/delete only.
 
@@ -131,7 +133,7 @@ assignment.status === 'changes_requested'
 
 **Remaining (request-changes):** окрема entity циклів запиту; email/push; Playwright e2e матриця request→decline→re-request.
 
-**Remaining (загальне Phase 3):** auto-apply answers to profile (explicitly out); Phase 2 `/me` approval queue; IndexedDB offline; full Playwright matrix; template builder; production template v2 when real assignments exist.
+**Remaining (загальне Phase 3):** auto-apply answers to profile (explicitly out); Phase 2 `/me` approval queue; IndexedDB offline; full Playwright matrix; template builder; production template v2 when real assignments exist; optional fill suggestions from frozen `goalTemplates` / `duties` (context already captured).
 
 
 ## Phase 1 — відкладені polish (не блокують Done)

@@ -25,6 +25,11 @@ import {
   normalizeEmployeeContactsBundle,
   formatContactsBundleReviewSummary,
 } from '@loom/employee-contacts';
+import {
+  formatPositionSkillsMatrixReviewSummary,
+  parsePositionSkillsMatrixStrict,
+} from '@loom/questionnaire-schema';
+import { skillDefinitionByCode } from '@loom/position-skill-catalog';
 
 export type QuestionnaireStepUiState =
   | 'not_started'
@@ -185,6 +190,9 @@ export function reviewRowsForStep(
   answers: Record<string, unknown>,
   profileMirror: Record<string, unknown>,
   allSteps: QuestionnaireSchemaStep[],
+  options?: {
+    skillLabelByCode?: (code: string) => string;
+  },
 ): Array<{
   fieldKey: string;
   label: string;
@@ -227,7 +235,7 @@ export function reviewRowsForStep(
     rows.push({
       fieldKey: field.key,
       label: field.label,
-      display: formatReviewDisplay(field, resolved.value),
+      display: formatReviewDisplay(field, resolved.value, options?.skillLabelByCode),
       sourceLabel: visible ? reviewSourceLabel(resolved.source) : null,
       inactive: !visible && hasOwn,
     });
@@ -238,11 +246,26 @@ export function reviewRowsForStep(
 function formatReviewDisplay(
   field: QuestionnaireSchemaField,
   value: unknown,
+  skillLabelByCode?: (code: string) => string,
 ): string {
   if (field.valueType === 'contacts_bundle') {
     try {
       return formatContactsBundleReviewSummary(
         normalizeEmployeeContactsBundle(value ?? emptyEmployeeContactsBundle()),
+      );
+    } catch {
+      return '—';
+    }
+  }
+  if (field.valueType === 'position_skills_matrix') {
+    try {
+      const matrix = parsePositionSkillsMatrixStrict(value);
+      return formatPositionSkillsMatrixReviewSummary(
+        matrix,
+        (code) =>
+          skillLabelByCode?.(code) ??
+          skillDefinitionByCode(code)?.labelUa ??
+          code,
       );
     } catch {
       return '—';

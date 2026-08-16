@@ -27,6 +27,7 @@
     "@loom/contracts-questionnaires": "workspace:*",
     "@loom/questionnaire-schema": "workspace:*",
     "@loom/employee-contacts": "workspace:*",
+    "@loom/position-skill-catalog": "workspace:*",
     "@loom/ui": "workspace:*",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",

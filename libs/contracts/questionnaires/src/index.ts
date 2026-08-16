@@ -108,10 +108,27 @@ export type QuestionnaireVisibleWhen =
       equals?: never;
     };
 
+/** Single SoT for schema + runtime allowlist (`@loom/questionnaire-schema`). */
+export const QUESTIONNAIRE_VALUE_TYPES = [
+  'text',
+  'textarea',
+  'date',
+  'number',
+  'boolean',
+  'single_choice',
+  'multi_choice',
+  'repeating_group',
+  'contacts_bundle',
+  'position_skills_matrix',
+] as const;
+
+export type QuestionnaireValueType =
+  (typeof QUESTIONNAIRE_VALUE_TYPES)[number];
+
 export type QuestionnaireSchemaField = {
   key: string;
   label: string;
-  valueType: string;
+  valueType: QuestionnaireValueType;
   helpText?: string;
   requiredPolicy?: string;
   /** Boolean: default radio; `checkbox` for confirmations only. */
@@ -149,6 +166,8 @@ export type CreateQuestionnaireAssignmentRequest = {
   employeeId?: EntityId;
   /** Template code; default employee-360 when omitted. */
   templateCode?: string;
+  /** Display title; defaults to template title when omitted/blank. */
+  title?: string | null;
   /** Service HR note (not shown to fill owner). */
   comment?: string | null;
   dueAt?: string | null;
@@ -202,6 +221,8 @@ export type QuestionnaireSubmissionSummary = {
   reviewComment: string | null;
   reviewedByUserId: EntityId | null;
   changeRequestResolution: QuestionnaireChangeRequestResolution | null;
+  /** Frozen context at submit; null = legacy registry labels (ADR 0010). */
+  context: QuestionnaireContextV1 | null;
 };
 
 export type QuestionnaireDraftDto = {
@@ -270,6 +291,8 @@ export type QuestionnaireAssignmentDetail = {
   submissions: QuestionnaireSubmissionSummary[];
   completionPercent: number;
   profileMirror: Record<string, unknown> | null;
+  /** Frozen fill context; null = legacy registry mode (ADR 0010). */
+  context: QuestionnaireContextV1 | null;
   capabilities: {
     canEditDraft: boolean;
     canSubmit: boolean;
@@ -381,3 +404,79 @@ export type QuestionnaireSnapshotSummary = {
   hobbies: Record<string, unknown> | null;
   workStyle: Record<string, unknown> | null;
 };
+
+// ─── Assignment / submission fill context (ADR 0010) ─────────────────
+
+export type PositionSkillContext = {
+  code: string;
+  labelUa: string;
+  group: string;
+  targetLevel: number | null;
+  required: boolean;
+  weight: number | null;
+};
+
+export type PositionGoalTemplateContext = {
+  goalKind: string;
+  title: string;
+  description: string | null;
+  sortOrder: number;
+};
+
+export type PositionDutyContext = {
+  title: string;
+  description: string | null;
+  sortOrder: number;
+};
+
+/** Frozen position catalog slice inside QuestionnaireContextV1. */
+export type PositionCatalogContextV1 = {
+  employeeId: string;
+  employmentAssignmentId: string | null;
+  positionId: string | null;
+  positionName: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  directionId: string | null;
+  directionName: string | null;
+  capturedAt: string;
+  skills: PositionSkillContext[];
+  goalTemplates: PositionGoalTemplateContext[];
+  duties: PositionDutyContext[];
+};
+
+/**
+ * Versioned envelope for questionnaire_assignments.context_json /
+ * questionnaire_submissions.context_json. Fail-closed on unknown version.
+ */
+export type QuestionnaireContextV1 = {
+  version: 1;
+  positionCatalog: PositionCatalogContextV1;
+};
+
+export type QuestionnaireContext = QuestionnaireContextV1;
+
+export function parseQuestionnaireContext(
+  raw: unknown,
+):
+  | { ok: true; context: QuestionnaireContextV1 }
+  | { ok: false; error: string } {
+  if (raw == null) {
+    return { ok: false, error: 'context is null' };
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, error: 'context must be an object' };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj['version'] !== 1) {
+    return {
+      ok: false,
+      error: `unsupported context version: ${String(obj['version'])}`,
+    };
+  }
+  const pc = obj['positionCatalog'];
+  if (pc == null || typeof pc !== 'object' || Array.isArray(pc)) {
+    return { ok: false, error: 'positionCatalog missing or invalid' };
+  }
+  return { ok: true, context: raw as QuestionnaireContextV1 };
+}

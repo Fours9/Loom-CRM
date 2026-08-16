@@ -19,7 +19,7 @@ Forbidden: Platform → Absences / Documents / Questionnaires; Organization → 
 ## Layers
 
 1. **Platform** — auth, identity, permissions, audit, notifications, settings, files (**planned**), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`, `normalizeUploadedFileName`).
-2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions, schedules, access scope.
+2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions / Position Catalog (Settings UI **`/settings/positions`** «Керування посадами» — [ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](dev/position-catalog.md)), schedules, access scope.
 3. **Business modules** — absences (product UI: **Робочий календар** / TimeEvent domain — [ADR 0008](adr/0008-work-calendar-via-absences.md)); documents (MVP: employee file list/upload + People aggregate with time-event attachments); **questionnaires** (360° policy catalog + module — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [field catalog](product/questionnaire-360-field-catalog.md)); later onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
 
 ### Documents MVP
@@ -48,6 +48,7 @@ CRM employee profile: `/people/:id` — tabs Дані працівника, Ро
 - `@loom/contracts-questionnaires` — API/DTO/schema **shapes only** (incl. `visibleWhen`, layout meta).
 - `@loom/questionnaire-schema` — framework-free domain helpers: visibility, `projectVisibleQuestionnaireAnswers`, completion %, preferred-language serialize/parse, schema validation. Used by `apps/api` + `apps/web`. Contracts must **not** import this package. API loads compiled `dist/` (CJS); web path-maps to `src/` (Angular). Build via `pnpm --filter @loom/questionnaire-schema build` (also from API `dev`).
 - `@loom/employee-contacts` — canonical contacts bundle shape, draft normalize vs write validate, snapshot/completion helpers. Shared by API Organization facade, questionnaire proposals, and web shared editor (`apps/web/src/app/shared/employee-contacts/public-api.ts`). Questionnaires module uses Organization `EmployeeContactsFacade` only (no direct contact entities).
+- `@loom/position-skill-catalog` — stable skill codes/labels (HTML §7) for questionnaire `position_skills_matrix` and future Organization skills seed. Questionnaires and Organization both import this lib; Organization must never import Questionnaires seed. Context envelope: `QuestionnaireContextV1` in contracts ([ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](dev/position-catalog.md)).
 
 ### Application startup
 

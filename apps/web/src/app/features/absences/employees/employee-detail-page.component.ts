@@ -53,7 +53,7 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
             </div>
             <div class="hero-row hero-meta">
               <p>#{{ employee.employeeNumber }} · {{ employee.departmentName }} · {{ employee.positionName }}</p>
-              @if (employee.permissions?.canEditProfile && !editingProfile) {
+              @if (!editingProfile && employee.permissions?.canEditProfile) {
                 <button type="button" class="ghost-btn" (click)="startEdit()">Редагувати</button>
               }
               @if (editingProfile) {
@@ -100,11 +100,21 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
           </div>
         </header>
 
+        @if (message) {
+          <p class="ok banner-msg">{{ message }}</p>
+        }
+        @if (error) {
+          <p class="error banner-msg">{{ error }}</p>
+        }
+
         <div class="grid">
           <div class="col">
             <article class="card">
               <div class="card-head">
                 <h2>Анкета</h2>
+                @if (!editingProfile) {
+                  <a class="ghost-btn" [routerLink]="['/people', employee.id]">Профіль Loom</a>
+                }
               </div>
 
               @if (!editingProfile) {
@@ -269,16 +279,9 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
                         />
                       </label>
                       @if (employee.hasAccount && employee.permissions?.canViewAccountDetails) {
-                        <label>
-                          Email акаунта
-                          <input
-                            type="email"
-                            name="accountEmail"
-                            [(ngModel)]="edit.email"
-                            maxlength="254"
-                            autocomplete="off"
-                          />
-                        </label>
+                        <p class="account-email-ro">
+                          <strong>Email акаунта:</strong> {{ employee.accountEmail || '—' }}
+                        </p>
                       }
                     } @else {
                       <p><strong>Робочий email:</strong> {{ employee.workEmail || '—' }}</p>
@@ -747,6 +750,9 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
       .hero-row .ghost-btn {
         flex: 0 0 auto;
       }
+      .banner-msg {
+        margin: 0 0 0.75rem;
+      }
       .section-block {
         margin-top: 0.85rem;
         padding-top: 0.95rem;
@@ -1051,6 +1057,10 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
         flex-wrap: wrap;
       }
       .card-head h2 { margin: 0; }
+      .card-head .ghost-btn {
+        flex: 0 0 auto;
+        margin-left: auto;
+      }
       .req-actions {
         justify-content: flex-end;
       }
@@ -1084,6 +1094,7 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
         cursor: pointer;
         font-weight: 600;
         font-size: 0.9rem;
+        text-decoration: none;
       }
       .ghost-btn:hover { text-decoration: underline; }
       .section-block > label.check-row,
@@ -1318,6 +1329,8 @@ export class EmployeeDetailPageComponent implements OnInit {
   sidePanel: 'schedule' | 'comment' | 'requests' = 'schedule';
   pdfLoading = false;
   private editBaseline: EmployeeProfile | null = null;
+  /** `?edit=1` may open edit once; do not re-enter after save/reload. */
+  private editQueryConsumed = false;
 
   get isAdmin(): boolean {
     return this.auth.isAdmin();
@@ -1387,9 +1400,13 @@ export class EmployeeDetailPageComponent implements OnInit {
   }
 
   private openEditFromQueryIfNeeded(): void {
+    if (this.editQueryConsumed) {
+      return;
+    }
     if (this.route.snapshot.queryParamMap.get('edit') !== '1') {
       return;
     }
+    this.editQueryConsumed = true;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { edit: null },
@@ -1558,6 +1575,8 @@ export class EmployeeDetailPageComponent implements OnInit {
     this.normalizeCalendarColor();
     this.error = '';
     this.message = '';
+    // Never re-enter edit via ?edit=1 after an explicit save attempt.
+    this.editQueryConsumed = true;
     const baseline = this.editBaseline;
     const org = optionalOrgAssignmentIds({
       departmentId: this.edit.departmentId,
@@ -1576,9 +1595,7 @@ export class EmployeeDetailPageComponent implements OnInit {
       body['employeeNumber'] = this.edit.employeeNumber;
       body['calendarColor'] = this.edit.calendarColor;
       body['workEmail'] = this.edit.workEmail || null;
-      if (this.employee.hasAccount) {
-        body['email'] = this.edit.email;
-      }
+      // Account login email is not part of UpdateEmployeeDto (forbidNonWhitelisted).
       body['role'] = this.edit.role;
       body['isDepartmentManager'] =
         this.edit.role === 'department_manager'
@@ -1639,16 +1656,22 @@ export class EmployeeDetailPageComponent implements OnInit {
       }
     }
 
-    const saveProfile$ = this.api.updateEmployee(this.employee.id, body);
+    const employeeId = this.employee.id;
     const shouldSaveSchedule = Boolean(this.employee.permissions?.canEditSchedule);
     const schedulePayload = normalizeSchedulePayload(this.editSchedule);
 
-    const finish = (employee: EmployeeProfile) => {
+    const exitEditMode = (employee: EmployeeProfile) => {
       this.employee = employee;
       this.editingProfile = false;
-      this.message = 'Збережено';
-      this.load(employee.id);
-      this.refreshAuthIfSelf();
+      this.moreMenuOpen = false;
+      this.fillEditFromEmployee(employee);
+      this.managedIds = [...(employee.managedDepartmentIds || [])];
+      this.profileOverride = this.fromOverride(employee.profileVisibilityOverride ?? null);
+      this.absencesOverride = this.fromOverride(employee.absenceVisibilityOverride ?? null);
+      this.absenceTypeDetailOverride = this.fromTypeDetailOverride(
+        employee.showAbsenceTypeToPeersOverride ?? null,
+      );
+      this.reloadPositions(employee.departmentId, employee.positionId);
     };
 
     const fail = (err: { error?: { message?: string | string[] } }) => {
@@ -1656,21 +1679,33 @@ export class EmployeeDetailPageComponent implements OnInit {
       this.error = Array.isArray(msg) ? msg.join(', ') : msg || 'Помилка збереження';
     };
 
-    if (shouldSaveSchedule) {
-      saveProfile$.subscribe({
-        next: (employee) => {
-          this.api.putSchedule(employee.id, schedulePayload).subscribe({
-            next: () => finish(employee),
-            error: fail,
-          });
-        },
-        error: fail,
-      });
-      return;
-    }
+    this.api.updateEmployee(employeeId, body).subscribe({
+      next: (employee) => {
+        // Leave edit mode as soon as the profile is saved.
+        exitEditMode(employee);
+        this.message = 'Збережено';
+        this.refreshAuthIfSelf();
+        this.api.getEmployeeRequests(employeeId).subscribe({
+          next: (res) => (this.requests = res.items.slice(0, 8)),
+        });
 
-    saveProfile$.subscribe({
-      next: finish,
+        if (!shouldSaveSchedule) {
+          return;
+        }
+        this.api.putSchedule(employeeId, schedulePayload).subscribe({
+          next: (days) => {
+            if (this.employee) {
+              this.employee = { ...this.employee, schedule: days };
+            }
+          },
+          error: (err) => {
+            const msg = err?.error?.message;
+            this.error = Array.isArray(msg)
+              ? msg.join(', ')
+              : msg || 'Профіль збережено, але графік не вдалося оновити';
+          },
+        });
+      },
       error: fail,
     });
   }

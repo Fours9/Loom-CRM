@@ -53,6 +53,16 @@ Live reset без оновлення tracked snapshot → наступний `db
 
 Breaking answer shapes (наприклад `family.other_dates_note` text → `family.other_dates` list) вимагають reset + API restart перед smoke.
 
+## Track B / Managing·Docs
+
+Після зміни published schema `employee-managing` або `employee-docs` (Track B): якщо локально вже є MAN/DOC assignments (або застарілий `schema_json`), виконати reset перед smoke:
+
+```bash
+ALLOW_QUESTIONNAIRE_TEST_RESET=YES pnpm questionnaires:reset -- --execute
+```
+
+Потім restart API (seed refresh). Деталі Position Catalog / matrix modes: [position-catalog.md](./position-catalog.md).
+
 ## Коли потрібен reset
 
-Перед in-place refresh `employee-360` v1 (breaking answer shapes). Після першого **production** assignment — не мутувати published v1; публікувати version 2.
+Перед in-place refresh `employee-360` / `employee-managing` / `employee-docs` v1 (breaking answer shapes). Після першого **production** assignment — не мутувати published v1; публікувати version 2.

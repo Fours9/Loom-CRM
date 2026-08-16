@@ -4,15 +4,16 @@
   "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@loom/contracts-questionnaires": "workspace:*",
+    "@loom/employee-contacts": "workspace:*",
+    "@loom/position-skill-catalog": "workspace:*"
+  },
   "scripts": {
     "lint": "echo \"no lint\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm --filter @loom/employee-contacts build && jest",
+    "test": "pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/position-skill-catalog build && jest",
     "build": "tsc -p tsconfig.json"
-  },
-  "dependencies": {
-    "@loom/contracts-questionnaires": "workspace:*",
-    "@loom/employee-contacts": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
