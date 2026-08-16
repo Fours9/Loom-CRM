@@ -288,7 +288,9 @@ export class QuestionnaireAssignmentService {
     qb.orderBy('a.created_at', 'DESC').addOrderBy('a.id', 'ASC');
 
     const rows = await qb.getMany();
-    const items = await Promise.all(rows.map((row) => this.toListItem(actor, row)));
+    const items = await Promise.all(
+      rows.map((row) => this.toListItem(actor, row, employee)),
+    );
 
     return {
       items,
@@ -652,6 +654,7 @@ export class QuestionnaireAssignmentService {
         'emp.first_name AS "firstName"',
         'emp.last_name AS "lastName"',
         'emp.middle_name AS "middleName"',
+        'emp.user_id AS "employeeUserId"',
         'dept.name AS "departmentName"',
         'pos.name AS "positionName"',
         'resp.id AS "responseId"',
@@ -676,6 +679,7 @@ export class QuestionnaireAssignmentService {
       firstName: string | null;
       lastName: string | null;
       middleName: string | null;
+      employeeUserId: string | null;
       departmentName: string | null;
       positionName: string | null;
       responseId: string | null;
@@ -692,12 +696,24 @@ export class QuestionnaireAssignmentService {
     );
 
     const items = rows.map((row) => {
+      const latestSubmission = row.responseId
+        ? (latestByResponseId.get(row.responseId) ?? null)
+        : null;
+      const employee = row.employeeId
+        ? ({
+            id: row.employeeId,
+            userId: row.employeeUserId,
+          } as Employee)
+        : null;
       const lifecycle = computeListLifecycleCapabilities({
         actor,
         status: row.status,
         employeeId: row.employeeId,
         detachedFromEmployeeId: row.detachedFromEmployeeId,
         permissions: this.permissions,
+        employee,
+        access: this.access,
+        hasLatestSubmission: latestSubmission != null,
       });
       const assignmentUpdated = new Date(row.assignmentUpdatedAt).getTime();
       const responseUpdated = row.responseUpdatedAt
@@ -734,9 +750,7 @@ export class QuestionnaireAssignmentService {
         createdAt: new Date(row.createdAt).toISOString(),
         updatedAt: new Date(activityMs).toISOString(),
         ...(canViewAssignmentComment ? { comment: row.comment ?? null } : {}),
-        latestSubmission: row.responseId
-          ? (latestByResponseId.get(row.responseId) ?? null)
-          : null,
+        latestSubmission,
         attachConstraint,
         capabilities: {
           canOpen: lifecycle.canOpen,
@@ -744,6 +758,7 @@ export class QuestionnaireAssignmentService {
           canCancel: lifecycle.canCancel,
           canClose: lifecycle.canClose,
           canDelete: lifecycle.canDelete,
+          canStartFill: lifecycle.canStartFill,
         },
       };
     });
@@ -998,7 +1013,11 @@ export class QuestionnaireAssignmentService {
     }
   }
 
-  private async toListItem(actor: User, row: QuestionnaireAssignment) {
+  private async toListItem(
+    actor: User,
+    row: QuestionnaireAssignment,
+    employee: Employee,
+  ) {
     const draft = await this.responses.findOne({
       where: { assignmentId: row.id },
     });
@@ -1023,6 +1042,9 @@ export class QuestionnaireAssignmentService {
       employeeId: row.employeeId,
       detachedFromEmployeeId: row.detachedFromEmployeeId,
       permissions: this.permissions,
+      employee,
+      access: this.access,
+      hasLatestSubmission: latestSubmission != null,
     });
 
     const canViewAssignmentComment = this.permissions.has(
@@ -1053,6 +1075,7 @@ export class QuestionnaireAssignmentService {
         canCancel: lifecycle.canCancel,
         canClose: lifecycle.canClose,
         canDelete: lifecycle.canDelete,
+        canStartFill: lifecycle.canStartFill,
       },
     };
   }

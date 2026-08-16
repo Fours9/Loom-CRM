@@ -23,6 +23,7 @@ import { QuestionnaireFieldHostComponent } from './fields/questionnaire-field-ho
 import { QuestionnaireContactsBundleFieldComponent } from './fields/questionnaire-contacts-bundle-field.component';
 import { QuestionnaireSaveStatusComponent } from './questionnaire-save-status.component';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
+import { shouldShowReviewSubmit } from './questionnaire-fill-session.policy';
 import { validateFieldValue } from './validation/questionnaire-validation';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { fieldsByKey, listInactiveOwnAnswers } from '@loom/questionnaire-schema';
@@ -298,7 +299,7 @@ import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
             >
               Далі
             </button>
-          } @else if (store.editable() && !isRevisionEdit()) {
+          } @else if (showReviewSubmit()) {
             <button
               type="button"
               class="btn primary"
@@ -658,6 +659,13 @@ export class QuestionnaireWizardShellComponent {
 
   isRevisionEdit(): boolean {
     return this.revision.isRevisionEdit();
+  }
+
+  showReviewSubmit(): boolean {
+    return shouldShowReviewSubmit({
+      stepKey: this.store.activeStepKey(),
+      editable: this.store.editable(),
+    });
   }
 
   fieldValue(fieldKey: string): unknown {

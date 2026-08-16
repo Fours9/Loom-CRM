@@ -18,6 +18,7 @@ import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnairesApiService } from './core/questionnaires-api.service';
 import { QuestionnaireSnapshotSummaryComponent } from './questionnaire-snapshot-summary.component';
 import { buildQuestionnaireAssignmentLink } from './navigation/questionnaire-navigation';
+import { questionnaireListOpenLabel } from './fill/questionnaire-fill-session.policy';
 import { QUESTIONNAIRE_INTRO_STEP } from './navigation/questionnaire-step-keys';
 import {
   QUESTIONNAIRE_STATUS_LABELS,
@@ -119,15 +120,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                     class="btn view"
                     (click)="openAssignment(item)"
                   >
-                    {{
-                      item.status === 'submitted' || item.status === 'reviewed'
-                        ? 'Відкрити'
-                        : item.status === 'changes_requested' ||
-                            item.status === 'in_progress' ||
-                            item.status === 'assigned'
-                          ? 'Почати'
-                          : 'Переглянути'
-                    }}
+                    {{ openLabel(item) }}
                   </button>
                   <button
                     type="button"
@@ -713,6 +706,13 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
       return (
         !!latestSubmissionId && p.submissionId === latestSubmissionId
       );
+    });
+  }
+
+  openLabel(item: QuestionnaireAssignmentListItem): string {
+    return questionnaireListOpenLabel({
+      canStartFill: item.capabilities.canStartFill,
+      status: item.status,
     });
   }
 

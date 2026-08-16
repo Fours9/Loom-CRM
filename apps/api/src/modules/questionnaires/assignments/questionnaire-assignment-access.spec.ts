@@ -8,6 +8,7 @@ import { createdAtRangeBounds } from './questionnaire-assignment-list.query';
 import {
   computeDetailCapabilities,
   computeListLifecycleCapabilities,
+  computeCanStartFill,
   canActorAccessAssignmentType,
 } from './questionnaire-assignment-access';
 import { Permission } from '../../../platform/permissions/permission.names';
@@ -16,6 +17,24 @@ import type { User } from '../../../platform/identity/user.entity';
 import type { Employee } from '../../../organization/employees/employee.entity';
 import type { PermissionService } from '../../../platform/permissions/permission.service';
 import type { EmployeeAccessService } from '../../../organization/access/employee-access.service';
+
+function listLifecycle(
+  input: Omit<
+    Parameters<typeof computeListLifecycleCapabilities>[0],
+    'employee' | 'access' | 'hasLatestSubmission'
+  > & {
+    employee?: Employee | null;
+    access?: EmployeeAccessService;
+    hasLatestSubmission?: boolean;
+  },
+) {
+  return computeListLifecycleCapabilities({
+    employee: { id: 'e1', userId: 'u1' } as Employee,
+    access: { isOwner: () => false } as unknown as EmployeeAccessService,
+    hasLatestSubmission: false,
+    ...input,
+  });
+}
 
 describe('attachmentStateForStatus', () => {
   it('maps closed / cancelled / new / other', () => {
@@ -194,7 +213,7 @@ describe('computeDetailCapabilities matrix', () => {
   });
 
   it('closed list caps allow only delete + open', () => {
-    const caps = computeListLifecycleCapabilities({
+    const caps = listLifecycle({
       actor,
       status: 'closed',
       employeeId: null,
@@ -209,7 +228,7 @@ describe('computeDetailCapabilities matrix', () => {
   });
 
   it('new list caps allow attach, not cancel/close', () => {
-    const caps = computeListLifecycleCapabilities({
+    const caps = listLifecycle({
       actor,
       status: 'new',
       employeeId: null,
@@ -222,7 +241,7 @@ describe('computeDetailCapabilities matrix', () => {
   });
 
   it('cancelled (unattached) list caps allow attach and close, not cancel', () => {
-    const caps = computeListLifecycleCapabilities({
+    const caps = listLifecycle({
       actor,
       status: 'cancelled',
       employeeId: null,
@@ -235,7 +254,7 @@ describe('computeDetailCapabilities matrix', () => {
   });
 
   it('non-manage actor never gets canAttach even when statuses allow it', () => {
-    const caps = computeListLifecycleCapabilities({
+    const caps = listLifecycle({
       actor: { id: 'u1', role: UserRole.Employee } as User,
       status: 'new',
       employeeId: null,
@@ -250,7 +269,7 @@ describe('computeDetailCapabilities matrix', () => {
       has: (_r: string, p: string) => p === Permission.QuestionnairesAssign,
     } as unknown as PermissionService;
 
-    const neu = computeListLifecycleCapabilities({
+    const neu = listLifecycle({
       actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
       status: 'new',
       employeeId: null,
@@ -262,7 +281,7 @@ describe('computeDetailCapabilities matrix', () => {
     expect(neu.canClose).toBe(false);
     expect(neu.canDelete).toBe(false);
 
-    const cancelled = computeListLifecycleCapabilities({
+    const cancelled = listLifecycle({
       actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
       status: 'cancelled',
       employeeId: null,
@@ -272,7 +291,7 @@ describe('computeDetailCapabilities matrix', () => {
     expect(cancelled.canAttach).toBe(false);
     expect(cancelled.canClose).toBe(false);
 
-    const assigned = computeListLifecycleCapabilities({
+    const assigned = listLifecycle({
       actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
       status: 'assigned',
       employeeId: 'e1',
@@ -443,7 +462,7 @@ describe('canDelete detail/list matrix', () => {
   });
 
   it('list caps: owner canOpen does not imply canDelete', () => {
-    const caps = computeListLifecycleCapabilities({
+    const caps = listLifecycle({
       actor: { id: 'u1', role: UserRole.Employee } as User,
       status: 'assigned',
       employeeId: 'e1',
@@ -452,5 +471,110 @@ describe('canDelete detail/list matrix', () => {
     });
     expect(caps.canOpen).toBe(true);
     expect(caps.canDelete).toBe(false);
+  });
+});
+
+describe('computeCanStartFill', () => {
+  function perms(role: UserRole): PermissionService {
+    const set = new Set<string>(
+      role === UserRole.Admin
+        ? [
+            Permission.QuestionnairesCompleteSelf,
+            Permission.QuestionnairesCompleteAny,
+            Permission.QuestionnairesAssign,
+            Permission.QuestionnairesManageLifecycle,
+            Permission.QuestionnairesDelete,
+          ]
+        : [Permission.QuestionnairesCompleteSelf],
+    );
+    return {
+      has: (_r: string, p: string) => set.has(p),
+    } as unknown as PermissionService;
+  }
+
+  const employee = { id: 'e1', userId: 'u1' } as Employee;
+  const ownerAccess = {
+    isOwner: () => true,
+  } as unknown as EmployeeAccessService;
+  const otherAccess = {
+    isOwner: () => false,
+  } as unknown as EmployeeAccessService;
+
+  it('owner + assigned + no submission → true', () => {
+    expect(
+      computeCanStartFill({
+        actor: { id: 'u1', role: UserRole.Employee } as User,
+        employee,
+        status: 'assigned',
+        permissions: perms(UserRole.Employee),
+        access: ownerAccess,
+        hasLatestSubmission: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('owner + in_progress + no submission → true', () => {
+    expect(
+      computeCanStartFill({
+        actor: { id: 'u1', role: UserRole.Employee } as User,
+        employee,
+        status: 'in_progress',
+        permissions: perms(UserRole.Employee),
+        access: ownerAccess,
+        hasLatestSubmission: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('reattach assigned with submission → false', () => {
+    expect(
+      computeCanStartFill({
+        actor: { id: 'u1', role: UserRole.Employee } as User,
+        employee,
+        status: 'assigned',
+        permissions: perms(UserRole.Employee),
+        access: ownerAccess,
+        hasLatestSubmission: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('non-owner without CompleteAny → false', () => {
+    expect(
+      computeCanStartFill({
+        actor: { id: 'u2', role: UserRole.Employee } as User,
+        employee,
+        status: 'assigned',
+        permissions: perms(UserRole.Employee),
+        access: otherAccess,
+        hasLatestSubmission: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('Admin CompleteAny + assigned + no submission → true', () => {
+    expect(
+      computeCanStartFill({
+        actor: { id: 'u2', role: UserRole.Admin } as User,
+        employee,
+        status: 'assigned',
+        permissions: perms(UserRole.Admin),
+        access: otherAccess,
+        hasLatestSubmission: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('changes_requested → false', () => {
+    expect(
+      computeCanStartFill({
+        actor: { id: 'u1', role: UserRole.Employee } as User,
+        employee,
+        status: 'changes_requested',
+        permissions: perms(UserRole.Employee),
+        access: ownerAccess,
+        hasLatestSubmission: true,
+      }),
+    ).toBe(false);
   });
 });

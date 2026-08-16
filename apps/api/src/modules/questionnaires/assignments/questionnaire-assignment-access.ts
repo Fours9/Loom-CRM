@@ -45,6 +45,7 @@ export type QuestionnaireListLifecycleCapabilities = {
   canCancel: boolean;
   canClose: boolean;
   canDelete: boolean;
+  canStartFill: boolean;
 };
 
 const EMPTY_CAPS: QuestionnaireDetailCapabilities = {
@@ -240,9 +241,20 @@ export function computeListLifecycleCapabilities(input: {
   employeeId: string | null | undefined;
   detachedFromEmployeeId: string | null | undefined;
   permissions: PermissionService;
+  employee: Employee | null;
+  access: EmployeeAccessService;
+  hasLatestSubmission: boolean;
 }): QuestionnaireListLifecycleCapabilities {
-  const { actor, status, employeeId, detachedFromEmployeeId, permissions } =
-    input;
+  const {
+    actor,
+    status,
+    employeeId,
+    detachedFromEmployeeId,
+    permissions,
+    employee,
+    access,
+    hasLatestSubmission,
+  } = input;
   const canAssign = canAssignQuestionnaires(permissions, actor);
   const canManage = canManageLifecycle(permissions, actor);
   const canDelete = canDeleteQuestionnaire(permissions, actor);
@@ -250,6 +262,14 @@ export function computeListLifecycleCapabilities(input: {
     status,
     employeeId,
     detachedFromEmployeeId,
+  });
+  const canStartFill = computeCanStartFill({
+    actor,
+    employee,
+    status,
+    permissions,
+    access,
+    hasLatestSubmission,
   });
 
   if (status === 'closed') {
@@ -260,6 +280,7 @@ export function computeListLifecycleCapabilities(input: {
       canCancel: false,
       canClose: false,
       canDelete,
+      canStartFill: false,
     };
   }
 
@@ -274,7 +295,30 @@ export function computeListLifecycleCapabilities(input: {
     canCancel: canManage && canCancelAssignment(status),
     canClose: canManage && canCloseAssignment(status),
     canDelete,
+    canStartFill,
   };
+}
+
+/** First-fill CTA: same canEditDraft rules as detail, no prior submissions. */
+export function computeCanStartFill(input: {
+  actor: User;
+  employee: Employee | null;
+  status: QuestionnaireAssignmentStatus | string;
+  permissions: PermissionService;
+  access: EmployeeAccessService;
+  hasLatestSubmission: boolean;
+}): boolean {
+  if (input.hasLatestSubmission) return false;
+  if (input.status !== 'assigned' && input.status !== 'in_progress') {
+    return false;
+  }
+  return computeDetailCapabilities({
+    actor: input.actor,
+    employee: input.employee,
+    status: input.status,
+    permissions: input.permissions,
+    access: input.access,
+  }).canEditDraft;
 }
 
 export function requireCanEditDraft(
