@@ -1,10 +1,15 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import {
+  isSkillCode,
+  skillDefinitionByCode,
+} from '@loom/position-skill-catalog';
 import { SkillGroup } from './skill-group.entity';
 import { Skill } from './skill.entity';
 
@@ -51,14 +56,9 @@ export class SkillsService {
 
   async updateGroup(
     id: string,
-    input: Partial<Pick<SkillGroup, 'code' | 'name' | 'sortOrder' | 'isActive'>>,
+    input: Partial<Pick<SkillGroup, 'name' | 'sortOrder' | 'isActive'>>,
   ): Promise<SkillGroup> {
     const row = await this.getGroupOrFail(id);
-    if (input.code !== undefined && input.code !== row.code) {
-      const clash = await this.groups.findOne({ where: { code: input.code } });
-      if (clash) throw new ConflictException('Skill group code already exists');
-      row.code = input.code;
-    }
     if (input.name !== undefined) row.name = input.name;
     if (input.sortOrder !== undefined) row.sortOrder = input.sortOrder;
     if (input.isActive !== undefined) row.isActive = input.isActive;
@@ -107,8 +107,19 @@ export class SkillsService {
     description?: string | null;
     scaleMax?: number;
   }): Promise<Skill> {
-    await this.getGroupOrFail(input.groupId);
+    const group = await this.getGroupOrFail(input.groupId);
     const code = input.code.trim();
+    if (!isSkillCode(code)) {
+      throw new BadRequestException(
+        `Skill code must exist in @loom/position-skill-catalog (got "${code}")`,
+      );
+    }
+    const def = skillDefinitionByCode(code);
+    if (def && group.code !== def.group) {
+      throw new BadRequestException(
+        `Skill "${code}" belongs to group ${def.group}, not ${group.code}`,
+      );
+    }
     const existing = await this.skills.findOne({ where: { code } });
     if (existing) throw new ConflictException('Skill code already exists');
     return this.skills.save(
@@ -126,18 +137,19 @@ export class SkillsService {
   async updateSkill(
     id: string,
     input: Partial<
-      Pick<Skill, 'groupId' | 'code' | 'name' | 'description' | 'scaleMax' | 'isActive'>
+      Pick<Skill, 'groupId' | 'name' | 'description' | 'scaleMax' | 'isActive'>
     >,
   ): Promise<Skill> {
     const row = await this.getSkillOrFail(id);
     if (input.groupId !== undefined && input.groupId !== row.groupId) {
-      await this.getGroupOrFail(input.groupId);
+      const group = await this.getGroupOrFail(input.groupId);
+      const def = skillDefinitionByCode(row.code);
+      if (def && group.code !== def.group) {
+        throw new BadRequestException(
+          `Skill "${row.code}" belongs to group ${def.group}, not ${group.code}`,
+        );
+      }
       row.groupId = input.groupId;
-    }
-    if (input.code !== undefined && input.code !== row.code) {
-      const clash = await this.skills.findOne({ where: { code: input.code } });
-      if (clash) throw new ConflictException('Skill code already exists');
-      row.code = input.code;
     }
     if (input.name !== undefined) row.name = input.name;
     if (input.description !== undefined) row.description = input.description;

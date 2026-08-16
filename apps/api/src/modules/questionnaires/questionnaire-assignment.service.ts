@@ -421,7 +421,9 @@ export class QuestionnaireAssignmentService {
       submissions: submissions.map((s) => toSubmissionSummaryDto(s)),
       completionPercent: completionPercent(draft?.answersJson, schema),
       profileMirror,
-      context: parseAssignmentContext(assignment.contextJson),
+      context: parseAssignmentContext(assignment.contextJson, {
+        assignmentId: assignment.id,
+      }),
       capabilities: {
         ...caps,
         canViewAssignmentComment,

@@ -329,7 +329,20 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         detachedFromEmployeeId: 'emp-1',
         contextJson: {
           version: 1,
-          positionCatalog: { employeeId: 'emp-1', skills: [] },
+          positionCatalog: {
+            employeeId: 'emp-1',
+            employmentAssignmentId: null,
+            positionId: null,
+            positionName: null,
+            departmentId: null,
+            departmentName: null,
+            directionId: null,
+            directionName: null,
+            capturedAt: '2026-01-01T00:00:00.000Z',
+            skills: [],
+            goalTemplates: [],
+            duties: [],
+          },
         },
       });
       await ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-1' });
@@ -338,7 +351,20 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
       expect(ctx.assignment.contextJson).toEqual({
         version: 1,
-        positionCatalog: { employeeId: 'emp-1', skills: [] },
+        positionCatalog: {
+          employeeId: 'emp-1',
+          employmentAssignmentId: null,
+          positionId: null,
+          positionName: null,
+          departmentId: null,
+          departmentName: null,
+          directionId: null,
+          directionName: null,
+          capturedAt: '2026-01-01T00:00:00.000Z',
+          skills: [],
+          goalTemplates: [],
+          duties: [],
+        },
       });
       expect(ctx.audit.record).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -375,7 +401,20 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         submissionRows: [],
         contextJson: {
           version: 1,
-          positionCatalog: { employeeId: 'emp-1', skills: [] },
+          positionCatalog: {
+            employeeId: 'emp-1',
+            employmentAssignmentId: null,
+            positionId: null,
+            positionName: null,
+            departmentId: null,
+            departmentName: null,
+            directionId: null,
+            directionName: null,
+            capturedAt: '2026-01-01T00:00:00.000Z',
+            skills: [],
+            goalTemplates: [],
+            duties: [],
+          },
         },
       });
       await ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' });

@@ -47,12 +47,16 @@ Historical Review uses `submission.context_json` (or registry if null), never cu
 
 | Migration class / file | PR | What |
 | --- | --- | --- |
-| `PositionsDirectionId1730000019000` | PR3 | (superseded) briefly added `positions.direction_id` |
-| `DepartmentBelongsToDirection1730000022000` | follow-up | `departments.direction_id`; drop `positions.direction_id` — hierarchy Direction ← Dept ← Position |
+| `PositionsDirectionId1730000019000` | PR3 | briefly added `positions.direction_id` |
+| `DepartmentBelongsToDirection1730000022000` | follow-up | `departments.direction_id`; temporarily dropped `positions.direction_id` |
+| `RestorePositionDirectionId1730000023000` | follow-up | **restores** denormalized `positions.direction_id` (inherit from dept when set; else optional manual) |
 | `PositionSkillCatalog1730000020000` | PR5 | `skill_groups` / `skills` (seed from registry) + `position_skill_requirements` / `position_duties` / `position_goal_templates` |
 | `QuestionnaireContextJson1730000021000` | PR6 | `questionnaire_assignments.context_json` / `questionnaire_submissions.context_json` |
+| `QuestionnaireAssignmentTitle1730000024000` | follow-up | optional assignment `title` |
 
-**Hierarchy:** Direction ←(optional) Department ←(optional) Position. Both parents nullable.
+**Hierarchy:** Direction ←(optional) Department ←(optional) Position. Position stores `directionId` (Decision #10 / ADR 0010): department set → inherit; no department → optional manual.
+
+**Context modes:** `context_json == null` → legacy_registry; valid v1 (including `skills: []`) → frozen allowlist; non-null invalid → data-integrity error (not legacy).
 
 Schema via TypeORM migrations only — never `synchronize: true`.
 

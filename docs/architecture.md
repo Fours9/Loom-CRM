@@ -16,6 +16,8 @@ Questionnaires → Organization
 
 Forbidden: Platform → Absences / Documents / Questionnaires; Organization → Absences / Documents / Questionnaires; frontend → backend source.
 
+`OrganizationModule` is a **composition aggregator**. Feature modules (e.g. Questionnaires) should import concrete capabilities (`EmployeesModule`, `PositionCatalogModule`) rather than the full aggregator. Questionnaires → Position Catalog live reads go only through `PositionCatalogFacade` (frozen `context_json` thereafter — [ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md)).
+
 ## Layers
 
 1. **Platform** — auth, identity, permissions, audit, notifications, settings, files (**planned**), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`, `normalizeUploadedFileName`).

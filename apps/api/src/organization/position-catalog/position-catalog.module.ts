@@ -9,6 +9,7 @@ import { PositionSkillRequirement } from '../position-requirements/position-skil
 import { PositionDuty } from '../position-requirements/position-duty.entity';
 import { PositionGoalTemplate } from '../position-requirements/position-goal-template.entity';
 import { PositionCatalogFacade } from './position-catalog.facade';
+import { PositionCatalogReadService } from './position-catalog-read.service';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { PositionCatalogFacade } from './position-catalog.facade';
       PositionGoalTemplate,
     ]),
   ],
-  providers: [PositionCatalogFacade],
+  providers: [PositionCatalogReadService, PositionCatalogFacade],
   exports: [PositionCatalogFacade],
 })
 export class PositionCatalogModule {}

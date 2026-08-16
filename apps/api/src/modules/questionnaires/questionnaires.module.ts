@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { OrganizationModule } from '../../organization/organization.module';
+import { EmployeesModule } from '../../organization/employees/employees.module';
+import { PositionCatalogModule } from '../../organization/position-catalog/position-catalog.module';
 import { AuditModule } from '../../platform/audit/audit.module';
 import { IdentityModule } from '../../platform/identity/identity.module';
 import { NotificationsModule } from '../../platform/notifications/notifications.module';
@@ -34,7 +35,9 @@ import { QuestionnairesController } from './questionnaires.controller';
       EmployeeContact,
       User,
     ]),
-    OrganizationModule,
+    // Feature modules import concrete capabilities — not OrganizationModule aggregator.
+    EmployeesModule,
+    PositionCatalogModule,
     IdentityModule,
     PermissionsModule,
     AuditModule,

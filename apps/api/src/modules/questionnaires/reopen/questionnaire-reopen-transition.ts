@@ -1,13 +1,12 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import {
-  parseQuestionnaireContext,
-  type QuestionnaireContextV1,
-} from '@loom/contracts-questionnaires';
 import { QuestionnaireAssignment } from '../questionnaire-assignment.entity';
 import { QuestionnaireResponse } from '../questionnaire-response.entity';
 import { QuestionnaireSubmission } from '../questionnaire-submission.entity';
 import { supersedePendingForSubmission } from '../proposals/questionnaire-proposal-lifecycle';
+import { parseAssignmentContext } from '../assignments/questionnaire-context-access';
+
+export { parseAssignmentContext };
 
 export type QuestionnaireReopenCause =
   | { kind: 'owner_reopen'; actorUserId: string }
@@ -89,15 +88,8 @@ export function toSubmissionSummaryDto(submission: QuestionnaireSubmission) {
     reviewComment: submission.reviewComment,
     reviewedByUserId: submission.reviewedByUserId,
     changeRequestResolution: submission.changeRequestResolution,
-    context: parseAssignmentContext(submission.contextJson),
+    context: parseAssignmentContext(submission.contextJson, {
+      submissionId: submission.id,
+    }),
   };
-}
-
-/** Expose parsed QuestionnaireContextV1 or null (legacy / invalid). */
-export function parseAssignmentContext(
-  raw: unknown,
-): QuestionnaireContextV1 | null {
-  if (raw == null) return null;
-  const parsed = parseQuestionnaireContext(raw);
-  return parsed.ok ? parsed.context : null;
 }
