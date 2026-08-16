@@ -13,6 +13,7 @@ import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { QuestionnaireSectionRailComponent } from './progress/questionnaire-section-rail.component';
 import { QuestionnaireRequestChangesPopoverComponent } from './questionnaire-request-changes-popover.component';
+import { shouldShowRevisionSaveAndClose } from './questionnaire-fill-session.policy';
 import {
   buildProgressSections,
   type ProgressSection,
@@ -101,7 +102,7 @@ import {
             {{ actionBusy() ? 'Відкриття…' : 'Редагувати' }}
           </button>
         }
-        @if (store.editable() && revision.isRevisionEdit()) {
+        @if (showRevisionSaveAndClose()) {
           <button
             type="button"
             class="btn primary"
@@ -402,6 +403,14 @@ export class QuestionnaireFillChromeComponent {
 
   onRequestChangesSubmit(comment: string): void {
     this.requestChanges.emit(comment);
+  }
+
+  showRevisionSaveAndClose(): boolean {
+    return shouldShowRevisionSaveAndClose({
+      stepKey: this.store.activeStepKey(),
+      editable: this.store.editable(),
+      isRevisionEdit: this.revision.isRevisionEdit(),
+    });
   }
 
   markRequestChangesSuccess(): void {

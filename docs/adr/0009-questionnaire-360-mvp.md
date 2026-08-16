@@ -8,7 +8,7 @@ Accepted.
 
 - Foundation (templates, assignments, draft revision, submissions, proposals): shipped
 - Assignment UI (People «Анкети» panel + snapshot summary): shipped
-- Fill wizard (PR-4 schema-driven `/questionnaires/:id`): shipped
+- Fill wizard (PR-4 schema-driven `/questionnaires/:id`): shipped. First-fill auto-edit (`assigned`/`in_progress` + `canEditDraft` + 0 submissions) in `DraftStore.load` before step resolve; Review «Надіслати»; list `canStartFill` → «Почати»; revision chrome «Зберегти і закрити» hidden on Review.
 - Schema UX (family / celebration_dates, visibleWhen, layout groups, from/to, multi-language): shipped
 - `@loom/questionnaire-schema` pure helpers + submit visible-answer projection: shipped
 - Application startup composition root (single `OnModuleInit`): shipped

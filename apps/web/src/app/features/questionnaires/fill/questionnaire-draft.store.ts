@@ -26,6 +26,7 @@ import {
 } from './validation/questionnaire-validation';
 import { resolveQuestionnaireFieldDisplay } from './display/questionnaire-display-value';
 import { mergeLegacyContactsIntoDraft } from '../../../shared/employee-contacts/public-api';
+import { shouldAutoBeginEditSession } from './questionnaire-fill-session.policy';
 import {
   areStepVisibleRequiredValid,
   fieldsByKey,
@@ -78,7 +79,7 @@ export class QuestionnaireDraftStore {
   readonly submitState = signal<SubmitState>('idle');
   readonly submitError = signal<string | null>(null);
   readonly schemaError = signal<string | null>(null);
-  /** Explicit user opt-in to edit; open/view starts without this. */
+  /** First-fill auto-starts from load policy; otherwise explicit «Редагувати». */
   readonly editSessionActive = signal(false);
 
   readonly uiMode = computed<UiMode>(() => {
@@ -321,6 +322,16 @@ export class QuestionnaireDraftStore {
       this.revision.set(detail.draft?.revision ?? 0);
       this.profileMirror.set(mirror);
       this.loadState.set('ready');
+
+      if (
+        shouldAutoBeginEditSession({
+          status: detail.status,
+          canEditDraft: detail.capabilities.canEditDraft,
+          hasSubmissions: detail.submissions.length > 0,
+        })
+      ) {
+        this.beginEditSession();
+      }
 
       this.applyRequestedStep(requestedStepKey ?? null);
     } catch (err: unknown) {

@@ -235,6 +235,7 @@ export type QuestionnaireAssignmentListItem = {
     canCancel: boolean;
     canClose: boolean;
     canDelete: boolean;
+    canStartFill: boolean;
   };
 };
 
@@ -328,6 +329,7 @@ export type QuestionnaireDirectoryItem = {
     canCancel: boolean;
     canClose: boolean;
     canDelete: boolean;
+    canStartFill: boolean;
   };
 };
 
