@@ -7,10 +7,10 @@ Accepted.
 ## Implementation status
 
 - `@loom/position-skill-catalog` pure skill code registry: **shipped (PR1)**
-- `QuestionnaireContextV1` + `parseQuestionnaireContext` in contracts: **shipped (PR1)**
+- `QuestionnaireContextV1` + `parseQuestionnaireContext` in contracts: **shipped (PR1)**; strict full-shape parse + unknown-key reject: **required (follow-up)**
 - Track B published schemas `employee-managing` / `employee-docs` + `position_skills_matrix` fill/validation: **shipped (PR2)**
-- `positions.direction_id` (PR3) → superseded by **Department → Direction**; position inherits direction via department
-- `departments.direction_id` + drop `positions.direction_id`: **shipped**
+- `departments.direction_id`: **shipped**; hierarchy Direction ← Dept ← Position
+- `positions.direction_id`: **restored** (`1730000023000-RestorePositionDirectionId`) — denormalized inherit from department when set, else optional manual (Decision #10). Earlier PR3 add + `1730000022000` drop are historical only.
 - employment-assignment consistency (auto-fill dept/direction from catalog parents): **shipped**
 - Settings «Керування посадами» (`/settings/positions`): **shipped (PR4)**
 - Organization `skill_groups` / `skills` / position requirements, duties, goal templates + Settings catalog tabs: **shipped (PR5)**
@@ -40,15 +40,15 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
    ```ts
    QuestionnaireContextV1 = { version: 1; positionCatalog: PositionCatalogContextV1 }
    ```
-   `parseQuestionnaireContext` is fail-closed on unknown `version`.
+   `parseQuestionnaireContext` is **strict fail-closed**: exact `version = 1`, full `positionCatalog` shape (required arrays/fields), reject unknown keys. Envelope-only checks are insufficient.
 
 6. **Capture:** write `QuestionnaireContextV1` in the **same TX** as attach / create-with-employee (after PR6). Unattached `new` → `context_json = null`.
 
-7. **Legacy (`context_json = null`):** means **legacy_registry mode** forever — matrix rows and validation use `@loom/position-skill-catalog`; Review uses registry labels. **Do not** auto-`ensureContextCaptured` from live Position Catalog (would invalidate pre-PR6 ratings outside the new matrix).
+7. **Legacy (`context_json = null`):** means **legacy_registry mode** forever — matrix rows and validation use `@loom/position-skill-catalog`; Review uses registry labels. **Do not** auto-`ensureContextCaptured` from live Position Catalog (would invalidate pre-PR6 ratings outside the new matrix). Non-null **invalid** context is a **server data-integrity** failure (HTTP 500), never silent legacy and never 400.
 
 8. **Validation modes:**
-   - Legacy null: `skillCode ∈ registry`
-   - Context set: `∈ registry` **and** `⊆ frozen context skill codes`
+   - Legacy null: `skillCode ∈ registry` (`allowedSkillCodes` omitted / `undefined`)
+   - Context set (including `skills: []`): `∈ registry` **and** `⊆ frozen context skill codes` (empty array = allow none)
    - PATCH = structural; SUBMIT = semantic (same split as contacts)
 
 9. **Position resolve precedence** for Facade snapshot:
@@ -71,7 +71,7 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
 
 14. **Sensitive fields:** `grade.net_salary` and `manager_review` deferred until field/step sensitivity + scoped manager completion ACL exist. Track B does not ship them.
 
-15. **Skill codes:** single SoT `@loom/position-skill-catalog` — Questionnaires seed and Organization skills seed both import it (never Questionnaires `seed/shared` imported by Organization).
+15. **Skill codes:** single SoT `@loom/position-skill-catalog` — Questionnaires seed and Organization skills seed both import it (never Questionnaires `seed/shared` imported by Organization). Organization `createSkill` may only materialize registry codes; **`code` is identity** (not editable via PATCH).
 
 ## Consequences
 

@@ -3,6 +3,8 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -25,7 +27,7 @@ import {
 } from '@loom/questionnaire-schema';
 import { InvalidEmployeeContactsBundle } from '@loom/employee-contacts';
 import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
-import { parseQuestionnaireContext } from '@loom/contracts-questionnaires';
+import { resolveAllowedSkillCodesFromContextJson } from '@loom/contracts-questionnaires';
 import { validateDraftAnswersForSubmit } from './questionnaire-answers-validation';
 import {
   applyReopenTransition,
@@ -44,6 +46,8 @@ import { isOwnerEditableStatus } from './assignments/questionnaire-assignment-tr
 
 @Injectable()
 export class QuestionnaireSubmissionService {
+  private readonly logger = new Logger(QuestionnaireSubmissionService.name);
+
   constructor(
     @InjectRepository(QuestionnaireAssignment)
     private readonly assignments: Repository<QuestionnaireAssignment>,
@@ -150,16 +154,19 @@ export class QuestionnaireSubmissionService {
     const schema = assignment.templateVersion
       .schemaJson as unknown as QuestionnaireSchemaJson;
     try {
-      const parsed = parseQuestionnaireContext(assignment.contextJson);
-      const contextSkills = parsed.ok
-        ? parsed.context.positionCatalog.skills
-        : [];
-      const allowedSkillCodes =
-        contextSkills.length > 0
-          ? contextSkills.map((s) => s.code)
-          : undefined;
+      const resolved = resolveAllowedSkillCodesFromContextJson(
+        assignment.contextJson,
+      );
+      if (!resolved.ok) {
+        this.logger.error(
+          `Invalid questionnaire context_json on submit (data integrity): ${resolved.error} assignmentId=${assignment.id}`,
+        );
+        throw new InternalServerErrorException(
+          'Questionnaire context is corrupted',
+        );
+      }
       validateDraftAnswersForSubmit(schema, response.answersJson ?? {}, {
-        allowedSkillCodes,
+        allowedSkillCodes: resolved.allowedSkillCodes,
       });
     } catch (err) {
       if (

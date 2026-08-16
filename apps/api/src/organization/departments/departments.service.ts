@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Department } from './department.entity';
 import { Position } from '../positions/position.entity';
 
@@ -15,6 +15,7 @@ export class DepartmentsService {
     private readonly departments: Repository<Department>,
     @InjectRepository(Position)
     private readonly positions: Repository<Position>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(): Promise<DepartmentListItem[]> {
@@ -62,18 +63,28 @@ export class DepartmentsService {
       >
     >,
   ): Promise<Department> {
-    const row = await this.getOrFail(id);
-    const directionChanged =
-      input.directionId !== undefined && input.directionId !== row.directionId;
-    Object.assign(row, input);
-    const saved = await this.departments.save(row);
-    if (directionChanged) {
-      await this.positions.update(
-        { departmentId: id },
-        { directionId: saved.directionId },
-      );
-    }
-    return saved;
+    return this.dataSource.transaction(async (manager) => {
+      const deptRepo = manager.getRepository(Department);
+      const posRepo = manager.getRepository(Position);
+      const row = await deptRepo.findOne({
+        where: { id },
+        relations: ['direction'],
+      });
+      if (!row) throw new NotFoundException('Department not found');
+
+      const directionChanged =
+        input.directionId !== undefined &&
+        input.directionId !== row.directionId;
+      Object.assign(row, input);
+      const saved = await deptRepo.save(row);
+      if (directionChanged) {
+        await posRepo.update(
+          { departmentId: id },
+          { directionId: saved.directionId },
+        );
+      }
+      return saved;
+    });
   }
 
   async softDelete(id: string): Promise<void> {

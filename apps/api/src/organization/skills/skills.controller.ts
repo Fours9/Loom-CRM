@@ -42,11 +42,6 @@ class UpdateSkillGroupDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
-  code?: string;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
   name?: string;
 
   @IsOptional()
@@ -84,11 +79,6 @@ class UpdateSkillDto {
   @IsOptional()
   @IsUUID()
   groupId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  code?: string;
 
   @IsOptional()
   @IsString()

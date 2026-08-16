@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Position } from './position.entity';
 import { DepartmentsService } from '../departments/departments.service';
+import { resolvePositionDirectionId } from './resolve-position-direction';
 
 export type PositionListQuery = {
   all?: boolean;
@@ -28,27 +29,25 @@ export class PositionsService {
     private readonly departments: DepartmentsService,
   ) {}
 
-  /**
-   * department set → direction forced from department (even if null).
-   * department null → direction from request (optional).
-   */
   private async resolveDirectionId(input: {
     departmentId: string | null;
-    directionId?: string | null;
+    /** Only pass when the caller explicitly sent directionId in the request. */
+    explicitDirectionId?: string | null;
   }): Promise<string | null> {
+    let departmentDirectionId: string | null | undefined;
     if (input.departmentId) {
       const dept = await this.departments.getOrFail(input.departmentId);
-      if (
-        input.directionId != null &&
-        input.directionId !== dept.directionId
-      ) {
-        throw new BadRequestException(
-          'When a department is set, position directionId must match department.directionId',
-        );
-      }
-      return dept.directionId;
+      departmentDirectionId = dept.directionId;
     }
-    return input.directionId ?? null;
+    const resolved = resolvePositionDirectionId({
+      hasDepartment: Boolean(input.departmentId),
+      departmentDirectionId,
+      explicitDirectionId: input.explicitDirectionId,
+    });
+    if (!resolved.ok) {
+      throw new BadRequestException(resolved.error);
+    }
+    return resolved.directionId;
   }
 
   async findAll(query: PositionListQuery = {}): Promise<PositionListItem[]> {
@@ -104,7 +103,7 @@ export class PositionsService {
     const departmentId = input.departmentId ?? null;
     const directionId = await this.resolveDirectionId({
       departmentId,
-      directionId: input.directionId,
+      explicitDirectionId: input.directionId,
     });
     return this.positions.save(
       this.positions.create({
@@ -129,11 +128,11 @@ export class PositionsService {
     const row = await this.getOrFail(id);
     const departmentId =
       input.departmentId !== undefined ? input.departmentId : row.departmentId;
-    const requestedDirection =
-      input.directionId !== undefined ? input.directionId : row.directionId;
     const directionId = await this.resolveDirectionId({
       departmentId,
-      directionId: requestedDirection,
+      // Never feed old persisted directionId — dept change must inherit.
+      explicitDirectionId:
+        input.directionId !== undefined ? input.directionId : undefined,
     });
 
     if (input.name !== undefined) row.name = input.name;

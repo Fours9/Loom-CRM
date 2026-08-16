@@ -456,27 +456,352 @@ export type QuestionnaireContextV1 = {
 
 export type QuestionnaireContext = QuestionnaireContextV1;
 
+const CONTEXT_ROOT_KEYS = new Set(['version', 'positionCatalog']);
+const POSITION_CATALOG_KEYS = new Set([
+  'employeeId',
+  'employmentAssignmentId',
+  'positionId',
+  'positionName',
+  'departmentId',
+  'departmentName',
+  'directionId',
+  'directionName',
+  'capturedAt',
+  'skills',
+  'goalTemplates',
+  'duties',
+]);
+const SKILL_ITEM_KEYS = new Set([
+  'code',
+  'labelUa',
+  'group',
+  'targetLevel',
+  'required',
+  'weight',
+]);
+const GOAL_ITEM_KEYS = new Set([
+  'goalKind',
+  'title',
+  'description',
+  'sortOrder',
+]);
+const DUTY_ITEM_KEYS = new Set(['title', 'description', 'sortOrder']);
+
+function fail(error: string): { ok: false; error: string } {
+  return { ok: false, error };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function rejectUnknownKeys(
+  obj: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  path: string,
+): string | null {
+  for (const key of Object.keys(obj)) {
+    if (!allowed.has(key)) {
+      return `unknown property ${path}.${key}`;
+    }
+  }
+  return null;
+}
+
+function expectString(
+  value: unknown,
+  path: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  if (typeof value !== 'string') {
+    return fail(`${path} must be a string`);
+  }
+  return { ok: true, value };
+}
+
+function expectNullableString(
+  value: unknown,
+  path: string,
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (value !== null && typeof value !== 'string') {
+    return fail(`${path} must be a string or null`);
+  }
+  return { ok: true, value: value as string | null };
+}
+
+function expectNullableNumber(
+  value: unknown,
+  path: string,
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (value !== null && typeof value !== 'number') {
+    return fail(`${path} must be a number or null`);
+  }
+  return { ok: true, value: value as number | null };
+}
+
+function parseSkillItem(
+  raw: unknown,
+  path: string,
+): { ok: true; value: PositionSkillContext } | { ok: false; error: string } {
+  if (!isPlainObject(raw)) {
+    return fail(`${path} must be an object`);
+  }
+  const unknown = rejectUnknownKeys(raw, SKILL_ITEM_KEYS, path);
+  if (unknown) return fail(unknown);
+
+  const code = expectString(raw['code'], `${path}.code`);
+  if (!code.ok) return code;
+  const labelUa = expectString(raw['labelUa'], `${path}.labelUa`);
+  if (!labelUa.ok) return labelUa;
+  const group = expectString(raw['group'], `${path}.group`);
+  if (!group.ok) return group;
+  const targetLevel = expectNullableNumber(
+    raw['targetLevel'],
+    `${path}.targetLevel`,
+  );
+  if (!targetLevel.ok) return targetLevel;
+  if (typeof raw['required'] !== 'boolean') {
+    return fail(`${path}.required must be a boolean`);
+  }
+  const weight = expectNullableNumber(raw['weight'], `${path}.weight`);
+  if (!weight.ok) return weight;
+
+  return {
+    ok: true,
+    value: {
+      code: code.value,
+      labelUa: labelUa.value,
+      group: group.value,
+      targetLevel: targetLevel.value,
+      required: raw['required'],
+      weight: weight.value,
+    },
+  };
+}
+
+function parseGoalItem(
+  raw: unknown,
+  path: string,
+):
+  | { ok: true; value: PositionGoalTemplateContext }
+  | { ok: false; error: string } {
+  if (!isPlainObject(raw)) {
+    return fail(`${path} must be an object`);
+  }
+  const unknown = rejectUnknownKeys(raw, GOAL_ITEM_KEYS, path);
+  if (unknown) return fail(unknown);
+
+  const goalKind = expectString(raw['goalKind'], `${path}.goalKind`);
+  if (!goalKind.ok) return goalKind;
+  const title = expectString(raw['title'], `${path}.title`);
+  if (!title.ok) return title;
+  const description = expectNullableString(
+    raw['description'],
+    `${path}.description`,
+  );
+  if (!description.ok) return description;
+  if (typeof raw['sortOrder'] !== 'number') {
+    return fail(`${path}.sortOrder must be a number`);
+  }
+
+  return {
+    ok: true,
+    value: {
+      goalKind: goalKind.value,
+      title: title.value,
+      description: description.value,
+      sortOrder: raw['sortOrder'],
+    },
+  };
+}
+
+function parseDutyItem(
+  raw: unknown,
+  path: string,
+): { ok: true; value: PositionDutyContext } | { ok: false; error: string } {
+  if (!isPlainObject(raw)) {
+    return fail(`${path} must be an object`);
+  }
+  const unknown = rejectUnknownKeys(raw, DUTY_ITEM_KEYS, path);
+  if (unknown) return fail(unknown);
+
+  const title = expectString(raw['title'], `${path}.title`);
+  if (!title.ok) return title;
+  const description = expectNullableString(
+    raw['description'],
+    `${path}.description`,
+  );
+  if (!description.ok) return description;
+  if (typeof raw['sortOrder'] !== 'number') {
+    return fail(`${path}.sortOrder must be a number`);
+  }
+
+  return {
+    ok: true,
+    value: {
+      title: title.value,
+      description: description.value,
+      sortOrder: raw['sortOrder'],
+    },
+  };
+}
+
+/**
+ * Strict fail-closed parser for frozen questionnaire context.
+ * Rejects unknown keys and incomplete positionCatalog shapes.
+ * Note: `raw === null` is not "legacy" here — callers treat DB null separately;
+ * this function returns ok:false for null.
+ */
 export function parseQuestionnaireContext(
   raw: unknown,
 ):
   | { ok: true; context: QuestionnaireContextV1 }
   | { ok: false; error: string } {
   if (raw == null) {
-    return { ok: false, error: 'context is null' };
+    return fail('context is null');
   }
-  if (typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ok: false, error: 'context must be an object' };
+  if (!isPlainObject(raw)) {
+    return fail('context must be an object');
   }
-  const obj = raw as Record<string, unknown>;
-  if (obj['version'] !== 1) {
-    return {
-      ok: false,
-      error: `unsupported context version: ${String(obj['version'])}`,
-    };
+  const unknownRoot = rejectUnknownKeys(raw, CONTEXT_ROOT_KEYS, 'context');
+  if (unknownRoot) return fail(unknownRoot);
+
+  if (raw['version'] !== 1) {
+    return fail(`unsupported context version: ${String(raw['version'])}`);
   }
-  const pc = obj['positionCatalog'];
-  if (pc == null || typeof pc !== 'object' || Array.isArray(pc)) {
-    return { ok: false, error: 'positionCatalog missing or invalid' };
+
+  const pcRaw = raw['positionCatalog'];
+  if (!isPlainObject(pcRaw)) {
+    return fail('positionCatalog missing or invalid');
   }
-  return { ok: true, context: raw as QuestionnaireContextV1 };
+  const unknownPc = rejectUnknownKeys(
+    pcRaw,
+    POSITION_CATALOG_KEYS,
+    'positionCatalog',
+  );
+  if (unknownPc) return fail(unknownPc);
+
+  const employeeId = expectString(pcRaw['employeeId'], 'positionCatalog.employeeId');
+  if (!employeeId.ok) return employeeId;
+  const employmentAssignmentId = expectNullableString(
+    pcRaw['employmentAssignmentId'],
+    'positionCatalog.employmentAssignmentId',
+  );
+  if (!employmentAssignmentId.ok) return employmentAssignmentId;
+  const positionId = expectNullableString(
+    pcRaw['positionId'],
+    'positionCatalog.positionId',
+  );
+  if (!positionId.ok) return positionId;
+  const positionName = expectNullableString(
+    pcRaw['positionName'],
+    'positionCatalog.positionName',
+  );
+  if (!positionName.ok) return positionName;
+  const departmentId = expectNullableString(
+    pcRaw['departmentId'],
+    'positionCatalog.departmentId',
+  );
+  if (!departmentId.ok) return departmentId;
+  const departmentName = expectNullableString(
+    pcRaw['departmentName'],
+    'positionCatalog.departmentName',
+  );
+  if (!departmentName.ok) return departmentName;
+  const directionId = expectNullableString(
+    pcRaw['directionId'],
+    'positionCatalog.directionId',
+  );
+  if (!directionId.ok) return directionId;
+  const directionName = expectNullableString(
+    pcRaw['directionName'],
+    'positionCatalog.directionName',
+  );
+  if (!directionName.ok) return directionName;
+  const capturedAt = expectString(
+    pcRaw['capturedAt'],
+    'positionCatalog.capturedAt',
+  );
+  if (!capturedAt.ok) return capturedAt;
+
+  if (!Array.isArray(pcRaw['skills'])) {
+    return fail('positionCatalog.skills must be an array');
+  }
+  if (!Array.isArray(pcRaw['goalTemplates'])) {
+    return fail('positionCatalog.goalTemplates must be an array');
+  }
+  if (!Array.isArray(pcRaw['duties'])) {
+    return fail('positionCatalog.duties must be an array');
+  }
+
+  const skills: PositionSkillContext[] = [];
+  for (let i = 0; i < pcRaw['skills'].length; i += 1) {
+    const item = parseSkillItem(pcRaw['skills'][i], `positionCatalog.skills[${i}]`);
+    if (!item.ok) return item;
+    skills.push(item.value);
+  }
+
+  const goalTemplates: PositionGoalTemplateContext[] = [];
+  for (let i = 0; i < pcRaw['goalTemplates'].length; i += 1) {
+    const item = parseGoalItem(
+      pcRaw['goalTemplates'][i],
+      `positionCatalog.goalTemplates[${i}]`,
+    );
+    if (!item.ok) return item;
+    goalTemplates.push(item.value);
+  }
+
+  const duties: PositionDutyContext[] = [];
+  for (let i = 0; i < pcRaw['duties'].length; i += 1) {
+    const item = parseDutyItem(
+      pcRaw['duties'][i],
+      `positionCatalog.duties[${i}]`,
+    );
+    if (!item.ok) return item;
+    duties.push(item.value);
+  }
+
+  return {
+    ok: true,
+    context: {
+      version: 1,
+      positionCatalog: {
+        employeeId: employeeId.value,
+        employmentAssignmentId: employmentAssignmentId.value,
+        positionId: positionId.value,
+        positionName: positionName.value,
+        departmentId: departmentId.value,
+        departmentName: departmentName.value,
+        directionId: directionId.value,
+        directionName: directionName.value,
+        capturedAt: capturedAt.value,
+        skills,
+        goalTemplates,
+        duties,
+      },
+    },
+  };
+}
+
+/**
+ * Resolve matrix allowlist from assignment/submission context_json.
+ * - DB null → undefined (legacy_registry)
+ * - valid context → skill codes array (may be empty = deny all catalog skills)
+ * - non-null invalid → ok:false (caller must fail closed, not treat as legacy)
+ */
+export function resolveAllowedSkillCodesFromContextJson(
+  raw: unknown,
+):
+  | { ok: true; allowedSkillCodes: readonly string[] | undefined }
+  | { ok: false; error: string } {
+  if (raw == null) {
+    return { ok: true, allowedSkillCodes: undefined };
+  }
+  const parsed = parseQuestionnaireContext(raw);
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error };
+  }
+  return {
+    ok: true,
+    allowedSkillCodes: parsed.context.positionCatalog.skills.map((s) => s.code),
+  };
 }
