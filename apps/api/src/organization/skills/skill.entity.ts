@@ -35,6 +35,12 @@ export class Skill {
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 
+  @Column({ name: 'scale_kind', type: 'varchar', length: 16, default: 'range' })
+  scaleKind!: 'range' | 'percent';
+
+  @Column({ name: 'scale_min', type: 'int', default: 0 })
+  scaleMin!: number;
+
   @Column({ name: 'scale_max', type: 'int', default: 5 })
   scaleMax!: number;
 

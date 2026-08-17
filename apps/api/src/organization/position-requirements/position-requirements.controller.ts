@@ -16,8 +16,6 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Max,
-  Min,
   MinLength,
 } from 'class-validator';
 import { Permission } from '../../platform/permissions/permission.names';
@@ -34,8 +32,6 @@ class CreateSkillRequirementDto {
 
   @IsOptional()
   @IsInt()
-  @Min(0)
-  @Max(5)
   targetLevel?: number;
 
   @IsOptional()
@@ -54,8 +50,6 @@ class UpdateSkillRequirementDto {
 
   @IsOptional()
   @IsInt()
-  @Min(0)
-  @Max(5)
   targetLevel?: number;
 
   @IsOptional()

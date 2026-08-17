@@ -51,6 +51,8 @@ export type OrgSkill = {
   code: string;
   name: string;
   description: string | null;
+  scaleKind: 'range' | 'percent';
+  scaleMin: number;
   scaleMax: number;
   isActive: boolean;
   group?: OrgSkillGroup | null;
@@ -65,6 +67,8 @@ export type OrgPositionSkillRequirement = {
   weight: number | null;
   skillCode?: string | null;
   skillName?: string | null;
+  skillScaleKind?: 'range' | 'percent' | null;
+  skillScaleMin?: number | null;
   skillScaleMax?: number | null;
 };
 
@@ -185,6 +189,36 @@ export class SettingsOrgApiService {
     if (all) params = params.set('all', '1');
     if (groupId) params = params.set('groupId', groupId);
     return this.http.get<OrgSkill[]>('/api/v1/skills', { params });
+  }
+
+  createSkill(body: {
+    groupId: string;
+    name: string;
+    description?: string | null;
+    scaleKind?: 'range' | 'percent';
+    scaleMin?: number;
+    scaleMax?: number;
+  }): Observable<OrgSkill> {
+    return this.http.post<OrgSkill>('/api/v1/skills', body);
+  }
+
+  updateSkill(
+    id: string,
+    body: Partial<{
+      groupId: string;
+      name: string;
+      description: string | null;
+      scaleKind: 'range' | 'percent';
+      scaleMin: number;
+      scaleMax: number;
+      isActive: boolean;
+    }>,
+  ): Observable<OrgSkill> {
+    return this.http.patch<OrgSkill>(`/api/v1/skills/${id}`, body);
+  }
+
+  deleteSkill(id: string): Observable<unknown> {
+    return this.http.delete(`/api/v1/skills/${id}`);
   }
 
   getPositionSkillRequirements(

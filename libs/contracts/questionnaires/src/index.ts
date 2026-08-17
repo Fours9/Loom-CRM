@@ -1,4 +1,9 @@
 import type { EntityId } from '@loom/contracts-common';
+import {
+  isSkillIdentityCode,
+  isSkillScaleKind,
+  validateSkillScaleBounds,
+} from '@loom/position-skill-catalog';
 
 export const QUESTIONNAIRE_ASSIGNMENT_STATUSES = [
   'new',
@@ -414,6 +419,9 @@ export type PositionSkillContext = {
   targetLevel: number | null;
   required: boolean;
   weight: number | null;
+  scaleKind?: 'range' | 'percent';
+  scaleMin?: number;
+  scaleMax?: number;
 };
 
 export type PositionGoalTemplateContext = {
@@ -478,6 +486,9 @@ const SKILL_ITEM_KEYS = new Set([
   'targetLevel',
   'required',
   'weight',
+  'scaleKind',
+  'scaleMin',
+  'scaleMax',
 ]);
 const GOAL_ITEM_KEYS = new Set([
   'goalKind',
@@ -538,6 +549,17 @@ function expectNullableNumber(
   return { ok: true, value: value as number | null };
 }
 
+function expectNullableInteger(
+  value: unknown,
+  path: string,
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    return fail(`${path} must be an integer or null`);
+  }
+  return { ok: true, value };
+}
+
 function parseSkillItem(
   raw: unknown,
   path: string,
@@ -550,11 +572,14 @@ function parseSkillItem(
 
   const code = expectString(raw['code'], `${path}.code`);
   if (!code.ok) return code;
+  if (!isSkillIdentityCode(code.value)) {
+    return fail(`${path}.code is not a valid skill identity`);
+  }
   const labelUa = expectString(raw['labelUa'], `${path}.labelUa`);
   if (!labelUa.ok) return labelUa;
   const group = expectString(raw['group'], `${path}.group`);
   if (!group.ok) return group;
-  const targetLevel = expectNullableNumber(
+  const targetLevel = expectNullableInteger(
     raw['targetLevel'],
     `${path}.targetLevel`,
   );
@@ -565,17 +590,52 @@ function parseSkillItem(
   const weight = expectNullableNumber(raw['weight'], `${path}.weight`);
   if (!weight.ok) return weight;
 
-  return {
-    ok: true,
-    value: {
-      code: code.value,
-      labelUa: labelUa.value,
-      group: group.value,
-      targetLevel: targetLevel.value,
-      required: raw['required'],
-      weight: weight.value,
-    },
+  const hasKind = raw['scaleKind'] !== undefined;
+  const hasMin = raw['scaleMin'] !== undefined;
+  const hasMax = raw['scaleMax'] !== undefined;
+  const scalePresent = hasKind || hasMin || hasMax;
+  if (scalePresent && !(hasKind && hasMin && hasMax)) {
+    return fail(
+      `${path} scaleKind, scaleMin and scaleMax must all be present together`,
+    );
+  }
+
+  const value: PositionSkillContext = {
+    code: code.value,
+    labelUa: labelUa.value,
+    group: group.value,
+    targetLevel: targetLevel.value,
+    required: raw['required'],
+    weight: weight.value,
   };
+
+  if (scalePresent) {
+    const scaleKind = raw['scaleKind'];
+    const scaleMin = raw['scaleMin'];
+    const scaleMax = raw['scaleMax'];
+    if (!isSkillScaleKind(scaleKind)) {
+      return fail(`${path}.scaleKind must be range or percent`);
+    }
+    if (typeof scaleMin !== 'number' || !Number.isInteger(scaleMin)) {
+      return fail(`${path}.scaleMin must be an integer`);
+    }
+    if (typeof scaleMax !== 'number' || !Number.isInteger(scaleMax)) {
+      return fail(`${path}.scaleMax must be an integer`);
+    }
+    const bounds = validateSkillScaleBounds(scaleKind, scaleMin, scaleMax);
+    if (!bounds.ok) return fail(`${path}: ${bounds.error}`);
+    if (
+      targetLevel.value != null &&
+      (targetLevel.value < scaleMin || targetLevel.value > scaleMax)
+    ) {
+      return fail(`${path}.targetLevel is outside scale bounds`);
+    }
+    value.scaleKind = scaleKind;
+    value.scaleMin = scaleMin;
+    value.scaleMax = scaleMax;
+  }
+
+  return { ok: true, value };
 }
 
 function parseGoalItem(

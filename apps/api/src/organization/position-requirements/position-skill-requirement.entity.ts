@@ -36,7 +36,7 @@ export class PositionSkillRequirement {
   @JoinColumn({ name: 'skill_id' })
   skill?: Skill;
 
-  @Column({ name: 'target_level', type: 'int', default: 0 })
+  @Column({ name: 'target_level', type: 'int' })
   targetLevel!: number;
 
   @Column({ type: 'boolean', default: true })

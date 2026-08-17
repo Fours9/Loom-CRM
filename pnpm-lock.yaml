@@ -293,6 +293,9 @@ importers:
       '@loom/contracts-common':
         specifier: workspace:*
         version: link:../common
+      '@loom/position-skill-catalog':
+        specifier: workspace:*
+        version: link:../../position-skill-catalog
     devDependencies:
       typescript:
         specifier: ~5.7.2

@@ -1,12 +1,14 @@
 import {
   SKILL_LEVEL_MAX,
   SKILL_LEVEL_MIN,
+  MAX_POSITION_SKILLS,
   isSkillCode,
+  isSkillIdentityCode,
 } from '@loom/position-skill-catalog';
 import { InvalidPositionSkillsMatrix } from './errors';
 
 export const POSITION_SKILLS_MATRIX_LIMITS = {
-  maxRatings: 64,
+  maxRatings: MAX_POSITION_SKILLS,
   maxCustom: 20,
   nameMaxLength: 120,
   commentMaxLength: 500,
@@ -119,9 +121,9 @@ export function parsePositionSkillsMatrixStrict(
     }
     const skillCode =
       row['skillCode'] === undefined ? '' : String(row['skillCode']);
-    if (skillCode && !isSkillCode(skillCode)) {
+    if (skillCode && !isSkillIdentityCode(skillCode)) {
       throw new InvalidPositionSkillsMatrix(
-        `rating.skillCode "${skillCode}" is not in registry`,
+        `rating.skillCode "${skillCode}" is not a valid skill identity`,
       );
     }
     ratings.push({
@@ -208,9 +210,9 @@ export function validatePositionSkillsMatrixForSubmit(
 
   const seen = new Set<string>();
   for (const r of matrix.ratings) {
-    if (!r.skillCode || !isSkillCode(r.skillCode)) {
+    if (!r.skillCode || !isSkillIdentityCode(r.skillCode)) {
       throw new InvalidPositionSkillsMatrix(
-        `rating.skillCode required and must be in registry`,
+        `rating.skillCode required and must be a valid skill identity`,
       );
     }
     if (seen.has(r.skillCode)) {
@@ -219,7 +221,13 @@ export function validatePositionSkillsMatrixForSubmit(
       );
     }
     seen.add(r.skillCode);
-    if (allowed && !allowed.has(r.skillCode)) {
+    if (allowed == null) {
+      if (!isSkillCode(r.skillCode)) {
+        throw new InvalidPositionSkillsMatrix(
+          `rating.skillCode required and must be in registry`,
+        );
+      }
+    } else if (!allowed.has(r.skillCode)) {
       throw new InvalidPositionSkillsMatrix(
         `skillCode "${r.skillCode}" not in frozen position context`,
       );

@@ -13,9 +13,47 @@ export type SkillDefinition = {
   sortOrder: number;
 };
 
-/** Scale used by position_skills_matrix (plan + Profile Core §17). */
+/** Questionnaire assessment scale (published position_skills_matrix.ratings[].level). Independent of Skill native scale. */
 export const SKILL_LEVEL_MIN = 0;
 export const SKILL_LEVEL_MAX = 5;
+
+/** Max attached skills per position and matrix ratings rows. */
+export const MAX_POSITION_SKILLS = 64;
+
+/** Immutable skill identity syntax (registry codes + generated `skill_<hex>`). */
+export const SKILL_IDENTITY_CODE_PATTERN = /^[a-z0-9_]{1,64}$/;
+
+export function isSkillIdentityCode(value: unknown): value is string {
+  return typeof value === 'string' && SKILL_IDENTITY_CODE_PATTERN.test(value);
+}
+
+export type SkillScaleKind = 'range' | 'percent';
+
+export function isSkillScaleKind(value: unknown): value is SkillScaleKind {
+  return value === 'range' || value === 'percent';
+}
+
+export function validateSkillScaleBounds(
+  kind: SkillScaleKind,
+  scaleMin: number,
+  scaleMax: number,
+): { ok: true } | { ok: false; error: string } {
+  if (!Number.isInteger(scaleMin) || !Number.isInteger(scaleMax)) {
+    return { ok: false, error: 'scaleMin and scaleMax must be integers' };
+  }
+  if (!(scaleMin < scaleMax)) {
+    return { ok: false, error: 'scaleMin must be less than scaleMax' };
+  }
+  if (kind === 'percent') {
+    if (scaleMin < 0 || scaleMax > 100) {
+      return {
+        ok: false,
+        error: 'percent scale must satisfy 0 ≤ scaleMin < scaleMax ≤ 100',
+      };
+    }
+  }
+  return { ok: true };
+}
 
 export const SKILL_DEFINITIONS: readonly SkillDefinition[] = [
   // TECH

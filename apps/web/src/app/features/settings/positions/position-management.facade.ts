@@ -15,7 +15,7 @@ import {
 } from '../settings-org-api.service';
 
 export type CatalogTab = 'skills' | 'goals' | 'duties';
-export type CatalogPanel = 'directions' | 'departments' | 'positions';
+export type CatalogPanel = 'directions' | 'departments' | 'positions' | 'skills';
 
 const GOAL_KIND_LABELS: Record<GoalKind, string> = {
   career: 'Карʼєра',
@@ -46,7 +46,9 @@ export class PositionManagementFacade {
     directions: true,
     departments: true,
     positions: true,
+    skills: true,
   });
+  readonly positionDialogOpen = signal(false);
 
   togglePanel(panel: CatalogPanel): void {
     this.panelOpen.update((state) => ({ ...state, [panel]: !state[panel] }));
@@ -61,8 +63,15 @@ export class PositionManagementFacade {
   formDescription = '';
   formIsActive = true;
 
+  newSkillName = '';
+  newSkillGroupId = '';
+  newSkillScaleKind: 'range' | 'percent' = 'range';
+  newSkillScaleMin = 0;
+  newSkillScaleMax = 5;
+  editingSkillId = signal<string | null>(null);
+
   reqSkillId = '';
-  reqTargetLevel = 3;
+  reqTargetLevel = 0;
   reqRequired = true;
 
   goalKind: GoalKind = 'probation';
@@ -162,10 +171,6 @@ export class PositionManagementFacade {
     return d.directionName || d.direction?.name || '';
   }
 
-  skillsForGroup(groupId: string): OrgSkill[] {
-    return this.catalogSkills().filter((s) => s.groupId === groupId);
-  }
-
   goalKindLabel(kind: string): string {
     return GOAL_KIND_LABELS[kind as GoalKind] || kind;
   }
@@ -195,7 +200,7 @@ export class PositionManagementFacade {
       next: (g) => this.skillGroups.set(g),
       error: () => this.error.set('Не вдалося завантажити групи навичок'),
     });
-    this.api.getSkills().subscribe({
+    this.api.getSkills(true).subscribe({
       next: (s) => this.catalogSkills.set(s),
       error: () => this.error.set('Не вдалося завантажити навички'),
     });
@@ -361,6 +366,13 @@ export class PositionManagementFacade {
     });
   }
 
+  startCreatePosition(): void {
+    this.cancelEdit();
+    this.clearSelection();
+    this.positionDialogOpen.set(true);
+    this.error.set('');
+  }
+
   startEdit(p: OrgPosition): void {
     this.panelOpen.update((state) => ({ ...state, positions: true }));
     this.editingId.set(p.id);
@@ -369,7 +381,15 @@ export class PositionManagementFacade {
     this.formDirectionId = p.directionId || '';
     this.formDescription = p.description || '';
     this.formIsActive = p.isActive;
+    this.selectedPositionId.set(p.id);
+    this.loadPositionCatalog(p.id);
+    this.positionDialogOpen.set(true);
     this.error.set('');
+  }
+
+  closePositionDialog(): void {
+    this.positionDialogOpen.set(false);
+    this.cancelEdit();
   }
 
   cancelEdit(): void {
@@ -404,10 +424,7 @@ export class PositionManagementFacade {
           isActive: this.formIsActive,
         })
         .subscribe({
-          next: () => {
-            this.cancelEdit();
-            this.reload();
-          },
+          next: () => this.reload(),
           error: (err) => this.error.set(this.apiError(err, 'Не вдалося зберегти посаду')),
         });
       return;
@@ -415,9 +432,11 @@ export class PositionManagementFacade {
 
     this.api.createPosition(body).subscribe({
       next: (created) => {
-        this.cancelEdit();
+        this.editingId.set(created.id);
+        this.selectedPositionId.set(created.id);
+        this.formIsActive = created.isActive;
         this.reload();
-        this.selectPosition(created);
+        this.loadPositionCatalog(created.id);
       },
       error: (err) => this.error.set(this.apiError(err, 'Не вдалося додати посаду')),
     });
@@ -442,8 +461,20 @@ export class PositionManagementFacade {
     });
   }
 
+  onReqSkillChange(): void {
+    const skill = this.catalogSkills().find((s) => s.id === this.reqSkillId);
+    this.reqTargetLevel = skill?.scaleMin ?? 0;
+  }
+
+  formatNativeTarget(r: OrgPositionSkillRequirement): string {
+    const kind = r.skillScaleKind ?? 'range';
+    const max = r.skillScaleMax ?? 5;
+    if (kind === 'percent') return `${r.targetLevel}%`;
+    return `${r.targetLevel} / ${max}`;
+  }
+
   addSkillRequirement(): void {
-    const positionId = this.selectedPositionId();
+    const positionId = this.editingId() || this.selectedPositionId();
     if (!positionId) return;
     this.error.set('');
     if (!this.reqSkillId) {
@@ -459,7 +490,6 @@ export class PositionManagementFacade {
       .subscribe({
         next: () => {
           this.reqSkillId = '';
-          this.reqTargetLevel = 3;
           this.reqRequired = true;
           this.loadPositionCatalog(positionId);
         },
@@ -469,9 +499,11 @@ export class PositionManagementFacade {
   }
 
   bumpRequirementLevel(r: OrgPositionSkillRequirement, delta: number): void {
-    const positionId = this.selectedPositionId();
+    const positionId = this.editingId() || this.selectedPositionId();
     if (!positionId) return;
-    const next = Math.max(0, Math.min(r.skillScaleMax ?? 5, r.targetLevel + delta));
+    const min = r.skillScaleMin ?? 0;
+    const max = r.skillScaleMax ?? 5;
+    const next = Math.max(min, Math.min(max, r.targetLevel + delta));
     if (next === r.targetLevel) return;
     this.api
       .updatePositionSkillRequirement(positionId, r.id, { targetLevel: next })
@@ -482,11 +514,82 @@ export class PositionManagementFacade {
   }
 
   removeSkillRequirement(r: OrgPositionSkillRequirement): void {
-    const positionId = this.selectedPositionId();
+    const positionId = this.editingId() || this.selectedPositionId();
     if (!positionId) return;
     this.api.deletePositionSkillRequirement(positionId, r.id).subscribe({
       next: () => this.loadPositionCatalog(positionId),
       error: () => this.error.set('Не вдалося прибрати вимогу'),
+    });
+  }
+
+  saveCatalogSkill(): void {
+    this.error.set('');
+    if (!this.newSkillName.trim() || !this.newSkillGroupId) {
+      this.error.set('Вкажіть назву і групу навички');
+      return;
+    }
+    const body = {
+      groupId: this.newSkillGroupId,
+      name: this.newSkillName.trim(),
+      scaleKind: this.newSkillScaleKind,
+      scaleMin: Number(this.newSkillScaleMin),
+      scaleMax: Number(this.newSkillScaleMax),
+    };
+    const id = this.editingSkillId();
+    if (id) {
+      this.api.updateSkill(id, body).subscribe({
+        next: () => {
+          this.cancelEditSkill();
+          this.reload();
+        },
+        error: (err) => this.error.set(this.apiError(err, 'Не вдалося зберегти навичку')),
+      });
+      return;
+    }
+    this.api.createSkill(body).subscribe({
+      next: () => {
+        this.cancelEditSkill();
+        this.reload();
+      },
+      error: (err) => this.error.set(this.apiError(err, 'Не вдалося додати навичку')),
+    });
+  }
+
+  startEditSkill(s: OrgSkill): void {
+    this.panelOpen.update((state) => ({ ...state, skills: true }));
+    this.editingSkillId.set(s.id);
+    this.newSkillName = s.name;
+    this.newSkillGroupId = s.groupId;
+    this.newSkillScaleKind = s.scaleKind ?? 'range';
+    this.newSkillScaleMin = s.scaleMin ?? 0;
+    this.newSkillScaleMax = s.scaleMax ?? 5;
+    this.error.set('');
+  }
+
+  cancelEditSkill(): void {
+    this.editingSkillId.set(null);
+    this.newSkillName = '';
+    this.newSkillGroupId = '';
+    this.newSkillScaleKind = 'range';
+    this.newSkillScaleMin = 0;
+    this.newSkillScaleMax = 5;
+  }
+
+  hardDeleteSkill(s: OrgSkill): void {
+    if (!confirm(`Видалити навичку «${s.name}»?`)) return;
+    this.api.deleteSkill(s.id).subscribe({
+      next: () => {
+        if (this.editingSkillId() === s.id) this.cancelEditSkill();
+        this.reload();
+      },
+      error: (err) => this.error.set(this.apiError(err, 'Не вдалося видалити навичку')),
+    });
+  }
+
+  setSkillActive(s: OrgSkill, active: boolean): void {
+    this.api.updateSkill(s.id, { isActive: active }).subscribe({
+      next: () => this.reload(),
+      error: (err) => this.error.set(this.apiError(err, 'Не вдалося змінити стан навички')),
     });
   }
 

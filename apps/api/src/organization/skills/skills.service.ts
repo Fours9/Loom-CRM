@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -5,13 +6,27 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, QueryFailedError, Repository } from 'typeorm';
 import {
   isSkillCode,
+  isSkillScaleKind,
   skillDefinitionByCode,
+  validateSkillScaleBounds,
+  type SkillScaleKind,
 } from '@loom/position-skill-catalog';
 import { SkillGroup } from './skill-group.entity';
 import { Skill } from './skill.entity';
+import { PositionSkillRequirement } from '../position-requirements/position-skill-requirement.entity';
+
+const GENERATE_CODE_ATTEMPTS = 8;
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    err instanceof QueryFailedError &&
+    (err as QueryFailedError & { driverError?: { code?: string } }).driverError
+      ?.code === '23505'
+  );
+}
 
 @Injectable()
 export class SkillsService {
@@ -20,6 +35,9 @@ export class SkillsService {
     private readonly groups: Repository<SkillGroup>,
     @InjectRepository(Skill)
     private readonly skills: Repository<Skill>,
+    @InjectRepository(PositionSkillRequirement)
+    private readonly requirements: Repository<PositionSkillRequirement>,
+    private readonly dataSource: DataSource,
   ) {}
 
   findGroups(all = false): Promise<SkillGroup[]> {
@@ -100,67 +118,207 @@ export class SkillsService {
     return row;
   }
 
+  async getActiveSkillOrFail(id: string): Promise<Skill> {
+    const row = await this.getSkillOrFail(id);
+    if (!row.isActive) {
+      throw new BadRequestException('Skill is inactive');
+    }
+    return row;
+  }
+
+  async lockSkill(
+    manager: EntityManager,
+    id: string,
+  ): Promise<Skill> {
+    const row = await manager.getRepository(Skill).findOne({
+      where: { id },
+      relations: { group: true },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!row) throw new NotFoundException('Skill not found');
+    return row;
+  }
+
+  async assertCanDeactivateSkill(
+    skillId: string,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const repo = manager
+      ? manager.getRepository(PositionSkillRequirement)
+      : this.requirements;
+    const count = await repo.count({ where: { skillId } });
+    if (count > 0) {
+      throw new ConflictException(
+        'Detach this skill from all positions before deactivating it',
+      );
+    }
+  }
+
+  assertScalePair(kind: SkillScaleKind, scaleMin: number, scaleMax: number): void {
+    const check = validateSkillScaleBounds(kind, scaleMin, scaleMax);
+    if (!check.ok) throw new BadRequestException(check.error);
+  }
+
   async createSkill(input: {
     groupId: string;
-    code: string;
+    code?: string;
     name: string;
     description?: string | null;
+    scaleKind?: SkillScaleKind;
+    scaleMin?: number;
     scaleMax?: number;
   }): Promise<Skill> {
     const group = await this.getGroupOrFail(input.groupId);
-    const code = input.code.trim();
-    if (!isSkillCode(code)) {
-      throw new BadRequestException(
-        `Skill code must exist in @loom/position-skill-catalog (got "${code}")`,
+    const scaleKind: SkillScaleKind = input.scaleKind ?? 'range';
+    if (!isSkillScaleKind(scaleKind)) {
+      throw new BadRequestException('scaleKind must be range or percent');
+    }
+    const scaleMin = input.scaleMin ?? 0;
+    const scaleMax = input.scaleMax ?? 5;
+    this.assertScalePair(scaleKind, scaleMin, scaleMax);
+
+    let code: string;
+    if (input.code != null && input.code.trim() !== '') {
+      code = input.code.trim();
+      if (!isSkillCode(code)) {
+        throw new BadRequestException(
+          `Skill code must exist in @loom/position-skill-catalog (got "${code}")`,
+        );
+      }
+      const def = skillDefinitionByCode(code);
+      if (def && group.code !== def.group) {
+        throw new BadRequestException(
+          `Skill "${code}" belongs to group ${def.group}, not ${group.code}`,
+        );
+      }
+      const existing = await this.skills.findOne({ where: { code } });
+      if (existing) throw new ConflictException('Skill code already exists');
+      return this.skills.save(
+        this.skills.create({
+          groupId: input.groupId,
+          code,
+          name: input.name.trim(),
+          description: input.description ?? null,
+          scaleKind,
+          scaleMin,
+          scaleMax,
+          isActive: true,
+        }),
       );
     }
-    const def = skillDefinitionByCode(code);
-    if (def && group.code !== def.group) {
-      throw new BadRequestException(
-        `Skill "${code}" belongs to group ${def.group}, not ${group.code}`,
-      );
+
+    for (let attempt = 0; attempt < GENERATE_CODE_ATTEMPTS; attempt += 1) {
+      code = `skill_${randomBytes(6).toString('hex')}`;
+      try {
+        return await this.skills.save(
+          this.skills.create({
+            groupId: input.groupId,
+            code,
+            name: input.name.trim(),
+            description: input.description ?? null,
+            scaleKind,
+            scaleMin,
+            scaleMax,
+            isActive: true,
+          }),
+        );
+      } catch (err) {
+        if (isUniqueViolation(err) && attempt < GENERATE_CODE_ATTEMPTS - 1) {
+          continue;
+        }
+        throw err;
+      }
     }
-    const existing = await this.skills.findOne({ where: { code } });
-    if (existing) throw new ConflictException('Skill code already exists');
-    return this.skills.save(
-      this.skills.create({
-        groupId: input.groupId,
-        code,
-        name: input.name.trim(),
-        description: input.description ?? null,
-        scaleMax: input.scaleMax ?? 5,
-        isActive: true,
-      }),
-    );
+    throw new ConflictException('Could not allocate a unique skill code');
   }
 
   async updateSkill(
     id: string,
     input: Partial<
-      Pick<Skill, 'groupId' | 'name' | 'description' | 'scaleMax' | 'isActive'>
+      Pick<
+        Skill,
+        | 'groupId'
+        | 'name'
+        | 'description'
+        | 'scaleKind'
+        | 'scaleMin'
+        | 'scaleMax'
+        | 'isActive'
+      >
     >,
   ): Promise<Skill> {
-    const row = await this.getSkillOrFail(id);
-    if (input.groupId !== undefined && input.groupId !== row.groupId) {
-      const group = await this.getGroupOrFail(input.groupId);
-      const def = skillDefinitionByCode(row.code);
-      if (def && group.code !== def.group) {
-        throw new BadRequestException(
-          `Skill "${row.code}" belongs to group ${def.group}, not ${group.code}`,
-        );
+    return this.dataSource.transaction(async (manager) => {
+      const skillRepo = manager.getRepository(Skill);
+      const reqRepo = manager.getRepository(PositionSkillRequirement);
+      const row = await this.lockSkill(manager, id);
+
+      const nextKind = (input.scaleKind ?? row.scaleKind) as SkillScaleKind;
+      const nextMin = input.scaleMin ?? row.scaleMin;
+      const nextMax = input.scaleMax ?? row.scaleMax;
+      const scaleTouched =
+        input.scaleKind !== undefined ||
+        input.scaleMin !== undefined ||
+        input.scaleMax !== undefined;
+
+      if (scaleTouched) {
+        if (!isSkillScaleKind(nextKind)) {
+          throw new BadRequestException('scaleKind must be range or percent');
+        }
+        this.assertScalePair(nextKind, nextMin, nextMax);
+        const reqs = await reqRepo.find({ where: { skillId: id } });
+        if (nextKind !== row.scaleKind && reqs.length > 0) {
+          throw new ConflictException(
+            'Detach this skill from all positions before changing scale kind',
+          );
+        }
+        if (nextKind === row.scaleKind && reqs.length > 0) {
+          const outOfRange = reqs.filter(
+            (r) => r.targetLevel < nextMin || r.targetLevel > nextMax,
+          );
+          if (outOfRange.length > 0) {
+            throw new ConflictException(
+              'Existing position requirements fall outside the new scale bounds',
+            );
+          }
+        }
+        row.scaleKind = nextKind;
+        row.scaleMin = nextMin;
+        row.scaleMax = nextMax;
       }
-      row.groupId = input.groupId;
-    }
-    if (input.name !== undefined) row.name = input.name;
-    if (input.description !== undefined) row.description = input.description;
-    if (input.scaleMax !== undefined) row.scaleMax = input.scaleMax;
-    if (input.isActive !== undefined) row.isActive = input.isActive;
-    return this.skills.save(row);
+
+      if (input.isActive === false && row.isActive) {
+        await this.assertCanDeactivateSkill(id, manager);
+        row.isActive = false;
+      } else if (input.isActive === true) {
+        row.isActive = true;
+      }
+
+      if (input.groupId !== undefined && input.groupId !== row.groupId) {
+        const group = await manager.getRepository(SkillGroup).findOne({
+          where: { id: input.groupId },
+        });
+        if (!group) throw new NotFoundException('Skill group not found');
+        const def = skillDefinitionByCode(row.code);
+        if (def && group.code !== def.group) {
+          throw new BadRequestException(
+            `Skill "${row.code}" belongs to group ${def.group}, not ${group.code}`,
+          );
+        }
+        row.groupId = input.groupId;
+      }
+      if (input.name !== undefined) row.name = input.name;
+      if (input.description !== undefined) row.description = input.description;
+      return skillRepo.save(row);
+    });
   }
 
   async softDeleteSkill(id: string): Promise<void> {
-    const row = await this.getSkillOrFail(id);
-    row.isActive = false;
-    await this.skills.save(row);
+    await this.dataSource.transaction(async (manager) => {
+      await this.lockSkill(manager, id);
+      await this.assertCanDeactivateSkill(id, manager);
+      const row = await manager.getRepository(Skill).findOneByOrFail({ id });
+      row.isActive = false;
+      await manager.getRepository(Skill).save(row);
+    });
   }
 }

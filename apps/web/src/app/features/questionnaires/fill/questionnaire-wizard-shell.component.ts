@@ -22,6 +22,7 @@ import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireFieldHostComponent } from './fields/questionnaire-field-host.component';
 import { QuestionnaireContactsBundleFieldComponent } from './fields/questionnaire-contacts-bundle-field.component';
 import { QuestionnaireSkillsMatrixFieldComponent } from './fields/questionnaire-skills-matrix-field.component';
+import type { MatrixAvailableSkill } from './fields/questionnaire-skills-matrix-field.component';
 import { QuestionnaireSaveStatusComponent } from './questionnaire-save-status.component';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { shouldShowReviewSubmit } from './questionnaire-fill-session.policy';
@@ -626,12 +627,19 @@ export class QuestionnaireWizardShellComponent {
     return buildFieldBlocks(visible);
   });
 
-  /** Frozen position skills for matrix rows; null → full registry (legacy). */
-  readonly contextSkills = computed(() => {
-    const skills =
-      this.store.assignment()?.context?.positionCatalog?.skills ?? null;
-    if (!skills || skills.length === 0) return null;
-    return skills.map((s) => ({ code: s.code, labelUa: s.labelUa }));
+  /** Frozen position skills for matrix rows; `null` → full registry (legacy). */
+  readonly contextSkills = computed((): MatrixAvailableSkill[] | null => {
+    const context = this.store.assignment()?.context ?? null;
+    if (context == null) return null;
+    return context.positionCatalog.skills.map((s) => ({
+      code: s.code,
+      labelUa: s.labelUa,
+      group: s.group,
+      targetLevel: s.targetLevel,
+      scaleKind: s.scaleKind,
+      scaleMin: s.scaleMin,
+      scaleMax: s.scaleMax,
+    }));
   });
 
   saveStatusText(): string {
@@ -767,13 +775,13 @@ export class QuestionnaireWizardShellComponent {
   private skillLabelByCode(): Map<string, string> | null {
     const detail = this.store.assignment();
     if (!detail) return null;
-    const fromSubmission =
-      !this.store.editable() && detail.submissions[0]?.context?.positionCatalog?.skills;
-    const skills =
-      fromSubmission ??
-      detail.context?.positionCatalog?.skills ??
-      null;
-    if (!skills || skills.length === 0) return null;
+    if (!this.store.editable() && detail.submissions.length > 0) {
+      const skills = detail.submissions[0]?.context?.positionCatalog?.skills ?? null;
+      if (skills == null) return null;
+      return new Map(skills.map((s) => [s.code, s.labelUa]));
+    }
+    const skills = detail.context?.positionCatalog?.skills ?? null;
+    if (skills == null) return null;
     return new Map(skills.map((s) => [s.code, s.labelUa]));
   }
 
