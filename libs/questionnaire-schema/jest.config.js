@@ -6,5 +6,7 @@ module.exports = {
   testMatch: ['**/*.spec.ts'],
   moduleNameMapper: {
     '^@loom/employee-contacts$': '<rootDir>/../employee-contacts/src/index.ts',
+    '^@loom/position-skill-catalog$':
+      '<rootDir>/../position-skill-catalog/src/index.ts',
   },
 };

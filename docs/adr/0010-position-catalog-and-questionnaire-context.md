@@ -6,15 +6,16 @@ Accepted.
 
 ## Implementation status
 
-- `@loom/position-skill-catalog` pure skill code registry: **shipped (PR1)**
-- `QuestionnaireContextV1` + `parseQuestionnaireContext` in contracts: **shipped (PR1)**; strict full-shape parse + unknown-key reject: **required (follow-up)**
+- `@loom/position-skill-catalog` pure skill code registry: **shipped (PR1)**; identity syntax + `MAX_POSITION_SKILLS` + Settings custom codes: **this increment**
+- `QuestionnaireContextV1` + `parseQuestionnaireContext` in contracts: **shipped** (strict full-shape + unknown-key reject on `1708c21`)
 - Track B published schemas `employee-managing` / `employee-docs` + `position_skills_matrix` fill/validation: **shipped (PR2)**
 - `departments.direction_id`: **shipped**; hierarchy Direction ← Dept ← Position
 - `positions.direction_id`: **restored** (`1730000023000-RestorePositionDirectionId`) — denormalized inherit from department when set, else optional manual (Decision #10). Earlier PR3 add + `1730000022000` drop are historical only.
 - employment-assignment consistency (auto-fill dept/direction from catalog parents): **shipped**
-- Settings «Керування посадами» (`/settings/positions`): **shipped (PR4)**
+- Settings «Керування посадами» (`/settings/positions`): **shipped (PR4)**; skills column + position edit modal: **this increment**
 - Organization `skill_groups` / `skills` / position requirements, duties, goal templates + Settings catalog tabs: **shipped (PR5)**
-- `PositionCatalogFacade`, assign/attach capture, `questionnaire_* .context_json`: **shipped (PR6)**
+- `PositionCatalogFacade`, assign/attach capture, `questionnaire_* .context_json`: **shipped (PR6)**; empty allowlist + fail-closed invalid context: **shipped (`1708c21`)**
+- Native skill scale (`range`/`percent`) independent of questionnaire 0–5: **this increment**
 - PR7 closeout: living docs + catalog sync; optional fill suggestions from `goalTemplates` / `duties` **not** shipped (context fields available for future UI)
 
 ## Context
@@ -47,9 +48,10 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
 7. **Legacy (`context_json = null`):** means **legacy_registry mode** forever — matrix rows and validation use `@loom/position-skill-catalog`; Review uses registry labels. **Do not** auto-`ensureContextCaptured` from live Position Catalog (would invalidate pre-PR6 ratings outside the new matrix). Non-null **invalid** context is a **server data-integrity** failure (HTTP 500), never silent legacy and never 400.
 
 8. **Validation modes:**
-   - Legacy null: `skillCode ∈ registry` (`allowedSkillCodes` omitted / `undefined`)
-   - Context set (including `skills: []`): `∈ registry` **and** `⊆ frozen context skill codes` (empty array = allow none)
-   - PATCH = structural; SUBMIT = semantic (same split as contacts)
+   - Legacy null: `skillCode ∈ registry` (`allowedSkillCodes` omitted / `undefined`); UI = full registry
+   - Context set (including `skills: []`): `skillCode ⊆ frozen context skill codes` (**not** ∩ registry). Empty array = allow none
+   - PATCH = structural (`isSkillIdentityCode`); SUBMIT = semantic (same split as contacts)
+   - `custom[]` remains extra-catalog (not identity, not in allowlist)
 
 9. **Position resolve precedence** for Facade snapshot:
    1. `employee.currentAssignmentId` (belongs + active) → `positionId`
@@ -71,11 +73,21 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
 
 14. **Sensitive fields:** `grade.net_salary` and `manager_review` deferred until field/step sensitivity + scoped manager completion ACL exist. Track B does not ship them.
 
-15. **Skill codes:** single SoT `@loom/position-skill-catalog` — Questionnaires seed and Organization skills seed both import it (never Questionnaires `seed/shared` imported by Organization). Organization `createSkill` may only materialize registry codes; **`code` is identity** (not editable via PATCH).
+15. **Skill codes:** `@loom/position-skill-catalog` holds legacy registry (`isSkillCode`) **and** identity syntax (`isSkillIdentityCode`). Registry is SoT **only for legacy null context**. Settings may create custom skills (`code` omitted → generated `skill_<hex>`; `code` provided → must be registry + group match). **`code` is identity** (not editable via PATCH). Snapshot capture includes all attached skills (no `isSkillCode` filter).
+
+16. **Two independent scales (do not mix):**
+    - `PositionSkillRequirement.targetLevel` = target in the skill’s **native** scale (`range` or `percent`, `scaleMin`..`scaleMax`)
+    - `position_skills_matrix.ratings[].level` = questionnaire assessment **0..5** (published schema)
+    - Forbidden: compare, subtract, `gap = targetLevel - rating.level`, display as one scale, or convert `80% → 4`. Future normalization is a separate ADR.
+    - Frozen skill rows may include optional all-or-none `scaleKind`/`scaleMin`/`scaleMax` (absent = old V1 snapshots). Fill may show “Вимога посади: 80%” next to “Ваша оцінка: 0–5”.
+
+17. **Skill lifecycle:** deactivate/soft-delete **409** while any `position_skill_requirement` exists. Attach only active skills. Scale kind change with existing requirements → 409. Same-kind bound shrink allowed only if all existing `targetLevel` still fit. Skill row is the pessimistic lock root for scale update, deactivate, and requirement attach/`skillId` change. Max **64** skills per position (`MAX_POSITION_SKILLS`).
 
 ## Consequences
 
-- Track B Managing/Docs and Position Catalog Settings UI are both shipped; fill can use frozen context for skills matrix.
+- Track B Managing/Docs and Position Catalog Settings UI are both shipped; fill can use frozen context for skills matrix (including custom Settings skill codes).
+- Pre-PR6 answers remain valid after PR6 deploy (legacy_registry mode).
+- Native skill scale and questionnaire 0–5 stay independent; no implicit conversion.
 - Pre-PR6 answers remain valid after PR6 deploy (legacy_registry mode).
 - Immutable submissions stay interpretable years later via `version` + frozen context.
 - Cross-employee reattach after fill is rejected — safer than multi-subject history in one assignment.

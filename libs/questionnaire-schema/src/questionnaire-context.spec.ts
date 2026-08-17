@@ -96,6 +96,67 @@ describe('parseQuestionnaireContext (strict)', () => {
     ).toBe(false);
   });
 
+  it('accepts old V1 skill rows without scale fields', () => {
+    const parsed = parseQuestionnaireContext(
+      validContext({ skills: [validSkill] }),
+    );
+    expect(parsed.ok).toBe(true);
+  });
+
+  it('rejects partial scale metadata', () => {
+    expect(
+      parseQuestionnaireContext(
+        validContext({
+          skills: [{ ...validSkill, scaleKind: 'percent' }],
+        }),
+      ).ok,
+    ).toBe(false);
+  });
+
+  it('accepts generated skill identity codes outside the registry', () => {
+    const parsed = parseQuestionnaireContext(
+      validContext({
+        skills: [{ ...validSkill, code: 'skill_abc123def456' }],
+      }),
+    );
+    expect(parsed.ok).toBe(true);
+  });
+
+  it('rejects targetLevel outside native scale bounds', () => {
+    expect(
+      parseQuestionnaireContext(
+        validContext({
+          skills: [
+            {
+              ...validSkill,
+              targetLevel: 120,
+              scaleKind: 'percent',
+              scaleMin: 0,
+              scaleMax: 100,
+            },
+          ],
+        }),
+      ).ok,
+    ).toBe(false);
+  });
+
+  it('accepts all-or-none scale metadata', () => {
+    const parsed = parseQuestionnaireContext(
+      validContext({
+        skills: [
+          {
+            ...validSkill,
+            targetLevel: 80,
+            scaleKind: 'percent',
+            scaleMin: 0,
+            scaleMax: 100,
+          },
+        ],
+      }),
+    );
+    expect(parsed.ok).toBe(true);
+  });
+
   it('rejects goalTemplates not array', () => {
     expect(
       parseQuestionnaireContext(validContext({ goalTemplates: {} })).ok,

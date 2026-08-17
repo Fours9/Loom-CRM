@@ -11,7 +11,12 @@ import { PositionManagementFacade } from './position-management.facade';
       <article class="card catalog-panel">
         <div class="panel-head">
           <h3>Каталог посади: {{ pos.name }}</h3>
-          <button type="button" class="ghost-neutral" (click)="vm.clearSelection()">Закрити</button>
+          <span class="head-actions">
+            @if (vm.canManagePositions()) {
+              <button type="button" (click)="vm.startEdit(pos)">Редагувати</button>
+            }
+            <button type="button" class="ghost-neutral" (click)="vm.clearSelection()">Закрити</button>
+          </span>
         </div>
         <div class="tabs" role="tablist">
           <button
@@ -42,64 +47,17 @@ import { PositionManagementFacade } from './position-management.facade';
 
         @if (vm.catalogTab() === 'skills') {
           <div class="tab-body">
-            @if (vm.canManagePositions()) {
-              <form class="inline add-row" (ngSubmit)="vm.addSkillRequirement()">
-                <select [(ngModel)]="vm.reqSkillId" name="reqSkillId">
-                  <option value="">Оберіть навичку</option>
-                  @for (s of vm.availableSkills(); track s.id) {
-                    <option [value]="s.id">{{ s.group?.name || '' }} — {{ s.name }}</option>
-                  }
-                </select>
-                <label class="level">
-                  Рівень
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    [(ngModel)]="vm.reqTargetLevel"
-                    name="reqTargetLevel"
-                  />
-                </label>
-                <label class="check">
-                  <input type="checkbox" [(ngModel)]="vm.reqRequired" name="reqRequired" />
-                  Обовʼязкова
-                </label>
-                <button type="submit">Додати</button>
-              </form>
-            }
+            <p class="hint">Навички посади змінюються в модалці редагування.</p>
             <ul>
               @for (r of vm.skillRequirements(); track r.id) {
                 <li>
                   <span>
                     <strong>{{ r.skillName || r.skillCode }}</strong>
-                    <small>ціль {{ r.targetLevel }}/{{ r.skillScaleMax ?? 5 }}</small>
+                    <small>{{ vm.formatNativeTarget(r) }}</small>
                     @if (r.required) {
                       <small class="badge">обовʼязкова</small>
                     }
                   </span>
-                  @if (vm.canManagePositions()) {
-                    <span class="row-actions">
-                      <button
-                        type="button"
-                        class="ghost-neutral"
-                        (click)="vm.bumpRequirementLevel(r, -1)"
-                        [disabled]="r.targetLevel <= 0"
-                      >
-                        −
-                      </button>
-                      <button
-                        type="button"
-                        class="ghost-neutral"
-                        (click)="vm.bumpRequirementLevel(r, 1)"
-                        [disabled]="r.targetLevel >= (r.skillScaleMax ?? 5)"
-                      >
-                        +
-                      </button>
-                      <button type="button" class="ghost" (click)="vm.removeSkillRequirement(r)">
-                        Прибрати
-                      </button>
-                    </span>
-                  }
                 </li>
               } @empty {
                 <li class="muted-row">Немає вимог до навичок</li>
@@ -383,6 +341,16 @@ import { PositionManagementFacade } from './position-management.facade';
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
+      }
+      .head-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .hint {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--pw-muted);
       }
       .tabs {
         display: flex;

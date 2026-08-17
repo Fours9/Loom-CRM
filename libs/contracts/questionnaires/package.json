@@ -11,7 +11,8 @@
     "build": "echo \"contracts are source-only\""
   },
   "dependencies": {
-    "@loom/contracts-common": "workspace:*"
+    "@loom/contracts-common": "workspace:*",
+    "@loom/position-skill-catalog": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~5.7.2"

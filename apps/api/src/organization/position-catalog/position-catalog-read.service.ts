@@ -7,7 +7,6 @@ import type {
   PositionGoalTemplateContext,
   PositionSkillContext,
 } from '@loom/contracts-questionnaires';
-import { isSkillCode } from '@loom/position-skill-catalog';
 import { Employee } from '../employees/employee.entity';
 import { EmploymentAssignment } from '../employees/employment-assignment.entity';
 import { Position } from '../positions/position.entity';
@@ -169,7 +168,7 @@ export class PositionCatalogReadService {
     ]);
 
     const skills: PositionSkillContext[] = skillReqs
-      .filter((r) => r.skill && isSkillCode(r.skill.code))
+      .filter((r) => r.skill)
       .map((r) => ({
         code: r.skill!.code,
         labelUa: r.skill!.name,
@@ -177,6 +176,9 @@ export class PositionCatalogReadService {
         targetLevel: r.targetLevel ?? null,
         required: r.required,
         weight: r.weight,
+        scaleKind: r.skill!.scaleKind,
+        scaleMin: r.skill!.scaleMin,
+        scaleMax: r.skill!.scaleMax,
       }));
 
     const dutiesCtx: PositionDutyContext[] = duties.map((d) => ({

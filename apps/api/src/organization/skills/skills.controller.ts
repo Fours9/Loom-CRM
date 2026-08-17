@@ -11,11 +11,11 @@ import {
 } from '@nestjs/common';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
-  Min,
   MinLength,
 } from 'class-validator';
 import { Permission } from '../../platform/permissions/permission.names';
@@ -57,9 +57,10 @@ class CreateSkillDto {
   @IsUUID()
   groupId!: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  code!: string;
+  code?: string;
 
   @IsString()
   @MinLength(1)
@@ -70,8 +71,15 @@ class CreateSkillDto {
   description?: string;
 
   @IsOptional()
+  @IsIn(['range', 'percent'])
+  scaleKind?: 'range' | 'percent';
+
+  @IsOptional()
   @IsInt()
-  @Min(1)
+  scaleMin?: number;
+
+  @IsOptional()
+  @IsInt()
   scaleMax?: number;
 }
 
@@ -90,8 +98,15 @@ class UpdateSkillDto {
   description?: string | null;
 
   @IsOptional()
+  @IsIn(['range', 'percent'])
+  scaleKind?: 'range' | 'percent';
+
+  @IsOptional()
   @IsInt()
-  @Min(1)
+  scaleMin?: number;
+
+  @IsOptional()
+  @IsInt()
   scaleMax?: number;
 
   @IsOptional()

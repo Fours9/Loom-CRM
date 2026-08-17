@@ -240,71 +240,7 @@ import { PositionManagementFacade } from './position-management.facade';
         </button>
         <div class="panel-body">
           @if (vm.canManagePositions()) {
-            <form class="position-form" novalidate (submit)="$event.preventDefault()">
-              <label>
-                Назва
-                <input
-                  [(ngModel)]="vm.formName"
-                  name="formName"
-                  placeholder="Назва посади"
-                />
-              </label>
-              <label>
-                Відділ
-                <select
-                  [(ngModel)]="vm.formDepartmentId"
-                  name="formDepartmentId"
-                  (ngModelChange)="vm.onFormDepartmentChange()"
-                >
-                  <option value="">Без відділу</option>
-                  @for (d of vm.formDepartmentOptions(); track d.id) {
-                    <option [value]="d.id">{{ d.name }}</option>
-                  }
-                </select>
-              </label>
-              @if (vm.formDepartmentId) {
-                <p class="hint">
-                  @if (vm.inheritedDirectionLabel()) {
-                    Напрямок від відділу: {{ vm.inheritedDirectionLabel() }}
-                  } @else {
-                    Відділ без напрямку — посада успадковує відсутність напрямку.
-                  }
-                </p>
-              } @else {
-                <label>
-                  Напрямок
-                  <select [(ngModel)]="vm.formDirectionId" name="formDirectionId">
-                    <option value="">Без напрямку</option>
-                    @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
-                      <option [value]="dir.id">{{ dir.name }}</option>
-                    }
-                  </select>
-                </label>
-              }
-              <label>
-                Опис
-                <textarea
-                  [(ngModel)]="vm.formDescription"
-                  name="formDescription"
-                  rows="2"
-                  placeholder="Опис посади (необовʼязково)"
-                ></textarea>
-              </label>
-              @if (vm.editingId()) {
-                <label class="check">
-                  <input type="checkbox" [(ngModel)]="vm.formIsActive" name="formIsActive" />
-                  Увімкнено
-                </label>
-              }
-              <div class="form-actions">
-                <button type="button" (click)="vm.savePosition()">
-                  {{ vm.editingId() ? 'Зберегти' : 'Додати' }}
-                </button>
-                @if (vm.editingId()) {
-                  <button type="button" class="ghost-neutral" (click)="vm.cancelEdit()">Скасувати</button>
-                }
-              </div>
-            </form>
+            <button type="button" (click)="vm.startCreatePosition()">Додати посаду</button>
           }
           <ul>
             @for (p of vm.positions(); track p.id) {
@@ -357,6 +293,135 @@ import { PositionManagementFacade } from './position-management.facade';
                       title="Видалити назавжди"
                       aria-label="Видалити посаду назавжди"
                       (click)="vm.hardDeletePosition(p)"
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path
+                          fill="currentColor"
+                          d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                        />
+                      </svg>
+                    </button>
+                  </span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      </article>
+
+      <article
+        class="card panel"
+        [class.collapsed]="!vm.panelOpen().skills"
+        [attr.aria-expanded]="vm.panelOpen().skills"
+      >
+        <button
+          type="button"
+          class="panel-toggle"
+          [attr.title]="vm.panelOpen().skills ? 'Згорнути: Навички' : 'Навички'"
+          [attr.aria-label]="vm.panelOpen().skills ? 'Згорнути навички' : 'Розгорнути навички'"
+          (click)="vm.togglePanel('skills')"
+        >
+          @if (vm.panelOpen().skills) {
+            <h3>Навички</h3>
+            <span class="panel-caret" aria-hidden="true"></span>
+          } @else {
+            <svg class="panel-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"
+              />
+            </svg>
+          }
+        </button>
+        <div class="panel-body">
+          @if (vm.canManagePositions()) {
+            <form class="position-form" novalidate (submit)="$event.preventDefault()">
+              <label>
+                Назва
+                <input [(ngModel)]="vm.newSkillName" name="newSkillName" placeholder="Назва навички" />
+              </label>
+              <label>
+                Група
+                <select [(ngModel)]="vm.newSkillGroupId" name="newSkillGroupId">
+                  <option value="">Оберіть групу</option>
+                  @for (g of vm.skillGroups(); track g.id) {
+                    <option [value]="g.id">{{ g.name }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                Шкала
+                <select [(ngModel)]="vm.newSkillScaleKind" name="newSkillScaleKind">
+                  <option value="range">Від–до</option>
+                  <option value="percent">Відсотки</option>
+                </select>
+              </label>
+              <div class="form-actions">
+                <label>
+                  Від
+                  <input type="number" [(ngModel)]="vm.newSkillScaleMin" name="newSkillScaleMin" />
+                </label>
+                <label>
+                  До
+                  <input type="number" [(ngModel)]="vm.newSkillScaleMax" name="newSkillScaleMax" />
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="button" (click)="vm.saveCatalogSkill()">
+                  {{ vm.editingSkillId() ? 'Зберегти' : 'Додати' }}
+                </button>
+                @if (vm.editingSkillId()) {
+                  <button type="button" class="ghost-neutral" (click)="vm.cancelEditSkill()">
+                    Скасувати
+                  </button>
+                }
+              </div>
+            </form>
+          }
+          <ul>
+            @for (s of vm.catalogSkills(); track s.id) {
+              <li>
+                <span>
+                  {{ s.name }}
+                  <small class="code">{{ s.code }}</small>
+                  <small>
+                    @if (s.scaleKind === 'percent') {
+                      {{ s.scaleMin }}–{{ s.scaleMax }}%
+                    } @else {
+                      {{ s.scaleMin }}–{{ s.scaleMax }}
+                    }
+                  </small>
+                  @if (!s.isActive) {
+                    <small class="badge">вимкнено</small>
+                  }
+                </span>
+                @if (vm.canManagePositions()) {
+                  <span class="row-actions">
+                    <label class="toggle" [title]="s.isActive ? 'Увімкнено' : 'Вимкнено'">
+                      <input
+                        type="checkbox"
+                        [checked]="s.isActive"
+                        (change)="vm.setSkillActive(s, $any($event.target).checked)"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      class="icon-btn"
+                      title="Редагувати"
+                      (click)="vm.startEditSkill(s)"
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path
+                          fill="currentColor"
+                          d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-btn danger"
+                      title="Видалити"
+                      (click)="vm.hardDeleteSkill(s)"
                     >
                       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                         <path
@@ -687,6 +752,10 @@ import { PositionManagementFacade } from './position-management.facade';
         padding: 0.1rem 0.4rem;
         border-radius: 999px;
         margin-left: 0.35rem;
+      }
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.8rem;
       }
       .check {
         display: flex;

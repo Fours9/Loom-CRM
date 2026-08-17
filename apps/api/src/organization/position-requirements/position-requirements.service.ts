@@ -1,19 +1,24 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { MAX_POSITION_SKILLS } from '@loom/position-skill-catalog';
 import { PositionsService } from '../positions/positions.service';
 import { SkillsService } from '../skills/skills.service';
 import { PositionSkillRequirement } from './position-skill-requirement.entity';
 import { PositionDuty } from './position-duty.entity';
 import { PositionGoalTemplate } from './position-goal-template.entity';
+import { Skill } from '../skills/skill.entity';
 
 export type PositionSkillRequirementItem = PositionSkillRequirement & {
   skillCode: string | null;
   skillName: string | null;
+  skillScaleKind: 'range' | 'percent' | null;
+  skillScaleMin: number | null;
   skillScaleMax: number | null;
 };
 
@@ -28,7 +33,22 @@ export class PositionRequirementsService {
     private readonly duties: Repository<PositionDuty>,
     @InjectRepository(PositionGoalTemplate)
     private readonly goalTemplates: Repository<PositionGoalTemplate>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private toItem(
+    row: PositionSkillRequirement,
+    skill?: Skill | null,
+  ): PositionSkillRequirementItem {
+    return {
+      ...row,
+      skillCode: skill?.code ?? row.skill?.code ?? null,
+      skillName: skill?.name ?? row.skill?.name ?? null,
+      skillScaleKind: skill?.scaleKind ?? row.skill?.scaleKind ?? null,
+      skillScaleMin: skill?.scaleMin ?? row.skill?.scaleMin ?? null,
+      skillScaleMax: skill?.scaleMax ?? row.skill?.scaleMax ?? null,
+    };
+  }
 
   async listSkillRequirements(
     positionId: string,
@@ -39,12 +59,15 @@ export class PositionRequirementsService {
       relations: { skill: true },
       order: { createdAt: 'ASC' },
     });
-    return rows.map((row) => ({
-      ...row,
-      skillCode: row.skill?.code ?? null,
-      skillName: row.skill?.name ?? null,
-      skillScaleMax: row.skill?.scaleMax ?? null,
-    }));
+    return rows.map((row) => this.toItem(row));
+  }
+
+  private assertTargetInScale(skill: Skill, targetLevel: number): void {
+    if (targetLevel < skill.scaleMin || targetLevel > skill.scaleMax) {
+      throw new BadRequestException(
+        `targetLevel must be ${skill.scaleMin}..${skill.scaleMax} for this skill`,
+      );
+    }
   }
 
   async createSkillRequirement(
@@ -57,33 +80,37 @@ export class PositionRequirementsService {
     },
   ): Promise<PositionSkillRequirementItem> {
     await this.positions.getOrFail(positionId);
-    await this.skillsCatalog.getSkillOrFail(input.skillId);
-    const existing = await this.requirements.findOne({
-      where: { positionId, skillId: input.skillId },
-    });
-    if (existing) {
-      throw new ConflictException('Skill already required for this position');
-    }
-    const saved = await this.requirements.save(
-      this.requirements.create({
-        positionId,
-        skillId: input.skillId,
-        targetLevel: input.targetLevel ?? 0,
-        required: input.required ?? true,
-        weight: input.weight ?? null,
-      }),
-    );
-    const found = (await this.listSkillRequirements(positionId)).find(
-      (r) => r.id === saved.id,
-    );
-    return (
-      found ?? {
-        ...saved,
-        skillCode: null,
-        skillName: null,
-        skillScaleMax: null,
+    return this.dataSource.transaction(async (manager) => {
+      const skill = await this.skillsCatalog.lockSkill(manager, input.skillId);
+      if (!skill.isActive) {
+        throw new BadRequestException('Skill is inactive');
       }
-    );
+      const reqRepo = manager.getRepository(PositionSkillRequirement);
+      const count = await reqRepo.count({ where: { positionId } });
+      if (count >= MAX_POSITION_SKILLS) {
+        throw new ConflictException(
+          `A position may have at most ${MAX_POSITION_SKILLS} skills`,
+        );
+      }
+      const existing = await reqRepo.findOne({
+        where: { positionId, skillId: input.skillId },
+      });
+      if (existing) {
+        throw new ConflictException('Skill already required for this position');
+      }
+      const targetLevel = input.targetLevel ?? skill.scaleMin;
+      this.assertTargetInScale(skill, targetLevel);
+      const saved = await reqRepo.save(
+        reqRepo.create({
+          positionId,
+          skillId: input.skillId,
+          targetLevel,
+          required: input.required ?? true,
+          weight: input.weight ?? null,
+        }),
+      );
+      return this.toItem(saved, skill);
+    });
   }
 
   async updateSkillRequirement(
@@ -93,26 +120,35 @@ export class PositionRequirementsService {
       Pick<PositionSkillRequirement, 'skillId' | 'targetLevel' | 'required' | 'weight'>
     >,
   ): Promise<PositionSkillRequirementItem> {
-    const row = await this.getRequirementOrFail(positionId, id);
-    if (input.skillId !== undefined && input.skillId !== row.skillId) {
-      await this.skillsCatalog.getSkillOrFail(input.skillId);
-      const clash = await this.requirements.findOne({
-        where: { positionId, skillId: input.skillId },
-      });
-      if (clash && clash.id !== id) {
-        throw new ConflictException('Skill already required for this position');
+    await this.positions.getOrFail(positionId);
+    return this.dataSource.transaction(async (manager) => {
+      const reqRepo = manager.getRepository(PositionSkillRequirement);
+      const row = await reqRepo.findOne({ where: { id, positionId } });
+      if (!row) throw new NotFoundException('Skill requirement not found');
+
+      const nextSkillId = input.skillId ?? row.skillId;
+      const skill = await this.skillsCatalog.lockSkill(manager, nextSkillId);
+      if (input.skillId !== undefined && input.skillId !== row.skillId) {
+        if (!skill.isActive) {
+          throw new BadRequestException('Skill is inactive');
+        }
+        const clash = await reqRepo.findOne({
+          where: { positionId, skillId: input.skillId },
+        });
+        if (clash && clash.id !== id) {
+          throw new ConflictException('Skill already required for this position');
+        }
+        row.skillId = input.skillId;
       }
-      row.skillId = input.skillId;
-    }
-    if (input.targetLevel !== undefined) row.targetLevel = input.targetLevel;
-    if (input.required !== undefined) row.required = input.required;
-    if (input.weight !== undefined) row.weight = input.weight;
-    await this.requirements.save(row);
-    const found = (await this.listSkillRequirements(positionId)).find(
-      (r) => r.id === id,
-    );
-    if (!found) throw new NotFoundException('Skill requirement not found');
-    return found;
+      const nextTarget =
+        input.targetLevel !== undefined ? input.targetLevel : row.targetLevel;
+      this.assertTargetInScale(skill, nextTarget);
+      row.targetLevel = nextTarget;
+      if (input.required !== undefined) row.required = input.required;
+      if (input.weight !== undefined) row.weight = input.weight;
+      const saved = await reqRepo.save(row);
+      return this.toItem(saved, skill);
+    });
   }
 
   async deleteSkillRequirement(positionId: string, id: string): Promise<void> {

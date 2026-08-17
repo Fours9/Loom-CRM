@@ -6,12 +6,12 @@ Living companion to [ADR 0010](../adr/0010-position-catalog-and-questionnaire-co
 
 | Package | Role |
 | --- | --- |
-| `@loom/position-skill-catalog` | Pure `SKILL_DEFINITIONS` / `isSkillCode` — shared by questionnaire Track B and Organization skills seed |
+| `@loom/position-skill-catalog` | Pure registry (`isSkillCode`) + identity (`isSkillIdentityCode`) + `MAX_POSITION_SKILLS` — Settings custom codes + legacy matrix |
 | `@loom/contracts-questionnaires` | `QuestionnaireContextV1`, `QUESTIONNAIRE_VALUE_TYPES`, `position_skills_matrix` |
 
 ## Settings UI
 
-Product path: **`/settings/positions`** («Керування посадами») — directions, departments, positions, per-position skill requirements / duties / goal templates. Absences admin keeps privacy only (no position CRUD there).
+Product path: **`/settings/positions`** («Керування посадами») — four catalog columns (directions, departments, positions, skills) plus a position edit modal for immediate requirement attach/detach. Details panel skills are read-only. Absences admin keeps privacy only (no position CRUD there).
 
 ## Build
 
@@ -27,7 +27,11 @@ API `dev`/`build`/`typecheck` already build this package before Nest compile.
 | Assignment | Rows | Validation | Review labels |
 | --- | --- | --- | --- |
 | `context_json == null` (**legacy_registry**) | full `@loom/position-skill-catalog` | `skillCode ∈ registry` | registry |
-| `context_json.version === 1` (**context** / post-PR6 attach) | frozen `positionCatalog.skills` | ∈ registry **and** ⊆ context codes | frozen context (not live catalog) |
+| `context_json.version === 1` (**context**) | frozen `positionCatalog.skills` (incl. custom codes; `[]` = no ratings) | ⊆ frozen codes (**not** ∩ registry) | frozen context (not live catalog) |
+
+`ratings[].level` is always questionnaire **0–5**. `targetLevel` on the requirement/frozen row is the skill’s **native** scale (`range` / `percent`) — do not convert or gap-compare.
+
+`custom[]` stays extra-catalog (not identity).
 
 Never auto-upgrade legacy null to a live Position Catalog snapshot (`ensureContextCaptured` from live catalog is forbidden — would invalidate pre-PR6 ratings).
 
@@ -53,6 +57,7 @@ Historical Review uses `submission.context_json` (or registry if null), never cu
 | `PositionSkillCatalog1730000020000` | PR5 | `skill_groups` / `skills` (seed from registry) + `position_skill_requirements` / `position_duties` / `position_goal_templates` |
 | `QuestionnaireContextJson1730000021000` | PR6 | `questionnaire_assignments.context_json` / `questionnaire_submissions.context_json` |
 | `QuestionnaireAssignmentTitle1730000024000` | follow-up | optional assignment `title` |
+| `SkillNativeScale1730000025000` | this increment | `skills.scale_kind` / `scale_min`; DROP DEFAULT on `position_skill_requirements.target_level` |
 
 **Hierarchy:** Direction ←(optional) Department ←(optional) Position. Position stores `directionId` (Decision #10 / ADR 0010): department set → inherit; no department → optional manual.
 

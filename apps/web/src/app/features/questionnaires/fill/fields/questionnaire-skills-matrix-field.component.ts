@@ -13,8 +13,6 @@ import {
   SKILL_GROUP_LABELS_UA,
   SKILL_LEVEL_MAX,
   SKILL_LEVEL_MIN,
-  type SkillDefinition,
-  type SkillGroupCode,
 } from '@loom/position-skill-catalog';
 import {
   emptyPositionSkillsMatrix,
@@ -22,10 +20,21 @@ import {
   type PositionSkillsMatrixAnswer,
 } from '@loom/questionnaire-schema';
 
+/** Fill presentation row. Frozen context is used literally; null input → registry. */
+export type MatrixAvailableSkill = {
+  code: string;
+  labelUa: string;
+  group: string;
+  targetLevel?: number | null;
+  scaleKind?: 'range' | 'percent';
+  scaleMin?: number;
+  scaleMax?: number;
+};
+
 type GroupView = {
-  code: SkillGroupCode;
+  code: string;
   label: string;
-  skills: SkillDefinition[];
+  skills: MatrixAvailableSkill[];
 };
 
 @Component({
@@ -34,14 +43,25 @@ type GroupView = {
   imports: [FormsModule],
   template: `
     <div class="matrix" [class.disabled]="disabled">
-      <p class="hint">Оцініть навички від {{ levelMin }} до {{ levelMax }}.</p>
+      <p class="hint">
+        Оцініть навички від {{ levelMin }} до {{ levelMax }}. Оцінка незалежна від вимоги
+        посади.
+      </p>
+      @if (groups.length === 0 && availableSkills !== null) {
+        <p class="empty">Немає навичок у знімку посади.</p>
+      }
       @for (group of groups; track group.code) {
         <section class="group">
           <h3>{{ group.label }}</h3>
           <ul>
             @for (skill of group.skills; track skill.code) {
               <li>
-                <span class="label">{{ skill.labelUa }}</span>
+                <span class="label">
+                  {{ skill.labelUa }}
+                  @if (nativeHint(skill); as hint) {
+                    <small>{{ hint }}</small>
+                  }
+                </span>
                 <div class="dots" role="group" [attr.aria-label]="skill.labelUa">
                   @for (lvl of levels; track lvl) {
                     <button
@@ -118,10 +138,19 @@ type GroupView = {
         flex-direction: column;
         gap: 1.25rem;
       }
-      .hint {
+      .hint,
+      .empty {
         margin: 0;
         opacity: 0.75;
         font-size: 0.9rem;
+      }
+      .label {
+        display: grid;
+        gap: 0.15rem;
+      }
+      .label small {
+        font-size: 0.8rem;
+        opacity: 0.8;
       }
       .group h3,
       .custom h3 {
@@ -182,8 +211,11 @@ type GroupView = {
 export class QuestionnaireSkillsMatrixFieldComponent implements OnChanges {
   @Input() value: unknown;
   @Input() disabled = false;
-  /** When set (frozen context), only these rows; null/empty → full registry. */
-  @Input() availableSkills: { code: string; labelUa: string }[] | null = null;
+  /**
+   * `null` → legacy registry.
+   * Array (including `[]`) → literal frozen rows; do not fall back to registry.
+   */
+  @Input() availableSkills: MatrixAvailableSkill[] | null = null;
   @Output() matrixChange = new EventEmitter<PositionSkillsMatrixAnswer>();
 
   readonly levelMin = SKILL_LEVEL_MIN;
@@ -210,30 +242,58 @@ export class QuestionnaireSkillsMatrixFieldComponent implements OnChanges {
     }
   }
 
-  private buildGroups(
-    available: { code: string; labelUa: string }[] | null,
-  ): GroupView[] {
-    if (available && available.length > 0) {
-      const byCode = new Map(available.map((s) => [s.code, s]));
-      return SKILL_GROUP_CODES.map((code) => {
-        const skills = SKILL_DEFINITIONS.filter(
-          (s) => s.group === code && byCode.has(s.code),
-        ).map((s) => ({
-          ...s,
-          labelUa: byCode.get(s.code)?.labelUa ?? s.labelUa,
-        }));
-        return {
-          code,
-          label: SKILL_GROUP_LABELS_UA[code],
-          skills,
-        };
-      }).filter((g) => g.skills.length > 0);
+  nativeHint(skill: MatrixAvailableSkill): string | null {
+    if (skill.targetLevel == null) return null;
+    if (skill.scaleKind === 'percent') {
+      return `Вимога посади: ${skill.targetLevel}%`;
     }
-    return SKILL_GROUP_CODES.map((code) => ({
+    if (skill.scaleMax != null) {
+      return `Вимога посади: ${skill.targetLevel} / ${skill.scaleMax}`;
+    }
+    return `Вимога посади: ${skill.targetLevel}`;
+  }
+
+  private buildGroups(
+    available: MatrixAvailableSkill[] | null,
+  ): GroupView[] {
+    const rows =
+      available === null
+        ? SKILL_DEFINITIONS.map((s) => ({
+            code: s.code,
+            labelUa: s.labelUa,
+            group: s.group,
+          }))
+        : available;
+    if (rows.length === 0) return [];
+
+    const byGroup = new Map<string, MatrixAvailableSkill[]>();
+    for (const skill of rows) {
+      const key = skill.group?.trim() ? skill.group : '__other__';
+      const list = byGroup.get(key) ?? [];
+      list.push(skill);
+      byGroup.set(key, list);
+    }
+
+    const orderedKeys = [
+      ...SKILL_GROUP_CODES.filter((code) => byGroup.has(code)),
+      ...[...byGroup.keys()]
+        .filter((code) => !SKILL_GROUP_CODES.includes(code as (typeof SKILL_GROUP_CODES)[number]))
+        .sort((a, b) => a.localeCompare(b)),
+    ];
+
+    return orderedKeys.map((code) => ({
       code,
-      label: SKILL_GROUP_LABELS_UA[code],
-      skills: SKILL_DEFINITIONS.filter((s) => s.group === code),
+      label: this.groupLabel(code),
+      skills: byGroup.get(code) ?? [],
     }));
+  }
+
+  private groupLabel(code: string): string {
+    if (code === '__other__') return 'Інші';
+    return (
+      SKILL_GROUP_LABELS_UA[code as keyof typeof SKILL_GROUP_LABELS_UA] ??
+      (code.trim() ? code : 'Інші')
+    );
   }
 
   levelFor(code: string): number | null {
@@ -291,7 +351,6 @@ export class QuestionnaireSkillsMatrixFieldComponent implements OnChanges {
       const parsed = parsePositionSkillsMatrixStrict(next);
       this.matrix = {
         ...parsed,
-        // Preserve in-progress empty custom rows not yet persisted
         custom: next.custom.some((c) => !c.name.trim() && c.level == null)
           ? next.custom
           : parsed.custom,

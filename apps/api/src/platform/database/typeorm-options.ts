@@ -47,6 +47,7 @@ import { QuestionnaireContextJson1730000021000 } from './migrations/173000002100
 import { DepartmentBelongsToDirection1730000022000 } from './migrations/1730000022000-DepartmentBelongsToDirection';
 import { RestorePositionDirectionId1730000023000 } from './migrations/1730000023000-RestorePositionDirectionId';
 import { QuestionnaireAssignmentTitle1730000024000 } from './migrations/1730000024000-QuestionnaireAssignmentTitle';
+import { SkillNativeScale1730000025000 } from './migrations/1730000025000-SkillNativeScale';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -104,6 +105,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       DepartmentBelongsToDirection1730000022000,
       RestorePositionDirectionId1730000023000,
       QuestionnaireAssignmentTitle1730000024000,
+      SkillNativeScale1730000025000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

@@ -37,17 +37,32 @@ describe('position_skills_matrix', () => {
     expect(() => validatePositionSkillsMatrixForSubmit(m)).toThrow(/duplicate/);
   });
 
-  it('submit enforces frozen allowed set', () => {
+  it('submit allows custom identity when frozen allowlist includes it', () => {
     const m = parsePositionSkillsMatrixStrict({
-      ratings: [
-        { skillCode: 'sewing', level: 4 },
-        { skillCode: 'packing', level: 2 },
-      ],
+      ratings: [{ skillCode: 'skill_abc123def', level: 4 }],
       custom: [],
     });
     expect(() =>
-      validatePositionSkillsMatrixForSubmit(m, ['sewing']),
-    ).toThrow(/frozen/);
+      validatePositionSkillsMatrixForSubmit(m, ['skill_abc123def']),
+    ).not.toThrow();
+  });
+
+  it('submit rejects custom identity in legacy (no allowlist)', () => {
+    const m = parsePositionSkillsMatrixStrict({
+      ratings: [{ skillCode: 'skill_abc123def', level: 4 }],
+      custom: [],
+    });
+    expect(() => validatePositionSkillsMatrixForSubmit(m)).toThrow(/registry/);
+  });
+
+  it('submit rejects sewing when frozen allowlist is empty', () => {
+    const m = parsePositionSkillsMatrixStrict({
+      ratings: [{ skillCode: 'sewing', level: 4 }],
+      custom: [],
+    });
+    expect(() => validatePositionSkillsMatrixForSubmit(m, [])).toThrow(
+      /frozen/,
+    );
   });
 
   it('meaningful when any rated skill', () => {
