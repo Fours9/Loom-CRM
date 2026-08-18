@@ -93,7 +93,7 @@ export class SkillsService {
   }
 
   /**
-   * Settings HTTP create: generated immutable `group_<12hex>`.
+   * Position Catalog Organization UI create: generated immutable `group_<12hex>`.
    * Seeded codes (TECH/BEAUTY/OFFICE) stay migration-only.
    */
   async createCustomGroup(input: {
@@ -194,12 +194,18 @@ export class SkillsService {
     manager: EntityManager,
     id: string,
   ): Promise<Skill> {
+    // Lock the skill row only. `relations: { group: true }` + pessimistic_write
+    // becomes LEFT JOIN … FOR UPDATE, which Postgres rejects (nullable outer join).
     const row = await manager.getRepository(Skill).findOne({
       where: { id },
-      relations: { group: true },
       lock: { mode: 'pessimistic_write' },
     });
     if (!row) throw new NotFoundException('Skill not found');
+    const group = await manager.getRepository(SkillGroup).findOne({
+      where: { id: row.groupId },
+    });
+    if (!group) throw new NotFoundException('Skill group not found');
+    row.group = group;
     return row;
   }
 

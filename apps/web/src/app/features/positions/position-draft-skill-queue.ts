@@ -14,16 +14,15 @@ export type SkillScaleSnapshot = {
   scaleKind?: 'range' | 'percent' | null;
 };
 
-let clientSeq = 0;
-
-function nextClientId(): string {
-  clientSeq += 1;
-  return `draft-${clientSeq}`;
-}
-
 export class PositionDraftSkillQueue {
   private rows: PendingSkillRequirement[] = [];
+  private clientSeq = 0;
   private nextSequence = 1;
+
+  private nextClientId(): string {
+    this.clientSeq += 1;
+    return `draft-${this.clientSeq}`;
+  }
 
   snapshot(): PendingSkillRequirement[] {
     return this.rows.map((row) => ({ ...row }));
@@ -70,6 +69,7 @@ export class PositionDraftSkillQueue {
 
   reset(): void {
     this.rows = [];
+    this.clientSeq = 0;
     this.nextSequence = 1;
   }
 
@@ -90,7 +90,7 @@ export class PositionDraftSkillQueue {
     const toAdd = unique.slice(0, room);
     for (const skill of toAdd) {
       this.rows.push({
-        clientId: nextClientId(),
+        clientId: this.nextClientId(),
         sequence: this.nextSequence,
         skillId: skill.id,
         targetLevel: skill.scaleMin,

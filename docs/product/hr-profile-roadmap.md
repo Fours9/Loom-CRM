@@ -7,7 +7,7 @@
 | **1. Employee Profile Core** | Header, section edit (basics/contacts/personal/dates/employment), assignment history, capabilities, audit/history API, completeness, `/people/:id` | **Done** |
 | 2. Self-service + approval | `/me/profile`, change requests, approval queue | Planned |
 | 3. Questionnaires MVP | Seeded 360 template, assign, draft autosave, immutable submissions, review, profile proposals, fill wizard ([field catalog](./questionnaire-360-field-catalog.md), [ADR 0009](../adr/0009-questionnaire-360-mvp.md)). Track B: published Managing/Docs content. | **In progress / Partially implemented** (foundation + fill + Track B content shipped; see Remaining below) |
-| 3b. Position Catalog | Settings «Керування посадами», position↔direction/dept, skills requirements, frozen questionnaire context | **Shipped (PR1–PR6)** — closeout docs PR7; optional fill suggestions from `goalTemplates`/`duties` deferred ([ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](../dev/position-catalog.md)) |
+| 3b. Position Catalog | `/positions` («Керування посадами»), position↔direction/dept, skills requirements, frozen questionnaire context | **Shipped (PR1–PR6)** — closeout docs PR7; optional fill suggestions from `goalTemplates`/`duties` deferred ([ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](../dev/position-catalog.md)) |
 | 4. Onboarding | Templates, tasks, progress widget | Planned |
 | 5. Goals + probation reviews | Goals, manager review cycles | Planned |
 | 6. Skills + development | Catalogs, position requirements, assessments | Planned |

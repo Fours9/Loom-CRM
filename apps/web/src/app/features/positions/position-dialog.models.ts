@@ -145,37 +145,76 @@ export function persistedToRowVm(row: PersistedRequirementLike): RequirementRowV
 
 /**
  * Merge server-backed rows with leftover draft/failed/conflict rows.
- * Conflict drafts hide the matching persisted twin so the modal shows one row per skill.
+ * Invariant: at most one presentation row per skillId.
+ * Unresolved draft wins over persisted, in order: conflict > failed > pending/applying > persisted.
+ * Leftover drafts (no persisted twin) append in sequence ASC.
  */
 export function mergeRequirementRows(
   persisted: readonly PersistedRequirementLike[],
   drafts: readonly PendingSkillRequirement[],
 ): RequirementRowVm[] {
-  const draftBySkill = new Map(drafts.map((d) => [d.skillId, d]));
-  const hiddenSkillIds = new Set(
-    drafts
-      .filter((d) => d.state === 'conflict' || d.state === 'pending' || d.state === 'applying')
-      .map((d) => d.skillId),
-  );
+  const bestDraftBySkill = new Map<string, PendingSkillRequirement>();
+  for (const draft of drafts) {
+    const prev = bestDraftBySkill.get(draft.skillId);
+    if (!prev || unresolvedDraftRank(draft.state) > unresolvedDraftRank(prev.state)) {
+      bestDraftBySkill.set(draft.skillId, draft);
+    }
+  }
 
+  const usedSkills = new Set<string>();
   const rows: RequirementRowVm[] = [];
   for (const row of persisted) {
-    const draft = draftBySkill.get(row.skillId);
-    if (draft?.state === 'conflict') {
+    const draft = bestDraftBySkill.get(row.skillId);
+    if (draft && unresolvedDraftRank(draft.state) > 0) {
       rows.push(draftToRowVm(draft));
-      continue;
+    } else {
+      rows.push(persistedToRowVm(row));
     }
-    if (hiddenSkillIds.has(row.skillId)) continue;
-    rows.push(persistedToRowVm(row));
+    usedSkills.add(row.skillId);
   }
-  for (const draft of drafts) {
-    if (draft.state === 'conflict') continue;
-    if (persisted.some((row) => row.skillId === draft.skillId) && draft.state !== 'failed') {
-      continue;
-    }
+
+  const leftovers = [...bestDraftBySkill.values()]
+    .filter((draft) => !usedSkills.has(draft.skillId))
+    .sort((a, b) => a.sequence - b.sequence);
+  for (const draft of leftovers) {
     rows.push(draftToRowVm(draft));
   }
   return rows;
+}
+
+function unresolvedDraftRank(state: DraftRequirementState): number {
+  if (state === 'conflict') return 4;
+  if (state === 'failed') return 3;
+  if (state === 'pending' || state === 'applying') return 2;
+  return 0;
+}
+
+export function httpErrorMessage(err: unknown, fallback: string): string {
+  const msg = (err as { error?: { message?: string | string[] } })?.error?.message;
+  if (Array.isArray(msg)) return msg.join(', ');
+  if (typeof msg === 'string' && msg.trim()) return msg;
+  return fallback;
+}
+
+export function compareByUkNameThenId(
+  a: { name: string; id: string },
+  b: { name: string; id: string },
+  sign: number,
+): number {
+  const byName = a.name.localeCompare(b.name, 'uk');
+  if (byName !== 0) return byName * sign;
+  return a.id.localeCompare(b.id);
+}
+
+export type PositionSaveCompletion = 'close-and-reset' | 'keep-open-with-queue';
+
+/** Close after PATCH only when the draft queue is empty (precondition for closeAfterSuccessfulSave). */
+export function positionSaveCompletion(input: {
+  queueEmpty: boolean;
+  hasUnresolved: boolean;
+}): PositionSaveCompletion {
+  if (input.hasUnresolved || !input.queueEmpty) return 'keep-open-with-queue';
+  return 'close-and-reset';
 }
 
 export function formatNativeTarget(row: {

@@ -1,11 +1,8 @@
-import { Component, HostListener, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { PositionManagementFacade } from './position-management.facade';
+import { Component, HostListener, input, output } from '@angular/core';
 
 @Component({
-  selector: 'loom-direction-edit-dialog',
+  selector: 'loom-catalog-edit-dialog',
   standalone: true,
-  imports: [FormsModule],
   template: `
     <div
       class="backdrop"
@@ -18,52 +15,29 @@ import { PositionManagementFacade } from './position-management.facade';
         (click)="$event.stopPropagation()"
         role="dialog"
         aria-modal="true"
-        [attr.aria-labelledby]="headingId"
+        [attr.aria-labelledby]="headingId()"
       >
         <div class="head">
-          <h2 [id]="headingId">
-            {{ vm.editingDirectionId() ? 'Редагувати напрямок' : 'Новий напрямок' }}
-          </h2>
+          <h2 [id]="headingId()">{{ title() }}</h2>
           <div class="head-actions">
-            @if (vm.editingDirectionId()) {
-              <label class="check toggle-active">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="vm.formDirectionIsActive"
-                  name="formDirectionIsActive"
-                />
-                Увімкнено
-              </label>
-            }
-            <button type="button" (click)="vm.saveDirection()">
-              {{ vm.editingDirectionId() ? 'Зберегти' : 'Створити' }}
-            </button>
+            <ng-content select="[catalogHeadActions]" />
             <button
               type="button"
               class="icon-close"
               aria-label="Закрити"
               title="Закрити"
-              (click)="vm.closeDirectionDialog()"
+              (click)="closed.emit()"
             >
               ×
             </button>
           </div>
         </div>
 
-        @if (vm.error()) {
-          <p class="error">{{ vm.error() }}</p>
+        @if (error()) {
+          <p class="error">{{ error() }}</p>
         }
 
-        <form class="catalog-form" novalidate (submit)="$event.preventDefault()">
-          <label>
-            Назва
-            <input
-              [(ngModel)]="vm.newDirection"
-              name="newDirection"
-              placeholder="Назва напрямку"
-            />
-          </label>
-        </form>
+        <ng-content />
       </div>
     </div>
   `,
@@ -90,6 +64,8 @@ import { PositionManagementFacade } from './position-management.facade';
         background: var(--pw-surface);
         border: 1px solid var(--pw-border);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+        max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.75rem);
+        overflow: auto;
       }
       .head {
         display: flex;
@@ -112,31 +88,6 @@ import { PositionManagementFacade } from './position-management.facade';
         margin: 0;
         color: var(--pw-danger);
       }
-      .catalog-form label {
-        display: grid;
-        gap: 0.3rem;
-        font-size: 0.9rem;
-      }
-      .check {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      input,
-      button {
-        padding: 0.5rem 0.7rem;
-        border-radius: 8px;
-        border: 1px solid var(--pw-border-strong);
-        box-sizing: border-box;
-        font: inherit;
-      }
-      button {
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        border: 0;
-        cursor: pointer;
-      }
       .icon-close {
         display: inline-grid;
         place-items: center;
@@ -149,24 +100,17 @@ import { PositionManagementFacade } from './position-management.facade';
         background: transparent;
         color: var(--pw-text);
         border: 1px solid var(--pw-border-strong);
-      }
-      .toggle-active {
-        white-space: nowrap;
-      }
-      .check input[type='checkbox'] {
-        width: 1rem;
-        height: 1rem;
-        margin: 0;
-        padding: 0;
-        border: none;
-        flex: 0 0 auto;
+        border-radius: 8px;
+        cursor: pointer;
       }
     `,
   ],
 })
-export class DirectionEditDialogComponent {
-  readonly vm = inject(PositionManagementFacade);
-  readonly headingId = 'direction-edit-dialog-title';
+export class CatalogEditDialogComponent {
+  readonly headingId = input.required<string>();
+  readonly title = input.required<string>();
+  readonly error = input('');
+  readonly closed = output<void>();
   private backdropPress = false;
 
   onBackdropPointerDown(event: Event): void {
@@ -175,13 +119,13 @@ export class DirectionEditDialogComponent {
 
   onBackdropClick(event: Event): void {
     if (this.backdropPress && event.target === event.currentTarget) {
-      this.vm.closeDirectionDialog();
+      this.closed.emit();
     }
     this.backdropPress = false;
   }
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    this.vm.closeDirectionDialog();
+    this.closed.emit();
   }
 }

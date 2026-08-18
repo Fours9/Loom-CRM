@@ -6,12 +6,12 @@ Living companion to [ADR 0010](../adr/0010-position-catalog-and-questionnaire-co
 
 | Package | Role |
 | --- | --- |
-| `@loom/position-skill-catalog` | Pure registry (`isSkillCode`) + identity (`isSkillIdentityCode`) + `MAX_POSITION_SKILLS` — Settings custom codes + legacy matrix |
+| `@loom/position-skill-catalog` | Pure registry (`isSkillCode`) + identity (`isSkillIdentityCode`) + `MAX_POSITION_SKILLS` — Position Catalog custom codes + legacy matrix |
 | `@loom/contracts-questionnaires` | `QuestionnaireContextV1`, `QUESTIONNAIRE_VALUE_TYPES`, `position_skills_matrix` |
 
-## Settings UI
+## Position Catalog UI
 
-Product path: **`/positions`** (sidebar «Керування посадами»; `/settings/positions` redirects here) — three catalog rail columns (directions, departments, positions) plus a full-width **Groups + Skills** block below the rail (not a 4th rail column). Position edit modal attaches requirements; details panel skills are read-only. Absences admin keeps privacy only (no position CRUD there).
+Product path: **`/positions`** (sidebar «Керування посадами»; `/settings/positions` redirects here) — three catalog rail columns (directions, departments, positions) plus a full-width **Groups + Skills** block below the rail (not a 4th rail column). Frontend feature: `apps/web/src/app/features/positions/` (lazy route); `/settings/positions` remains a compatibility redirect. Position edit modal attaches requirements; details panel skills are read-only. Absences admin keeps privacy only (no position CRUD there).
 
 ## Build
 
@@ -86,16 +86,16 @@ Schema via TypeORM migrations only — never `synchronize: true`.
 
 ## Pre-create skill requirements (frontend draft queue)
 
-Persisted `position_skill_requirements` still require a `positionId`. The Settings modal lets the user queue requirements **before** create, as a frontend-only command list (`PositionDraftSkillQueue`). This is **not** a second domain model.
+Persisted `position_skill_requirements` still require a `positionId`. The Position dialog lets the user queue requirements **before** create, as a frontend-only command list (`PositionDraftSkillQueue`). This is **not** a second domain model.
 
 Boundaries:
 
 | Layer | Role |
 | --- | --- |
 | `PositionEditDialog` | Renders `RequirementRowVm[]` and calls facade actions. Does not know backing storage. |
-| `PositionManagementFacade` | Orchestration + `PositionDialogMode` lifecycle. Dispatches requirement mutations by `row.kind`. |
+| `PositionManagementFacade` | Orchestration + `PositionDialogMode` lifecycle. Dispatches requirement mutations by `row.kind`. Create / edit picker / retry apply drafts via `applyQueuedRequirements`. |
 | `PositionDraftSkillQueue` | Transient pending/failed/conflict commands. Monotonic `sequence` is **session-level apply order only**. |
-| `SettingsOrgApiService` | HTTP: positions, requirements, skill groups/skills. |
+| `SettingsOrgApiService` | Legacy-named shared Organization HTTP client (relocation/rename deferred): positions, requirements, skill groups/skills. |
 | Backend | Persistence, validation, group/skill lifecycle. |
 
 `PositionDialogMode`: `create` → `creating-position` → (`unresolved-create` **or** `applying-drafts` → `edit` / `edit-with-failed-drafts`).
@@ -113,7 +113,7 @@ Canonical **persisted** display order: `createdAt ASC, id ASC`. Local insertion 
 
 Close policy: non-empty create drafts → confirm discard; `creating-position` / `applying-drafts` → close disabled; `unresolved-create` → acknowledgement; `edit-with-failed-drafts` → warn before discarding failed intents.
 
-## Skill groups in Settings
+## Skill groups in Position Catalog
 
 The Groups + Skills block is two columns in one card: groups (CRUD) and skills for the selected group. Public `POST /skill-groups` accepts `{ name, sortOrder? }` only — **no `code`**. Backend `createCustomGroup()` generates immutable `group_<12hex>` with unique-violation retry. Seeded `TECH` / `BEAUTY` / `OFFICE` remain migration-only.
 

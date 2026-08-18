@@ -24,7 +24,7 @@ export const routes: Routes = [
       {
         path: 'positions',
         loadChildren: () =>
-          import('./features/settings/positions/positions.routes').then(
+          import('./features/positions/positions.routes').then(
             (m) => m.POSITIONS_ROUTES,
           ),
       },
