@@ -57,7 +57,7 @@ export class PositionRequirementsService {
     const rows = await this.requirements.find({
       where: { positionId },
       relations: { skill: true },
-      order: { createdAt: 'ASC' },
+      order: { createdAt: 'ASC', id: 'ASC' },
     });
     return rows.map((row) => this.toItem(row));
   }
@@ -82,9 +82,7 @@ export class PositionRequirementsService {
     await this.positions.getOrFail(positionId);
     return this.dataSource.transaction(async (manager) => {
       const skill = await this.skillsCatalog.lockSkill(manager, input.skillId);
-      if (!skill.isActive) {
-        throw new BadRequestException('Skill is inactive');
-      }
+      this.skillsCatalog.assertSkillAttachable(skill);
       const reqRepo = manager.getRepository(PositionSkillRequirement);
       const count = await reqRepo.count({ where: { positionId } });
       if (count >= MAX_POSITION_SKILLS) {
@@ -129,9 +127,7 @@ export class PositionRequirementsService {
       const nextSkillId = input.skillId ?? row.skillId;
       const skill = await this.skillsCatalog.lockSkill(manager, nextSkillId);
       if (input.skillId !== undefined && input.skillId !== row.skillId) {
-        if (!skill.isActive) {
-          throw new BadRequestException('Skill is inactive');
-        }
+        this.skillsCatalog.assertSkillAttachable(skill);
         const clash = await reqRepo.findOne({
           where: { positionId, skillId: input.skillId },
         });

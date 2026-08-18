@@ -54,39 +54,103 @@ export class SkillsService {
     return row;
   }
 
-  async createGroup(input: {
-    code: string;
+  async lockGroup(manager: EntityManager, id: string): Promise<SkillGroup> {
+    const row = await manager.getRepository(SkillGroup).findOne({
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!row) throw new NotFoundException('Skill group not found');
+    return row;
+  }
+
+  async assertCanDeactivateGroup(
+    groupId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const count = await manager.getRepository(Skill).count({
+      where: { groupId, isActive: true },
+    });
+    if (count > 0) {
+      throw new ConflictException(
+        'Deactivate all skills in this group before deactivating the group',
+      );
+    }
+  }
+
+  assertGroupActive(group: SkillGroup): void {
+    if (!group.isActive) {
+      throw new BadRequestException('Skill group is inactive');
+    }
+  }
+
+  assertSkillAttachable(skill: Skill): void {
+    if (!skill.isActive) {
+      throw new BadRequestException('Skill is inactive');
+    }
+    if (!skill.group || !skill.group.isActive) {
+      throw new BadRequestException('Skill group is inactive');
+    }
+  }
+
+  /**
+   * Settings HTTP create: generated immutable `group_<12hex>`.
+   * Seeded codes (TECH/BEAUTY/OFFICE) stay migration-only.
+   */
+  async createCustomGroup(input: {
     name: string;
     sortOrder?: number;
   }): Promise<SkillGroup> {
-    const code = input.code.trim();
-    const existing = await this.groups.findOne({ where: { code } });
-    if (existing) throw new ConflictException('Skill group code already exists');
-    return this.groups.save(
-      this.groups.create({
-        code,
-        name: input.name.trim(),
-        sortOrder: input.sortOrder ?? 0,
-        isActive: true,
-      }),
-    );
+    const name = input.name.trim();
+    const sortOrder = input.sortOrder ?? 0;
+    for (let attempt = 0; attempt < GENERATE_CODE_ATTEMPTS; attempt += 1) {
+      const code = `group_${randomBytes(6).toString('hex')}`;
+      try {
+        return await this.groups.save(
+          this.groups.create({
+            code,
+            name,
+            sortOrder,
+            isActive: true,
+          }),
+        );
+      } catch (err) {
+        if (isUniqueViolation(err) && attempt < GENERATE_CODE_ATTEMPTS - 1) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new ConflictException('Could not allocate a unique skill group code');
   }
 
   async updateGroup(
     id: string,
     input: Partial<Pick<SkillGroup, 'name' | 'sortOrder' | 'isActive'>>,
   ): Promise<SkillGroup> {
-    const row = await this.getGroupOrFail(id);
-    if (input.name !== undefined) row.name = input.name;
-    if (input.sortOrder !== undefined) row.sortOrder = input.sortOrder;
-    if (input.isActive !== undefined) row.isActive = input.isActive;
-    return this.groups.save(row);
+    return this.dataSource.transaction(async (manager) => {
+      const groupRepo = manager.getRepository(SkillGroup);
+      const row = await this.lockGroup(manager, id);
+      if (input.name !== undefined) row.name = input.name;
+      if (input.sortOrder !== undefined) row.sortOrder = input.sortOrder;
+      if (input.isActive === false && row.isActive) {
+        await this.assertCanDeactivateGroup(id, manager);
+        row.isActive = false;
+      } else if (input.isActive === true) {
+        row.isActive = true;
+      }
+      return groupRepo.save(row);
+    });
   }
 
   async softDeleteGroup(id: string): Promise<void> {
-    const row = await this.getGroupOrFail(id);
-    row.isActive = false;
-    await this.groups.save(row);
+    await this.dataSource.transaction(async (manager) => {
+      const row = await this.lockGroup(manager, id);
+      if (row.isActive) {
+        await this.assertCanDeactivateGroup(id, manager);
+        row.isActive = false;
+        await manager.getRepository(SkillGroup).save(row);
+      }
+    });
   }
 
   findSkills(query: {
@@ -168,7 +232,6 @@ export class SkillsService {
     scaleMin?: number;
     scaleMax?: number;
   }): Promise<Skill> {
-    const group = await this.getGroupOrFail(input.groupId);
     const scaleKind: SkillScaleKind = input.scaleKind ?? 'range';
     if (!isSkillScaleKind(scaleKind)) {
       throw new BadRequestException('scaleKind must be range or percent');
@@ -177,41 +240,28 @@ export class SkillsService {
     const scaleMax = input.scaleMax ?? 5;
     this.assertScalePair(scaleKind, scaleMin, scaleMax);
 
-    let code: string;
-    if (input.code != null && input.code.trim() !== '') {
-      code = input.code.trim();
-      if (!isSkillCode(code)) {
-        throw new BadRequestException(
-          `Skill code must exist in @loom/position-skill-catalog (got "${code}")`,
-        );
-      }
-      const def = skillDefinitionByCode(code);
-      if (def && group.code !== def.group) {
-        throw new BadRequestException(
-          `Skill "${code}" belongs to group ${def.group}, not ${group.code}`,
-        );
-      }
-      const existing = await this.skills.findOne({ where: { code } });
-      if (existing) throw new ConflictException('Skill code already exists');
-      return this.skills.save(
-        this.skills.create({
-          groupId: input.groupId,
-          code,
-          name: input.name.trim(),
-          description: input.description ?? null,
-          scaleKind,
-          scaleMin,
-          scaleMax,
-          isActive: true,
-        }),
-      );
-    }
+    return this.dataSource.transaction(async (manager) => {
+      const group = await this.lockGroup(manager, input.groupId);
+      this.assertGroupActive(group);
+      const skillRepo = manager.getRepository(Skill);
 
-    for (let attempt = 0; attempt < GENERATE_CODE_ATTEMPTS; attempt += 1) {
-      code = `skill_${randomBytes(6).toString('hex')}`;
-      try {
-        return await this.skills.save(
-          this.skills.create({
+      if (input.code != null && input.code.trim() !== '') {
+        const code = input.code.trim();
+        if (!isSkillCode(code)) {
+          throw new BadRequestException(
+            `Skill code must exist in @loom/position-skill-catalog (got "${code}")`,
+          );
+        }
+        const def = skillDefinitionByCode(code);
+        if (def && group.code !== def.group) {
+          throw new BadRequestException(
+            `Skill "${code}" belongs to group ${def.group}, not ${group.code}`,
+          );
+        }
+        const existing = await skillRepo.findOne({ where: { code } });
+        if (existing) throw new ConflictException('Skill code already exists');
+        return skillRepo.save(
+          skillRepo.create({
             groupId: input.groupId,
             code,
             name: input.name.trim(),
@@ -222,14 +272,32 @@ export class SkillsService {
             isActive: true,
           }),
         );
-      } catch (err) {
-        if (isUniqueViolation(err) && attempt < GENERATE_CODE_ATTEMPTS - 1) {
-          continue;
-        }
-        throw err;
       }
-    }
-    throw new ConflictException('Could not allocate a unique skill code');
+
+      for (let attempt = 0; attempt < GENERATE_CODE_ATTEMPTS; attempt += 1) {
+        const code = `skill_${randomBytes(6).toString('hex')}`;
+        try {
+          return await skillRepo.save(
+            skillRepo.create({
+              groupId: input.groupId,
+              code,
+              name: input.name.trim(),
+              description: input.description ?? null,
+              scaleKind,
+              scaleMin,
+              scaleMax,
+              isActive: true,
+            }),
+          );
+        } catch (err) {
+          if (isUniqueViolation(err) && attempt < GENERATE_CODE_ATTEMPTS - 1) {
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw new ConflictException('Could not allocate a unique skill code');
+    });
   }
 
   async updateSkill(
@@ -289,15 +357,18 @@ export class SkillsService {
       if (input.isActive === false && row.isActive) {
         await this.assertCanDeactivateSkill(id, manager);
         row.isActive = false;
-      } else if (input.isActive === true) {
+      } else if (input.isActive === true && !row.isActive) {
+        const groupForEnable = await this.lockGroup(
+          manager,
+          input.groupId ?? row.groupId,
+        );
+        this.assertGroupActive(groupForEnable);
         row.isActive = true;
       }
 
       if (input.groupId !== undefined && input.groupId !== row.groupId) {
-        const group = await manager.getRepository(SkillGroup).findOne({
-          where: { id: input.groupId },
-        });
-        if (!group) throw new NotFoundException('Skill group not found');
+        const group = await this.lockGroup(manager, input.groupId);
+        this.assertGroupActive(group);
         const def = skillDefinitionByCode(row.code);
         if (def && group.code !== def.group) {
           throw new BadRequestException(

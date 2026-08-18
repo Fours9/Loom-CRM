@@ -1,6 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { PositionManagementFacade } from './position-management.facade';
+import type { RequirementRowVm } from './position-dialog.models';
 
 @Component({
   selector: 'loom-position-edit-dialog',
@@ -22,16 +23,25 @@ import { PositionManagementFacade } from './position-management.facade';
       >
         <div class="head">
           <h2 [id]="headingId">
-            {{ vm.editingId() ? 'Редагувати посаду' : 'Нова посада' }}
+            {{ heading() }}
           </h2>
           <div class="head-actions">
             @if (vm.editingId()) {
               <label class="check toggle-active">
-                <input type="checkbox" [(ngModel)]="vm.formIsActive" name="formIsActive" />
+                <input
+                  type="checkbox"
+                  [(ngModel)]="vm.formIsActive"
+                  name="formIsActive"
+                  [disabled]="vm.saveLocked()"
+                />
                 Увімкнено
               </label>
             }
-            <button type="button" (click)="vm.savePosition()">
+            <button
+              type="button"
+              (click)="vm.savePosition()"
+              [disabled]="vm.saveLocked()"
+            >
               {{ vm.editingId() ? 'Зберегти' : 'Створити' }}
             </button>
             <button
@@ -39,7 +49,8 @@ import { PositionManagementFacade } from './position-management.facade';
               class="icon-close"
               aria-label="Закрити"
               title="Закрити"
-              (click)="vm.closePositionDialog()"
+              (click)="vm.requestClose()"
+              [disabled]="vm.closeLocked()"
             >
               ×
             </button>
@@ -49,14 +60,37 @@ import { PositionManagementFacade } from './position-management.facade';
         @if (vm.error()) {
           <p class="error">{{ vm.error() }}</p>
         }
+        @if (vm.dialogMode() === 'unresolved-create') {
+          <p class="error">
+            Не вдалося підтвердити результат створення. Перед повторним створенням
+            перевірте список посад.
+          </p>
+        }
+        @if (vm.dialogMode() === 'applying-drafts') {
+          <p class="hint">Додаємо вимоги до навичок…</p>
+        }
+        @if (vm.dialogMode() === 'edit-with-failed-drafts') {
+          <p class="hint">
+            Посаду створено. Деякі вимоги не додано.
+            <button
+              type="button"
+              class="ghost-neutral"
+              (click)="vm.retryFailedDrafts()"
+              [disabled]="vm.saveLocked()"
+            >
+              Повторити невдалі
+            </button>
+          </p>
+        }
 
-        <form class="position-form" novalidate (submit)="$event.preventDefault()">
+        <form class="position-form" novalidate (submit)="$event.preventDefault(); vm.savePosition()">
           <label>
             Назва
             <input
               [(ngModel)]="vm.formName"
               name="formName"
               placeholder="Назва посади"
+              [disabled]="vm.saveLocked()"
             />
           </label>
           <div class="org-row">
@@ -66,6 +100,7 @@ import { PositionManagementFacade } from './position-management.facade';
                 [(ngModel)]="vm.formDepartmentId"
                 name="formDepartmentId"
                 (ngModelChange)="vm.onFormDepartmentChange()"
+                [disabled]="vm.saveLocked()"
               >
                 <option [ngValue]="''">Без відділу</option>
                 @for (d of vm.formDepartmentOptions(); track d.id) {
@@ -78,7 +113,7 @@ import { PositionManagementFacade } from './position-management.facade';
               <select
                 [(ngModel)]="vm.formDirectionId"
                 name="formDirectionId"
-                [disabled]="!!vm.formDepartmentId"
+                [disabled]="!!vm.formDepartmentId || vm.saveLocked()"
               >
                 <option value="">Без напрямку</option>
                 @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
@@ -97,57 +132,65 @@ import { PositionManagementFacade } from './position-management.facade';
               name="formDescription"
               rows="2"
               placeholder="Опис посади (необовʼязково)"
+              [disabled]="vm.saveLocked()"
             ></textarea>
           </label>
         </form>
 
-        <section class="reqs" [class.disabled]="!vm.editingId()">
+        <section class="reqs" [class.disabled]="vm.skillsEditingLocked()">
           <h3>Вимоги до навичок</h3>
-          @if (!vm.editingId()) {
-            <p class="hint">Спочатку створіть посаду — тоді можна додавати навички.</p>
-          }
+          <p class="hint">
+            {{ vm.requirementRows().length }} / {{ vm.maxPositionSkills }}
+          </p>
           @if (vm.canManagePositions()) {
-            <form class="inline add-row" (ngSubmit)="vm.addSkillRequirement()">
-              <select
-                [(ngModel)]="vm.reqSkillId"
-                name="reqSkillId"
-                [disabled]="!vm.editingId()"
-                (ngModelChange)="vm.onReqSkillChange()"
+            <div class="picker">
+              <button
+                type="button"
+                class="ghost-neutral"
+                (click)="vm.togglePicker()"
+                [disabled]="vm.skillsEditingLocked() || vm.skillsQuotaReached()"
               >
-                <option value="">Оберіть навичку</option>
-                @for (s of vm.availableSkills(); track s.id) {
-                  <option [value]="s.id">{{ s.group?.name || '' }} — {{ s.name }}</option>
-                }
-              </select>
-              <label class="level">
-                Ціль
-                <input
-                  type="number"
-                  [(ngModel)]="vm.reqTargetLevel"
-                  name="reqTargetLevel"
-                  [disabled]="!vm.editingId()"
-                />
-              </label>
-              <label class="check">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="vm.reqRequired"
-                  name="reqRequired"
-                  [disabled]="!vm.editingId()"
-                />
-                Обовʼязкова
-              </label>
-              <button type="submit" [disabled]="!vm.editingId()">Додати</button>
-            </form>
+                {{ vm.pickerOpen() ? 'Сховати список' : 'Додати навички' }}
+              </button>
+              @if (vm.pickerOpen()) {
+                <div class="picker-list">
+                  @for (s of vm.pickerCandidateSkills(); track s.id) {
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="vm.isPickerSelected(s.id)"
+                        (change)="vm.togglePickerSkill(s.id)"
+                      />
+                      {{ s.group?.name || '' }} — {{ s.name }}
+                    </label>
+                  } @empty {
+                    <p class="hint">Немає доступних навичок</p>
+                  }
+                  <button
+                    type="button"
+                    (click)="vm.confirmPickerSkills()"
+                    [disabled]="vm.pickerSelectedIds().length === 0"
+                  >
+                    Додати вибрані
+                  </button>
+                </div>
+              }
+            </div>
           }
           <ul>
-            @for (r of vm.skillRequirements(); track r.id) {
-              <li>
+            @for (r of vm.requirementRows(); track rowTrack(r)) {
+              <li [class.failed]="r.kind === 'draft' && r.state === 'failed'">
                 <span>
                   <strong>{{ r.skillName || r.skillCode }}</strong>
                   <small>{{ vm.formatNativeTarget(r) }}</small>
                   @if (r.required) {
                     <small class="badge">обовʼязкова</small>
+                  }
+                  @if (r.kind === 'draft') {
+                    <small class="badge draft">{{ vm.rowStateLabel(r) }}</small>
+                  }
+                  @if (r.kind === 'draft' && r.error) {
+                    <small class="error-inline">{{ r.error }}</small>
                   }
                 </span>
                 @if (vm.canManagePositions()) {
@@ -156,7 +199,10 @@ import { PositionManagementFacade } from './position-management.facade';
                       type="button"
                       class="ghost-neutral"
                       (click)="vm.bumpRequirementLevel(r, -1)"
-                      [disabled]="!vm.editingId() || r.targetLevel <= (r.skillScaleMin ?? 0)"
+                      [disabled]="
+                        vm.skillsEditingLocked() ||
+                        r.targetLevel <= (r.skillScaleMin ?? 0)
+                      "
                     >
                       −
                     </button>
@@ -165,16 +211,28 @@ import { PositionManagementFacade } from './position-management.facade';
                       class="ghost-neutral"
                       (click)="vm.bumpRequirementLevel(r, 1)"
                       [disabled]="
-                        !vm.editingId() || r.targetLevel >= (r.skillScaleMax ?? r.targetLevel)
+                        vm.skillsEditingLocked() ||
+                        r.targetLevel >= (r.skillScaleMax ?? r.targetLevel)
                       "
                     >
                       +
                     </button>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="r.required"
+                        [disabled]="vm.skillsEditingLocked()"
+                        (change)="
+                          vm.changeRequired(r, $any($event.target).checked)
+                        "
+                      />
+                      Обовʼязкова
+                    </label>
                     <button
                       type="button"
                       class="ghost"
-                      (click)="vm.removeSkillRequirement(r)"
-                      [disabled]="!vm.editingId()"
+                      (click)="vm.removeRequirement(r)"
+                      [disabled]="vm.skillsEditingLocked()"
                     >
                       Прибрати
                     </button>
@@ -240,6 +298,10 @@ import { PositionManagementFacade } from './position-management.facade';
         margin: 0;
         color: var(--pw-danger);
       }
+      .error-inline {
+        display: block;
+        color: var(--pw-danger);
+      }
       .hint {
         margin: 0;
         font-size: 0.85rem;
@@ -255,44 +317,30 @@ import { PositionManagementFacade } from './position-management.facade';
         grid-template-columns: 1fr 1fr;
         gap: 0.75rem;
       }
-      .position-form label,
-      .add-row .level {
+      .position-form label {
         display: grid;
         gap: 0.3rem;
         font-size: 0.9rem;
       }
       .position-form label.check,
-      .add-row .check {
+      .check {
         display: flex;
         flex-direction: row;
         align-items: center;
         gap: 0.5rem;
       }
-      .inline {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        align-items: center;
+      .picker {
+        display: grid;
+        gap: 0.45rem;
       }
-      .inline input,
-      .inline select {
-        flex: 1 1 120px;
-        min-width: 0;
-      }
-      .add-row .level {
-        display: flex;
+      .picker-list {
+        display: grid;
         gap: 0.35rem;
-        align-items: center;
-        font-size: 0.9rem;
-      }
-      .add-row .level input {
-        width: 4.5rem;
-        flex: 0 0 auto;
-      }
-      .form-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
+        padding: 0.6rem;
+        border: 1px solid var(--pw-border);
+        border-radius: 8px;
+        max-height: 14rem;
+        overflow: auto;
       }
       input,
       select,
@@ -359,6 +407,13 @@ import { PositionManagementFacade } from './position-management.facade';
         padding: 0.35rem 0;
         border-bottom: 1px solid #eef2f7;
       }
+      li.failed {
+        background: color-mix(in srgb, var(--pw-danger) 8%, transparent);
+        margin: 0 -0.35rem;
+        padding-left: 0.35rem;
+        padding-right: 0.35rem;
+        border-radius: 8px;
+      }
       .row-actions {
         display: flex;
         flex-wrap: wrap;
@@ -375,6 +430,10 @@ import { PositionManagementFacade } from './position-management.facade';
         padding: 0.1rem 0.4rem;
         border-radius: 999px;
         margin-left: 0.35rem;
+      }
+      .badge.draft {
+        background: #e0e7ff;
+        color: #3730a3;
       }
       .muted-row {
         color: var(--pw-muted);
@@ -407,14 +466,33 @@ export class PositionEditDialogComponent {
   readonly headingId = 'position-edit-dialog-title';
   private backdropPress = false;
 
+  heading(): string {
+    if (this.vm.dialogMode() === 'create' || this.vm.dialogMode() === 'creating-position') {
+      return 'Нова посада';
+    }
+    if (this.vm.dialogMode() === 'unresolved-create') {
+      return 'Створення не підтверджено';
+    }
+    return 'Редагувати посаду';
+  }
+
+  rowTrack(row: RequirementRowVm): string {
+    return row.kind === 'draft' ? row.clientId : row.id;
+  }
+
   onBackdropPointerDown(event: Event): void {
     this.backdropPress = event.target === event.currentTarget;
   }
 
   onBackdropClick(event: Event): void {
     if (this.backdropPress && event.target === event.currentTarget) {
-      this.vm.closePositionDialog();
+      this.vm.requestClose();
     }
     this.backdropPress = false;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.vm.requestClose();
   }
 }

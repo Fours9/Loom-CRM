@@ -184,6 +184,24 @@ export class SettingsOrgApiService {
     return this.http.get<OrgSkillGroup[]>('/api/v1/skill-groups', { params });
   }
 
+  createSkillGroup(body: {
+    name: string;
+    sortOrder?: number;
+  }): Observable<OrgSkillGroup> {
+    return this.http.post<OrgSkillGroup>('/api/v1/skill-groups', body);
+  }
+
+  updateSkillGroup(
+    id: string,
+    body: Partial<{ name: string; sortOrder: number; isActive: boolean }>,
+  ): Observable<OrgSkillGroup> {
+    return this.http.patch<OrgSkillGroup>(`/api/v1/skill-groups/${id}`, body);
+  }
+
+  deleteSkillGroup(id: string): Observable<unknown> {
+    return this.http.delete(`/api/v1/skill-groups/${id}`);
+  }
+
   getSkills(all = false, groupId?: string): Observable<OrgSkill[]> {
     let params = new HttpParams();
     if (all) params = params.set('all', '1');

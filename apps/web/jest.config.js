@@ -10,6 +10,8 @@ module.exports = {
       '<rootDir>/../../libs/questionnaire-schema/src/index.ts',
     '^@loom/contracts-questionnaires$':
       '<rootDir>/../../libs/contracts/questionnaires/src/index.ts',
+    '^@loom/position-skill-catalog$':
+      '<rootDir>/../../libs/position-skill-catalog/src/index.ts',
   },
   transform: {
     '^.+\\.ts$': [

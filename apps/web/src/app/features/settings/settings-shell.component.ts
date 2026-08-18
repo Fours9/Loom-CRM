@@ -1,19 +1,20 @@
 import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { RouterLink, RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'loom-settings-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink],
   template: `
     <section class="page">
       <header class="page-head">
         <h1>Налаштування</h1>
-        <p class="lead">Платформені довідники та параметри</p>
-        <nav class="subnav" aria-label="Розділи налаштувань">
-          <a routerLink="positions" routerLinkActive="active">Керування посадами</a>
-        </nav>
+        <p class="lead">Платформені параметри</p>
       </header>
+      <p class="hint">
+        Довідники напрямків, відділів, посад і навичок —
+        <a routerLink="/positions">Керування посадами</a>.
+      </p>
       <router-outlet />
     </section>
   `,
@@ -35,24 +36,12 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
         margin: 0.35rem 0 0;
         color: var(--pw-muted);
       }
-      .subnav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
+      .hint {
+        margin: 0;
+        color: var(--pw-muted);
       }
-      .subnav a {
-        padding: 0.4rem 0.75rem;
-        border-radius: 8px;
-        border: 1px solid var(--pw-border);
-        color: var(--pw-text);
-        text-decoration: none;
-        background: var(--pw-surface);
-      }
-      .subnav a.active {
-        border-color: var(--pw-accent);
+      .hint a {
         color: var(--pw-accent);
-        font-weight: 600;
       }
     `,
   ],

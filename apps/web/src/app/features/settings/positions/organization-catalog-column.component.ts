@@ -1,11 +1,9 @@
 import { Component, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { PositionManagementFacade } from './position-management.facade';
 
 @Component({
   selector: 'loom-organization-catalog-column',
   standalone: true,
-  imports: [FormsModule],
   template: `
     <div class="catalog-layout">
       <div class="catalog-rail">
@@ -35,21 +33,7 @@ import { PositionManagementFacade } from './position-management.facade';
         </button>
         <div class="panel-body">
           @if (vm.canManageDirections()) {
-            <form class="inline" novalidate (submit)="$event.preventDefault()">
-              <input
-                [(ngModel)]="vm.newDirection"
-                name="newDirection"
-                placeholder="Назва напрямку"
-              />
-              <button type="button" (click)="vm.saveDirection()">
-                {{ vm.editingDirectionId() ? 'Зберегти' : 'Додати' }}
-              </button>
-              @if (vm.editingDirectionId()) {
-                <button type="button" class="ghost-neutral" (click)="vm.cancelEditDirection()">
-                  Скасувати
-                </button>
-              }
-            </form>
+            <button type="button" (click)="vm.startCreateDirection()">Додати напрямок</button>
           }
           <ul>
             @for (d of vm.directions(); track d.id) {
@@ -131,29 +115,7 @@ import { PositionManagementFacade } from './position-management.facade';
         </button>
         <div class="panel-body">
           @if (vm.canManageDepartments()) {
-            <form class="dept-form" novalidate (submit)="$event.preventDefault()">
-              <input
-                [(ngModel)]="vm.newDepartment"
-                name="newDepartment"
-                placeholder="Назва відділу"
-              />
-              <select [(ngModel)]="vm.newDepartmentDirectionId" name="newDepartmentDirectionId">
-                <option value="">Без напрямку</option>
-                @for (dir of vm.formDirectionOptions(); track dir.id) {
-                  <option [value]="dir.id">{{ dir.name }}</option>
-                }
-              </select>
-              <div class="form-actions">
-                <button type="button" (click)="vm.saveDepartment()">
-                  {{ vm.editingDepartmentId() ? 'Зберегти' : 'Додати' }}
-                </button>
-                @if (vm.editingDepartmentId()) {
-                  <button type="button" class="ghost-neutral" (click)="vm.cancelEditDepartment()">
-                    Скасувати
-                  </button>
-                }
-              </div>
-            </form>
+            <button type="button" (click)="vm.startCreateDepartment()">Додати відділ</button>
           }
           <ul>
             @for (d of vm.departments(); track d.id) {
@@ -319,12 +281,13 @@ import { PositionManagementFacade } from './position-management.facade';
         <button
           type="button"
           class="panel-toggle"
-          [attr.title]="vm.panelOpen().skills ? 'Згорнути: Навички' : 'Навички'"
-          [attr.aria-label]="vm.panelOpen().skills ? 'Згорнути навички' : 'Розгорнути навички'"
+          [attr.title]="vm.panelOpen().skills ? 'Згорнути групи та навички' : 'Групи та навички'"
+          [attr.aria-label]="
+            vm.panelOpen().skills ? 'Згорнути групи та навички' : 'Розгорнути групи та навички'
+          "
           (click)="vm.togglePanel('skills')"
         >
           @if (vm.panelOpen().skills) {
-            <h3>Навички</h3>
             <span class="panel-caret" aria-hidden="true"></span>
           } @else {
             <svg class="panel-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -336,107 +299,173 @@ import { PositionManagementFacade } from './position-management.facade';
           }
         </button>
         <div class="panel-body">
-          @if (vm.canManagePositions()) {
-            <form class="position-form" novalidate (submit)="$event.preventDefault()">
-              <label>
-                Назва
-                <input [(ngModel)]="vm.newSkillName" name="newSkillName" placeholder="Назва навички" />
-              </label>
-              <label>
-                Група
-                <select [(ngModel)]="vm.newSkillGroupId" name="newSkillGroupId">
-                  <option value="">Оберіть групу</option>
-                  @for (g of vm.skillGroups(); track g.id) {
-                    <option [value]="g.id">{{ g.name }}</option>
-                  }
-                </select>
-              </label>
-              <label>
-                Шкала
-                <select [(ngModel)]="vm.newSkillScaleKind" name="newSkillScaleKind">
-                  <option value="range">Від–до</option>
-                  <option value="percent">Відсотки</option>
-                </select>
-              </label>
-              <div class="form-actions">
-                <label>
-                  Від
-                  <input type="number" [(ngModel)]="vm.newSkillScaleMin" name="newSkillScaleMin" />
-                </label>
-                <label>
-                  До
-                  <input type="number" [(ngModel)]="vm.newSkillScaleMax" name="newSkillScaleMax" />
-                </label>
-              </div>
-              <div class="form-actions">
-                <button type="button" (click)="vm.saveCatalogSkill()">
-                  {{ vm.editingSkillId() ? 'Зберегти' : 'Додати' }}
-                </button>
-                @if (vm.editingSkillId()) {
-                  <button type="button" class="ghost-neutral" (click)="vm.cancelEditSkill()">
-                    Скасувати
-                  </button>
-                }
-              </div>
-            </form>
-          }
-          <ul>
-            @for (s of vm.catalogSkills(); track s.id) {
-              <li>
-                <span>
-                  {{ s.name }}
-                  <small class="code">{{ s.code }}</small>
-                  <small>
-                    @if (s.scaleKind === 'percent') {
-                      {{ s.scaleMin }}–{{ s.scaleMax }}%
-                    } @else {
-                      {{ s.scaleMin }}–{{ s.scaleMax }}
-                    }
-                  </small>
-                  @if (!s.isActive) {
-                    <small class="badge">вимкнено</small>
-                  }
-                </span>
+          <div class="skills-split">
+            <div class="skills-col groups-col">
+              <div class="col-toolbar">
+                <h4>Групи</h4>
                 @if (vm.canManagePositions()) {
-                  <span class="row-actions">
-                    <label class="toggle" [title]="s.isActive ? 'Увімкнено' : 'Вимкнено'">
-                      <input
-                        type="checkbox"
-                        [checked]="s.isActive"
-                        (change)="vm.setSkillActive(s, $any($event.target).checked)"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      class="icon-btn"
-                      title="Редагувати"
-                      (click)="vm.startEditSkill(s)"
-                    >
-                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                        <path
-                          fill="currentColor"
-                          d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      class="icon-btn danger"
-                      title="Видалити"
-                      (click)="vm.hardDeleteSkill(s)"
-                    >
-                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                        <path
-                          fill="currentColor"
-                          d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                        />
-                      </svg>
-                    </button>
-                  </span>
+                  <button type="button" (click)="vm.startCreateGroup()">Додати групу</button>
                 }
-              </li>
-            }
-          </ul>
+              </div>
+              <div class="groups-table">
+                <div class="groups-head">
+                  <button
+                    type="button"
+                    class="th"
+                    [class.active]="true"
+                    (click)="vm.toggleGroupNameSort()"
+                  >
+                    Назва
+                    <span class="dir" aria-hidden="true">{{ vm.groupSortMark() }}</span>
+                  </button>
+                  <span class="th-actions"></span>
+                </div>
+                <ul>
+                  @for (g of vm.sortedSkillGroups(); track g.id) {
+                    <li
+                      class="group-row"
+                      [class.selected]="vm.selectedSkillGroupId() === g.id"
+                    >
+                      <button type="button" class="select-group" (click)="vm.selectSkillGroup(g)">
+                        {{ g.name }}
+                        @if (!g.isActive) {
+                          <small class="badge">вимкнено</small>
+                        }
+                      </button>
+                      @if (vm.canManagePositions()) {
+                        <span class="row-actions">
+                          <label class="toggle" [title]="g.isActive ? 'Увімкнено' : 'Вимкнено'">
+                            <input
+                              type="checkbox"
+                              [checked]="g.isActive"
+                              (change)="vm.setGroupActive(g, $any($event.target).checked)"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            class="icon-btn"
+                            title="Редагувати"
+                            (click)="vm.startEditGroup(g)"
+                          >
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="icon-btn danger"
+                            title="Вимкнути"
+                            (click)="vm.hardDeleteGroup(g)"
+                          >
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                              />
+                            </svg>
+                          </button>
+                        </span>
+                      }
+                    </li>
+                  }
+                </ul>
+              </div>
+            </div>
+            <div class="skills-col skills-list-col">
+              <div class="col-toolbar">
+                <h4>Навички</h4>
+                @if (vm.canManagePositions()) {
+                  <button type="button" (click)="vm.startCreateSkill()">Додати навичку</button>
+                }
+              </div>
+              <div class="skills-table">
+                <div class="skills-head">
+                  <button
+                    type="button"
+                    class="th"
+                    [class.active]="vm.skillSort().key === 'name'"
+                    (click)="vm.toggleSkillSort('name')"
+                  >
+                    Назва
+                    <span class="dir" aria-hidden="true">{{ vm.skillSortMark('name') }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="th"
+                    [class.active]="vm.skillSort().key === 'scale'"
+                    (click)="vm.toggleSkillSort('scale')"
+                  >
+                    Тип шкали
+                    <span class="dir" aria-hidden="true">{{ vm.skillSortMark('scale') }}</span>
+                  </button>
+                  <span class="th-actions"></span>
+                </div>
+                <ul>
+                  @for (s of vm.skillsForSelectedGroup(); track s.id) {
+                    <li class="skill-row">
+                      <span class="skill-name">
+                        {{ s.name }}
+                        @if (!s.isActive) {
+                          <small class="badge">вимкнено</small>
+                        }
+                      </span>
+                      <span class="skill-scale">
+                        {{ vm.scaleKindLabel(s.scaleKind) }}
+                        ·
+                        @if (s.scaleKind === 'percent') {
+                          {{ s.scaleMin }}–{{ s.scaleMax }}%
+                        } @else {
+                          {{ s.scaleMin }}–{{ s.scaleMax }}
+                        }
+                      </span>
+                      @if (vm.canManagePositions()) {
+                        <span class="row-actions">
+                          <label class="toggle" [title]="s.isActive ? 'Увімкнено' : 'Вимкнено'">
+                            <input
+                              type="checkbox"
+                              [checked]="s.isActive"
+                              (change)="vm.setSkillActive(s, $any($event.target).checked)"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            class="icon-btn"
+                            title="Редагувати"
+                            (click)="vm.startEditSkill(s)"
+                          >
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="icon-btn danger"
+                            title="Видалити"
+                            (click)="vm.hardDeleteSkill(s)"
+                          >
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                              />
+                            </svg>
+                          </button>
+                        </span>
+                      } @else {
+                        <span class="th-actions"></span>
+                      }
+                    </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       </article>
     </div>
@@ -484,7 +513,7 @@ import { PositionManagementFacade } from './position-management.facade';
           padding 0.22s ease;
       }
       .card.panel.card-positions {
-        flex-grow: 1.35;
+        flex-grow: 1.08;
       }
       .card.panel.collapsed {
         flex: 0 0 3.25rem;
@@ -559,6 +588,23 @@ import { PositionManagementFacade } from './position-management.facade';
       .skills-block {
         min-width: 0;
       }
+      .skills-block:not(.collapsed) {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        column-gap: 0.5rem;
+      }
+      .skills-block:not(.collapsed) .panel-body {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .skills-block:not(.collapsed) .panel-toggle {
+        grid-column: 2;
+        grid-row: 1;
+        width: auto;
+        justify-content: center;
+        align-self: start;
+        margin-top: 0.1rem;
+      }
       .skills-block.collapsed {
         padding-bottom: 0.65rem;
       }
@@ -569,16 +615,200 @@ import { PositionManagementFacade } from './position-management.facade';
       .skills-block.collapsed .panel-body {
         display: none;
       }
-      .skills-block .position-form {
-        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-        align-items: end;
+      .skills-split {
+        display: grid;
+        grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.35fr);
+        gap: 0;
+        align-items: stretch;
+        min-width: 0;
       }
-      .skills-block .position-form .form-actions {
-        grid-column: 1 / -1;
+      .skills-col {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        align-content: stretch;
+        justify-items: stretch;
+        gap: 0.65rem;
+        min-width: 0;
       }
-      .skills-block ul {
+      .groups-col {
+        padding-right: 1.1rem;
+        border-right: 1px solid color-mix(in srgb, var(--pw-text) 38%, var(--pw-border-strong));
+      }
+      .skills-list-col {
+        padding-left: 1.1rem;
+      }
+      .skills-col h4 {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+      .col-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .groups-table,
+      .skills-table {
+        --table-line: color-mix(in srgb, var(--pw-text) 38%, var(--pw-border-strong));
+        display: grid;
+        grid-template-rows: auto;
+        grid-auto-rows: min-content;
+        align-content: start;
+        align-items: stretch;
+        min-width: 0;
+        width: 100%;
+        height: 100%;
         max-height: min(24rem, 50vh);
         overflow-y: auto;
+        border: 1px solid var(--table-line);
+        border-radius: 8px;
+        background: var(--pw-surface);
+      }
+      .groups-table {
+        grid-template-columns: minmax(0, 1fr) 7.25rem;
+      }
+      .skills-table {
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 7.25rem;
+      }
+      .groups-table ul,
+      .skills-table ul {
+        display: contents;
+      }
+      .groups-head,
+      .skills-head,
+      .group-row,
+      .skill-row {
+        display: grid;
+        grid-template-columns: subgrid;
+        grid-column: 1 / -1;
+        gap: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+      }
+      .groups-head,
+      .skills-head {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        height: auto;
+        background: var(--pw-surface-2, #f8fafc);
+        border-bottom: 1px solid var(--table-line);
+      }
+      .groups-head > *,
+      .skills-head > *,
+      .group-row > *,
+      .skill-row > * {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        min-height: 0;
+        margin: 0;
+        padding: 0.2rem 0.5rem;
+        border: 0;
+        border-right: 1px solid var(--table-line);
+        border-radius: 0;
+        box-sizing: border-box;
+        background: transparent;
+      }
+      .groups-head > *:last-child,
+      .skills-head > *:last-child,
+      .group-row > *:last-child,
+      .skill-row > *:last-child {
+        border-right: 0;
+      }
+      .groups-head .th,
+      .skills-head .th {
+        gap: 0.3rem;
+        color: var(--pw-muted);
+        font: inherit;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        text-align: left;
+        cursor: pointer;
+      }
+      .groups-head .th:hover,
+      .groups-head .th.active,
+      .skills-head .th:hover,
+      .skills-head .th.active {
+        color: var(--pw-text);
+      }
+      .groups-head .th .dir,
+      .skills-head .th .dir {
+        font-size: 0.65rem;
+        min-width: 0.7rem;
+      }
+      .groups-head .th-actions,
+      .skills-head .th-actions,
+      .group-row .row-actions,
+      .skill-row .row-actions {
+        justify-content: flex-end;
+      }
+      .group-row,
+      .skill-row {
+        border-bottom: 1px solid var(--table-line);
+      }
+      .group-row:last-child,
+      .skill-row:last-child {
+        border-bottom: 0;
+      }
+      .skill-name {
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .skill-scale {
+        color: var(--pw-muted);
+        font-size: 0.85rem;
+      }
+      .group-row .select-group {
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        width: auto;
+        height: auto;
+        text-align: left;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      .groups-table .icon-btn,
+      .skills-table .icon-btn {
+        width: 1.7rem;
+        height: 1.7rem;
+      }
+      .groups-table .toggle,
+      .skills-table .toggle {
+        min-height: 1.7rem;
+        padding: 0;
+      }
+      .group-row.selected {
+        background: color-mix(in srgb, var(--pw-accent) 12%, var(--pw-surface));
+      }
+      .group-row.selected .select-group {
+        color: var(--pw-text);
+        font-weight: 600;
+      }
+      .group-row:hover:not(.selected),
+      .skill-row:hover {
+        background: color-mix(in srgb, var(--pw-muted) 8%, var(--pw-surface));
+      }
+      @media (max-width: 860px) {
+        .skills-split {
+          grid-template-columns: 1fr;
+        }
+        .groups-col {
+          padding-right: 0;
+          padding-bottom: 1rem;
+          border-right: 0;
+          border-bottom: 1px solid var(--pw-border);
+        }
+        .skills-list-col {
+          padding-left: 0;
+          padding-top: 1rem;
+        }
       }
       @media (prefers-reduced-motion: reduce) {
         .card.panel {
@@ -600,38 +830,6 @@ import { PositionManagementFacade } from './position-management.facade';
           max-width: 3.25rem;
           min-width: 3.25rem;
         }
-      }
-      .inline {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        align-items: center;
-      }
-      .dept-form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        align-items: center;
-        margin-bottom: 0.5rem;
-      }
-      .dept-form input,
-      .dept-form select {
-        flex: 1 1 120px;
-        min-width: 0;
-      }
-      .hint {
-        margin: 0;
-        font-size: 0.85rem;
-        opacity: 0.75;
-      }
-      .inline input,
-      .inline select {
-        flex: 1 1 120px;
-        min-width: 0;
-      }
-      .inline button {
-        flex: 0 0 auto;
-        white-space: nowrap;
       }
       .position-form {
         display: grid;

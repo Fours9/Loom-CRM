@@ -2,6 +2,10 @@ import { Component, OnInit, inject } from '@angular/core';
 import { OrganizationCatalogColumnComponent } from './organization-catalog-column.component';
 import { PositionDetailsPanelComponent } from './position-details-panel.component';
 import { PositionEditDialogComponent } from './position-edit-dialog.component';
+import { SkillEditDialogComponent } from './skill-edit-dialog.component';
+import { SkillGroupEditDialogComponent } from './skill-group-edit-dialog.component';
+import { DirectionEditDialogComponent } from './direction-edit-dialog.component';
+import { DepartmentEditDialogComponent } from './department-edit-dialog.component';
 import { PositionManagementFacade } from './position-management.facade';
 
 @Component({
@@ -12,13 +16,24 @@ import { PositionManagementFacade } from './position-management.facade';
     OrganizationCatalogColumnComponent,
     PositionDetailsPanelComponent,
     PositionEditDialogComponent,
+    SkillEditDialogComponent,
+    SkillGroupEditDialogComponent,
+    DirectionEditDialogComponent,
+    DepartmentEditDialogComponent,
   ],
   template: `
     <section class="section">
-      <h2>Керування посадами</h2>
+      <h1>Керування посадами</h1>
       <p class="lead">Напрямки, відділи, посади та навички організації</p>
 
-      @if (vm.error() && !vm.positionDialogOpen()) {
+      @if (
+        vm.error() &&
+        !vm.positionDialogOpen() &&
+        !vm.skillDialogOpen() &&
+        !vm.groupDialogOpen() &&
+        !vm.directionDialogOpen() &&
+        !vm.departmentDialogOpen()
+      ) {
         <p class="error">{{ vm.error() }}</p>
       }
 
@@ -31,6 +46,18 @@ import { PositionManagementFacade } from './position-management.facade';
       @if (vm.positionDialogOpen()) {
         <loom-position-edit-dialog />
       }
+      @if (vm.skillDialogOpen()) {
+        <loom-skill-edit-dialog />
+      }
+      @if (vm.groupDialogOpen()) {
+        <loom-skill-group-edit-dialog />
+      }
+      @if (vm.directionDialogOpen()) {
+        <loom-direction-edit-dialog />
+      }
+      @if (vm.departmentDialogOpen()) {
+        <loom-department-edit-dialog />
+      }
     </section>
   `,
   styles: [
@@ -38,10 +65,13 @@ import { PositionManagementFacade } from './position-management.facade';
       .section {
         display: grid;
         gap: 1rem;
+        max-width: 1400px;
+        margin-inline: auto;
+        width: 100%;
       }
-      h2 {
+      h1 {
         margin: 0;
-        font-size: 1.35rem;
+        font-size: 1.75rem;
         color: var(--pw-text-strong);
       }
       .lead,
