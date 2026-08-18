@@ -128,11 +128,17 @@ export class PositionsService {
     const row = await this.getOrFail(id);
     const departmentId =
       input.departmentId !== undefined ? input.departmentId : row.departmentId;
+    const explicitDirectionId =
+      input.directionId !== undefined
+        ? input.directionId
+        : departmentId === null
+          ? row.directionId
+          : undefined;
     const directionId = await this.resolveDirectionId({
       departmentId,
-      // Never feed old persisted directionId — dept change must inherit.
-      explicitDirectionId:
-        input.directionId !== undefined ? input.directionId : undefined,
+      // Department changes must inherit; global positions preserve manual direction
+      // unless the caller explicitly sent directionId.
+      explicitDirectionId,
     });
 
     if (input.name !== undefined) row.name = input.name;

@@ -61,6 +61,25 @@ Historical Review uses `submission.context_json` (or registry if null), never cu
 
 **Hierarchy:** Direction ←(optional) Department ←(optional) Position. Position stores `directionId` (Decision #10 / ADR 0010): department set → inherit; no department → optional manual.
 
+## Position direction semantics
+
+`positions.direction_id` is a **persisted field**, but it is not always independently editable.
+
+| `departmentId` | `directionId` | Semantics |
+| --- | --- | --- |
+| `null` | `null` | Global position without direction |
+| `null` | `value` | Global position with manual direction |
+| `value` | `value/null from department` | Persisted derived copy from Department |
+| `value` | arbitrary other value | Invalid state |
+
+Transition rules:
+
+- `create/update Position` use `resolvePositionDirectionId()` as the canonical policy.
+- `departmentId != null` means `directionId` is recalculated from the department and cannot be edited independently.
+- Partial PATCH with omitted `directionId` must **not** clear manual direction when resulting `departmentId == null`.
+- Transition `department -> null` with omitted `directionId` preserves the previously inherited direction as the new manual direction.
+- `DepartmentsService` separately keeps child `positions.direction_id` in sync via transactional cascade when a parent department changes its direction.
+
 **Context modes:** `context_json == null` → legacy_registry; valid v1 (including `skills: []`) → frozen allowlist; non-null invalid → data-integrity error (not legacy).
 
 Schema via TypeORM migrations only — never `synchronize: true`.
