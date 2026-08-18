@@ -29,10 +29,7 @@ import { PositionManagementFacade } from './position-management.facade';
       @if (
         vm.error() &&
         !vm.positionDialogOpen() &&
-        !vm.skillDialogOpen() &&
-        !vm.groupDialogOpen() &&
-        !vm.directionDialogOpen() &&
-        !vm.departmentDialogOpen()
+        !vm.activeCatalogDialog()
       ) {
         <p class="error">{{ vm.error() }}</p>
       }
@@ -46,16 +43,16 @@ import { PositionManagementFacade } from './position-management.facade';
       @if (vm.positionDialogOpen()) {
         <loom-position-edit-dialog />
       }
-      @if (vm.skillDialogOpen()) {
+      @if (vm.activeCatalogDialog() === 'skill') {
         <loom-skill-edit-dialog />
       }
-      @if (vm.groupDialogOpen()) {
+      @if (vm.activeCatalogDialog() === 'group') {
         <loom-skill-group-edit-dialog />
       }
-      @if (vm.directionDialogOpen()) {
+      @if (vm.activeCatalogDialog() === 'direction') {
         <loom-direction-edit-dialog />
       }
-      @if (vm.departmentDialogOpen()) {
+      @if (vm.activeCatalogDialog() === 'department') {
         <loom-department-edit-dialog />
       }
     </section>

@@ -6,14 +6,14 @@ Accepted.
 
 ## Implementation status
 
-- `@loom/position-skill-catalog` pure skill code registry: **shipped (PR1)**; identity syntax + `MAX_POSITION_SKILLS` + Settings custom codes: **this increment**
+- `@loom/position-skill-catalog` pure skill code registry: **shipped (PR1)**; identity syntax + `MAX_POSITION_SKILLS` + Position Catalog custom codes: **this increment**
 - `QuestionnaireContextV1` + `parseQuestionnaireContext` in contracts: **shipped** (strict full-shape + unknown-key reject on `1708c21`)
 - Track B published schemas `employee-managing` / `employee-docs` + `position_skills_matrix` fill/validation: **shipped (PR2)**
 - `departments.direction_id`: **shipped**; hierarchy Direction ← Dept ← Position
 - `positions.direction_id`: **restored** (`1730000023000-RestorePositionDirectionId`) — denormalized inherit from department when set, else optional manual (Decision #10). Earlier PR3 add + `1730000022000` drop are historical only.
 - employment-assignment consistency (auto-fill dept/direction from catalog parents): **shipped**
-- Settings «Керування посадами» (`/settings/positions`): **shipped (PR4)**; skills as full-width Groups+Skills block + position edit modal: **this increment**; **sidebar `/positions`** (suitcase icon; `/settings/positions` redirects)
-- Organization `skill_groups` / `skills` / position requirements, duties, goal templates + Settings catalog tabs: **shipped (PR5)**
+- Settings «Керування посадами» (`/settings/positions`): **shipped (PR4)**; **superseded UI location:** sidebar **`/positions`** (suitcase icon; `/settings/positions` redirects); skills as full-width Groups+Skills block + position edit modal: **this increment**
+- Organization `skill_groups` / `skills` / position requirements, duties, goal templates + Position Catalog UI: **shipped (PR5)**
 - `PositionCatalogFacade`, assign/attach capture, `questionnaire_* .context_json`: **shipped (PR6)**; empty allowlist + fail-closed invalid context: **shipped (`1708c21`)**
 - Native skill scale (`range`/`percent`) independent of questionnaire 0–5: **this increment**
 - PR7 closeout: living docs + catalog sync; optional fill suggestions from `goalTemplates` / `duties` **not** shipped (context fields available for future UI)
@@ -75,10 +75,11 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
 12. **Historical Review** uses `submission.context_json` (or registry if null); never current `assignment.context_json`.
 
 13. **Settings:** move departments/positions UI to `/settings/positions` («Керування посадами»); Absences admin keeps privacy only.
+    **Superseded for UI location by later increment:** Position Catalog UI lives at `/positions`; Organization remains owner; legacy `/settings/positions` redirects.
 
 14. **Sensitive fields:** `grade.net_salary` and `manager_review` deferred until field/step sensitivity + scoped manager completion ACL exist. Track B does not ship them.
 
-15. **Skill codes:** `@loom/position-skill-catalog` holds legacy registry (`isSkillCode`) **and** identity syntax (`isSkillIdentityCode`). Registry is SoT **only for legacy null context**. Settings may create custom skills (`code` omitted → generated `skill_<hex>`; `code` provided → must be registry + group match). **`code` is identity** (not editable via PATCH). Snapshot capture includes all attached skills (no `isSkillCode` filter).
+15. **Skill codes:** `@loom/position-skill-catalog` holds legacy registry (`isSkillCode`) **and** identity syntax (`isSkillIdentityCode`). Registry is SoT **only for legacy null context**. Position Catalog UI may create custom skills (`code` omitted → generated `skill_<hex>`; `code` provided → must be registry + group match). **`code` is identity** (not editable via PATCH). Snapshot capture includes all attached skills (no `isSkillCode` filter).
 
 16. **Two independent scales (do not mix):**
     - `PositionSkillRequirement.targetLevel` = target in the skill’s **native** scale (`range` or `percent`, `scaleMin`..`scaleMax`)
@@ -88,11 +89,11 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
 
 17. **Skill lifecycle:** deactivate/soft-delete **409** while any `position_skill_requirement` exists. Attach only active skills **whose group is also active**. Scale kind change with existing requirements → 409. Same-kind bound shrink allowed only if all existing `targetLevel` still fit. Skill row is the pessimistic lock root for scale update, deactivate, and requirement attach/`skillId` change. Max **64** skills per position (`MAX_POSITION_SKILLS`).
 
-18. **Skill group identity and lifecycle:** Public `POST /skill-groups` does **not** accept `code` (`name` + optional `sortOrder` only). Settings custom groups get generated immutable `group_<12hex>` (unique-violation retry), same idea as custom skills. Seeded `TECH` / `BEAUTY` / `OFFICE` stay migration/seed. Create/move skill and re-enable skill require an **active** group. Deactivate group (`PATCH isActive:false` and `DELETE`) is **409** while any active skill remains. `SkillGroup` is the pessimistic lock root for deactivate, create-in-group, move-into-group, and re-enable. Pre-create position skill requirements are a **frontend draft queue only** (not persisted without `positionId`); see [position-catalog.md](../dev/position-catalog.md).
+18. **Skill group identity and lifecycle:** Public `POST /skill-groups` does **not** accept `code` (`name` + optional `sortOrder` only). Position Catalog custom groups get generated immutable `group_<12hex>` (unique-violation retry), same idea as custom skills. Seeded `TECH` / `BEAUTY` / `OFFICE` stay migration/seed. Create/move skill and re-enable skill require an **active** group. Deactivate group (`PATCH isActive:false` and `DELETE`) is **409** while any active skill remains. `SkillGroup` is the pessimistic lock root for deactivate, create-in-group, move-into-group, and re-enable. Pre-create position skill requirements are a **frontend draft queue only** (not persisted without `positionId`); see [position-catalog.md](../dev/position-catalog.md).
 
 ## Consequences
 
-- Track B Managing/Docs and Position Catalog Settings UI are both shipped; fill can use frozen context for skills matrix (including custom Settings skill codes).
+- Track B Managing/Docs and Position Catalog UI are both shipped; fill can use frozen context for skills matrix (including custom Position Catalog skill codes).
 - Pre-PR6 answers remain valid after PR6 deploy (legacy_registry mode).
 - Native skill scale and questionnaire 0–5 stay independent; no implicit conversion.
 - Pre-PR6 answers remain valid after PR6 deploy (legacy_registry mode).

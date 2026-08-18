@@ -1,7 +1,8 @@
 import { firstValueFrom, type Observable } from 'rxjs';
-import type { OrgPosition, OrgPositionSkillRequirement } from '../settings-org-api.service';
+import type { OrgPosition, OrgPositionSkillRequirement } from '../settings/settings-org-api.service';
 import {
   classifyPositionCreateError,
+  httpErrorMessage,
   isSaveLocked,
   type PositionDialogMode,
 } from './position-dialog.models';
@@ -34,13 +35,19 @@ export type CreateFlowResult =
   | { kind: 'unknown' }
   | { kind: 'locked' };
 
-function apiMessage(err: unknown, fallback: string): string {
-  const msg = (err as { error?: { message?: string | string[] } })?.error?.message;
-  if (Array.isArray(msg)) return msg.join(', ');
-  if (typeof msg === 'string' && msg.trim()) return msg;
-  return fallback;
-}
+export type ApplyQueuedInput = {
+  api: PositionDraftApi;
+  positionId: string;
+  queue: PositionDraftSkillQueue;
+  setMode: (mode: PositionDialogMode) => void;
+};
 
+export type ApplyQueuedResult = {
+  rows: OrgPositionSkillRequirement[];
+  mode: PositionDialogMode;
+};
+
+/** Sequential apply + reconcile. Does not own PositionDialogMode. */
 export async function applyDraftRequirements(
   api: PositionDraftApi,
   positionId: string,
@@ -66,7 +73,7 @@ export async function applyDraftRequirements(
         );
       }
     } catch (err) {
-      queue.markFailed(row.clientId, apiMessage(err, 'Не вдалося додати вимогу'));
+      queue.markFailed(row.clientId, httpErrorMessage(err, 'Не вдалося додати вимогу'));
     }
   }
 
@@ -82,6 +89,26 @@ export async function applyDraftRequirements(
     }
     return [];
   }
+}
+
+/** Lifecycle use-case: applying-drafts → sequential apply → edit | edit-with-failed-drafts. */
+export async function applyQueuedRequirements(
+  input: ApplyQueuedInput,
+): Promise<ApplyQueuedResult> {
+  input.setMode('applying-drafts');
+  const rows = await applyDraftRequirements(input.api, input.positionId, input.queue);
+  const mode: PositionDialogMode = input.queue.hasUnresolved()
+    ? 'edit-with-failed-drafts'
+    : 'edit';
+  input.setMode(mode);
+  return { rows, mode };
+}
+
+/** UI-facing alias over applyQueuedRequirements. */
+export async function retryFailedDrafts(
+  input: ApplyQueuedInput,
+): Promise<ApplyQueuedResult> {
+  return applyQueuedRequirements(input);
 }
 
 export async function createPositionThenApplyDrafts(input: {
@@ -107,7 +134,7 @@ export async function createPositionThenApplyDrafts(input: {
       input.setMode('create');
       return {
         kind: 'known-rejection',
-        message: apiMessage(err, 'Не вдалося додати посаду'),
+        message: httpErrorMessage(err, 'Не вдалося додати посаду'),
       };
     }
     input.setMode('unresolved-create');
@@ -119,24 +146,11 @@ export async function createPositionThenApplyDrafts(input: {
     return { kind: 'created', position: created, mode: 'edit' };
   }
 
-  input.setMode('applying-drafts');
-  const serverRows = await applyDraftRequirements(
-    input.api,
-    created.id,
-    input.queue,
-  );
-  void serverRows;
-  const nextMode: PositionDialogMode = input.queue.hasUnresolved()
-    ? 'edit-with-failed-drafts'
-    : 'edit';
-  input.setMode(nextMode);
-  return { kind: 'created', position: created, mode: nextMode };
-}
-
-export async function retryFailedDrafts(
-  api: PositionDraftApi,
-  positionId: string,
-  queue: PositionDraftSkillQueue,
-): Promise<OrgPositionSkillRequirement[]> {
-  return applyDraftRequirements(api, positionId, queue);
+  const applied = await applyQueuedRequirements({
+    api: input.api,
+    positionId: created.id,
+    queue: input.queue,
+    setMode: input.setMode,
+  });
+  return { kind: 'created', position: created, mode: applied.mode };
 }

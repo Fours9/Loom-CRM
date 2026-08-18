@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Permission } from '@loom/contracts-auth';
 import { MAX_POSITION_SKILLS } from '@loom/position-skill-catalog';
-import { SessionStore } from '../../../core/auth/session.store';
+import { SessionStore } from '../../core/auth/session.store';
 import {
   GoalKind,
   OrgDepartment,
@@ -14,20 +14,30 @@ import {
   OrgSkill,
   OrgSkillGroup,
   SettingsOrgApiService,
-} from '../settings-org-api.service';
+} from '../settings/settings-org-api.service';
+import {
+  catalogEscapeClosesActive,
+  setCatalogDialog,
+  type CatalogDialog,
+  type CatalogDialogKind,
+} from './catalog-dialog.model';
 import {
   canEditDraftQueue,
   closePolicyFor,
+  compareByUkNameThenId,
   formatNativeTarget,
+  httpErrorMessage,
   isSaveLocked,
   mergeRequirementRows,
+  positionSaveCompletion,
   type PositionDialogMode,
   type RequirementRowVm,
 } from './position-dialog.models';
 import { PositionDraftSkillQueue } from './position-draft-skill-queue';
 import {
-  applyDraftRequirements,
+  applyQueuedRequirements,
   createPositionThenApplyDrafts,
+  retryFailedDrafts as retryFailedDraftsFlow,
 } from './position-create.flow';
 
 export type CatalogTab = 'skills' | 'goals' | 'duties';
@@ -69,10 +79,7 @@ export class PositionManagementFacade {
   readonly pickerOpen = signal(false);
   readonly pickerSelectedIds = signal<string[]>([]);
   readonly selectedSkillGroupId = signal<string | null>(null);
-  readonly skillDialogOpen = signal(false);
-  readonly groupDialogOpen = signal(false);
-  readonly directionDialogOpen = signal(false);
-  readonly departmentDialogOpen = signal(false);
+  readonly activeCatalogDialog = signal<CatalogDialog>(null);
   readonly skillSort = signal<{ key: 'name' | 'scale'; dir: 'asc' | 'desc' }>({
     key: 'name',
     dir: 'asc',
@@ -247,9 +254,9 @@ export class PositionManagementFacade {
           'uk',
         );
         if (kind !== 0) return kind * sign;
-        return a.name.localeCompare(b.name, 'uk');
+        return compareByUkNameThenId(a, b, sign);
       }
-      return a.name.localeCompare(b.name, 'uk') * sign;
+      return compareByUkNameThenId(a, b, sign);
     });
   });
 
@@ -261,9 +268,7 @@ export class PositionManagementFacade {
 
   readonly sortedSkillGroups = computed(() => {
     const sign = this.groupSortDir() === 'asc' ? 1 : -1;
-    return [...this.skillGroups()].sort(
-      (a, b) => a.name.localeCompare(b.name, 'uk') * sign,
-    );
+    return [...this.skillGroups()].sort((a, b) => compareByUkNameThenId(a, b, sign));
   });
 
   toggleSkillSort(key: 'name' | 'scale'): void {
@@ -402,9 +407,19 @@ export class PositionManagementFacade {
   }
 
   private apiError(err: unknown, fallback: string): string {
-    const msg = (err as { error?: { message?: string | string[] } })?.error?.message;
-    if (Array.isArray(msg)) return msg.join(', ');
-    return msg || fallback;
+    return httpErrorMessage(err, fallback);
+  }
+
+  private openCatalog(kind: CatalogDialogKind): void {
+    if (kind !== 'skill') this.cancelEditSkill();
+    if (kind !== 'group') this.cancelEditGroup();
+    if (kind !== 'direction') this.cancelEditDirection();
+    if (kind !== 'department') this.cancelEditDepartment();
+    this.activeCatalogDialog.update((prev) => setCatalogDialog(prev, kind));
+  }
+
+  private closeCatalog(): void {
+    this.activeCatalogDialog.update((prev) => catalogEscapeClosesActive(prev));
   }
 
   saveDepartment(): void {
@@ -446,7 +461,7 @@ export class PositionManagementFacade {
   startCreateDepartment(): void {
     this.cancelEditDepartment();
     this.formDepartmentIsActive = true;
-    this.departmentDialogOpen.set(true);
+    this.openCatalog('department');
     this.error.set('');
   }
 
@@ -456,7 +471,7 @@ export class PositionManagementFacade {
     this.newDepartment = d.name;
     this.newDepartmentDirectionId = d.directionId || '';
     this.formDepartmentIsActive = d.isActive && !d.isHidden;
-    this.departmentDialogOpen.set(true);
+    this.openCatalog('department');
     this.error.set('');
   }
 
@@ -468,7 +483,7 @@ export class PositionManagementFacade {
   }
 
   closeDepartmentDialog(): void {
-    this.departmentDialogOpen.set(false);
+    this.closeCatalog();
     this.cancelEditDepartment();
   }
 
@@ -530,7 +545,7 @@ export class PositionManagementFacade {
   startCreateDirection(): void {
     this.cancelEditDirection();
     this.formDirectionIsActive = true;
-    this.directionDialogOpen.set(true);
+    this.openCatalog('direction');
     this.error.set('');
   }
 
@@ -539,7 +554,7 @@ export class PositionManagementFacade {
     this.editingDirectionId.set(d.id);
     this.newDirection = d.name;
     this.formDirectionIsActive = d.isActive;
-    this.directionDialogOpen.set(true);
+    this.openCatalog('direction');
     this.error.set('');
   }
 
@@ -550,7 +565,7 @@ export class PositionManagementFacade {
   }
 
   closeDirectionDialog(): void {
-    this.directionDialogOpen.set(false);
+    this.closeCatalog();
     this.cancelEditDirection();
   }
 
@@ -661,6 +676,18 @@ export class PositionManagementFacade {
     this.touchDraft();
   }
 
+  /** Precondition: draft queue is empty. Unresolved drafts keep the dialog open. */
+  private closeAfterSuccessfulSave(): void {
+    const decision = positionSaveCompletion({
+      queueEmpty: this.draftQueue.isEmpty(),
+      hasUnresolved: this.draftQueue.hasUnresolved(),
+    });
+    if (decision !== 'close-and-reset') return;
+    this.positionDialogOpen.set(false);
+    this.cancelEdit();
+    this.resetDraftSession();
+  }
+
   async savePosition(): Promise<void> {
     this.error.set('');
     if (this.saveLocked()) return;
@@ -686,10 +713,8 @@ export class PositionManagementFacade {
             isActive: !!this.formIsActive,
           }),
         );
-        this.positionDialogOpen.set(false);
-        this.cancelEdit();
-        this.resetDraftSession();
         this.reload();
+        this.closeAfterSuccessfulSave();
       } catch (err) {
         this.error.set(this.apiError(err, 'Не вдалося зберегти посаду'));
       }
@@ -780,7 +805,7 @@ export class PositionManagementFacade {
     this.pickerSelectedIds.set([...selected]);
   }
 
-  confirmPickerSkills(): void {
+  async confirmPickerSkills(): Promise<void> {
     if (this.skillsEditingLocked() || !canEditDraftQueue(this.dialogMode())) return;
     const ids = this.pickerSelectedIds();
     if (ids.length === 0) {
@@ -791,46 +816,38 @@ export class PositionManagementFacade {
       .map((id) => this.catalogSkills().find((s) => s.id === id))
       .filter((s): s is OrgSkill => !!s);
     this.error.set('');
-    const positionId = this.editingId();
-    if (positionId && this.dialogMode() !== 'create') {
-      this.addPersistedSkills(positionId, skills);
-    } else {
-      const result = this.draftQueue.addSkills(
-        skills.map((s) => ({
-          id: s.id,
-          scaleMin: s.scaleMin,
-          scaleMax: s.scaleMax,
-          name: s.name,
-          code: s.code,
-          scaleKind: s.scaleKind,
-        })),
-        this.skillRequirements().length,
-      );
-      this.touchDraft();
-      if (result.error) this.error.set(result.error);
-    }
+    const result = this.draftQueue.addSkills(
+      skills.map((s) => ({
+        id: s.id,
+        scaleMin: s.scaleMin,
+        scaleMax: s.scaleMax,
+        name: s.name,
+        code: s.code,
+        scaleKind: s.scaleKind,
+      })),
+      this.skillRequirements().length,
+    );
+    this.touchDraft();
+    if (result.error) this.error.set(result.error);
     this.pickerOpen.set(false);
     this.pickerSelectedIds.set([]);
+    const positionId = this.editingId();
+    if (positionId && this.dialogMode() !== 'create' && result.added > 0) {
+      await this.applyQueuedDrafts(positionId);
+    }
   }
 
-  private addPersistedSkills(positionId: string, skills: OrgSkill[]): void {
-    const room = this.remainingSkillSlots();
-    const toAdd = skills.slice(0, room);
-    if (toAdd.length < skills.length) {
-      this.error.set(`Посада може мати щонайбільше ${MAX_POSITION_SKILLS} навичок`);
-    }
-    for (const skill of toAdd) {
-      this.api
-        .createPositionSkillRequirement(positionId, {
-          skillId: skill.id,
-          targetLevel: skill.scaleMin,
-          required: true,
-        })
-        .subscribe({
-          next: () => this.loadPositionCatalog(positionId),
-          error: (err) =>
-            this.error.set(this.apiError(err, 'Не вдалося додати вимогу')),
-        });
+  private async applyQueuedDrafts(positionId: string): Promise<void> {
+    try {
+      const applied = await applyQueuedRequirements({
+        api: this.api,
+        positionId,
+        queue: this.draftQueue,
+        setMode: (next) => this.dialogMode.set(next),
+      });
+      this.skillRequirements.set(applied.rows);
+    } finally {
+      this.touchDraft();
     }
   }
 
@@ -894,14 +911,15 @@ export class PositionManagementFacade {
   async retryFailedDrafts(): Promise<void> {
     const positionId = this.editingId();
     if (!positionId || this.skillsEditingLocked()) return;
-    this.dialogMode.set('applying-drafts');
     this.error.set('');
     try {
-      const rows = await applyDraftRequirements(this.api, positionId, this.draftQueue);
-      this.skillRequirements.set(rows);
-      this.dialogMode.set(
-        this.draftQueue.hasUnresolved() ? 'edit-with-failed-drafts' : 'edit',
-      );
+      const applied = await retryFailedDraftsFlow({
+        api: this.api,
+        positionId,
+        queue: this.draftQueue,
+        setMode: (next) => this.dialogMode.set(next),
+      });
+      this.skillRequirements.set(applied.rows);
     } finally {
       this.touchDraft();
     }
@@ -957,7 +975,7 @@ export class PositionManagementFacade {
     this.cancelEditSkill();
     this.newSkillGroupId = this.selectedSkillGroupId() || '';
     this.formSkillIsActive = true;
-    this.skillDialogOpen.set(true);
+    this.openCatalog('skill');
     this.error.set('');
   }
 
@@ -971,7 +989,7 @@ export class PositionManagementFacade {
     this.newSkillScaleMax = s.scaleMax ?? 5;
     this.formSkillIsActive = s.isActive;
     this.selectedSkillGroupId.set(s.groupId);
-    this.skillDialogOpen.set(true);
+    this.openCatalog('skill');
     this.error.set('');
   }
 
@@ -994,7 +1012,7 @@ export class PositionManagementFacade {
   }
 
   closeSkillDialog(): void {
-    this.skillDialogOpen.set(false);
+    this.closeCatalog();
     this.cancelEditSkill();
   }
 
@@ -1056,7 +1074,7 @@ export class PositionManagementFacade {
   startCreateGroup(): void {
     this.cancelEditGroup();
     this.formGroupIsActive = true;
-    this.groupDialogOpen.set(true);
+    this.openCatalog('group');
     this.error.set('');
   }
 
@@ -1066,7 +1084,7 @@ export class PositionManagementFacade {
     this.newGroupName = g.name;
     this.formGroupIsActive = g.isActive;
     this.selectedSkillGroupId.set(g.id);
-    this.groupDialogOpen.set(true);
+    this.openCatalog('group');
     this.error.set('');
   }
 
@@ -1077,7 +1095,7 @@ export class PositionManagementFacade {
   }
 
   closeGroupDialog(): void {
-    this.groupDialogOpen.set(false);
+    this.closeCatalog();
     this.cancelEditGroup();
   }
 

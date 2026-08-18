@@ -194,7 +194,7 @@ describe('SkillsService scale and deactivate', () => {
 });
 
 describe('SkillsService group lifecycle', () => {
-  it('generates group_<hex> for Settings custom groups', async () => {
+  it('generates group_<hex> for Position Catalog custom groups', async () => {
     const service = makeService({});
     const created = await service.createCustomGroup({ name: 'Нова група' });
     expect(created.code).toMatch(/^group_[a-f0-9]{12}$/);
@@ -237,6 +237,13 @@ describe('SkillsService group lifecycle', () => {
     await expect(
       service.updateSkill('skill-1', { isActive: true }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('soft-deletes a skill with no requirements after locking without a group join', async () => {
+    const skill = skillRow({ isActive: true });
+    const service = makeService({ skill, requirements: [] });
+    await service.softDeleteSkill('skill-1');
+    expect(skill.isActive).toBe(false);
   });
 
   it('rejects move skill into an inactive group', async () => {

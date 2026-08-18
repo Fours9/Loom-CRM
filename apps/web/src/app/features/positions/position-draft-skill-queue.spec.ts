@@ -86,4 +86,23 @@ describe('PositionDraftSkillQueue', () => {
     expect(queue.snapshot()[0].skillId).toBe('b');
     expect(queue.snapshot()[0].sequence).toBe(1);
   });
+
+  it('gives independent client ids to two queue instances', () => {
+    const first = new PositionDraftSkillQueue();
+    const second = new PositionDraftSkillQueue();
+    first.addSkills([skill('a'), skill('b')], 0);
+    second.addSkills([skill('x')], 0);
+    expect(first.snapshot().map((row) => row.clientId)).toEqual(['draft-1', 'draft-2']);
+    expect(second.snapshot().map((row) => row.clientId)).toEqual(['draft-1']);
+  });
+
+  it('reset restores the instance clientSeq and nextSequence', () => {
+    const queue = new PositionDraftSkillQueue();
+    queue.addSkills([skill('a'), skill('b')], 0);
+    queue.reset();
+    queue.addSkills([skill('c')], 0);
+    expect(queue.snapshot()[0].clientId).toBe('draft-1');
+    expect(queue.snapshot()[0].sequence).toBe(1);
+  });
 });
+
