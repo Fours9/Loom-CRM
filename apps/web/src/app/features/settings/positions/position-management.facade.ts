@@ -374,14 +374,12 @@ export class PositionManagementFacade {
   }
 
   startEdit(p: OrgPosition): void {
-    this.panelOpen.update((state) => ({ ...state, positions: true }));
     this.editingId.set(p.id);
     this.formName = p.name;
     this.formDepartmentId = p.departmentId || '';
     this.formDirectionId = p.directionId || '';
     this.formDescription = p.description || '';
     this.formIsActive = p.isActive;
-    this.selectedPositionId.set(p.id);
     this.loadPositionCatalog(p.id);
     this.positionDialogOpen.set(true);
     this.error.set('');

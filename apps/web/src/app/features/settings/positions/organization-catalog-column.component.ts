@@ -7,12 +7,13 @@ import { PositionManagementFacade } from './position-management.facade';
   standalone: true,
   imports: [FormsModule],
   template: `
-    <div class="catalog-rail">
-      <article
-        class="card panel"
-        [class.collapsed]="!vm.panelOpen().directions"
-        [attr.aria-expanded]="vm.panelOpen().directions"
-      >
+    <div class="catalog-layout">
+      <div class="catalog-rail">
+        <article
+          class="card panel"
+          [class.collapsed]="!vm.panelOpen().directions"
+          [attr.aria-expanded]="vm.panelOpen().directions"
+        >
         <button
           type="button"
           class="panel-toggle"
@@ -308,9 +309,10 @@ import { PositionManagementFacade } from './position-management.facade';
           </ul>
         </div>
       </article>
+      </div>
 
       <article
-        class="card panel"
+        class="card skills-block"
         [class.collapsed]="!vm.panelOpen().skills"
         [attr.aria-expanded]="vm.panelOpen().skills"
       >
@@ -448,6 +450,11 @@ import { PositionManagementFacade } from './position-management.facade';
         margin: 0;
         font-size: 1.05rem;
       }
+      .catalog-layout {
+        display: grid;
+        gap: 1rem;
+        min-width: 0;
+      }
       .catalog-rail {
         display: flex;
         flex-wrap: nowrap;
@@ -548,6 +555,30 @@ import { PositionManagementFacade } from './position-management.facade';
       }
       .card.panel.collapsed .panel-body {
         display: none;
+      }
+      .skills-block {
+        min-width: 0;
+      }
+      .skills-block.collapsed {
+        padding-bottom: 0.65rem;
+      }
+      .skills-block .panel-body {
+        display: grid;
+        gap: 0.75rem;
+      }
+      .skills-block.collapsed .panel-body {
+        display: none;
+      }
+      .skills-block .position-form {
+        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+        align-items: end;
+      }
+      .skills-block .position-form .form-actions {
+        grid-column: 1 / -1;
+      }
+      .skills-block ul {
+        max-height: min(24rem, 50vh);
+        overflow-y: auto;
       }
       @media (prefers-reduced-motion: reduce) {
         .card.panel {

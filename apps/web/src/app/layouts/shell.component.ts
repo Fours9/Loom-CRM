@@ -64,8 +64,8 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
             <img
               class="brand-mark"
               src="assets/loom-mark.png"
-              width="36"
-              height="36"
+              width="32"
+              height="32"
               alt=""
             />
             <span class="brand-text">
@@ -331,8 +331,8 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         display: flex;
         flex-direction: column;
         color: var(--pw-text);
-        /* icon 2.75rem + vertical padding 0.65*2 + safe-area */
-        --shell-topbar-h: calc(4.05rem + env(safe-area-inset-top, 0px));
+        /* icon 2.4rem + vertical padding 0.4*2 + safe-area */
+        --shell-topbar-h: calc(3.2rem + env(safe-area-inset-top, 0px));
         background: linear-gradient(
           180deg,
           var(--pw-bg-grad-top) 0%,
@@ -354,7 +354,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         gap: 0.75rem;
         align-items: center;
         justify-content: space-between;
-        padding: calc(0.65rem + env(safe-area-inset-top, 0px)) 1rem 0.65rem;
+        padding: calc(0.4rem + env(safe-area-inset-top, 0px)) 1rem 0.4rem;
         border-bottom: 1px solid var(--pw-border);
         background: var(--pw-topbar, var(--pw-surface));
         backdrop-filter: blur(8px);
@@ -374,8 +374,8 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         color: inherit;
       }
       .brand-mark {
-        width: 36px;
-        height: 36px;
+        width: 32px;
+        height: 32px;
         border-radius: 8px;
         display: block;
         flex-shrink: 0;
@@ -389,7 +389,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
       }
       .brand-name {
         font-weight: 700;
-        font-size: 1.05rem;
+        font-size: 1rem;
         color: var(--pw-accent);
         white-space: nowrap;
         overflow: hidden;
@@ -448,7 +448,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         border-radius: 8px;
         padding: 0.4rem 0.75rem;
         cursor: pointer;
-        min-height: 2.75rem;
+        min-height: 2.4rem;
       }
       .theme-toggle {
         display: inline-flex;
@@ -456,9 +456,9 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         justify-content: center;
         gap: 0.35rem;
         font-weight: 600;
-        width: 2.75rem;
-        min-width: 2.75rem;
-        height: 2.75rem;
+        width: 2.4rem;
+        min-width: 2.4rem;
+        height: 2.4rem;
         padding: 0;
       }
       .inbox {
@@ -468,9 +468,9 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         position: relative;
         display: inline-grid;
         place-items: center;
-        width: 2.75rem;
-        height: 2.75rem;
-        min-width: 2.75rem;
+        width: 2.4rem;
+        height: 2.4rem;
+        min-width: 2.4rem;
         padding: 0;
         border: 1px solid var(--pw-border-strong);
         border-radius: 8px;
@@ -757,7 +757,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
       }
       @media (min-width: 641px) {
         .shell {
-          --shell-topbar-h: 4.55rem;
+          --shell-topbar-h: 3.5rem;
         }
         .shell.app-chrome-hidden {
           --shell-topbar-h: 0px;
@@ -766,21 +766,21 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
           display: grid;
           grid-template-columns: 1fr auto 1fr;
           gap: 1.5rem;
-          padding: 0.9rem 1.5rem;
+          padding: 0.45rem 1.25rem;
         }
         .shell:not(.in-absences) .topbar {
           display: flex;
           justify-content: space-between;
         }
         .brand-name {
-          font-size: 1.15rem;
+          font-size: 1.05rem;
         }
         .brand-module {
-          font-size: 0.78rem;
+          font-size: 0.72rem;
         }
         .brand-mark {
-          width: 36px;
-          height: 36px;
+          width: 32px;
+          height: 32px;
         }
         .desktop-nav {
           display: flex;
