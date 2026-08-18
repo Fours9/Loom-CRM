@@ -22,6 +22,13 @@ export const routes: Routes = [
           import('./features/people/people.routes').then((m) => m.PEOPLE_ROUTES),
       },
       {
+        path: 'positions',
+        loadChildren: () =>
+          import('./features/settings/positions/positions.routes').then(
+            (m) => m.POSITIONS_ROUTES,
+          ),
+      },
+      {
         path: 'settings',
         loadChildren: () =>
           import('./features/settings/settings.routes').then(

@@ -25,7 +25,7 @@ import {
 
       <p class="catalog-link">
         Довідники відділів і посад:
-        <a routerLink="/settings/positions">Керування посадами</a>
+        <a routerLink="/positions">Керування посадами</a>
       </p>
 
       <div class="grid">

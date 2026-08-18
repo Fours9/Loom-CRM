@@ -27,10 +27,6 @@ import { SkillsService } from './skills.service';
 class CreateSkillGroupDto {
   @IsString()
   @MinLength(1)
-  code!: string;
-
-  @IsString()
-  @MinLength(1)
   name!: string;
 
   @IsOptional()
@@ -128,7 +124,7 @@ export class SkillsController {
   @Post('skill-groups')
   @RequirePermissions(Permission.PositionsManage)
   createGroup(@Body() dto: CreateSkillGroupDto) {
-    return this.skills.createGroup(dto);
+    return this.skills.createCustomGroup(dto);
   }
 
   @Patch('skill-groups/:id')

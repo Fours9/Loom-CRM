@@ -859,6 +859,8 @@ export class ShellComponent implements OnInit, OnDestroy {
         return 'M12 3 4 9v12h5v-7h6v7h5V9l-8-6z';
       case '/people':
         return 'M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-8 0a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 8 11zm8 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4zM8 13c-.29 0-.62.02-.97.05C4.84 13.42 2 14.53 2 17v2h6v-2c0-.7.18-2.32 2.39-3.47C9.5 13.18 8.74 13 8 13z';
+      case '/positions':
+        return 'M20 6h-4V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v11a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V8a2 2 0 0 0-2-2zM10 4h4v2h-4V4zm10 15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8h16v11z';
       case '/questionnaires':
         return 'M7 3h10a2 2 0 0 1 2 2v14l-3-2-2 2-2-2-2 2-2-2-3 2V5a2 2 0 0 1 2-2zm2 5v2h6V8H9zm0 4v2h6v-2H9z';
       case '/absences':

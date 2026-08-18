@@ -12,7 +12,7 @@ Accepted.
 - `departments.direction_id`: **shipped**; hierarchy Direction ← Dept ← Position
 - `positions.direction_id`: **restored** (`1730000023000-RestorePositionDirectionId`) — denormalized inherit from department when set, else optional manual (Decision #10). Earlier PR3 add + `1730000022000` drop are historical only.
 - employment-assignment consistency (auto-fill dept/direction from catalog parents): **shipped**
-- Settings «Керування посадами» (`/settings/positions`): **shipped (PR4)**; skills column + position edit modal: **this increment**
+- Settings «Керування посадами» (`/settings/positions`): **shipped (PR4)**; skills as full-width Groups+Skills block + position edit modal: **this increment**; **sidebar `/positions`** (suitcase icon; `/settings/positions` redirects)
 - Organization `skill_groups` / `skills` / position requirements, duties, goal templates + Settings catalog tabs: **shipped (PR5)**
 - `PositionCatalogFacade`, assign/attach capture, `questionnaire_* .context_json`: **shipped (PR6)**; empty allowlist + fail-closed invalid context: **shipped (`1708c21`)**
 - Native skill scale (`range`/`percent`) independent of questionnaire 0–5: **this increment**
@@ -20,7 +20,7 @@ Accepted.
 
 ## Context
 
-Skills matrices, goals, and duties should depend on the employee’s **position** (with department and direction). Position Catalog CRUD lives under Settings (`/settings/positions`); Absences admin keeps privacy only. Questionnaire submit validates against immutable `templateVersion.schemaJson` — dynamic schema field lists would break determinism and historical answers.
+Skills matrices, goals, and duties should depend on the employee’s **position** (with department and direction). Position Catalog CRUD lives at **`/positions`** (sidebar «Керування посадами»; `/settings/positions` redirects). Absences admin keeps privacy only. Questionnaire submit validates against immutable `templateVersion.schemaJson` — dynamic schema field lists would break determinism and historical answers.
 
 ## Decision
 
@@ -86,7 +86,9 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
     - Forbidden: compare, subtract, `gap = targetLevel - rating.level`, display as one scale, or convert `80% → 4`. Future normalization is a separate ADR.
     - Frozen skill rows may include optional all-or-none `scaleKind`/`scaleMin`/`scaleMax` (absent = old V1 snapshots). Fill may show “Вимога посади: 80%” next to “Ваша оцінка: 0–5”.
 
-17. **Skill lifecycle:** deactivate/soft-delete **409** while any `position_skill_requirement` exists. Attach only active skills. Scale kind change with existing requirements → 409. Same-kind bound shrink allowed only if all existing `targetLevel` still fit. Skill row is the pessimistic lock root for scale update, deactivate, and requirement attach/`skillId` change. Max **64** skills per position (`MAX_POSITION_SKILLS`).
+17. **Skill lifecycle:** deactivate/soft-delete **409** while any `position_skill_requirement` exists. Attach only active skills **whose group is also active**. Scale kind change with existing requirements → 409. Same-kind bound shrink allowed only if all existing `targetLevel` still fit. Skill row is the pessimistic lock root for scale update, deactivate, and requirement attach/`skillId` change. Max **64** skills per position (`MAX_POSITION_SKILLS`).
+
+18. **Skill group identity and lifecycle:** Public `POST /skill-groups` does **not** accept `code` (`name` + optional `sortOrder` only). Settings custom groups get generated immutable `group_<12hex>` (unique-violation retry), same idea as custom skills. Seeded `TECH` / `BEAUTY` / `OFFICE` stay migration/seed. Create/move skill and re-enable skill require an **active** group. Deactivate group (`PATCH isActive:false` and `DELETE`) is **409** while any active skill remains. `SkillGroup` is the pessimistic lock root for deactivate, create-in-group, move-into-group, and re-enable. Pre-create position skill requirements are a **frontend draft queue only** (not persisted without `positionId`); see [position-catalog.md](../dev/position-catalog.md).
 
 ## Consequences
 

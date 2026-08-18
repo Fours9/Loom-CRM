@@ -11,7 +11,7 @@ Living companion to [ADR 0010](../adr/0010-position-catalog-and-questionnaire-co
 
 ## Settings UI
 
-Product path: **`/settings/positions`** («Керування посадами») — four catalog columns (directions, departments, positions, skills) plus a position edit modal for immediate requirement attach/detach. Details panel skills are read-only. Absences admin keeps privacy only (no position CRUD there).
+Product path: **`/positions`** (sidebar «Керування посадами»; `/settings/positions` redirects here) — three catalog rail columns (directions, departments, positions) plus a full-width **Groups + Skills** block below the rail (not a 4th rail column). Position edit modal attaches requirements; details panel skills are read-only. Absences admin keeps privacy only (no position CRUD there).
 
 ## Build
 
@@ -83,6 +83,48 @@ Transition rules:
 **Context modes:** `context_json == null` → legacy_registry; valid v1 (including `skills: []`) → frozen allowlist; non-null invalid → data-integrity error (not legacy).
 
 Schema via TypeORM migrations only — never `synchronize: true`.
+
+## Pre-create skill requirements (frontend draft queue)
+
+Persisted `position_skill_requirements` still require a `positionId`. The Settings modal lets the user queue requirements **before** create, as a frontend-only command list (`PositionDraftSkillQueue`). This is **not** a second domain model.
+
+Boundaries:
+
+| Layer | Role |
+| --- | --- |
+| `PositionEditDialog` | Renders `RequirementRowVm[]` and calls facade actions. Does not know backing storage. |
+| `PositionManagementFacade` | Orchestration + `PositionDialogMode` lifecycle. Dispatches requirement mutations by `row.kind`. |
+| `PositionDraftSkillQueue` | Transient pending/failed/conflict commands. Monotonic `sequence` is **session-level apply order only**. |
+| `SettingsOrgApiService` | HTTP: positions, requirements, skill groups/skills. |
+| Backend | Persistence, validation, group/skill lifecycle. |
+
+`PositionDialogMode`: `create` → `creating-position` → (`unresolved-create` **or** `applying-drafts` → `edit` / `edit-with-failed-drafts`).
+
+Create outcome classification (fail-closed):
+
+- HTTP `400` / `409` received → known rejection; draft queue kept; retry allowed
+- transport/timeout/`5xx` (no structured rollback contract) → `unresolved-create`; Save disabled; no blind retry; Close needs acknowledgement, then reload positions. Do **not** look up the position by name.
+
+Requirement mutations use `RequirementRowVm.kind` (`draft` → queue, `persisted` → HTTP), not `editingId()`. This keeps mixed persisted + failed draft rows working after partial apply.
+
+After apply, reload and reconcile by `skillId` **and** `targetLevel`/`required`. Same skill with different values is `conflict`, not silent success.
+
+Canonical **persisted** display order: `createdAt ASC, id ASC`. Local insertion order is **not** restored after a full browser reload.
+
+Close policy: non-empty create drafts → confirm discard; `creating-position` / `applying-drafts` → close disabled; `unresolved-create` → acknowledgement; `edit-with-failed-drafts` → warn before discarding failed intents.
+
+## Skill groups in Settings
+
+The Groups + Skills block is two columns in one card: groups (CRUD) and skills for the selected group. Public `POST /skill-groups` accepts `{ name, sortOrder? }` only — **no `code`**. Backend `createCustomGroup()` generates immutable `group_<12hex>` with unique-violation retry. Seeded `TECH` / `BEAUTY` / `OFFICE` remain migration-only.
+
+Group lifecycle (backend, `SkillGroup` is the pessimistic lock root):
+
+- create/move skill → target group must be active
+- re-enable skill → group must be active
+- deactivate group (`PATCH isActive:false` **and** `DELETE`) → `409` while any active skill remains (`assertCanDeactivateGroup`)
+- attach requirement → skill active **and** group active
+
+Management UI loads groups with `all=true`. Frontend does not re-implement these rules; it shows API errors.
 
 ## Local schema refresh (Track B)
 
