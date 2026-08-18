@@ -159,14 +159,6 @@ export class PositionManagementFacade {
     this.formDirectionId = dept?.directionId || '';
   }
 
-  inheritedDirectionLabel(): string {
-    const deptId = this.formDepartmentId;
-    if (!deptId) return '';
-    const dept = this.departments().find((d) => d.id === deptId);
-    if (!dept) return '';
-    return dept.directionName || dept.direction?.name || '';
-  }
-
   departmentDirectionLabel(d: OrgDepartment): string {
     return d.directionName || d.direction?.name || '';
   }

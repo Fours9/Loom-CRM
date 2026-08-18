@@ -24,6 +24,19 @@ Forbidden: Platform → Absences / Documents / Questionnaires; Organization → 
 2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions / Position Catalog (Settings UI **`/settings/positions`** «Керування посадами» — four columns including skills + position edit modal; [ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](dev/position-catalog.md)), schedules, access scope. Skill native scale (`range`/`percent`) is independent of questionnaire matrix 0–5.
 3. **Business modules** — absences (product UI: **Робочий календар** / TimeEvent domain — [ADR 0008](adr/0008-work-calendar-via-absences.md)); documents (MVP: employee file list/upload + People aggregate with time-event attachments); **questionnaires** (360° policy catalog + module — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [field catalog](product/questionnaire-360-field-catalog.md)); later onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
 
+### Position direction invariant
+
+`resolvePositionDirectionId()` is the pure canonical policy for `create/update Position`.
+`PositionsService` applies that policy before persistence for mutations of the `Position` entity itself.
+
+`DepartmentsService` separately maintains the same invariant when `Department.directionId` changes, by transactionally cascading the new direction into child `positions.direction_id` rows.
+
+Practical semantics:
+
+- `departmentId == null` → `directionId` may be `null` or manually chosen
+- `departmentId != null` → `directionId` is a persisted derived copy from `Department.directionId`
+- partial update with omitted `directionId` must not clear a manual direction when the resulting position remains global
+
 ### Documents MVP
 
 Documents module owns `employee_documents` (interim `content_base64` storage until Platform Files). Sensitive document types (`questionnaire`, `identity`, `medical`, `consent`) are projected server-side: owner + admin only; department managers see only employment/education/certificate/other when viewing others. Upload/delete: `documents.manage` (Admin). View: `documents.view` (all roles) + `EmployeeAccessService` scope.

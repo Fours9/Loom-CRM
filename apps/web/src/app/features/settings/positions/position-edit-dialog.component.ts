@@ -67,7 +67,7 @@ import { PositionManagementFacade } from './position-management.facade';
                 name="formDepartmentId"
                 (ngModelChange)="vm.onFormDepartmentChange()"
               >
-                <option value="">Без відділу</option>
+                <option [ngValue]="''">Без відділу</option>
                 @for (d of vm.formDepartmentOptions(); track d.id) {
                   <option [value]="d.id">{{ d.name }}</option>
                 }
@@ -75,20 +75,16 @@ import { PositionManagementFacade } from './position-management.facade';
             </label>
             <label>
               Напрямок
-              @if (vm.formDepartmentId) {
-                <input
-                  [value]="vm.inheritedDirectionLabel() || 'Без напрямку'"
-                  readonly
-                  class="readonly-field"
-                />
-              } @else {
-                <select [(ngModel)]="vm.formDirectionId" name="formDirectionId">
-                  <option value="">Без напрямку</option>
-                  @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
-                    <option [value]="dir.id">{{ dir.name }}</option>
-                  }
-                </select>
-              }
+              <select
+                [(ngModel)]="vm.formDirectionId"
+                name="formDirectionId"
+                [disabled]="!!vm.formDepartmentId"
+              >
+                <option value="">Без напрямку</option>
+                @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
+                  <option [value]="dir.id">{{ dir.name }}</option>
+                }
+              </select>
             </label>
           </div>
           @if (vm.formDepartmentId) {
@@ -330,10 +326,6 @@ import { PositionManagementFacade } from './position-management.facade';
         background: transparent;
         color: var(--pw-text);
         border: 1px solid var(--pw-border-strong);
-      }
-      .readonly-field {
-        background: color-mix(in srgb, var(--pw-surface) 80%, #000 20%);
-        color: var(--pw-muted);
       }
       .toggle-active {
         white-space: nowrap;

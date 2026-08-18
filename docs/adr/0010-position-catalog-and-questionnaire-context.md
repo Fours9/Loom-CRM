@@ -60,6 +60,11 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
    4. else position null / empty skills
 
 10. **Hierarchy & EmploymentAssignment:** Direction ←(optional) Department ←(optional) Position. Position stores `directionId`: if `departmentId` is set, direction is **inherited** from the department (forced sync); if no department, direction may be chosen manually. Assignment must match `position.departmentId` / `position.directionId` when those are set (auto-fill).
+    - Partial update semantics:
+      - omitted `directionId` does **not** clear a manual direction when resulting `departmentId == null`
+      - when resulting `departmentId != null`, persisted `directionId` is recalculated from the department
+      - when `departmentId` transitions to `null` and `directionId` is omitted, the previously inherited direction becomes the new manual direction
+      - old persisted direction must never override a newly selected department
 
 11. **Reattach:**
     - SAME employee: keep context + draft/history
