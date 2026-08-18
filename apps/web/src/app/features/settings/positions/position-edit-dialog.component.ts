@@ -24,9 +24,26 @@ import { PositionManagementFacade } from './position-management.facade';
           <h2 [id]="headingId">
             {{ vm.editingId() ? 'Редагувати посаду' : 'Нова посада' }}
           </h2>
-          <button type="button" class="ghost-neutral" (click)="vm.closePositionDialog()">
-            Закрити
-          </button>
+          <div class="head-actions">
+            @if (vm.editingId()) {
+              <label class="check toggle-active">
+                <input type="checkbox" [(ngModel)]="vm.formIsActive" name="formIsActive" />
+                Увімкнено
+              </label>
+            }
+            <button type="button" (click)="vm.savePosition()">
+              {{ vm.editingId() ? 'Зберегти' : 'Створити' }}
+            </button>
+            <button
+              type="button"
+              class="icon-close"
+              aria-label="Закрити"
+              title="Закрити"
+              (click)="vm.closePositionDialog()"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         @if (vm.error()) {
@@ -42,37 +59,40 @@ import { PositionManagementFacade } from './position-management.facade';
               placeholder="Назва посади"
             />
           </label>
-          <label>
-            Відділ
-            <select
-              [(ngModel)]="vm.formDepartmentId"
-              name="formDepartmentId"
-              (ngModelChange)="vm.onFormDepartmentChange()"
-            >
-              <option value="">Без відділу</option>
-              @for (d of vm.formDepartmentOptions(); track d.id) {
-                <option [value]="d.id">{{ d.name }}</option>
-              }
-            </select>
-          </label>
-          @if (vm.formDepartmentId) {
-            <p class="hint">
-              @if (vm.inheritedDirectionLabel()) {
-                Напрямок від відділу: {{ vm.inheritedDirectionLabel() }}
-              } @else {
-                Відділ без напрямку — посада успадковує відсутність напрямку.
-              }
-            </p>
-          } @else {
+          <div class="org-row">
             <label>
-              Напрямок
-              <select [(ngModel)]="vm.formDirectionId" name="formDirectionId">
-                <option value="">Без напрямку</option>
-                @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
-                  <option [value]="dir.id">{{ dir.name }}</option>
+              Відділ
+              <select
+                [(ngModel)]="vm.formDepartmentId"
+                name="formDepartmentId"
+                (ngModelChange)="vm.onFormDepartmentChange()"
+              >
+                <option value="">Без відділу</option>
+                @for (d of vm.formDepartmentOptions(); track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
                 }
               </select>
             </label>
+            <label>
+              Напрямок
+              @if (vm.formDepartmentId) {
+                <input
+                  [value]="vm.inheritedDirectionLabel() || 'Без напрямку'"
+                  readonly
+                  class="readonly-field"
+                />
+              } @else {
+                <select [(ngModel)]="vm.formDirectionId" name="formDirectionId">
+                  <option value="">Без напрямку</option>
+                  @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
+                    <option [value]="dir.id">{{ dir.name }}</option>
+                  }
+                </select>
+              }
+            </label>
+          </div>
+          @if (vm.formDepartmentId) {
+            <p class="hint">Напрямок успадковується від вибраного відділу.</p>
           }
           <label>
             Опис
@@ -83,17 +103,6 @@ import { PositionManagementFacade } from './position-management.facade';
               placeholder="Опис посади (необовʼязково)"
             ></textarea>
           </label>
-          @if (vm.editingId()) {
-            <label class="check">
-              <input type="checkbox" [(ngModel)]="vm.formIsActive" name="formIsActive" />
-              Увімкнено
-            </label>
-          }
-          <div class="form-actions">
-            <button type="button" (click)="vm.savePosition()">
-              {{ vm.editingId() ? 'Зберегти посаду' : 'Створити посаду' }}
-            </button>
-          </div>
         </form>
 
         <section class="reqs" [class.disabled]="!vm.editingId()">
@@ -192,8 +201,9 @@ import { PositionManagementFacade } from './position-management.facade';
         z-index: 50;
         display: grid;
         place-items: center;
+        align-items: start;
         background: color-mix(in srgb, #0f172a 45%, transparent);
-        padding: 1rem;
+        padding: calc(var(--shell-topbar-h, 0px) + 1rem) 1rem 0.75rem;
         overflow-y: auto;
       }
       .modal {
@@ -206,12 +216,21 @@ import { PositionManagementFacade } from './position-management.facade';
         background: var(--pw-surface);
         border: 1px solid var(--pw-border);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+        max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.75rem);
+        overflow: auto;
       }
       .head {
         display: flex;
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
+      }
+      .head-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: flex-end;
       }
       h2,
       h3 {
@@ -234,6 +253,11 @@ import { PositionManagementFacade } from './position-management.facade';
       .reqs {
         display: grid;
         gap: 0.55rem;
+      }
+      .org-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
       }
       .position-form label,
       .add-row .level {
@@ -293,6 +317,26 @@ import { PositionManagementFacade } from './position-management.facade';
         color: var(--pw-on-accent);
         border: 0;
         cursor: pointer;
+      }
+      .icon-close {
+        display: inline-grid;
+        place-items: center;
+        width: 2.25rem;
+        min-width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        font-size: 1.35rem;
+        line-height: 1;
+        background: transparent;
+        color: var(--pw-text);
+        border: 1px solid var(--pw-border-strong);
+      }
+      .readonly-field {
+        background: color-mix(in srgb, var(--pw-surface) 80%, #000 20%);
+        color: var(--pw-muted);
+      }
+      .toggle-active {
+        white-space: nowrap;
       }
       button:disabled {
         opacity: 0.45;
@@ -354,6 +398,14 @@ import { PositionManagementFacade } from './position-management.facade';
         padding: 0;
         border: none;
         flex: 0 0 auto;
+      }
+      @media (max-width: 720px) {
+        .head {
+          align-items: start;
+        }
+        .org-row {
+          grid-template-columns: 1fr;
+        }
       }
     `,
   ],
