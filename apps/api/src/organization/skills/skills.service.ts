@@ -10,7 +10,6 @@ import { DataSource, EntityManager, QueryFailedError, Repository } from 'typeorm
 import {
   isSkillCode,
   isSkillScaleKind,
-  skillDefinitionByCode,
   validateSkillScaleBounds,
   type SkillScaleKind,
 } from '@loom/position-skill-catalog';
@@ -83,12 +82,14 @@ export class SkillsService {
     }
   }
 
+  /**
+   * Persistence/attach invariant: the skill itself must be active.
+   * Group `isActive` is Position Catalog UI availability only — ungrouped
+   * and inactive-group skills remain attachable.
+   */
   assertSkillAttachable(skill: Skill): void {
     if (!skill.isActive) {
       throw new BadRequestException('Skill is inactive');
-    }
-    if (!skill.group || !skill.group.isActive) {
-      throw new BadRequestException('Skill group is inactive');
     }
   }
 
@@ -153,15 +154,30 @@ export class SkillsService {
     });
   }
 
-  findSkills(query: {
-    all?: boolean;
-    groupId?: string;
-  } = {}): Promise<Skill[]> {
+  async ungroupSkills(manager: EntityManager, groupId: string): Promise<void> {
+    await manager.getRepository(Skill).update({ groupId }, { groupId: null });
+  }
+
+  async hardDeleteGroup(id: string): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const row = await this.lockGroup(manager, id);
+      await this.ungroupSkills(manager, id);
+      await manager.getRepository(SkillGroup).remove(row);
+    });
+  }
+
+  findSkills(
+    query: {
+      all?: boolean;
+      groupId?: string;
+    } = {},
+  ): Promise<Skill[]> {
     const qb = this.skills
       .createQueryBuilder('s')
       .leftJoinAndSelect('s.group', 'group')
       .orderBy('group.sort_order', 'ASC')
-      .addOrderBy('s.name', 'ASC');
+      .addOrderBy('s.name', 'ASC')
+      .addOrderBy('s.id', 'ASC');
 
     if (!query.all) {
       qb.andWhere('s.is_active = true');
@@ -190,10 +206,7 @@ export class SkillsService {
     return row;
   }
 
-  async lockSkill(
-    manager: EntityManager,
-    id: string,
-  ): Promise<Skill> {
+  async lockSkill(manager: EntityManager, id: string): Promise<Skill> {
     // Lock the skill row only. `relations: { group: true }` + pessimistic_write
     // becomes LEFT JOIN … FOR UPDATE, which Postgres rejects (nullable outer join).
     const row = await manager.getRepository(Skill).findOne({
@@ -201,6 +214,10 @@ export class SkillsService {
       lock: { mode: 'pessimistic_write' },
     });
     if (!row) throw new NotFoundException('Skill not found');
+    if (!row.groupId) {
+      row.group = null;
+      return row;
+    }
     const group = await manager.getRepository(SkillGroup).findOne({
       where: { id: row.groupId },
     });
@@ -230,7 +247,7 @@ export class SkillsService {
   }
 
   async createSkill(input: {
-    groupId: string;
+    groupId?: string | null;
     code?: string;
     name: string;
     description?: string | null;
@@ -247,84 +264,39 @@ export class SkillsService {
     this.assertScalePair(scaleKind, scaleMin, scaleMax);
 
     return this.dataSource.transaction(async (manager) => {
-      const group = await this.lockGroup(manager, input.groupId);
-      this.assertGroupActive(group);
-      const skillRepo = manager.getRepository(Skill);
-
-      if (input.code != null && input.code.trim() !== '') {
-        const code = input.code.trim();
-        if (!isSkillCode(code)) {
-          throw new BadRequestException(
-            `Skill code must exist in @loom/position-skill-catalog (got "${code}")`,
-          );
-        }
-        const def = skillDefinitionByCode(code);
-        if (def && group.code !== def.group) {
-          throw new BadRequestException(
-            `Skill "${code}" belongs to group ${def.group}, not ${group.code}`,
-          );
-        }
-        const existing = await skillRepo.findOne({ where: { code } });
-        if (existing) throw new ConflictException('Skill code already exists');
-        return skillRepo.save(
-          skillRepo.create({
-            groupId: input.groupId,
-            code,
-            name: input.name.trim(),
-            description: input.description ?? null,
-            scaleKind,
-            scaleMin,
-            scaleMax,
-            isActive: true,
-          }),
-        );
+      const groupId = input.groupId ?? null;
+      if (groupId) {
+        const group = await this.lockGroup(manager, groupId);
+        this.assertGroupActive(group);
       }
-
-      for (let attempt = 0; attempt < GENERATE_CODE_ATTEMPTS; attempt += 1) {
-        const code = `skill_${randomBytes(6).toString('hex')}`;
-        try {
-          return await skillRepo.save(
-            skillRepo.create({
-              groupId: input.groupId,
-              code,
-              name: input.name.trim(),
-              description: input.description ?? null,
-              scaleKind,
-              scaleMin,
-              scaleMax,
-              isActive: true,
-            }),
-          );
-        } catch (err) {
-          if (isUniqueViolation(err) && attempt < GENERATE_CODE_ATTEMPTS - 1) {
-            continue;
-          }
-          throw err;
-        }
-      }
-      throw new ConflictException('Could not allocate a unique skill code');
+      return this.insertSkill(manager, {
+        groupId,
+        code: input.code,
+        name: input.name,
+        description: input.description,
+        scaleKind,
+        scaleMin,
+        scaleMax,
+      });
     });
   }
 
   async updateSkill(
     id: string,
-    input: Partial<
-      Pick<
-        Skill,
-        | 'groupId'
-        | 'name'
-        | 'description'
-        | 'scaleKind'
-        | 'scaleMin'
-        | 'scaleMax'
-        | 'isActive'
-      >
-    >,
+    input: Partial<{
+      groupId: string | null;
+      name: string;
+      description: string | null;
+      scaleKind: SkillScaleKind;
+      scaleMin: number;
+      scaleMax: number;
+      isActive: boolean;
+    }>,
   ): Promise<Skill> {
     return this.dataSource.transaction(async (manager) => {
       const skillRepo = manager.getRepository(Skill);
       const reqRepo = manager.getRepository(PositionSkillRequirement);
-      const row = await this.lockSkill(manager, id);
+      const { row, nextGroup } = await this.lockSkillForUpdate(manager, id, input);
 
       const nextKind = (input.scaleKind ?? row.scaleKind) as SkillScaleKind;
       const nextMin = input.scaleMin ?? row.scaleMin;
@@ -364,24 +336,11 @@ export class SkillsService {
         await this.assertCanDeactivateSkill(id, manager);
         row.isActive = false;
       } else if (input.isActive === true && !row.isActive) {
-        const groupForEnable = await this.lockGroup(
-          manager,
-          input.groupId ?? row.groupId,
-        );
-        this.assertGroupActive(groupForEnable);
         row.isActive = true;
       }
 
-      if (input.groupId !== undefined && input.groupId !== row.groupId) {
-        const group = await this.lockGroup(manager, input.groupId);
-        this.assertGroupActive(group);
-        const def = skillDefinitionByCode(row.code);
-        if (def && group.code !== def.group) {
-          throw new BadRequestException(
-            `Skill "${row.code}" belongs to group ${def.group}, not ${group.code}`,
-          );
-        }
-        row.groupId = input.groupId;
+      if (nextGroup !== undefined) {
+        this.applyLiveGroup(row, nextGroup);
       }
       if (input.name !== undefined) row.name = input.name;
       if (input.description !== undefined) row.description = input.description;
@@ -397,5 +356,115 @@ export class SkillsService {
       row.isActive = false;
       await manager.getRepository(Skill).save(row);
     });
+  }
+
+  async hardDeleteSkill(id: string): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const row = await this.lockSkill(manager, id);
+      await manager.getRepository(PositionSkillRequirement).delete({ skillId: id });
+      await manager.getRepository(Skill).remove(row);
+    });
+  }
+
+  /**
+   * Known target group → lock Group then Skill.
+   * Re-enable with omitted groupId → pre-read membership, then Group→Skill and revalidate.
+   * Ungrouped / ungroup / no group target → lockSkill only.
+   *
+   * `nextGroup`: `undefined` = leave membership; `null` = ungroup; entity = assign.
+   */
+  private async lockSkillForUpdate(
+    manager: EntityManager,
+    id: string,
+    input: Partial<{ groupId: string | null; isActive: boolean }>,
+  ): Promise<{ row: Skill; nextGroup: SkillGroup | null | undefined }> {
+    if (input.groupId === null) {
+      return { row: await this.lockSkill(manager, id), nextGroup: null };
+    }
+
+    if (typeof input.groupId === 'string') {
+      const group = await this.lockGroup(manager, input.groupId);
+      this.assertGroupActive(group);
+      return { row: await this.lockSkill(manager, id), nextGroup: group };
+    }
+
+    const enabling = input.isActive === true;
+    if (!enabling) {
+      return { row: await this.lockSkill(manager, id), nextGroup: undefined };
+    }
+
+    const preview = await manager.getRepository(Skill).findOne({ where: { id } });
+    if (!preview) throw new NotFoundException('Skill not found');
+
+    if (preview.groupId) {
+      const group = await this.lockGroup(manager, preview.groupId);
+      this.assertGroupActive(group);
+      const row = await this.lockSkill(manager, id);
+      if (row.groupId !== preview.groupId) {
+        throw new ConflictException('Skill group changed; retry the update');
+      }
+      return { row, nextGroup: undefined };
+    }
+
+    const row = await this.lockSkill(manager, id);
+    if (row.groupId !== null) {
+      throw new ConflictException('Skill group changed; retry the update');
+    }
+    return { row, nextGroup: undefined };
+  }
+
+  /** Single write of live classification. TypeORM save() follows `group`, not `groupId` alone. */
+  private applyLiveGroup(row: Skill, group: SkillGroup | null): void {
+    row.group = group;
+    row.groupId = group?.id ?? null;
+  }
+
+  private async insertSkill(
+    manager: EntityManager,
+    input: {
+      groupId: string | null;
+      code?: string;
+      name: string;
+      description?: string | null;
+      scaleKind: SkillScaleKind;
+      scaleMin: number;
+      scaleMax: number;
+    },
+  ): Promise<Skill> {
+    const skillRepo = manager.getRepository(Skill);
+    const payload = {
+      groupId: input.groupId,
+      name: input.name.trim(),
+      description: input.description ?? null,
+      scaleKind: input.scaleKind,
+      scaleMin: input.scaleMin,
+      scaleMax: input.scaleMax,
+      isActive: true,
+    };
+
+    if (input.code != null && input.code.trim() !== '') {
+      const code = input.code.trim();
+      if (!isSkillCode(code)) {
+        throw new BadRequestException(
+          `Skill code must exist in @loom/position-skill-catalog (got "${code}")`,
+        );
+      }
+      const existing = await skillRepo.findOne({ where: { code } });
+      if (existing) throw new ConflictException('Skill code already exists');
+      return skillRepo.save(skillRepo.create({ ...payload, code }));
+    }
+
+    for (let attempt = 0; attempt < GENERATE_CODE_ATTEMPTS; attempt += 1) {
+      const code = `skill_${randomBytes(6).toString('hex')}`;
+      try {
+        return await skillRepo.save(skillRepo.create({ ...payload, code }));
+      } catch (err) {
+        if (isUniqueViolation(err) && attempt < GENERATE_CODE_ATTEMPTS - 1) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new ConflictException('Could not allocate a unique skill code');
   }
 }

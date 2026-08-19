@@ -113,6 +113,16 @@ describe('parseQuestionnaireContext (strict)', () => {
     ).toBe(false);
   });
 
+  it('accepts empty frozen skill group (ungrouped capture)', () => {
+    const parsed = parseQuestionnaireContext(
+      validContext({ skills: [{ ...validSkill, group: '' }] }),
+    );
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.context.positionCatalog.skills[0]?.group).toBe('');
+    }
+  });
+
   it('accepts generated skill identity codes outside the registry', () => {
     const parsed = parseQuestionnaireContext(
       validContext({

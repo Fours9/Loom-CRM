@@ -18,18 +18,18 @@ import { Component, HostListener, input, output } from '@angular/core';
         [attr.aria-labelledby]="headingId()"
       >
         <div class="head">
+          <button
+            type="button"
+            class="icon-close"
+            aria-label="Закрити"
+            title="Закрити"
+            (click)="closed.emit()"
+          >
+            ×
+          </button>
           <h2 [id]="headingId()">{{ title() }}</h2>
           <div class="head-actions">
             <ng-content select="[catalogHeadActions]" />
-            <button
-              type="button"
-              class="icon-close"
-              aria-label="Закрити"
-              title="Закрити"
-              (click)="closed.emit()"
-            >
-              ×
-            </button>
           </div>
         </div>
 
@@ -59,7 +59,8 @@ import { Component, HostListener, input, output } from '@angular/core';
         gap: 0.85rem;
         width: min(28rem, 100%);
         margin: auto;
-        padding: 1.1rem 1.2rem 1.25rem;
+        position: relative;
+        padding: 3.25rem 1.2rem 1.1rem;
         border-radius: 12px;
         background: var(--pw-surface);
         border: 1px solid var(--pw-border);
@@ -89,6 +90,10 @@ import { Component, HostListener, input, output } from '@angular/core';
         color: var(--pw-danger);
       }
       .icon-close {
+        position: absolute;
+        top: 0.55rem;
+        right: 0.7rem;
+        z-index: 1;
         display: inline-grid;
         place-items: center;
         width: 2.25rem;

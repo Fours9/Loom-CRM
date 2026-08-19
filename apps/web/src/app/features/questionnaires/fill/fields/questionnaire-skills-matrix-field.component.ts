@@ -289,10 +289,10 @@ export class QuestionnaireSkillsMatrixFieldComponent implements OnChanges {
   }
 
   private groupLabel(code: string): string {
-    if (code === '__other__') return 'Інші';
+    if (code === '__other__') return 'Без групи';
     return (
       SKILL_GROUP_LABELS_UA[code as keyof typeof SKILL_GROUP_LABELS_UA] ??
-      (code.trim() ? code : 'Інші')
+      (code.trim() ? code : 'Без групи')
     );
   }
 

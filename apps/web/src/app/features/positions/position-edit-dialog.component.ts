@@ -1,12 +1,15 @@
 import { Component, HostListener, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import {
+  MultiSelectListComponent,
+  type MultiSelectItem,
+} from '../../shared/multi-select-list.component';
 import { PositionManagementFacade } from './position-management.facade';
-import type { RequirementRowVm } from './position-dialog.models';
 
 @Component({
   selector: 'loom-position-edit-dialog',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, MultiSelectListComponent],
   template: `
     <div
       class="backdrop"
@@ -22,6 +25,16 @@ import type { RequirementRowVm } from './position-dialog.models';
         [attr.aria-labelledby]="headingId"
       >
         <div class="head">
+          <button
+            type="button"
+            class="icon-close"
+            aria-label="Закрити"
+            title="Закрити"
+            (click)="vm.requestClose()"
+            [disabled]="vm.closeLocked()"
+          >
+            ×
+          </button>
           <h2 [id]="headingId">
             {{ heading() }}
           </h2>
@@ -43,16 +56,6 @@ import type { RequirementRowVm } from './position-dialog.models';
               [disabled]="vm.saveLocked()"
             >
               {{ vm.editingId() ? 'Зберегти' : 'Створити' }}
-            </button>
-            <button
-              type="button"
-              class="icon-close"
-              aria-label="Закрити"
-              title="Закрити"
-              (click)="vm.requestClose()"
-              [disabled]="vm.closeLocked()"
-            >
-              ×
             </button>
           </div>
         </div>
@@ -95,6 +98,20 @@ import type { RequirementRowVm } from './position-dialog.models';
           </label>
           <div class="org-row">
             <label>
+              Напрямок
+              <select
+                [(ngModel)]="vm.formDirectionId"
+                name="formDirectionId"
+                (ngModelChange)="vm.onFormDirectionChange()"
+                [disabled]="vm.saveLocked()"
+              >
+                <option [ngValue]="''">Без напрямку</option>
+                @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
+                  <option [ngValue]="dir.id">{{ dir.name }}</option>
+                }
+              </select>
+            </label>
+            <label>
               Відділ
               <select
                 [(ngModel)]="vm.formDepartmentId"
@@ -104,26 +121,13 @@ import type { RequirementRowVm } from './position-dialog.models';
               >
                 <option [ngValue]="''">Без відділу</option>
                 @for (d of vm.formDepartmentOptions(); track d.id) {
-                  <option [value]="d.id">{{ d.name }}</option>
-                }
-              </select>
-            </label>
-            <label>
-              Напрямок
-              <select
-                [(ngModel)]="vm.formDirectionId"
-                name="formDirectionId"
-                [disabled]="!!vm.formDepartmentId || vm.saveLocked()"
-              >
-                <option value="">Без напрямку</option>
-                @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
-                  <option [value]="dir.id">{{ dir.name }}</option>
+                  <option [ngValue]="d.id">{{ d.name }}</option>
                 }
               </select>
             </label>
           </div>
-          @if (vm.formDepartmentId) {
-            <p class="hint">Напрямок успадковується від вибраного відділу.</p>
+          @if (vm.formDirectionId) {
+            <p class="hint">Відділи показуються лише для вибраного напрямку.</p>
           }
           <label>
             Опис
@@ -135,115 +139,21 @@ import type { RequirementRowVm } from './position-dialog.models';
               [disabled]="vm.saveLocked()"
             ></textarea>
           </label>
-        </form>
-
-        <section class="reqs" [class.disabled]="vm.skillsEditingLocked()">
-          <h3>Вимоги до навичок</h3>
-          <p class="hint">
-            {{ vm.requirementRows().length }} / {{ vm.maxPositionSkills }}
-          </p>
           @if (vm.canManagePositions()) {
-            <div class="picker">
-              <button
-                type="button"
-                class="ghost-neutral"
-                (click)="vm.togglePicker()"
-                [disabled]="vm.skillsEditingLocked() || vm.skillsQuotaReached()"
-              >
-                {{ vm.pickerOpen() ? 'Сховати список' : 'Додати навички' }}
-              </button>
-              @if (vm.pickerOpen()) {
-                <div class="picker-list">
-                  @for (s of vm.pickerCandidateSkills(); track s.id) {
-                    <label class="check">
-                      <input
-                        type="checkbox"
-                        [checked]="vm.isPickerSelected(s.id)"
-                        (change)="vm.togglePickerSkill(s.id)"
-                      />
-                      {{ s.group?.name || '' }} — {{ s.name }}
-                    </label>
-                  } @empty {
-                    <p class="hint">Немає доступних навичок</p>
-                  }
-                  <button
-                    type="button"
-                    (click)="vm.confirmPickerSkills()"
-                    [disabled]="vm.pickerSelectedIds().length === 0"
-                  >
-                    Додати вибрані
-                  </button>
-                </div>
-              }
-            </div>
+            <label class="skills-field">
+              Навички
+              <app-multi-select-list
+                [items]="pickerItems()"
+                [selectedIds]="vm.selectedSkillIds()"
+                [disabled]="vm.skillsEditingLocked()"
+                [searchable]="true"
+                placeholder="Оберіть або знайдіть навичку"
+                searchPlaceholder="Пошук…"
+                (selectedIdsChange)="vm.onSkillPickerChange($event)"
+              />
+            </label>
           }
-          <ul>
-            @for (r of vm.requirementRows(); track rowTrack(r)) {
-              <li [class.failed]="r.kind === 'draft' && r.state === 'failed'">
-                <span>
-                  <strong>{{ r.skillName || r.skillCode }}</strong>
-                  <small>{{ vm.formatNativeTarget(r) }}</small>
-                  @if (r.required) {
-                    <small class="badge">обовʼязкова</small>
-                  }
-                  @if (r.kind === 'draft') {
-                    <small class="badge draft">{{ vm.rowStateLabel(r) }}</small>
-                  }
-                  @if (r.kind === 'draft' && r.error) {
-                    <small class="error-inline">{{ r.error }}</small>
-                  }
-                </span>
-                @if (vm.canManagePositions()) {
-                  <span class="row-actions">
-                    <button
-                      type="button"
-                      class="ghost-neutral"
-                      (click)="vm.bumpRequirementLevel(r, -1)"
-                      [disabled]="
-                        vm.skillsEditingLocked() ||
-                        r.targetLevel <= (r.skillScaleMin ?? 0)
-                      "
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      class="ghost-neutral"
-                      (click)="vm.bumpRequirementLevel(r, 1)"
-                      [disabled]="
-                        vm.skillsEditingLocked() ||
-                        r.targetLevel >= (r.skillScaleMax ?? r.targetLevel)
-                      "
-                    >
-                      +
-                    </button>
-                    <label class="check">
-                      <input
-                        type="checkbox"
-                        [checked]="r.required"
-                        [disabled]="vm.skillsEditingLocked()"
-                        (change)="
-                          vm.changeRequired(r, $any($event.target).checked)
-                        "
-                      />
-                      Обовʼязкова
-                    </label>
-                    <button
-                      type="button"
-                      class="ghost"
-                      (click)="vm.removeRequirement(r)"
-                      [disabled]="vm.skillsEditingLocked()"
-                    >
-                      Прибрати
-                    </button>
-                  </span>
-                }
-              </li>
-            } @empty {
-              <li class="muted-row">Немає вимог до навичок</li>
-            }
-          </ul>
-        </section>
+        </form>
       </div>
     </div>
   `,
@@ -257,21 +167,21 @@ import type { RequirementRowVm } from './position-dialog.models';
         place-items: center;
         align-items: start;
         background: color-mix(in srgb, #0f172a 45%, transparent);
-        padding: calc(var(--shell-topbar-h, 0px) + 1rem) 1rem 0.75rem;
-        overflow-y: auto;
+        padding: calc(var(--shell-topbar-h, 0px) + 0.35rem) 1rem 0.75rem;
+        overflow: hidden;
       }
       .modal {
         display: grid;
         gap: 0.85rem;
         width: min(40rem, 100%);
-        margin: auto;
-        padding: 1.1rem 1.2rem 1.25rem;
+        margin: 0.35rem auto 0;
+        position: relative;
+        padding: 3.25rem 1.2rem 1.1rem;
         border-radius: 12px;
         background: var(--pw-surface);
         border: 1px solid var(--pw-border);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
-        max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.75rem);
-        overflow: auto;
+        overflow: visible;
       }
       .head {
         display: flex;
@@ -298,17 +208,12 @@ import type { RequirementRowVm } from './position-dialog.models';
         margin: 0;
         color: var(--pw-danger);
       }
-      .error-inline {
-        display: block;
-        color: var(--pw-danger);
-      }
       .hint {
         margin: 0;
         font-size: 0.85rem;
         color: var(--pw-muted);
       }
-      .position-form,
-      .reqs {
+      .position-form {
         display: grid;
         gap: 0.55rem;
       }
@@ -329,18 +234,10 @@ import type { RequirementRowVm } from './position-dialog.models';
         align-items: center;
         gap: 0.5rem;
       }
-      .picker {
-        display: grid;
-        gap: 0.45rem;
-      }
-      .picker-list {
-        display: grid;
-        gap: 0.35rem;
-        padding: 0.6rem;
-        border: 1px solid var(--pw-border);
-        border-radius: 8px;
-        max-height: 14rem;
-        overflow: auto;
+      .skills-field {
+        margin-top: 0.55rem;
+        gap: 0.65rem;
+        --ms-trigger-height: 4.75rem;
       }
       input,
       select,
@@ -363,6 +260,10 @@ import type { RequirementRowVm } from './position-dialog.models';
         cursor: pointer;
       }
       .icon-close {
+        position: absolute;
+        top: 0.55rem;
+        right: 0.7rem;
+        z-index: 1;
         display: inline-grid;
         place-items: center;
         width: 2.25rem;
@@ -391,56 +292,6 @@ import type { RequirementRowVm } from './position-dialog.models';
         background: transparent;
         color: var(--pw-text);
         border: 1px solid var(--pw-border-strong);
-      }
-      ul {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: 0.45rem;
-      }
-      li {
-        display: flex;
-        justify-content: space-between;
-        gap: 0.75rem;
-        align-items: center;
-        padding: 0.35rem 0;
-        border-bottom: 1px solid #eef2f7;
-      }
-      li.failed {
-        background: color-mix(in srgb, var(--pw-danger) 8%, transparent);
-        margin: 0 -0.35rem;
-        padding-left: 0.35rem;
-        padding-right: 0.35rem;
-        border-radius: 8px;
-      }
-      .row-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.25rem;
-        flex-shrink: 0;
-        align-items: center;
-      }
-      small {
-        color: var(--pw-muted);
-      }
-      .badge {
-        background: #fef3c7;
-        color: #92400e;
-        padding: 0.1rem 0.4rem;
-        border-radius: 999px;
-        margin-left: 0.35rem;
-      }
-      .badge.draft {
-        background: #e0e7ff;
-        color: #3730a3;
-      }
-      .muted-row {
-        color: var(--pw-muted);
-        border: 0;
-      }
-      .reqs.disabled {
-        opacity: 0.72;
       }
       .check input[type='checkbox'] {
         width: 1rem;
@@ -476,8 +327,8 @@ export class PositionEditDialogComponent {
     return 'Редагувати посаду';
   }
 
-  rowTrack(row: RequirementRowVm): string {
-    return row.kind === 'draft' ? row.clientId : row.id;
+  pickerItems(): MultiSelectItem[] {
+    return this.vm.pickerSkillOptions().map((s) => ({ id: s.id, label: s.name }));
   }
 
   onBackdropPointerDown(event: Event): void {

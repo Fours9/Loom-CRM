@@ -53,14 +53,10 @@ import { PositionManagementFacade } from './position-management.facade';
                 <li>
                   <span>
                     <strong>{{ r.skillName || r.skillCode }}</strong>
-                    <small>{{ vm.formatNativeTarget(r) }}</small>
-                    @if (r.required) {
-                      <small class="badge">обовʼязкова</small>
-                    }
                   </span>
                 </li>
               } @empty {
-                <li class="muted-row">Немає вимог до навичок</li>
+                <li class="muted-row">Немає навичок</li>
               }
             </ul>
           </div>

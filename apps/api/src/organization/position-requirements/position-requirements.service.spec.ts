@@ -42,9 +42,6 @@ function makeService(opts: {
       if (!skill.isActive) {
         throw new BadRequestException('Skill is inactive');
       }
-      if (!skill.group || !skill.group.isActive) {
-        throw new BadRequestException('Skill group is inactive');
-      }
     },
   };
 
@@ -83,7 +80,7 @@ describe('PositionRequirementsService attach limit', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('rejects attach when skill group is inactive', async () => {
+  it('allows attach when skill group is inactive', async () => {
     const skill = {
       id: 'skill-1',
       code: 'sewing',
@@ -98,7 +95,26 @@ describe('PositionRequirementsService attach limit', () => {
 
     await expect(
       service.createSkillRequirement('pos-1', { skillId: skill.id }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toMatchObject({ skillId: 'skill-1' });
+  });
+
+  it('allows attach when skill has no group', async () => {
+    const skill = {
+      id: 'skill-ungrouped',
+      code: 'sewing',
+      name: 'Пошиття',
+      scaleKind: 'range',
+      scaleMin: 0,
+      scaleMax: 5,
+      isActive: true,
+      groupId: null,
+      group: null,
+    } as Skill;
+    const { service } = makeService({ skill, count: 0 });
+
+    await expect(
+      service.createSkillRequirement('pos-1', { skillId: skill.id }),
+    ).resolves.toMatchObject({ skillId: 'skill-ungrouped' });
   });
 
   it('lists requirements by createdAt ASC then id ASC', async () => {

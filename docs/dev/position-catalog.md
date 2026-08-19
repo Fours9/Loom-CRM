@@ -58,6 +58,7 @@ Historical Review uses `submission.context_json` (or registry if null), never cu
 | `QuestionnaireContextJson1730000021000` | PR6 | `questionnaire_assignments.context_json` / `questionnaire_submissions.context_json` |
 | `QuestionnaireAssignmentTitle1730000024000` | follow-up | optional assignment `title` |
 | `SkillNativeScale1730000025000` | this increment | `skills.scale_kind` / `scale_min`; DROP DEFAULT on `position_skill_requirements.target_level` |
+| `SkillGroupOptional1730000026000` | this increment | `skills.group_id` nullable (optional live classification) |
 
 **Hierarchy:** Direction ←(optional) Department ←(optional) Position. Position stores `directionId` (Decision #10 / ADR 0010): department set → inherit; no department → optional manual.
 
@@ -92,13 +93,16 @@ Boundaries:
 
 | Layer | Role |
 | --- | --- |
-| `PositionEditDialog` | Renders `RequirementRowVm[]` and calls facade actions. Does not know backing storage. |
-| `PositionManagementFacade` | Orchestration + `PositionDialogMode` lifecycle. Dispatches requirement mutations by `row.kind`. Create / edit picker / retry apply drafts via `applyQueuedRequirements`. |
-| `PositionDraftSkillQueue` | Transient pending/failed/conflict commands. Monotonic `sequence` is **session-level apply order only**. |
+| `PositionEditDialog` | Multi-select + chips (same widget as Absences filters). Maps `{ id, name }` → widget labels. Does not know queue vs HTTP. |
+| `PositionManagementFacade` | Orchestration + `PositionDialogMode` lifecycle. Picker membership → queue; persist via `persistDraftRequirements`. |
+| `persistDraftRequirements` | Single persist entry. `lockUi: true` (create / Retry) uses `applying-drafts`. `lockUi: false` (edit picker) does not, so the dropdown stays open. Save/Close wait on in-flight picker persist. |
+| `PositionDraftSkillQueue` | Transient pending/failed/conflict commands. Monotonic `sequence` is **session-level apply order only**. Attach defaults: `required = true`, `targetLevel = skill.scaleMin` (native scale). The modal does not edit scale/`обовʼязкова`. Max **64** skills is enforced in the queue, not shown as a counter. |
 | `SettingsOrgApiService` | Legacy-named shared Organization HTTP client (relocation/rename deferred): positions, requirements, skill groups/skills. |
 | Backend | Persistence, validation, group/skill lifecycle. |
 
-`PositionDialogMode`: `create` → `creating-position` → (`unresolved-create` **or** `applying-drafts` → `edit` / `edit-with-failed-drafts`).
+Picker list order: `compareByUkNameThenId` (uk locale, then `id`). Chip order is **selection order** in the session; server membership is merged without reordering. After a full browser reload, chips follow the first catalog load (`createdAt ASC, id ASC`).
+
+`PositionDialogMode`: `create` → `creating-position` → (`unresolved-create` **or** `applying-drafts` → `edit` / `edit-with-failed-drafts`). Edit-picker persist does **not** enter `applying-drafts`.
 
 Create outcome classification (fail-closed):
 
@@ -109,20 +113,31 @@ Requirement mutations use `RequirementRowVm.kind` (`draft` → queue, `persisted
 
 After apply, reload and reconcile by `skillId` **and** `targetLevel`/`required`. Same skill with different values is `conflict`, not silent success.
 
-Canonical **persisted** display order: `createdAt ASC, id ASC`. Local insertion order is **not** restored after a full browser reload.
+Canonical **persisted** list order: `createdAt ASC, id ASC`.
 
-Close policy: non-empty create drafts → confirm discard; `creating-position` / `applying-drafts` → close disabled; `unresolved-create` → acknowledgement; `edit-with-failed-drafts` → warn before discarding failed intents.
+Close policy: non-empty create drafts → confirm discard; `creating-position` / `applying-drafts` / picker persist in flight → close disabled; `unresolved-create` → acknowledgement; `edit-with-failed-drafts` → warn before discarding failed intents.
 
 ## Skill groups in Position Catalog
 
-The Groups + Skills block is two columns in one card: groups (CRUD) and skills for the selected group. Public `POST /skill-groups` accepts `{ name, sortOrder? }` only — **no `code`**. Backend `createCustomGroup()` generates immutable `group_<12hex>` with unique-violation retry. Seeded `TECH` / `BEAUTY` / `OFFICE` remain migration-only.
+The Groups + Skills block is two columns in one card: groups (CRUD) and skills for the selected filter. Pinned rows above the name-sorted groups (not in the sort): **Усі навички** (`selected = null`) and **Без групи** (`__ungrouped__`, `groupId == null`). In all-skills mode, ungrouped skills show a «Без групи» badge. Public `POST /skill-groups` accepts `{ name, sortOrder? }` only — **no `code`**. Backend `createCustomGroup()` generates immutable `group_<12hex>` with unique-violation retry. Seeded `TECH` / `BEAUTY` / `OFFICE` remain migration-only. Live group membership is **not** bound to registry `skillDefinitionByCode().group`.
 
-Group lifecycle (backend, `SkillGroup` is the pessimistic lock root):
+Skill/group commands (backend; do not conflate):
 
-- create/move skill → target group must be active
-- re-enable skill → group must be active
-- deactivate group (`PATCH isActive:false` **and** `DELETE`) → `409` while any active skill remains (`assertCanDeactivateGroup`)
-- attach requirement → skill active **and** group active
+| HTTP | Effect |
+| --- | --- |
+| `PATCH isActive` | Toggle (deactivate skill 409 while requirements exist; deactivate group 409 while **active** skills remain) |
+| `DELETE /skills/:id` | Hard delete: bulk-delete that skill’s requirements, then remove the skill |
+| `DELETE /skill-groups/:id` | Hard delete: ungroup remaining skills (`group_id = null`), then remove the group |
+
+- create/move **into** a uuid group → target group must be active
+- ungrouped create / `PATCH groupId: null` → no group lock
+- re-enable grouped skill without `groupId` in PATCH → lock Group then Skill; 409 if membership changed mid-TX
+- attach requirement → skill active only (inactive/missing group does not block persist)
+- picker (UI, stricter) → `skill.isActive AND (groupId == null OR group.isActive)`
+
+Group `isActive` controls availability in the Position Catalog UI picker, but is **not** a persistence/attach invariant for Skill.
+
+Hard delete affects the **live** Position Catalog and **future** context captures only. Existing frozen questionnaire contexts remain unchanged; legacy `context_json=null` continues to use the immutable legacy registry.
 
 Management UI loads groups with `all=true`. Frontend does not re-implement these rules; it shows API errors.
 

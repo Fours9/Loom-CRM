@@ -42,9 +42,9 @@ import { PositionManagementFacade } from './position-management.facade';
         <label>
           Група
           <select [(ngModel)]="vm.newSkillGroupId" name="newSkillGroupId">
-            <option value="">Оберіть групу</option>
+            <option [ngValue]="null">Без групи</option>
             @for (g of vm.skillFormGroupOptions(); track g.id) {
-              <option [value]="g.id">{{ g.name }}</option>
+              <option [ngValue]="g.id">{{ g.name }}</option>
             }
           </select>
         </label>
