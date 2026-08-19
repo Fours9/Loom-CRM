@@ -37,6 +37,7 @@
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.27",
     "uuid": "^11.1.0",
+    "@loom/contracts-auth": "workspace:*",
     "@loom/contracts-questionnaires": "workspace:*",
     "@loom/questionnaire-schema": "workspace:*",
     "@loom/employee-contacts": "workspace:*",
