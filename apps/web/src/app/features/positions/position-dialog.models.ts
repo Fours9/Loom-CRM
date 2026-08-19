@@ -217,13 +217,30 @@ export function positionSaveCompletion(input: {
   return 'close-and-reset';
 }
 
+export function filterDepartmentsByDirection<
+  T extends { id: string; directionId: string | null },
+>(departments: T[], directionId: string): T[] {
+  if (!directionId) return departments;
+  return departments.filter((d) => d.directionId === directionId);
+}
+
+export function departmentFitsSelectedDirection(
+  department: { directionId: string | null } | undefined,
+  directionId: string,
+): boolean {
+  if (!directionId) return true;
+  return department?.directionId === directionId;
+}
+
 export function formatNativeTarget(row: {
-  targetLevel: number;
+  targetLevel?: number;
   skillScaleKind?: 'range' | 'percent' | null;
+  skillScaleMin?: number | null;
   skillScaleMax?: number | null;
 }): string {
   const kind = row.skillScaleKind ?? 'range';
+  const min = row.skillScaleMin ?? 0;
   const max = row.skillScaleMax ?? 5;
-  if (kind === 'percent') return `${row.targetLevel}%`;
-  return `${row.targetLevel} / ${max}`;
+  if (kind === 'percent') return `${min}–${max}%`;
+  return `${min}–${max}`;
 }

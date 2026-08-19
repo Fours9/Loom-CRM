@@ -48,6 +48,7 @@ import { DepartmentBelongsToDirection1730000022000 } from './migrations/17300000
 import { RestorePositionDirectionId1730000023000 } from './migrations/1730000023000-RestorePositionDirectionId';
 import { QuestionnaireAssignmentTitle1730000024000 } from './migrations/1730000024000-QuestionnaireAssignmentTitle';
 import { SkillNativeScale1730000025000 } from './migrations/1730000025000-SkillNativeScale';
+import { SkillGroupOptional1730000026000 } from './migrations/1730000026000-SkillGroupOptional';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -106,6 +107,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       RestorePositionDirectionId1730000023000,
       QuestionnaireAssignmentTitle1730000024000,
       SkillNativeScale1730000025000,
+      SkillGroupOptional1730000026000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

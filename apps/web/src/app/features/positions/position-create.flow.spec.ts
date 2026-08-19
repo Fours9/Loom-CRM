@@ -4,6 +4,7 @@ import {
   applyDraftRequirements,
   applyQueuedRequirements,
   createPositionThenApplyDrafts,
+  persistDraftRequirements,
   retryFailedDrafts,
 } from './position-create.flow';
 import type { PositionDraftApi } from './position-create.flow';
@@ -334,6 +335,29 @@ describe('retryFailedDrafts', () => {
     expect(modes[0]).toBe('applying-drafts');
     expect(modes.at(-1)).toBe('edit');
     expect(result.mode).toBe('edit');
+    expect(queue.isEmpty()).toBe(true);
+  });
+});
+
+describe('persistDraftRequirements', () => {
+  it('lockUi false does not enter applying-drafts', async () => {
+    const queue = new PositionDraftSkillQueue();
+    queue.addSkills([skillSnap('a')], 0);
+    const api = makeApi({ list: [req('a')] });
+    const modes: PositionDialogMode[] = [];
+    let mode: PositionDialogMode = 'edit';
+    await persistDraftRequirements({
+      api,
+      positionId: 'pos-1',
+      queue,
+      lockUi: false,
+      setMode: (next) => {
+        mode = next;
+        modes.push(next);
+      },
+    });
+    expect(modes).not.toContain('applying-drafts');
+    expect(mode).toBe('edit');
     expect(queue.isEmpty()).toBe(true);
   });
 });

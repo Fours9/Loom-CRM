@@ -321,6 +321,24 @@ import { PositionManagementFacade } from './position-management.facade';
                   <span class="th-actions"></span>
                 </div>
                 <ul>
+                  <li
+                    class="group-row pinned"
+                    [class.selected]="vm.selectedSkillGroupId() === null"
+                  >
+                    <button type="button" class="select-group" (click)="vm.selectAllSkills()">
+                      Усі навички
+                    </button>
+                    <span class="th-actions"></span>
+                  </li>
+                  <li
+                    class="group-row pinned"
+                    [class.selected]="vm.selectedSkillGroupId() === vm.ungroupedGroupId"
+                  >
+                    <button type="button" class="select-group" (click)="vm.selectUngrouped()">
+                      Без групи
+                    </button>
+                    <span class="th-actions"></span>
+                  </li>
                   @for (g of vm.sortedSkillGroups(); track g.id) {
                     <li
                       class="group-row"
@@ -357,7 +375,8 @@ import { PositionManagementFacade } from './position-management.facade';
                           <button
                             type="button"
                             class="icon-btn danger"
-                            title="Вимкнути"
+                            title="Видалити назавжди"
+                            aria-label="Видалити групу назавжди"
                             (click)="vm.hardDeleteGroup(g)"
                           >
                             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -411,6 +430,9 @@ import { PositionManagementFacade } from './position-management.facade';
                         @if (!s.isActive) {
                           <small class="badge">вимкнено</small>
                         }
+                        @if (vm.selectedSkillGroupId() === null && s.groupId == null) {
+                          <small class="badge">Без групи</small>
+                        }
                       </span>
                       <span class="skill-scale">
                         {{ vm.scaleKindLabel(s.scaleKind) }}
@@ -446,7 +468,8 @@ import { PositionManagementFacade } from './position-management.facade';
                           <button
                             type="button"
                             class="icon-btn danger"
-                            title="Видалити"
+                            title="Видалити назавжди"
+                            aria-label="Видалити навичку назавжди"
                             (click)="vm.hardDeleteSkill(s)"
                           >
                             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -789,6 +812,9 @@ import { PositionManagementFacade } from './position-management.facade';
       }
       .group-row.selected .select-group {
         color: var(--pw-text);
+        font-weight: 600;
+      }
+      .group-row.pinned .select-group {
         font-weight: 600;
       }
       .group-row:hover:not(.selected),

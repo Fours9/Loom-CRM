@@ -47,6 +47,11 @@ export type ApplyQueuedResult = {
   mode: PositionDialogMode;
 };
 
+export type PersistDraftInput = ApplyQueuedInput & {
+  /** When true, switch PositionDialogMode through applying-drafts. */
+  lockUi: boolean;
+};
+
 /** Sequential apply + reconcile. Does not own PositionDialogMode. */
 export async function applyDraftRequirements(
   api: PositionDraftApi,
@@ -91,17 +96,34 @@ export async function applyDraftRequirements(
   }
 }
 
-/** Lifecycle use-case: applying-drafts → sequential apply → edit | edit-with-failed-drafts. */
-export async function applyQueuedRequirements(
-  input: ApplyQueuedInput,
+/**
+ * Single persist entry for draft skill requirements.
+ * `lockUi: true` — create / retry (applying-drafts).
+ * `lockUi: false` — edit picker (no applying-drafts; picker stays open).
+ */
+export async function persistDraftRequirements(
+  input: PersistDraftInput,
 ): Promise<ApplyQueuedResult> {
-  input.setMode('applying-drafts');
+  if (input.lockUi) {
+    input.setMode('applying-drafts');
+  }
   const rows = await applyDraftRequirements(input.api, input.positionId, input.queue);
   const mode: PositionDialogMode = input.queue.hasUnresolved()
     ? 'edit-with-failed-drafts'
     : 'edit';
-  input.setMode(mode);
+  if (input.lockUi) {
+    input.setMode(mode);
+  } else if (mode === 'edit-with-failed-drafts') {
+    input.setMode(mode);
+  }
   return { rows, mode };
+}
+
+/** Lifecycle use-case: applying-drafts → sequential apply → edit | edit-with-failed-drafts. */
+export async function applyQueuedRequirements(
+  input: ApplyQueuedInput,
+): Promise<ApplyQueuedResult> {
+  return persistDraftRequirements({ ...input, lockUi: true });
 }
 
 /** UI-facing alias over applyQueuedRequirements. */
@@ -146,11 +168,12 @@ export async function createPositionThenApplyDrafts(input: {
     return { kind: 'created', position: created, mode: 'edit' };
   }
 
-  const applied = await applyQueuedRequirements({
+  const applied = await persistDraftRequirements({
     api: input.api,
     positionId: created.id,
     queue: input.queue,
     setMode: input.setMode,
+    lockUi: true,
   });
   return { kind: 'created', position: created, mode: applied.mode };
 }

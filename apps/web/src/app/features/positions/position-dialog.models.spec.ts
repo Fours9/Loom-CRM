@@ -6,6 +6,9 @@ import {
   isSaveLocked,
   mergeRequirementRows,
   positionSaveCompletion,
+  formatNativeTarget,
+  filterDepartmentsByDirection,
+  departmentFitsSelectedDirection,
 } from './position-dialog.models';
 import type { PendingSkillRequirement } from './position-dialog.models';
 
@@ -183,6 +186,43 @@ describe('position dialog models', () => {
     expect(
       positionSaveCompletion({ queueEmpty: true, hasUnresolved: false }),
     ).toBe('close-and-reset');
+  });
+
+  it('shows the skill native scale range, not a requirement score', () => {
+    expect(
+      formatNativeTarget({
+        skillScaleKind: 'range',
+        skillScaleMin: 0,
+        skillScaleMax: 5,
+      }),
+    ).toBe('0–5');
+    expect(
+      formatNativeTarget({
+        skillScaleKind: 'percent',
+        skillScaleMin: 0,
+        skillScaleMax: 100,
+        targetLevel: 0,
+      }),
+    ).toBe('0–100%');
+  });
+
+  it('filters departments by selected direction and keeps all when empty', () => {
+    const depts = [
+      { id: 'd1', directionId: 'dir-a' },
+      { id: 'd2', directionId: 'dir-b' },
+      { id: 'd3', directionId: null },
+    ];
+    expect(filterDepartmentsByDirection(depts, '').map((d) => d.id)).toEqual([
+      'd1',
+      'd2',
+      'd3',
+    ]);
+    expect(filterDepartmentsByDirection(depts, 'dir-a').map((d) => d.id)).toEqual([
+      'd1',
+    ]);
+    expect(departmentFitsSelectedDirection(depts[0], 'dir-a')).toBe(true);
+    expect(departmentFitsSelectedDirection(depts[0], 'dir-b')).toBe(false);
+    expect(departmentFitsSelectedDirection(depts[2], '')).toBe(true);
   });
 
   it('joins HTTP error messages the same way for facade and flow', () => {

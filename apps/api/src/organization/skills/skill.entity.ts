@@ -16,14 +16,15 @@ export class Skill {
   id!: string;
 
   @Index()
-  @Column({ name: 'group_id', type: 'uuid' })
-  groupId!: string;
+  @Column({ name: 'group_id', type: 'uuid', nullable: true })
+  groupId!: string | null;
 
   @ManyToOne(() => SkillGroup, (group) => group.skills, {
     onDelete: 'RESTRICT',
+    nullable: true,
   })
   @JoinColumn({ name: 'group_id' })
-  group?: SkillGroup;
+  group?: SkillGroup | null;
 
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 64 })

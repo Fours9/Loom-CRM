@@ -17,7 +17,9 @@ import {
   IsString,
   IsUUID,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { Permission } from '../../platform/permissions/permission.names';
 import { JwtAuthGuard } from '../../platform/auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../platform/permissions/permissions.guard';
@@ -50,8 +52,11 @@ class UpdateSkillGroupDto {
 }
 
 class CreateSkillDto {
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? null : value))
+  @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsUUID()
-  groupId!: string;
+  groupId?: string | null;
 
   @IsOptional()
   @IsString()
@@ -81,8 +86,10 @@ class CreateSkillDto {
 
 class UpdateSkillDto {
   @IsOptional()
+  @Transform(({ value }) => (value === '' ? null : value))
+  @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsUUID()
-  groupId?: string;
+  groupId?: string | null;
 
   @IsOptional()
   @IsString()
@@ -136,7 +143,7 @@ export class SkillsController {
   @Delete('skill-groups/:id')
   @RequirePermissions(Permission.PositionsManage)
   async removeGroup(@Param('id') id: string) {
-    await this.skills.softDeleteGroup(id);
+    await this.skills.hardDeleteGroup(id);
     return { ok: true };
   }
 
@@ -167,7 +174,7 @@ export class SkillsController {
   @Delete('skills/:id')
   @RequirePermissions(Permission.PositionsManage)
   async removeSkill(@Param('id') id: string) {
-    await this.skills.softDeleteSkill(id);
+    await this.skills.hardDeleteSkill(id);
     return { ok: true };
   }
 }

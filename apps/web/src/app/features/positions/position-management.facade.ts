@@ -1,7 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Permission } from '@loom/contracts-auth';
-import { MAX_POSITION_SKILLS } from '@loom/position-skill-catalog';
 import { SessionStore } from '../../core/auth/session.store';
 import {
   GoalKind,
@@ -25,20 +24,31 @@ import {
   canEditDraftQueue,
   closePolicyFor,
   compareByUkNameThenId,
-  formatNativeTarget,
   httpErrorMessage,
   isSaveLocked,
   mergeRequirementRows,
   positionSaveCompletion,
+  departmentFitsSelectedDirection,
+  filterDepartmentsByDirection,
   type PositionDialogMode,
   type RequirementRowVm,
 } from './position-dialog.models';
 import { PositionDraftSkillQueue } from './position-draft-skill-queue';
 import {
-  applyQueuedRequirements,
+  persistDraftRequirements,
   createPositionThenApplyDrafts,
   retryFailedDrafts as retryFailedDraftsFlow,
 } from './position-create.flow';
+import {
+  UNGROUPED_GROUP_ID,
+  defaultCreateSkillGroupId,
+  filterSkillsForSelectedGroup,
+  formGroupIdFromSkill,
+  isCatalogPickerEligible,
+  mergeSelectionOrder,
+  resolveSkillGroupSelectionAfterReload,
+  skillGroupIdForRequest,
+} from './skill-catalog-selection';
 
 export type CatalogTab = 'skills' | 'goals' | 'duties';
 export type CatalogPanel = 'directions' | 'departments' | 'positions' | 'skills';
@@ -76,10 +86,13 @@ export class PositionManagementFacade {
   });
   readonly positionDialogOpen = signal(false);
   readonly dialogMode = signal<PositionDialogMode>('create');
-  readonly pickerOpen = signal(false);
-  readonly pickerSelectedIds = signal<string[]>([]);
+  readonly selectedSkillIds = signal<string[]>([]);
   readonly selectedSkillGroupId = signal<string | null>(null);
+  readonly ungroupedGroupId = UNGROUPED_GROUP_ID;
   readonly activeCatalogDialog = signal<CatalogDialog>(null);
+  private skillPersistTail: Promise<void> = Promise.resolve();
+  private readonly skillPersistDepth = signal(0);
+  readonly skillPersistInFlight = computed(() => this.skillPersistDepth() > 0);
   readonly skillSort = signal<{ key: 'name' | 'scale'; dir: 'asc' | 'desc' }>({
     key: 'name',
     dir: 'asc',
@@ -108,7 +121,7 @@ export class PositionManagementFacade {
   formIsActive = true;
 
   newSkillName = '';
-  newSkillGroupId = '';
+  newSkillGroupId: string | null = null;
   newSkillScaleKind: 'range' | 'percent' = 'range';
   newSkillScaleMin = 0;
   newSkillScaleMax = 5;
@@ -167,63 +180,32 @@ export class PositionManagementFacade {
     return this.positions().find((p) => p.id === id) ?? null;
   });
 
-  readonly availableSkills = computed(() => {
-    this.draftRevision();
-    const used = new Set([
-      ...this.skillRequirements().map((r) => r.skillId),
-      ...this.draftQueue.skillIds(),
-      ...this.pickerSelectedIds(),
-    ]);
-    const activeGroupIds = new Set(
-      this.skillGroups()
-        .filter((g) => g.isActive)
-        .map((g) => g.id),
-    );
-    return this.catalogSkills().filter(
-      (s) => s.isActive && activeGroupIds.has(s.groupId) && !used.has(s.id),
-    );
-  });
-
   readonly pickerCandidateSkills = computed(() => {
     this.draftRevision();
-    const used = new Set([
-      ...this.skillRequirements().map((r) => r.skillId),
-      ...this.draftQueue.skillIds(),
-    ]);
-    const selected = new Set(this.pickerSelectedIds());
     const activeGroupIds = new Set(
       this.skillGroups()
         .filter((g) => g.isActive)
         .map((g) => g.id),
     );
-    return this.catalogSkills().filter(
-      (s) =>
-        s.isActive &&
-        activeGroupIds.has(s.groupId) &&
-        (!used.has(s.id) || selected.has(s.id)),
-    );
+    return this.catalogSkills()
+      .filter((s) => isCatalogPickerEligible(s, activeGroupIds))
+      .sort((a, b) => compareByUkNameThenId(a, b, 1));
   });
+
+  readonly pickerSkillOptions = computed(() =>
+    this.pickerCandidateSkills().map((s) => ({ id: s.id, name: s.name })),
+  );
 
   readonly requirementRows = computed((): RequirementRowVm[] => {
     this.draftRevision();
     return mergeRequirementRows(this.skillRequirements(), this.draftQueue.snapshot());
   });
-
-  readonly maxPositionSkills = MAX_POSITION_SKILLS;
-
-  readonly remainingSkillSlots = computed(() => {
-    this.draftRevision();
-    return Math.max(
-      0,
-      MAX_POSITION_SKILLS - this.skillRequirements().length - this.draftQueue.length,
-    );
-  });
-
-  readonly skillsQuotaReached = computed(() => this.remainingSkillSlots() <= 0);
-
-  readonly saveLocked = computed(() => isSaveLocked(this.dialogMode()));
+  readonly saveLocked = computed(
+    () => isSaveLocked(this.dialogMode()) || this.skillPersistInFlight(),
+  );
   readonly closeLocked = computed(() => {
     this.draftRevision();
+    if (this.skillPersistInFlight()) return true;
     const policy = closePolicyFor(
       this.dialogMode(),
       this.draftQueue.length,
@@ -241,10 +223,10 @@ export class PositionManagementFacade {
   });
 
   readonly skillsForSelectedGroup = computed(() => {
-    const groupId = this.selectedSkillGroupId();
-    const rows = groupId
-      ? this.catalogSkills().filter((s) => s.groupId === groupId)
-      : this.catalogSkills();
+    const rows = filterSkillsForSelectedGroup(
+      this.catalogSkills(),
+      this.selectedSkillGroupId(),
+    );
     const { key, dir } = this.skillSort();
     const sign = dir === 'asc' ? 1 : -1;
     return [...rows].sort((a, b) => {
@@ -262,7 +244,7 @@ export class PositionManagementFacade {
 
   readonly selectedSkillGroup = computed(() => {
     const id = this.selectedSkillGroupId();
-    if (!id) return null;
+    if (!id || id === UNGROUPED_GROUP_ID) return null;
     return this.skillGroups().find((g) => g.id === id) ?? null;
   });
 
@@ -298,9 +280,12 @@ export class PositionManagementFacade {
     return kind === 'percent' ? 'Відсотки' : 'Від–до';
   }
 
-  /** Active options plus the currently selected row when editing a legacy value. */
+  /** Active departments for the selected direction; all departments when none is selected. */
   formDepartmentOptions(): OrgDepartment[] {
-    const active = this.activeDepartments();
+    const active = filterDepartmentsByDirection(
+      this.activeDepartments(),
+      this.formDirectionId,
+    );
     const id = this.formDepartmentId;
     if (!id || active.some((d) => d.id === id)) return active;
     const current = this.departments().find((d) => d.id === id);
@@ -327,7 +312,15 @@ export class PositionManagementFacade {
   onFormDepartmentChange(): void {
     if (!this.formDepartmentId) return;
     const dept = this.departments().find((d) => d.id === this.formDepartmentId);
-    this.formDirectionId = dept?.directionId || '';
+    if (dept?.directionId) this.formDirectionId = dept.directionId;
+  }
+
+  onFormDirectionChange(): void {
+    if (!this.formDepartmentId) return;
+    const dept = this.departments().find((d) => d.id === this.formDepartmentId);
+    if (!departmentFitsSelectedDirection(dept, this.formDirectionId)) {
+      this.formDepartmentId = '';
+    }
   }
 
   departmentDirectionLabel(d: OrgDepartment): string {
@@ -362,11 +355,9 @@ export class PositionManagementFacade {
     this.api.getSkillGroups(true).subscribe({
       next: (g) => {
         this.skillGroups.set(g);
-        const selected = this.selectedSkillGroupId();
-        if (!selected && g.length > 0) {
-          const firstActive = g.find((row) => row.isActive) ?? g[0];
-          this.selectedSkillGroupId.set(firstActive.id);
-        }
+        this.selectedSkillGroupId.set(
+          resolveSkillGroupSelectionAfterReload(this.selectedSkillGroupId(), g),
+        );
       },
       error: () => this.error.set('Не вдалося завантажити групи навичок'),
     });
@@ -393,7 +384,10 @@ export class PositionManagementFacade {
 
   private loadPositionCatalog(positionId: string): void {
     this.api.getPositionSkillRequirements(positionId).subscribe({
-      next: (rows) => this.skillRequirements.set(rows),
+      next: (rows) => {
+        this.skillRequirements.set(rows);
+        this.syncSelectedSkillMembership(rows.map((r) => r.skillId));
+      },
       error: () => this.error.set('Не вдалося завантажити вимоги навичок'),
     });
     this.api.getPositionGoalTemplates(positionId, true).subscribe({
@@ -670,8 +664,7 @@ export class PositionManagementFacade {
 
   private resetDraftSession(): void {
     this.draftQueue.reset();
-    this.pickerOpen.set(false);
-    this.pickerSelectedIds.set([]);
+    this.selectedSkillIds.set([]);
     this.dialogMode.set('create');
     this.touchDraft();
   }
@@ -690,6 +683,8 @@ export class PositionManagementFacade {
 
   async savePosition(): Promise<void> {
     this.error.set('');
+    if (this.saveLocked()) return;
+    await this.skillPersistTail.catch(() => undefined);
     if (this.saveLocked()) return;
     if (!this.formName.trim()) {
       this.error.set('Вкажіть назву посади');
@@ -773,45 +768,30 @@ export class PositionManagementFacade {
     });
   }
 
-  formatNativeTarget(
-    r: RequirementRowVm | OrgPositionSkillRequirement,
-  ): string {
-    return formatNativeTarget(r);
-  }
-
-  togglePicker(): void {
-    if (this.skillsEditingLocked() || !this.canManagePositions()) return;
-    this.pickerOpen.update((open) => !open);
-    if (!this.pickerOpen()) this.pickerSelectedIds.set([]);
-  }
-
-  isPickerSelected(skillId: string): boolean {
-    return this.pickerSelectedIds().includes(skillId);
-  }
-
-  togglePickerSkill(skillId: string): void {
-    if (this.skillsEditingLocked()) return;
-    const selected = new Set(this.pickerSelectedIds());
-    if (selected.has(skillId)) {
-      selected.delete(skillId);
-      this.pickerSelectedIds.set([...selected]);
-      return;
-    }
-    if (this.remainingSkillSlots() - selected.size <= 0) {
-      this.error.set(`Посада може мати щонайбільше ${MAX_POSITION_SKILLS} навичок`);
-      return;
-    }
-    selected.add(skillId);
-    this.pickerSelectedIds.set([...selected]);
-  }
-
-  async confirmPickerSkills(): Promise<void> {
+  onSkillPickerChange(ids: string[]): void {
     if (this.skillsEditingLocked() || !canEditDraftQueue(this.dialogMode())) return;
-    const ids = this.pickerSelectedIds();
-    if (ids.length === 0) {
-      this.error.set('Оберіть навичку');
-      return;
+    const current = new Set([
+      ...this.skillRequirements().map((r) => r.skillId),
+      ...this.draftQueue.skillIds(),
+    ]);
+    const nextSet = new Set(ids);
+    const added = ids.filter((id) => !current.has(id));
+    const removed = [...current].filter((id) => !nextSet.has(id));
+    this.selectedSkillIds.set(ids);
+    if (added.length === 0 && removed.length === 0) return;
+    this.error.set('');
+    for (const skillId of removed) {
+      const row = this.requirementRows().find((r) => r.skillId === skillId);
+      if (row) this.removeRequirement(row);
     }
+    if (added.length > 0) {
+      void this.confirmPickerSkills(added);
+    }
+  }
+
+  async confirmPickerSkills(ids: string[]): Promise<void> {
+    if (this.skillsEditingLocked() || !canEditDraftQueue(this.dialogMode())) return;
+    if (ids.length === 0) return;
     const skills = ids
       .map((id) => this.catalogSkills().find((s) => s.id === id))
       .filter((s): s is OrgSkill => !!s);
@@ -828,69 +808,46 @@ export class PositionManagementFacade {
       this.skillRequirements().length,
     );
     this.touchDraft();
-    if (result.error) this.error.set(result.error);
-    this.pickerOpen.set(false);
-    this.pickerSelectedIds.set([]);
+    if (result.error) {
+      this.error.set(result.error);
+      this.syncSelectedSkillMembership([
+        ...this.skillRequirements().map((r) => r.skillId),
+        ...this.draftQueue.skillIds(),
+      ]);
+      return;
+    }
     const positionId = this.editingId();
     if (positionId && this.dialogMode() !== 'create' && result.added > 0) {
-      await this.applyQueuedDrafts(positionId);
+      this.enqueueSkillPersist(positionId);
     }
   }
 
-  private async applyQueuedDrafts(positionId: string): Promise<void> {
-    try {
-      const applied = await applyQueuedRequirements({
-        api: this.api,
-        positionId,
-        queue: this.draftQueue,
-        setMode: (next) => this.dialogMode.set(next),
-      });
-      this.skillRequirements.set(applied.rows);
-    } finally {
-      this.touchDraft();
-    }
+  private syncSelectedSkillMembership(membership: string[]): void {
+    this.selectedSkillIds.set(
+      mergeSelectionOrder(this.selectedSkillIds(), membership),
+    );
   }
 
-  bumpRequirementLevel(row: RequirementRowVm, delta: number): void {
-    const min = row.skillScaleMin ?? 0;
-    const max = row.skillScaleMax ?? 5;
-    const next = Math.max(min, Math.min(max, row.targetLevel + delta));
-    if (next === row.targetLevel) return;
-    this.changeTarget(row, next);
-  }
-
-  changeTarget(row: RequirementRowVm, targetLevel: number): void {
-    if (this.skillsEditingLocked()) return;
-    if (row.kind === 'draft') {
-      this.draftQueue.changeTarget(row.clientId, targetLevel);
-      this.touchDraft();
-      return;
-    }
-    const positionId = this.editingId();
-    if (!positionId) return;
-    this.api
-      .updatePositionSkillRequirement(positionId, row.id, { targetLevel })
-      .subscribe({
-        next: () => this.loadPositionCatalog(positionId),
-        error: () => this.error.set('Не вдалося оновити рівень'),
-      });
-  }
-
-  changeRequired(row: RequirementRowVm, required: boolean): void {
-    if (this.skillsEditingLocked()) return;
-    if (row.kind === 'draft') {
-      this.draftQueue.changeRequired(row.clientId, required);
-      this.touchDraft();
-      return;
-    }
-    const positionId = this.editingId();
-    if (!positionId) return;
-    this.api
-      .updatePositionSkillRequirement(positionId, row.id, { required })
-      .subscribe({
-        next: () => this.loadPositionCatalog(positionId),
-        error: () => this.error.set('Не вдалося оновити вимогу'),
-      });
+  private enqueueSkillPersist(positionId: string): void {
+    this.skillPersistDepth.update((n) => n + 1);
+    this.skillPersistTail = this.skillPersistTail
+      .catch(() => undefined)
+      .then(async () => {
+        if (!this.draftQueue.hasUnresolved()) return;
+        const applied = await persistDraftRequirements({
+          api: this.api,
+          positionId,
+          queue: this.draftQueue,
+          lockUi: false,
+          setMode: (next) => this.dialogMode.set(next),
+        });
+        this.skillRequirements.set(applied.rows);
+        this.syncSelectedSkillMembership(
+          this.requirementRows().map((r) => r.skillId),
+        );
+        this.touchDraft();
+      })
+      .finally(() => this.skillPersistDepth.update((n) => Math.max(0, n - 1)));
   }
 
   removeRequirement(row: RequirementRowVm): void {
@@ -903,7 +860,16 @@ export class PositionManagementFacade {
     const positionId = this.editingId();
     if (!positionId) return;
     this.api.deletePositionSkillRequirement(positionId, row.id).subscribe({
-      next: () => this.loadPositionCatalog(positionId),
+      next: () => {
+        this.api.getPositionSkillRequirements(positionId).subscribe({
+          next: (rows) => {
+            this.skillRequirements.set(rows);
+            this.syncSelectedSkillMembership(rows.map((r) => r.skillId));
+            this.touchDraft();
+          },
+          error: () => this.error.set('Не вдалося оновити список навичок'),
+        });
+      },
       error: () => this.error.set('Не вдалося прибрати вимогу'),
     });
   }
@@ -920,27 +886,22 @@ export class PositionManagementFacade {
         setMode: (next) => this.dialogMode.set(next),
       });
       this.skillRequirements.set(applied.rows);
+      this.syncSelectedSkillMembership(
+        this.requirementRows().map((r) => r.skillId),
+      );
     } finally {
       this.touchDraft();
     }
   }
 
-  rowStateLabel(row: RequirementRowVm): string {
-    if (row.kind !== 'draft') return '';
-    if (row.state === 'applying') return 'застосування…';
-    if (row.state === 'failed') return 'не додано';
-    if (row.state === 'conflict') return 'розбіжність';
-    return 'чернетка';
-  }
-
   saveCatalogSkill(): void {
     this.error.set('');
-    if (!this.newSkillName.trim() || !this.newSkillGroupId) {
-      this.error.set('Вкажіть назву і групу навички');
+    if (!this.newSkillName.trim()) {
+      this.error.set('Вкажіть назву навички');
       return;
     }
     const body = {
-      groupId: this.newSkillGroupId,
+      groupId: skillGroupIdForRequest(this.newSkillGroupId),
       name: this.newSkillName.trim(),
       scaleKind: this.newSkillScaleKind,
       scaleMin: Number(this.newSkillScaleMin),
@@ -973,7 +934,7 @@ export class PositionManagementFacade {
 
   startCreateSkill(): void {
     this.cancelEditSkill();
-    this.newSkillGroupId = this.selectedSkillGroupId() || '';
+    this.newSkillGroupId = defaultCreateSkillGroupId(this.selectedSkillGroupId());
     this.formSkillIsActive = true;
     this.openCatalog('skill');
     this.error.set('');
@@ -983,12 +944,12 @@ export class PositionManagementFacade {
     this.panelOpen.update((state) => ({ ...state, skills: true }));
     this.editingSkillId.set(s.id);
     this.newSkillName = s.name;
-    this.newSkillGroupId = s.groupId;
+    this.newSkillGroupId = formGroupIdFromSkill(s.groupId);
     this.newSkillScaleKind = s.scaleKind ?? 'range';
     this.newSkillScaleMin = s.scaleMin ?? 0;
     this.newSkillScaleMax = s.scaleMax ?? 5;
     this.formSkillIsActive = s.isActive;
-    this.selectedSkillGroupId.set(s.groupId);
+    if (s.groupId) this.selectedSkillGroupId.set(s.groupId);
     this.openCatalog('skill');
     this.error.set('');
   }
@@ -1004,7 +965,7 @@ export class PositionManagementFacade {
   cancelEditSkill(): void {
     this.editingSkillId.set(null);
     this.newSkillName = '';
-    this.newSkillGroupId = '';
+    this.newSkillGroupId = null;
     this.newSkillScaleKind = 'range';
     this.newSkillScaleMin = 0;
     this.newSkillScaleMax = 5;
@@ -1017,7 +978,13 @@ export class PositionManagementFacade {
   }
 
   hardDeleteSkill(s: OrgSkill): void {
-    if (!confirm(`Видалити навичку «${s.name}»?`)) return;
+    if (
+      !confirm(
+        `Видалити навичку «${s.name}» назавжди?\nВимоги цієї навички будуть видалені з усіх посад.`,
+      )
+    ) {
+      return;
+    }
     this.api.deleteSkill(s.id).subscribe({
       next: () => {
         if (this.editingSkillId() === s.id) this.closeSkillDialog();
@@ -1036,6 +1003,14 @@ export class PositionManagementFacade {
 
   selectSkillGroup(g: OrgSkillGroup): void {
     this.selectedSkillGroupId.set(g.id);
+  }
+
+  selectAllSkills(): void {
+    this.selectedSkillGroupId.set(null);
+  }
+
+  selectUngrouped(): void {
+    this.selectedSkillGroupId.set(UNGROUPED_GROUP_ID);
   }
 
   saveCatalogGroup(): void {
@@ -1100,13 +1075,19 @@ export class PositionManagementFacade {
   }
 
   hardDeleteGroup(g: OrgSkillGroup): void {
-    if (!confirm(`Вимкнути групу «${g.name}»?`)) return;
+    if (
+      !confirm(
+        `Видалити групу «${g.name}» назавжди?\nНавички групи залишаться в каталозі без групи.`,
+      )
+    ) {
+      return;
+    }
     this.api.deleteSkillGroup(g.id).subscribe({
       next: () => {
         if (this.editingGroupId() === g.id) this.closeGroupDialog();
         this.reload();
       },
-      error: (err) => this.error.set(this.apiError(err, 'Не вдалося вимкнути групу')),
+      error: (err) => this.error.set(this.apiError(err, 'Не вдалося видалити групу')),
     });
   }
 

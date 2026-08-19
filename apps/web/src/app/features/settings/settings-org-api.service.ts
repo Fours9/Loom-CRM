@@ -47,7 +47,7 @@ export type OrgSkillGroup = {
 
 export type OrgSkill = {
   id: string;
-  groupId: string;
+  groupId: string | null;
   code: string;
   name: string;
   description: string | null;
@@ -210,7 +210,7 @@ export class SettingsOrgApiService {
   }
 
   createSkill(body: {
-    groupId: string;
+    groupId?: string | null;
     name: string;
     description?: string | null;
     scaleKind?: 'range' | 'percent';
@@ -223,7 +223,7 @@ export class SettingsOrgApiService {
   updateSkill(
     id: string,
     body: Partial<{
-      groupId: string;
+      groupId: string | null;
       name: string;
       description: string | null;
       scaleKind: 'range' | 'percent';
