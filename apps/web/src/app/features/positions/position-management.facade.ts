@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Permission } from '@loom/contracts-auth';
 import { SessionStore } from '../../core/auth/session.store';
@@ -63,6 +64,7 @@ const GOAL_KIND_LABELS: Record<GoalKind, string> = {
 export class PositionManagementFacade {
   private readonly api = inject(SettingsOrgApiService);
   private readonly session = inject(SessionStore);
+  private readonly router = inject(Router);
 
   readonly departments = signal<OrgDepartment[]>([]);
   readonly directions = signal<OrgDirection[]>([]);
@@ -77,6 +79,7 @@ export class PositionManagementFacade {
   readonly editingDepartmentId = signal<string | null>(null);
   readonly editingDirectionId = signal<string | null>(null);
   readonly selectedPositionId = signal<string | null>(null);
+  readonly standaloneCatalog = signal(false);
   readonly catalogTab = signal<CatalogTab>('skills');
   readonly panelOpen = signal<Record<CatalogPanel, boolean>>({
     directions: true,
@@ -375,11 +378,29 @@ export class PositionManagementFacade {
     this.loadPositionCatalog(p.id);
   }
 
+  openPositionCatalogPage(p: OrgPosition): void {
+    void this.router.navigate(['/positions', p.id, 'catalog']);
+  }
+
+  openStandaloneCatalog(positionId: string | null): void {
+    this.standaloneCatalog.set(true);
+    if (!positionId) {
+      this.error.set('Не вказано посаду');
+      return;
+    }
+    this.selectedPositionId.set(positionId);
+    this.catalogTab.set('skills');
+    this.reload();
+  }
+
   clearSelection(): void {
     this.selectedPositionId.set(null);
     this.skillRequirements.set([]);
     this.goalTemplates.set([]);
     this.duties.set([]);
+    if (this.standaloneCatalog()) {
+      void this.router.navigateByUrl('/positions');
+    }
   }
 
   private loadPositionCatalog(positionId: string): void {
