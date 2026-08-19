@@ -58,6 +58,11 @@
 3. Змінити дефолтний пароль адміна одразу після першого входу.
 4. Якщо UI за reverse proxy на іншому origin — виставити `CORS_ORIGIN` (або same-origin через nginx на `:8080` / TLS proxy).
 
+**Перший вхід і скидання пароля**
+
+- Новий акаунт з тимчасовим паролем: після логіну UI відкриває `/change-password` (`mustChangePassword` з `/auth/login` / `/auth/me`). Успіх повертає новий JWT у тій самій відповіді.
+- Адмінське скидання (картка працівника Absences, `POST /auth/reset-password/:userId`) інвалідовує сесію через `tokenVersion`. Наступний запит API дає 401; interceptor робить logout і веде на `/login`. Окремого `if (це я)` на сторінці немає.
+
 У [`compose.yaml`](../../compose.yaml) частина змінних зараз задана inline у `environment:` — для продакшену замініть placeholder `JWT_SECRET` і узгодьте credentials з Postgres.
 
 ---

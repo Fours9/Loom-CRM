@@ -1,8 +1,14 @@
 import { Routes } from '@angular/router';
 import { ShellComponent } from './layouts/shell.component';
 import { LoginPageComponent } from './features/auth/login-page.component';
+import { ChangePasswordPageComponent } from './features/auth/change-password-page.component';
 import { DashboardPageComponent } from './features/dashboard/dashboard-page.component';
-import { authGuard, guestGuard } from './core/auth/auth.guards';
+import {
+  authGuard,
+  changePasswordPageGuard,
+  guestGuard,
+  mustChangePasswordGuard,
+} from './core/auth/auth.guards';
 
 export const routes: Routes = [
   {
@@ -11,8 +17,13 @@ export const routes: Routes = [
     component: LoginPageComponent,
   },
   {
+    path: 'change-password',
+    canActivate: [changePasswordPageGuard],
+    component: ChangePasswordPageComponent,
+  },
+  {
     path: '',
-    canActivate: [authGuard],
+    canActivate: [authGuard, mustChangePasswordGuard],
     component: ShellComponent,
     children: [
       { path: '', component: DashboardPageComponent },

@@ -1,6 +1,6 @@
 # Документація LoomCRM
 
-Модульний моноліт CRM: один логін, один PostgreSQL, Angular-клієнт лише через NestJS REST (`/api/v1`).
+Модульний моноліт CRM: один логін, один PostgreSQL, Angular-клієнт лише через NestJS REST (`/api/v1`). Тимчасовий пароль змінюється на `/change-password`; скидання інвалідовує JWT (`tokenVersion`) і наступний 401 веде на `/login` — [архітектура](architecture.md), [експлуатація](dev/operations.md).
 
 Документація розділена за аудиторіями:
 

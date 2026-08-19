@@ -45,6 +45,7 @@ export type CurrentUserResponse = {
   role: UserRole;
   permissions: Permission[];
   employeeId: EntityId | null;
+  mustChangePassword: boolean;
 };
 
 export type LoginRequest = {

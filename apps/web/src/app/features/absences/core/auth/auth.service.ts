@@ -75,7 +75,7 @@ export class AuthService {
       role: u.role,
       isDepartmentManager: u.role === 'department_manager',
       status: 'active',
-      mustChangePassword: false,
+      mustChangePassword: u.mustChangePassword,
       lastLoginAt: null,
       createdAt: '',
       employeeId: u.employeeId,

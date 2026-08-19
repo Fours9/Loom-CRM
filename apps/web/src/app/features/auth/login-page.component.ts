@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import type { LoginResponse } from '@loom/contracts-auth';
+import { destinationAfterAuth } from '../../core/auth/auth-session.policy';
 import { SessionStore } from '../../core/auth/session.store';
 import { environment } from '../../../environments/environment';
 import {
@@ -281,7 +282,9 @@ export class LoginPageComponent {
         next: (res) => {
           this.session.setAuthenticated(res.user, res.accessToken);
           this.busy.set(false);
-          void this.router.navigateByUrl('/');
+          void this.router.navigateByUrl(
+            destinationAfterAuth(res.user.mustChangePassword),
+          );
         },
         error: () => {
           this.error.set('Невірний email або пароль');
