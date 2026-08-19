@@ -46,7 +46,7 @@
 
 - [Синхронізація через Git](dev/git-sync.md) — pull/push, новий ПК, `db-snapshot` / `db-restore`, **демо-тунель**, типові проблеми
 - [Reset анкет (pre-prod)](dev/questionnaire-test-reset.md) — dry-run / execute + snapshot DoD
-- [Position Catalog](dev/position-catalog.md) — skill registry, context envelope ([ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md))
+- [Position Catalog](dev/position-catalog.md) — skill registry, context envelope ([ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md)); UI `/positions` + `/positions/:id/catalog`
 
 ## Розробницьке
 

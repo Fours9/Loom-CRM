@@ -296,7 +296,7 @@ import { PositionManagementFacade } from './position-management.facade';
         gap: 0.75rem;
         align-items: center;
         padding: 0.35rem 0;
-        border-bottom: 1px solid #eef2f7;
+        border-bottom: 1px solid var(--pw-border);
       }
       .row-actions {
         display: flex;

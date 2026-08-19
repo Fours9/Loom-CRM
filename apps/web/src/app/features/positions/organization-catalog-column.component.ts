@@ -207,10 +207,7 @@ import { PositionManagementFacade } from './position-management.facade';
           }
           <ul>
             @for (p of vm.positions(); track p.id) {
-              <li
-                class="position-row"
-                [class.selected]="vm.selectedPositionId() === p.id"
-              >
+              <li class="position-row">
                 <button type="button" class="select-pos" (click)="vm.selectPosition(p)">
                   <strong>{{ p.name }}</strong>
                   <small>
@@ -226,8 +223,22 @@ import { PositionManagementFacade } from './position-management.facade';
                     <small class="badge">вимкнено</small>
                   }
                 </button>
+                <span class="row-actions">
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    title="Каталог посади"
+                    aria-label="Відкрити каталог посади"
+                    (click)="vm.openPositionCatalogPage(p)"
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"
+                      />
+                    </svg>
+                  </button>
                 @if (vm.canManagePositions()) {
-                  <span class="row-actions">
                     <label class="toggle" [title]="p.isActive ? 'Увімкнено' : 'Вимкнено'">
                       <input
                         type="checkbox"
@@ -264,8 +275,8 @@ import { PositionManagementFacade } from './position-management.facade';
                         />
                       </svg>
                     </button>
-                  </span>
                 }
+                </span>
               </li>
             }
           </ul>
@@ -928,17 +939,10 @@ import { PositionManagementFacade } from './position-management.facade';
         gap: 0.75rem;
         align-items: center;
         padding: 0.35rem 0;
-        border-bottom: 1px solid #eef2f7;
+        border-bottom: 1px solid var(--pw-border);
       }
       .position-row {
         align-items: flex-start;
-      }
-      .position-row.selected {
-        background: #f0f7ff;
-        margin: 0 -0.5rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
-        border-radius: 8px;
       }
       .select-pos {
         display: grid;

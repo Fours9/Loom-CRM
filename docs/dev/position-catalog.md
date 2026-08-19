@@ -11,7 +11,7 @@ Living companion to [ADR 0010](../adr/0010-position-catalog-and-questionnaire-co
 
 ## Position Catalog UI
 
-Product path: **`/positions`** (sidebar «Керування посадами»; `/settings/positions` redirects here) — three catalog rail columns (directions, departments, positions) plus a full-width **Groups + Skills** block below the rail (not a 4th rail column). Frontend feature: `apps/web/src/app/features/positions/` (lazy route); `/settings/positions` remains a compatibility redirect. Position edit modal attaches requirements; details panel skills are read-only. Absences admin keeps privacy only (no position CRUD there).
+Product path: **`/positions`** (sidebar «Керування посадами»; `/settings/positions` redirects here) — three catalog rail columns (directions, departments, positions) plus a full-width **Groups + Skills** block below the rail (not a 4th rail column). Frontend feature: `apps/web/src/app/features/positions/` (lazy route); `/settings/positions` remains a compatibility redirect. Position edit modal attaches requirements; the inline details panel on `/positions` is still present (click the position name). **Dedicated catalog page** `/positions/:id/catalog` opens from the book icon on the position row (does not replace the inline panel). Absences admin keeps privacy only (no position CRUD there).
 
 ## Build
 
