@@ -28,7 +28,7 @@
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
-**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий графік** (Графік роботи · Заявки · Календар; Absences `public-api`), Документи, **Анкети** (Questionnaires — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [catalog](product/questionnaire-360-field-catalog.md); fill wizard `/questionnaires/:id`), Показники (stub), **Адміністрування** (підвкладка Історія), Згодом (stub); visibility gated by permissions/capabilities. Історія: актор + UA summary. Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
+**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робочий графік** (Графік роботи · Заявки · Календар; Absences `public-api`), Документи, **Анкети** (Questionnaires — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [catalog](product/questionnaire-360-field-catalog.md); fill wizard `/questionnaires/:id`), Показники (stub), **Адміністрування** (підвкладка Історія), Згодом (stub); visibility gated by permissions/capabilities. Історія: актор + UA summary. Employment: `hiredAt` now lives on `employees.hired_at`; assignment `startDate` is the transfer date; planned assignments activate through lifecycle service. Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 
@@ -46,7 +46,7 @@
 
 - [Синхронізація через Git](dev/git-sync.md) — pull/push, новий ПК, `db-snapshot` / `db-restore`, **демо-тунель**, типові проблеми
 - [Reset анкет (pre-prod)](dev/questionnaire-test-reset.md) — dry-run / execute + snapshot DoD
-- [Position Catalog](dev/position-catalog.md) — skill registry, context envelope ([ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md)); UI `/positions` + `/positions/:id/catalog`
+- [Position Catalog](dev/position-catalog.md) — skill registry, context envelope ([ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md)); UI `/positions` (керування + налаштування) + `/positions/:id/catalog`
 
 ## Розробницьке
 

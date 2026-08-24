@@ -24,6 +24,7 @@ import {
   tap,
 } from 'rxjs';
 import type {
+  EmploymentAssignmentHistoryItem,
   EmployeeProfileHistoryItem,
   EmployeeProfileResponse,
 } from '@loom/contracts-employees';
@@ -38,7 +39,6 @@ import { EmployeeDocumentsPanelComponent } from './employee-documents-panel.comp
 import { EmployeeProfileCompletenessComponent } from './employee-profile-completeness.component';
 import { EmployeeHistoryPanelComponent } from './employee-history-panel.component';
 import {
-  AssignmentHistoryItem,
   EmployeeDataPanelComponent,
 } from './employee-data-panel.component';
 import {
@@ -46,6 +46,8 @@ import {
   visiblePeopleProfileTabs,
   type PeopleProfileTabId,
 } from './people-profile-tabs';
+
+type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
 type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
 type AdminTabId = 'history';

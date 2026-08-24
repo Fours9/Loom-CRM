@@ -8,7 +8,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { Permission } from '../../platform/permissions/permission.names';
 import { JwtAuthGuard } from '../../platform/auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../platform/permissions/permissions.guard';
@@ -25,6 +25,11 @@ class CreateDepartmentDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  location?: string | null;
+
+  @IsOptional()
   @IsUUID()
   directionId?: string | null;
 }
@@ -38,6 +43,11 @@ class UpdateDepartmentDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  location?: string | null;
 
   @IsOptional()
   @IsUUID()

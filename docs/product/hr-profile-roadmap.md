@@ -7,7 +7,7 @@
 | **1. Employee Profile Core** | Header, section edit (basics/contacts/personal/dates/employment), assignment history, capabilities, audit/history API, completeness, `/people/:id` | **Done** |
 | 2. Self-service + approval | `/me/profile`, change requests, approval queue | Planned |
 | 3. Questionnaires MVP | Seeded 360 template, assign, draft autosave, immutable submissions, review, profile proposals, fill wizard ([field catalog](./questionnaire-360-field-catalog.md), [ADR 0009](../adr/0009-questionnaire-360-mvp.md)). Track B: published Managing/Docs content. | **In progress / Partially implemented** (foundation + fill + Track B content shipped; see Remaining below) |
-| 3b. Position Catalog | `/positions` («Керування посадами») + `/positions/:id/catalog` (book icon; inline panel still on `/positions`), position↔direction/dept, skills requirements, frozen questionnaire context | **Shipped (PR1–PR6)** — closeout docs PR7; optional fill suggestions from `goalTemplates`/`duties` deferred ([ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](../dev/position-catalog.md)) |
+| 3b. Position Catalog | `/positions` («Керування посадами») + `/positions/:id/catalog` (book icon; list click does not open catalog), position↔direction/dept, skills requirements, frozen questionnaire context | **Shipped (PR1–PR6)** — closeout docs PR7; optional fill suggestions from `goalTemplates`/`duties` deferred ([ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](../dev/position-catalog.md)) |
 | 4. Onboarding | Templates, tasks, progress widget | Planned |
 | 5. Goals + probation reviews | Goals, manager review cycles | Planned |
 | 6. Skills + development | Catalogs, position requirements, assessments | Planned |
@@ -31,7 +31,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 
 | Вкладка | Стан | Видимість |
 | --- | --- | --- |
-| Дані працівника | Основні · Контакти · Дати · Посада (редагування за capabilities) | завжди |
+| Дані працівника | Основні · Контакти · Дати · Посада (редагування за capabilities; planned/blocked assignment history visible) | завжди |
 | Робочий графік | **Графік роботи** + Заявки + Календар (Absences `public-api`: schedule panel через `getEmployee` + `PUT .../schedule`; UI = `ScheduleEditor`. Empty API schedule ≠ default Пн–Пт — дефолт лише в draft при редагуванні. Compat TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)) | `absences.calendar.view` |
 | Документи | Documents MVP + агрегат вкладень time-event (Absences) | `documents.view` |
 | Анкети | Directory `/questionnaires` + People panel; assign/cancel/reactivate/close/delete; fill wizard | `questionnaires.view` |
@@ -55,6 +55,14 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 
 PW-паритетна картка без змін: `/absences/employees/:id`.
 
+### Дані працівника -> Посада / Дати (living)
+
+- `Дати` редагує employee-level `hiredAt` через `PATCH /employees/:id/employment-meta`. Це дата початку роботи / найму і вона не змінюється автоматично від переводів.
+- `Посада` використовує shared org catalog snapshot (`directions -> departments -> positions`) і довідники `workFormats` / `employmentTypes`.
+- `companyId` більше не вводиться в UI вручну; компанія лишається read-model, derived з обраного напрямку.
+- Майбутня дата переводу створює `planned` assignment. Поточне активне призначення не перемикається відразу; activation виконується lifecycle service.
+- Якщо planned assignment не може активуватися на дату старту, запис лишається `planned` і показує `activationBlockedReason` в історії/деталях.
+
 ## Phase 3 — Questionnaires 360 (living)
 
 **Status:** In progress / Partially implemented.
@@ -69,7 +77,7 @@ PW-паритетна картка без змін: `/absences/employees/:id`.
 - **assignment lifecycle:** create without employee → `new` (optional employee + service `comment` + immutable `assignment.code`); cancel detaches (`employeeId=null`, `detachedFromEmployeeId=previous` auth provenance); attach — **any** employee for `new` (Assign) and cancelled (ManageLifecycle); audit from→to; close terminal; hard delete when `canDelete`. People excludes cancelled. Detached: `new` pool for Assign; cancelled scoped by `detachedFromEmployeeId`. Comment read: `questionnaires.read_assignment_comment` (Admin). Templates create list: published + version.
 - **permissions split:** `questionnaires.assign` (create + attach new; Admin + DM); `questionnaires.manage_lifecycle` (cancel/close/reattach; Admin); `questionnaires.delete` (Admin). DM does **not** get CompleteAny — may assign Managing/Docs; Admin fills.
 - **types:** `full` | `managing` | `docs` (`QUESTIONNAIRE_TYPE_CATALOG`). `employee-360` = `full` («Повна анкета»). **Track B content schemas shipped:** published `employee-managing` (grade without `net_salary`, `skills.matrix` / `position_skills_matrix`, career + probation goals) and `employee-docs` (onboarding repeating_groups + hr_documents checklist). `manager_review` / `grade.net_salary` **not** shipped. Owner ACL: plain owner sees/fills only `full`; elevated (Assign/ManageLifecycle/CompleteAny/Delete) all types. No `hr` role — product «HR» = Admin.
-- **Position Catalog (Phase 3b):** sidebar `/positions` (directions/departments/positions rail + Groups+Skills block + position edit modal with pre-create draft skill queue; `/settings/positions` redirects); dedicated catalog page `/positions/:id/catalog` from the book icon on the position row (inline details panel on `/positions` is not removed yet); Organization skill catalog with optional groups, hard-delete vs `PATCH isActive` toggle, native `range`/`percent` scale independent of questionnaire 0–5; assign/attach freezes `QuestionnaireContextV1` (custom skill codes allowed). Matrix: legacy null = registry; context v1 = frozen rows even `[]`. See [ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md).
+- **Position Catalog (Phase 3b):** sidebar `/positions` (directions/departments/positions rail + Groups+Skills block + position edit modal with pre-create draft skill queue; `/settings/positions` redirects); dedicated catalog page `/positions/:id/catalog` from the book icon on the position row; clicking the position name does nothing (inline panel not opened from list); Organization skill catalog with optional groups, hard-delete vs `PATCH isActive` toggle, native `range`/`percent` scale independent of questionnaire 0–5; assign/attach freezes `QuestionnaireContextV1` (custom skill codes allowed). Matrix: legacy null = registry; context v1 = frozen rows even `[]`. See [ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md).
 - **directory + access:** nav «Анкети»; `canCreate` / `attachConstraint` on directory; `new` draft editable without submit (CompleteAny); cancelled/closed fill = read-only; print stubs («Незабаром»). **PDF (planned):** blank template and filled questionnaire share one layout; filled only substitutes values — not shipped yet.
 - **directory + access (legacy note):** historical cancelled with non-null employeeId stay attach-blocked until manual detach; view/close/delete only.
 

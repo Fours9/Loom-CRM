@@ -6,6 +6,7 @@ import { EmployeesModule } from './employees/employees.module';
 import { SkillsModule } from './skills/skills.module';
 import { PositionRequirementsModule } from './position-requirements/position-requirements.module';
 import { PositionCatalogModule } from './position-catalog/position-catalog.module';
+import { EmploymentCatalogModule } from './employment-catalog/employment-catalog.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { PositionCatalogModule } from './position-catalog/position-catalog.modul
     SkillsModule,
     PositionRequirementsModule,
     PositionCatalogModule,
+    EmploymentCatalogModule,
     EmployeesModule,
   ],
   exports: [
@@ -24,6 +26,7 @@ import { PositionCatalogModule } from './position-catalog/position-catalog.modul
     SkillsModule,
     PositionRequirementsModule,
     PositionCatalogModule,
+    EmploymentCatalogModule,
     EmployeesModule,
   ],
 })

@@ -21,7 +21,7 @@ Forbidden: Platform → Absences / Documents / Questionnaires; Organization → 
 ## Layers
 
 1. **Platform** — auth, identity, permissions, audit, notifications, settings, files (**planned**), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`, `normalizeUploadedFileName`).
-2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions / Position Catalog (sidebar **`/positions`** «Керування посадами» — UI in `apps/web/src/app/features/positions/`; directions/departments/positions rail + full-width Groups+Skills block + position edit modal; per-position catalog also at **`/positions/:id/catalog`** via the book icon on the row, while the inline details panel on `/positions` remains; [ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](dev/position-catalog.md)), schedules, access scope. Skill native scale (`range`/`percent`) is independent of questionnaire matrix 0–5. Skill group is optional live classification (`group_id` nullable). `DELETE` skill/group is hard delete; `PATCH isActive` toggles. `SkillsService` is the application entry point for skill/group mutations (generated group codes, Group→Skill lock protocol). `PositionRequirementsService` lists requirements `createdAt ASC, id ASC`. Pre-create requirements exist only as a frontend draft queue.
+2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions / Position Catalog (sidebar **`/positions`** «Керування посадами» — UI in `apps/web/src/app/features/positions/`; directions/departments/positions rail + full-width Groups+Skills block + position edit modal; root `/positions` now has tabs **Керування посадами** and **Налаштування** for work formats / employment types, while per-position catalog stays at **`/positions/:id/catalog`** via the book icon on the row and does not load settings; [ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](dev/position-catalog.md)), schedules, access scope. Skill native scale (`range`/`percent`) is independent of questionnaire matrix 0–5. Skill group is optional live classification (`group_id` nullable). `DELETE` skill/group is hard delete; `PATCH isActive` toggles. `SkillsService` is the application entry point for skill/group mutations (generated group codes, Group→Skill lock protocol). `PositionRequirementsService` lists requirements `createdAt ASC, id ASC`. Pre-create requirements exist only as a frontend draft queue.
 3. **Business modules** — absences (product UI: **Робочий календар** / TimeEvent domain — [ADR 0008](adr/0008-work-calendar-via-absences.md)); documents (MVP: employee file list/upload + People aggregate with time-event attachments); **questionnaires** (360° policy catalog + module — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [field catalog](product/questionnaire-360-field-catalog.md)); later onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
 
 ### Position direction invariant
@@ -36,6 +36,14 @@ Practical semantics:
 - `departmentId == null` → `directionId` may be `null` or manually chosen
 - `departmentId != null` → `directionId` is a persisted derived copy from `Department.directionId`
 - partial update with omitted `directionId` must not clear a manual direction when the resulting position remains global
+
+### Employment assignment aggregate
+
+- `EmployeeProfileService` is the single assignment write entry point. Every assignment mutation locks the aggregate root (`employees FOR UPDATE`) before touching `employment_assignments`.
+- Assignment org resolution is company-aware and transaction-bound: `Company -> Direction -> Department -> Position` lock order, manager-only reads inside the transaction, retry on hierarchy drift.
+- `companyId` is derived only from the resolved direction; write DTO no longer accepts it.
+- Future-effective transfers persist as `status='planned'`; activation runs through `EmploymentAssignmentLifecycleService` from the startup composition root, not from profile reads.
+- `employees.hired_at` is now the employee-level hire/work-start date. Assignment `startDate` is the effective transfer date and no longer doubles as hire date.
 
 ### Documents MVP
 

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -40,9 +41,20 @@ import {
 import { EmployeeContactsFacade } from './employee-contacts.facade';
 import { PositionsService } from '../positions/positions.service';
 import { Position } from '../positions/position.entity';
+import { Department } from '../departments/department.entity';
+import { DepartmentsService } from '../departments/departments.service';
+import { EmploymentCatalogService } from '../employment-catalog/employment-catalog.service';
+import { BusinessDateClock, type DateOnly } from './business-date-clock';
+import { didAssignmentHierarchyDrift } from './assignment-hierarchy-drift.policy';
+import {
+  getPositionBlockedReason,
+  isCompanySelectable,
+  isDepartmentSelectable,
+  isDirectionSelectable,
+  isPositionSelectable,
+} from './organization-selectability.policy';
 
 type AssignmentWriteDto = {
-  companyId?: string | null;
   directionId?: string | null;
   departmentId?: string | null;
   positionId?: string | null;
@@ -56,9 +68,51 @@ type AssignmentWriteDto = {
   contractType?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  probationStartDate?: string | null;
   probationEndDate?: string | null;
   changeReason?: string | null;
 };
+
+type AssignmentOrgState = {
+  companyId: string | null;
+  directionId: string | null;
+  departmentId: string | null;
+  positionId: string | null;
+};
+
+type ResolveAssignmentOrgInput = {
+  mode: 'create' | 'update';
+  effective: Omit<AssignmentOrgState, 'companyId'>;
+  existing: AssignmentOrgState | null;
+};
+
+type ResolvedAssignmentOrg = AssignmentOrgState;
+
+class AssignmentHierarchyChangedDuringResolutionError extends Error {
+  constructor() {
+    super('Assignment hierarchy changed during resolution');
+  }
+}
+
+function shouldRetryHierarchyDrift(
+  error: unknown,
+  attempt: number,
+  maxAttempts: number,
+): boolean {
+  return (
+    error instanceof AssignmentHierarchyChangedDuringResolutionError &&
+    attempt < maxAttempts - 1
+  );
+}
+
+function rethrowAssignmentWriteError(error: unknown): never {
+  if (error instanceof AssignmentHierarchyChangedDuringResolutionError) {
+    throw new ConflictException(
+      'Organization hierarchy changed during save; retry the request',
+    );
+  }
+  throw error;
+}
 
 export type ProfileCapabilities = {
   canEditBasic: boolean;
@@ -99,58 +153,269 @@ export class EmployeeProfileService {
     private readonly users: UsersService,
     private readonly dataSource: DataSource,
     private readonly contactsFacade: EmployeeContactsFacade,
+    private readonly departmentsService: DepartmentsService,
     private readonly positions: PositionsService,
+    private readonly employmentCatalogs: EmploymentCatalogService,
+    private readonly businessDateClock: BusinessDateClock,
   ) {}
 
   private hasPerm(user: User, perm: Permission): boolean {
     return permissionsForRole(user.role).includes(perm);
   }
 
-  /**
-   * Hierarchy: Position → optional Department → optional Direction on dept;
-   * Position.directionId is stored: inherited from dept when dept set, else manual.
-   * Assignment must match position.departmentId / position.directionId when set.
-   */
-  private async applyPositionAssignmentInvariant(input: {
-    positionId: string | null;
-    departmentId: string | null;
-    directionId: string | null;
-  }): Promise<{
-    positionId: string | null;
-    departmentId: string | null;
-    directionId: string | null;
-  }> {
-    if (!input.positionId) {
-      return input;
+  private parseOptionalDateOnly(value: string | null | undefined): string | null {
+    if (value == null) {
+      return null;
     }
-    const position: Position = await this.positions.getOrFail(input.positionId);
-    let { departmentId, directionId } = input;
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      throw new BadRequestException('Date must be YYYY-MM-DD');
+    }
+    const probe = new Date(`${trimmed}T12:00:00Z`);
+    if (Number.isNaN(probe.getTime()) || probe.toISOString().slice(0, 10) !== trimmed) {
+      throw new BadRequestException(`Invalid date: ${trimmed}`);
+    }
+    return trimmed;
+  }
 
-    if (position.departmentId != null) {
-      if (
-        departmentId != null &&
-        departmentId !== position.departmentId
-      ) {
+  private normalizeOptionalText(
+    value: string | null | undefined,
+    maxLength: number,
+    field: string,
+  ): string | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (trimmed.length > maxLength) {
+      throw new BadRequestException(`${field} must be at most ${maxLength} characters`);
+    }
+    return trimmed;
+  }
+
+  private isSameHistoricalId(
+    id: string | null,
+    existingId: string | null | undefined,
+  ): boolean {
+    return id != null && id === (existingId ?? null);
+  }
+
+  private async resolveAssignmentOrganization(
+    manager: EntityManager,
+    input: ResolveAssignmentOrgInput,
+  ): Promise<ResolvedAssignmentOrg> {
+    const companyRepo = manager.getRepository(Company);
+    const directionRepo = manager.getRepository(Direction);
+    const departmentRepo = manager.getRepository(Department);
+    const positionRepo = manager.getRepository(Position);
+
+    const prePosition = input.effective.positionId
+      ? await positionRepo.findOne({
+          where: { id: input.effective.positionId },
+          relations: ['department', 'direction'],
+        })
+      : null;
+    if (input.effective.positionId && !prePosition) {
+      throw new NotFoundException('Position not found');
+    }
+
+    const candidateDepartmentId =
+      prePosition?.departmentId ?? input.effective.departmentId ?? null;
+    const preDepartment =
+      candidateDepartmentId != null
+        ? await departmentRepo.findOne({
+            where: { id: candidateDepartmentId },
+            relations: ['direction'],
+          })
+        : null;
+    if (candidateDepartmentId && !preDepartment) {
+      throw new NotFoundException('Department not found');
+    }
+
+    const candidateDirectionId =
+      preDepartment?.directionId ?? prePosition?.directionId ?? input.effective.directionId ?? null;
+    const preDirection =
+      candidateDirectionId != null
+        ? await directionRepo.findOne({
+            where: { id: candidateDirectionId },
+          })
+        : null;
+    if (candidateDirectionId && !preDirection) {
+      throw new NotFoundException('Direction not found');
+    }
+
+    const candidateCompanyId = preDirection?.companyId ?? null;
+    const lockedCompany =
+      candidateCompanyId != null
+        ? await companyRepo.findOne({
+            where: { id: candidateCompanyId },
+            lock: { mode: 'pessimistic_write' },
+          })
+        : null;
+    if (candidateCompanyId && !lockedCompany) {
+      throw new NotFoundException('Company not found');
+    }
+    const lockedDirection =
+      candidateDirectionId != null
+        ? await directionRepo.findOne({
+            where: { id: candidateDirectionId },
+            lock: { mode: 'pessimistic_write' },
+          })
+        : null;
+    if (candidateDirectionId && !lockedDirection) {
+      throw new NotFoundException('Direction not found');
+    }
+    const lockedDepartment =
+      candidateDepartmentId != null
+        ? await departmentRepo.findOne({
+            where: { id: candidateDepartmentId },
+            lock: { mode: 'pessimistic_write' },
+          })
+        : null;
+    if (candidateDepartmentId && !lockedDepartment) {
+      throw new NotFoundException('Department not found');
+    }
+    const lockedPosition =
+      input.effective.positionId != null
+        ? await positionRepo.findOne({
+            where: { id: input.effective.positionId },
+            lock: { mode: 'pessimistic_write' },
+          })
+        : null;
+    if (input.effective.positionId && !lockedPosition) {
+      throw new NotFoundException('Position not found');
+    }
+
+    if (
+      didAssignmentHierarchyDrift({
+        candidateCompanyId,
+        candidateDirectionId,
+        candidateDepartmentId,
+        candidatePositionId: input.effective.positionId ?? null,
+        lockedDirectionCompanyId: lockedDirection?.companyId,
+        lockedDepartmentDirectionId: lockedDepartment?.directionId,
+        lockedPositionDepartmentId: lockedPosition?.departmentId,
+        discoveryPositionDepartmentId: prePosition?.departmentId,
+        lockedPositionDirectionId: lockedPosition?.directionId,
+        discoveryPositionDirectionId: prePosition?.directionId,
+      })
+    ) {
+      throw new AssignmentHierarchyChangedDuringResolutionError();
+    }
+
+    let departmentId = input.effective.departmentId ?? null;
+    let directionId = input.effective.directionId ?? null;
+
+    if (lockedPosition?.departmentId != null) {
+      if (departmentId != null && departmentId !== lockedPosition.departmentId) {
         throw new BadRequestException(
           'Assignment departmentId must match position.departmentId',
         );
       }
-      departmentId = position.departmentId;
+      departmentId = lockedPosition.departmentId;
     }
-
-    if (position.directionId != null) {
-      if (directionId != null && directionId !== position.directionId) {
+    if (lockedPosition?.directionId != null) {
+      if (directionId != null && directionId !== lockedPosition.directionId) {
         throw new BadRequestException(
           'Assignment directionId must match position.directionId',
         );
       }
-      directionId = position.directionId;
+      directionId = lockedPosition.directionId;
+    }
+    if (lockedDepartment?.directionId != null) {
+      if (directionId != null && directionId !== lockedDepartment.directionId) {
+        throw new BadRequestException(
+          'Assignment directionId must match department.directionId',
+        );
+      }
+      directionId = lockedDepartment.directionId;
+    }
+
+    const companyId = directionId ? lockedDirection?.companyId ?? null : null;
+    const currentCompany = companyId ? lockedCompany : null;
+    const currentDirection = directionId ? lockedDirection : null;
+    const currentDepartment = departmentId ? lockedDepartment : null;
+    const currentPosition = input.effective.positionId ? lockedPosition : null;
+
+    const requireCompanySelectable =
+      companyId != null &&
+      (input.mode === 'create' ||
+        !this.isSameHistoricalId(companyId, input.existing?.companyId));
+    if (requireCompanySelectable && !isCompanySelectable(currentCompany)) {
+      throw new BadRequestException('Company is inactive');
+    }
+
+    const requireDirectionSelectable =
+      directionId != null &&
+      (input.mode === 'create' ||
+        !this.isSameHistoricalId(directionId, input.existing?.directionId));
+    if (
+      requireDirectionSelectable &&
+      !isDirectionSelectable({
+        direction: currentDirection,
+        company: currentCompany,
+      })
+    ) {
+      throw new BadRequestException('Direction is inactive');
+    }
+
+    const requireDepartmentSelectable =
+      departmentId != null &&
+      (input.mode === 'create' ||
+        !this.isSameHistoricalId(departmentId, input.existing?.departmentId));
+    if (
+      requireDepartmentSelectable &&
+      !isDepartmentSelectable({
+        department: currentDepartment,
+        direction: currentDirection,
+        company: currentCompany,
+      })
+    ) {
+      throw new BadRequestException('Department is inactive');
+    }
+
+    const requirePositionSelectable =
+      input.effective.positionId != null &&
+      (input.mode === 'create' ||
+        !this.isSameHistoricalId(
+          input.effective.positionId,
+          input.existing?.positionId,
+        ));
+    if (
+      requirePositionSelectable &&
+      !isPositionSelectable({
+        position: currentPosition,
+        department: currentDepartment,
+        direction: currentDirection,
+        company: currentCompany,
+      })
+    ) {
+      throw new BadRequestException(
+        getPositionBlockedReason({
+          position: currentPosition,
+          department: currentDepartment,
+          direction: currentDirection,
+          company: currentCompany,
+        }) === 'hierarchy_changed'
+          ? 'Position hierarchy is inconsistent'
+          : 'Position is inactive',
+      );
     }
 
     return {
-      positionId: input.positionId,
-      departmentId,
+      companyId,
       directionId,
+      departmentId,
+      positionId: input.effective.positionId ?? null,
     };
   }
 
@@ -300,7 +565,7 @@ export class EmployeeProfileService {
               displayName: this.serializer.fullName(manager),
             }
           : null,
-        hiredAt: assignment?.startDate ?? null,
+        hiredAt: employee.hiredAt,
         accountCreatedAt: employee.user?.createdAt
           ? employee.user.createdAt.toISOString()
           : null,
@@ -336,8 +601,13 @@ export class EmployeeProfileService {
               contractType: assignment.contractType,
               startDate: assignment.startDate,
               endDate: assignment.endDate,
+              probationStartDate: assignment.probationStartDate,
               probationEndDate: assignment.probationEndDate,
               status: assignment.status,
+              activationBlockedReason: assignment.activationBlockedReason,
+              activationCheckedAt: assignment.activationCheckedAt
+                ? assignment.activationCheckedAt.toISOString()
+                : null,
               company: assignment.company
                 ? { id: assignment.company.id, name: assignment.company.name }
                 : null,
@@ -515,6 +785,42 @@ export class EmployeeProfileService {
     return this.getProfile(actor, id);
   }
 
+  async patchEmploymentMeta(
+    actor: User,
+    id: string,
+    dto: { hiredAt?: string | null },
+  ) {
+    const employee = await this.access.getEmployeeOrFail(id);
+    const caps = await this.capabilities(actor, employee);
+    if (!caps.canEditEmployment) {
+      throw new BadRequestException('Cannot edit employment metadata');
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Employee);
+      const row = await repo.findOneOrFail({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (dto.hiredAt !== undefined) {
+        row.hiredAt = this.parseOptionalDateOnly(dto.hiredAt);
+      }
+      await repo.save(row);
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.employment_meta_updated',
+          entityType: 'Employee',
+          entityId: row.id,
+          metadata: { fields: Object.keys(dto) },
+        },
+        manager,
+      );
+    });
+
+    return this.getProfile(actor, id);
+  }
+
   async replacePersonalContacts(
     actor: User,
     employeeId: string,
@@ -681,72 +987,420 @@ export class EmployeeProfileService {
     return this.getProfile(actor, employeeId);
   }
 
+  private assignmentOrgTouched(dto: AssignmentWriteDto): boolean {
+    return (
+      dto.positionId !== undefined ||
+      dto.departmentId !== undefined ||
+      dto.directionId !== undefined
+    );
+  }
+
+  private normalizeAssignmentDto(dto: AssignmentWriteDto): AssignmentWriteDto {
+    return {
+      ...dto,
+      functionalRole: this.normalizeOptionalText(
+        dto.functionalRole,
+        120,
+        'functionalRole',
+      ),
+      workLocation: this.normalizeOptionalText(
+        dto.workLocation,
+        255,
+        'workLocation',
+      ),
+      workFormat: this.normalizeOptionalText(dto.workFormat, 64, 'workFormat'),
+      employmentType: this.normalizeOptionalText(
+        dto.employmentType,
+        64,
+        'employmentType',
+      ),
+      contractType: this.normalizeOptionalText(
+        dto.contractType,
+        64,
+        'contractType',
+      ),
+      changeReason: this.normalizeOptionalText(
+        dto.changeReason,
+        5000,
+        'changeReason',
+      ),
+      startDate:
+        dto.startDate === undefined
+          ? undefined
+          : this.parseOptionalDateOnly(dto.startDate),
+      endDate:
+        dto.endDate === undefined ? undefined : this.parseOptionalDateOnly(dto.endDate),
+      probationStartDate:
+        dto.probationStartDate === undefined
+          ? undefined
+          : this.parseOptionalDateOnly(dto.probationStartDate),
+      probationEndDate:
+        dto.probationEndDate === undefined
+          ? undefined
+          : this.parseOptionalDateOnly(dto.probationEndDate),
+    };
+  }
+
+  private async lockEmployeeForAssignmentMutation(
+    manager: EntityManager,
+    employeeId: string,
+  ): Promise<Employee> {
+    return manager.getRepository(Employee).findOneOrFail({
+      where: { id: employeeId },
+      lock: { mode: 'pessimistic_write' },
+    });
+  }
+
+  private async lockAssignmentForEmployee(
+    manager: EntityManager,
+    employeeId: string,
+    assignmentId: string,
+  ): Promise<EmploymentAssignment> {
+    return manager.getRepository(EmploymentAssignment).findOneOrFail({
+      where: { id: assignmentId, employeeId },
+      lock: { mode: 'pessimistic_write' },
+    });
+  }
+
+  private async assertAssignmentCatalogValue(
+    field: 'workFormat' | 'employmentType',
+    nextValue: string | null | undefined,
+    existingValue: string | null,
+    mode: 'create' | 'update',
+  ): Promise<string | null | undefined> {
+    if (nextValue === undefined) {
+      return undefined;
+    }
+    if (nextValue === null) {
+      return null;
+    }
+    if (mode === 'update' && nextValue === existingValue) {
+      return nextValue;
+    }
+    await this.employmentCatalogs.assertActiveValue(field, nextValue);
+    return nextValue;
+  }
+
+  private syncEmployeeCurrentAssignment(
+    employee: Employee,
+    assignment: EmploymentAssignment | null,
+  ): void {
+    employee.currentAssignmentId = assignment?.id ?? null;
+    employee.departmentId = assignment?.departmentId ?? null;
+    employee.positionId = assignment?.positionId ?? null;
+  }
+
+  private assertAssignmentDateState(
+    startDate: string | null,
+    endDate: string | null,
+    probationStartDate: string | null,
+    probationEndDate: string | null,
+    status: EmploymentAssignment['status'],
+  ): void {
+    if (startDate && endDate && endDate < startDate) {
+      throw new BadRequestException('endDate must be >= startDate');
+    }
+    if (startDate && probationEndDate && probationEndDate < startDate) {
+      throw new BadRequestException('probationEndDate must be >= startDate');
+    }
+    if (probationStartDate && probationEndDate && probationEndDate < probationStartDate) {
+      throw new BadRequestException(
+        'probationEndDate must be >= probationStartDate',
+      );
+    }
+    if (status === 'planned' && startDate == null) {
+      throw new BadRequestException('Planned assignment must have startDate');
+    }
+    if ((status === 'active' || status === 'planned') && endDate != null) {
+      throw new BadRequestException('Only ended assignments may have endDate');
+    }
+    if (status === 'ended' && endDate == null) {
+      throw new BadRequestException('Ended assignment must have endDate');
+    }
+  }
+
+  private activationRelevantTouched(dto: AssignmentWriteDto): boolean {
+    return (
+      dto.positionId !== undefined ||
+      dto.departmentId !== undefined ||
+      dto.directionId !== undefined ||
+      dto.workFormat !== undefined ||
+      dto.employmentType !== undefined ||
+      dto.startDate !== undefined
+    );
+  }
+
+  private async markPlannedActivationBlocked(
+    manager: EntityManager,
+    planned: EmploymentAssignment,
+    reason:
+      | 'employee_inactive'
+      | 'company_inactive'
+      | 'direction_inactive'
+      | 'department_inactive'
+      | 'position_inactive'
+      | 'hierarchy_changed'
+      | 'activation_date_conflict'
+      | 'work_format_inactive'
+      | 'employment_type_inactive',
+  ): Promise<void> {
+    planned.activationBlockedReason = reason;
+    planned.activationCheckedAt = this.businessDateClock.now();
+    await manager.getRepository(EmploymentAssignment).save(planned);
+  }
+
+  async activatePlannedAssignment(
+    manager: EntityManager,
+    employee: Employee,
+    planned: EmploymentAssignment,
+    actorId: string | null,
+  ): Promise<boolean> {
+    const assignmentRepo = manager.getRepository(EmploymentAssignment);
+    const lockedPlanned = await assignmentRepo.findOne({
+      where: { id: planned.id, employeeId: employee.id },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!lockedPlanned || lockedPlanned.status !== 'planned') {
+      return false;
+    }
+    const today = this.businessDateClock.today();
+    if (!lockedPlanned.startDate || lockedPlanned.startDate > today) {
+      return false;
+    }
+    if (!employee.isActive) {
+      await this.markPlannedActivationBlocked(
+        manager,
+        lockedPlanned,
+        'employee_inactive',
+      );
+      return false;
+    }
+
+    const currentActive = await assignmentRepo.findOne({
+      where: { employeeId: employee.id, status: 'active' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (
+      currentActive?.startDate != null &&
+      lockedPlanned.startDate < currentActive.startDate
+    ) {
+      await this.markPlannedActivationBlocked(
+        manager,
+        lockedPlanned,
+        'activation_date_conflict',
+      );
+      return false;
+    }
+
+    try {
+      const resolved = await this.resolveAssignmentOrganization(manager, {
+        mode: 'update',
+        effective: {
+          positionId: lockedPlanned.positionId,
+          departmentId: lockedPlanned.departmentId,
+          directionId: lockedPlanned.directionId,
+        },
+        existing: {
+          companyId: lockedPlanned.companyId,
+          positionId: lockedPlanned.positionId,
+          departmentId: lockedPlanned.departmentId,
+          directionId: lockedPlanned.directionId,
+        },
+      });
+      lockedPlanned.companyId = resolved.companyId;
+      lockedPlanned.directionId = resolved.directionId;
+      lockedPlanned.departmentId = resolved.departmentId;
+      lockedPlanned.positionId = resolved.positionId;
+      if (lockedPlanned.workFormat) {
+        await this.employmentCatalogs.assertActiveValue(
+          'workFormat',
+          lockedPlanned.workFormat,
+        );
+      }
+      if (lockedPlanned.employmentType) {
+        await this.employmentCatalogs.assertActiveValue(
+          'employmentType',
+          lockedPlanned.employmentType,
+        );
+      }
+    } catch (error) {
+      if (error instanceof AssignmentHierarchyChangedDuringResolutionError) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : 'unknown';
+      const reason = message.includes('company')
+        ? 'company_inactive'
+        : message.includes('direction')
+          ? 'direction_inactive'
+          : message.includes('department')
+            ? 'department_inactive'
+            : message.includes('employment type')
+              ? 'employment_type_inactive'
+              : message.includes('work format')
+                ? 'work_format_inactive'
+                : message.includes('position')
+                  ? 'position_inactive'
+                  : 'hierarchy_changed';
+      await this.markPlannedActivationBlocked(manager, lockedPlanned, reason);
+      return false;
+    }
+
+    if (currentActive) {
+      currentActive.status = 'ended';
+      currentActive.endDate = lockedPlanned.startDate;
+      await assignmentRepo.save(currentActive);
+    }
+
+    lockedPlanned.status = 'active';
+    lockedPlanned.endDate = null;
+    lockedPlanned.activationBlockedReason = null;
+    lockedPlanned.activationCheckedAt = null;
+    await assignmentRepo.save(lockedPlanned);
+    this.syncEmployeeCurrentAssignment(employee, lockedPlanned);
+    await manager.getRepository(Employee).save(employee);
+    await this.audit.record(
+      {
+        actorId,
+        action: 'employee.assignment_activated',
+        entityType: 'Employee',
+        entityId: employee.id,
+        metadata: { assignmentId: lockedPlanned.id },
+      },
+      manager,
+    );
+    return true;
+  }
+
   async createAssignment(actor: User, id: string, dto: AssignmentWriteDto) {
     const employee = await this.access.getEmployeeOrFail(id);
     const caps = await this.capabilities(actor, employee);
     if (!caps.canEditEmployment) {
       throw new BadRequestException('Cannot change assignment');
     }
-    this.assertAssignmentDates(dto, 'active');
-    if (dto.managerEmployeeId && dto.managerEmployeeId === id) {
+    const normalized = this.normalizeAssignmentDto(dto);
+    if (normalized.managerEmployeeId && normalized.managerEmployeeId === id) {
       throw new BadRequestException('Manager cannot be the same employee');
     }
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.dataSource.transaction(async (manager) => {
+          const employeeRepo = manager.getRepository(Employee);
+          const assignmentRepo = manager.getRepository(EmploymentAssignment);
+          const emp = await this.lockEmployeeForAssignmentMutation(manager, id);
+          const today = this.businessDateClock.today();
+          const status: EmploymentAssignment['status'] =
+            normalized.startDate != null && normalized.startDate > today
+              ? 'planned'
+              : 'active';
 
-    const resolved = await this.applyPositionAssignmentInvariant({
-      positionId: dto.positionId ?? null,
-      departmentId: dto.departmentId ?? null,
-      directionId: dto.directionId ?? null,
-    });
+          this.assertAssignmentDateState(
+            normalized.startDate ?? null,
+            null,
+            normalized.probationStartDate ?? null,
+            normalized.probationEndDate ?? null,
+            status,
+          );
 
-    await this.dataSource.transaction(async (manager) => {
-      const employeeRepo = manager.getRepository(Employee);
-      const assignmentRepo = manager.getRepository(EmploymentAssignment);
-      const emp = await employeeRepo.findOneByOrFail({ id });
+          const resolved = await this.resolveAssignmentOrganization(manager, {
+            mode: 'create',
+            effective: {
+              positionId: normalized.positionId ?? null,
+              departmentId: normalized.departmentId ?? null,
+              directionId: normalized.directionId ?? null,
+            },
+            existing: null,
+          });
 
-      await assignmentRepo.update(
-        { employeeId: id, status: 'active' },
-        { status: 'ended', endDate: dto.startDate ?? new Date().toISOString().slice(0, 10) },
-      );
+          const workFormat = await this.assertAssignmentCatalogValue(
+            'workFormat',
+            normalized.workFormat,
+            null,
+            'create',
+          );
+          const employmentType = await this.assertAssignmentCatalogValue(
+            'employmentType',
+            normalized.employmentType,
+            null,
+            'create',
+          );
 
-      const assignment = assignmentRepo.create({
-        employeeId: id,
-        companyId: dto.companyId ?? null,
-        directionId: resolved.directionId,
-        departmentId: resolved.departmentId,
-        positionId: resolved.positionId,
-        functionalRole: dto.functionalRole ?? null,
-        managerEmployeeId: dto.managerEmployeeId ?? null,
-        mentorEmployeeId: dto.mentorEmployeeId ?? null,
-        hrResponsibleEmployeeId: dto.hrResponsibleEmployeeId ?? null,
-        workLocation: dto.workLocation ?? null,
-        workFormat: dto.workFormat ?? null,
-        employmentType: dto.employmentType ?? null,
-        contractType: dto.contractType ?? null,
-        startDate: dto.startDate ?? null,
-        endDate: null,
-        probationEndDate: dto.probationEndDate ?? null,
-        changeReason: dto.changeReason ?? null,
-        status: 'active',
-        createdByUserId: actor.id,
-      });
-      await assignmentRepo.save(assignment);
+          if (status === 'active') {
+            const active = await assignmentRepo.findOne({
+              where: { employeeId: id, status: 'active' },
+              lock: { mode: 'pessimistic_write' },
+            });
+            if (active) {
+              active.status = 'ended';
+              active.endDate = normalized.startDate ?? today;
+              await assignmentRepo.save(active);
+            }
+          } else {
+            const planned = await assignmentRepo.findOne({
+              where: { employeeId: id, status: 'planned' },
+              lock: { mode: 'pessimistic_write' },
+            });
+            if (planned) {
+              planned.status = 'ended';
+              planned.endDate = today;
+              await assignmentRepo.save(planned);
+            }
+          }
 
-      emp.currentAssignmentId = assignment.id;
-      emp.departmentId = assignment.departmentId;
-      emp.positionId = assignment.positionId;
-      await employeeRepo.save(emp);
+          const assignment = assignmentRepo.create({
+            employeeId: id,
+            companyId: resolved.companyId,
+            directionId: resolved.directionId,
+            departmentId: resolved.departmentId,
+            positionId: resolved.positionId,
+            functionalRole: normalized.functionalRole ?? null,
+            managerEmployeeId: normalized.managerEmployeeId ?? null,
+            mentorEmployeeId: normalized.mentorEmployeeId ?? null,
+            hrResponsibleEmployeeId: normalized.hrResponsibleEmployeeId ?? null,
+            workLocation: normalized.workLocation ?? null,
+            workFormat: workFormat ?? null,
+            employmentType: employmentType ?? null,
+            contractType: normalized.contractType ?? null,
+            startDate: normalized.startDate ?? null,
+            endDate: null,
+            probationStartDate: normalized.probationStartDate ?? null,
+            probationEndDate: normalized.probationEndDate ?? null,
+            changeReason: normalized.changeReason ?? null,
+            status,
+            activationBlockedReason: null,
+            activationCheckedAt: null,
+            createdByUserId: actor.id,
+          });
+          await assignmentRepo.save(assignment);
 
-      await this.audit.record(
-        {
-          actorId: actor.id,
-          action: 'employee.assignment_changed',
-          entityType: 'Employee',
-          entityId: id,
-          metadata: { assignmentId: assignment.id, changeReason: dto.changeReason },
-        },
-        manager,
-      );
-    });
+          if (status === 'active') {
+            this.syncEmployeeCurrentAssignment(emp, assignment);
+            await employeeRepo.save(emp);
+          }
+
+          await this.audit.record(
+            {
+              actorId: actor.id,
+              action: 'employee.assignment_changed',
+              entityType: 'Employee',
+              entityId: id,
+              metadata: {
+                assignmentId: assignment.id,
+                status,
+                changeReason: normalized.changeReason ?? null,
+              },
+            },
+            manager,
+          );
+        });
+        return this.getProfile(actor, id);
+      } catch (error) {
+        if (shouldRetryHierarchyDrift(error, attempt, 3)) {
+          continue;
+        }
+        rethrowAssignmentWriteError(error);
+      }
+    }
 
     return this.getProfile(actor, id);
   }
@@ -762,105 +1416,181 @@ export class EmployeeProfileService {
     if (!caps.canEditEmployment) {
       throw new BadRequestException('Cannot change assignment');
     }
+    const normalized = this.normalizeAssignmentDto(dto);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.dataSource.transaction(async (manager) => {
+          const employeeRepo = manager.getRepository(Employee);
+          const assignmentRepo = manager.getRepository(EmploymentAssignment);
+          const emp = await this.lockEmployeeForAssignmentMutation(manager, employeeId);
+          const row = await this.lockAssignmentForEmployee(
+            manager,
+            employeeId,
+            assignmentId,
+          );
+          const today = this.businessDateClock.today();
 
-    const existing = await this.assignments.findOne({
-      where: { id: assignmentId, employeeId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Assignment not found');
-    }
+          const nextManager =
+            normalized.managerEmployeeId !== undefined
+              ? normalized.managerEmployeeId
+              : row.managerEmployeeId;
+          if (nextManager && nextManager === employeeId) {
+            throw new BadRequestException('Manager cannot be the same employee');
+          }
 
-    const nextManager =
-      dto.managerEmployeeId !== undefined
-        ? dto.managerEmployeeId
-        : existing.managerEmployeeId;
-    if (nextManager && nextManager === employeeId) {
-      throw new BadRequestException('Manager cannot be the same employee');
-    }
+          const orgTouched = this.assignmentOrgTouched(dto);
+          const resolved = orgTouched
+            ? await this.resolveAssignmentOrganization(manager, {
+                mode: 'update',
+                effective: {
+                  positionId:
+                    normalized.positionId !== undefined
+                      ? normalized.positionId
+                      : row.positionId,
+                  departmentId:
+                    normalized.departmentId !== undefined
+                      ? normalized.departmentId
+                      : row.departmentId,
+                  directionId:
+                    normalized.directionId !== undefined
+                      ? normalized.directionId
+                      : row.directionId,
+                },
+                existing: {
+                  companyId: row.companyId,
+                  positionId: row.positionId,
+                  departmentId: row.departmentId,
+                  directionId: row.directionId,
+                },
+              })
+            : {
+                companyId: row.companyId,
+                directionId: row.directionId,
+                departmentId: row.departmentId,
+                positionId: row.positionId,
+              };
 
-    const merged: AssignmentWriteDto = {
-      startDate: dto.startDate !== undefined ? dto.startDate : existing.startDate,
-      endDate: dto.endDate !== undefined ? dto.endDate : existing.endDate,
-      probationEndDate:
-        dto.probationEndDate !== undefined
-          ? dto.probationEndDate
-          : existing.probationEndDate,
-    };
-    this.assertAssignmentDates(merged, existing.status);
+          const workFormat = await this.assertAssignmentCatalogValue(
+            'workFormat',
+            normalized.workFormat,
+            row.workFormat,
+            'update',
+          );
+          const employmentType = await this.assertAssignmentCatalogValue(
+            'employmentType',
+            normalized.employmentType,
+            row.employmentType,
+            'update',
+          );
 
-    const resolved = await this.applyPositionAssignmentInvariant({
-      positionId:
-        dto.positionId !== undefined ? dto.positionId : existing.positionId,
-      departmentId:
-        dto.departmentId !== undefined
-          ? dto.departmentId
-          : existing.departmentId,
-      directionId:
-        dto.directionId !== undefined ? dto.directionId : existing.directionId,
-    });
+          if (
+            row.status === 'active' &&
+            normalized.startDate !== undefined &&
+            normalized.startDate != null &&
+            normalized.startDate > today
+          ) {
+            throw new BadRequestException(
+              'Active assignment cannot be moved into the future',
+            );
+          }
+          if (
+            row.status === 'planned' &&
+            normalized.startDate !== undefined &&
+            normalized.startDate == null
+          ) {
+            throw new BadRequestException('Planned assignment must have startDate');
+          }
 
-    await this.dataSource.transaction(async (manager) => {
-      const employeeRepo = manager.getRepository(Employee);
-      const assignmentRepo = manager.getRepository(EmploymentAssignment);
-      const row = await assignmentRepo.findOneByOrFail({
-        id: assignmentId,
-        employeeId,
-      });
+          row.companyId = resolved.companyId;
+          row.directionId = resolved.directionId;
+          row.departmentId = resolved.departmentId;
+          row.positionId = resolved.positionId;
+          if (normalized.functionalRole !== undefined) {
+            row.functionalRole = normalized.functionalRole;
+          }
+          if (normalized.managerEmployeeId !== undefined) {
+            row.managerEmployeeId = normalized.managerEmployeeId;
+          }
+          if (normalized.mentorEmployeeId !== undefined) {
+            row.mentorEmployeeId = normalized.mentorEmployeeId;
+          }
+          if (normalized.hrResponsibleEmployeeId !== undefined) {
+            row.hrResponsibleEmployeeId = normalized.hrResponsibleEmployeeId;
+          }
+          if (normalized.workLocation !== undefined) {
+            row.workLocation = normalized.workLocation;
+          }
+          if (workFormat !== undefined) {
+            row.workFormat = workFormat;
+          }
+          if (employmentType !== undefined) {
+            row.employmentType = employmentType;
+          }
+          if (normalized.contractType !== undefined) {
+            row.contractType = normalized.contractType;
+          }
+          if (normalized.startDate !== undefined) {
+            row.startDate = normalized.startDate;
+          }
+          if (normalized.probationStartDate !== undefined) {
+            row.probationStartDate = normalized.probationStartDate;
+          }
+          if (normalized.probationEndDate !== undefined) {
+            row.probationEndDate = normalized.probationEndDate;
+          }
+          if (normalized.changeReason !== undefined) {
+            row.changeReason = normalized.changeReason;
+          }
 
-      if (dto.companyId !== undefined) row.companyId = dto.companyId;
-      row.directionId = resolved.directionId;
-      row.departmentId = resolved.departmentId;
-      row.positionId = resolved.positionId;
-      if (dto.functionalRole !== undefined) row.functionalRole = dto.functionalRole;
-      if (dto.managerEmployeeId !== undefined) {
-        row.managerEmployeeId = dto.managerEmployeeId;
-      }
-      if (dto.mentorEmployeeId !== undefined) row.mentorEmployeeId = dto.mentorEmployeeId;
-      if (dto.hrResponsibleEmployeeId !== undefined) {
-        row.hrResponsibleEmployeeId = dto.hrResponsibleEmployeeId;
-      }
-      if (dto.workLocation !== undefined) row.workLocation = dto.workLocation;
-      if (dto.workFormat !== undefined) row.workFormat = dto.workFormat;
-      if (dto.employmentType !== undefined) row.employmentType = dto.employmentType;
-      if (dto.contractType !== undefined) row.contractType = dto.contractType;
-      if (dto.startDate !== undefined) row.startDate = dto.startDate;
-      if (dto.endDate !== undefined) row.endDate = dto.endDate;
-      if (dto.probationEndDate !== undefined) {
-        row.probationEndDate = dto.probationEndDate;
-      }
-      if (dto.changeReason !== undefined) row.changeReason = dto.changeReason;
+          if (row.status === 'ended') {
+            if (normalized.endDate !== undefined) {
+              row.endDate = normalized.endDate;
+            }
+          } else {
+            row.endDate = null;
+          }
 
-      if (row.status === 'ended' && !row.endDate) {
-        throw new BadRequestException('Ended assignment must have endDate');
-      }
-      if (row.status === 'active' && row.endDate) {
-        const today = new Date().toISOString().slice(0, 10);
-        if (row.endDate < today) {
-          throw new BadRequestException('Active assignment cannot have a past endDate');
+          if (row.status === 'planned' && this.activationRelevantTouched(dto)) {
+            row.activationBlockedReason = null;
+            row.activationCheckedAt = null;
+          }
+
+          this.assertAssignmentDateState(
+            row.startDate,
+            row.endDate,
+            row.probationStartDate,
+            row.probationEndDate,
+            row.status,
+          );
+
+          await assignmentRepo.save(row);
+
+          if (row.status === 'planned' && row.startDate != null && row.startDate <= today) {
+            await this.activatePlannedAssignment(manager, emp, row, actor.id);
+          } else if (row.status === 'active') {
+            this.syncEmployeeCurrentAssignment(emp, row);
+            await employeeRepo.save(emp);
+          }
+
+          await this.audit.record(
+            {
+              actorId: actor.id,
+              action: 'employee.assignment_updated',
+              entityType: 'Employee',
+              entityId: employeeId,
+              metadata: { assignmentId },
+            },
+            manager,
+          );
+        });
+        return this.getProfile(actor, employeeId);
+      } catch (error) {
+        if (shouldRetryHierarchyDrift(error, attempt, 3)) {
+          continue;
         }
+        rethrowAssignmentWriteError(error);
       }
-
-      await assignmentRepo.save(row);
-
-      if (row.status === 'active') {
-        const emp = await employeeRepo.findOneByOrFail({ id: employeeId });
-        emp.currentAssignmentId = row.id;
-        emp.departmentId = row.departmentId;
-        emp.positionId = row.positionId;
-        await employeeRepo.save(emp);
-      }
-
-      await this.audit.record(
-        {
-          actorId: actor.id,
-          action: 'employee.assignment_updated',
-          entityType: 'Employee',
-          entityId: employeeId,
-          metadata: { assignmentId },
-        },
-        manager,
-      );
-    });
+    }
 
     return this.getProfile(actor, employeeId);
   }
@@ -872,20 +1602,19 @@ export class EmployeeProfileService {
       throw new BadRequestException('Cannot change assignment');
     }
 
-    const existing = await this.assignments.findOne({
-      where: { id: assignmentId, employeeId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Assignment not found');
-    }
-    if (existing.status === 'active') {
-      throw new BadRequestException(
-        'Cannot delete active assignment; create a new assignment instead',
-      );
-    }
-
     await this.dataSource.transaction(async (manager) => {
+      await this.lockEmployeeForAssignmentMutation(manager, employeeId);
       const assignmentRepo = manager.getRepository(EmploymentAssignment);
+      const existing = await this.lockAssignmentForEmployee(
+        manager,
+        employeeId,
+        assignmentId,
+      );
+      if (existing.status === 'active') {
+        throw new BadRequestException(
+          'Cannot delete active assignment; create a new assignment instead',
+        );
+      }
       await assignmentRepo.delete({ id: assignmentId, employeeId });
       await this.audit.record(
         {
@@ -947,8 +1676,13 @@ export class EmployeeProfileService {
       contractType: a.contractType,
       startDate: a.startDate,
       endDate: a.endDate,
+      probationStartDate: a.probationStartDate,
       probationEndDate: a.probationEndDate,
       changeReason: a.changeReason,
+      activationBlockedReason: a.activationBlockedReason,
+      activationCheckedAt: a.activationCheckedAt
+        ? a.activationCheckedAt.toISOString()
+        : null,
       updatedAt: a.updatedAt.toISOString(),
       department: a.department
         ? { id: a.department.id, name: a.department.name }
@@ -1060,16 +1794,98 @@ export class EmployeeProfileService {
   }
 
   async listCatalogs() {
-    const [companies, directions] = await Promise.all([
-      this.companies.find({ where: { isActive: true }, order: { name: 'ASC' } }),
-      this.directions.find({ where: { isActive: true }, order: { name: 'ASC' } }),
-    ]);
+    const [companies, directions, departments, positions, workFormats, employmentTypes] =
+      await Promise.all([
+        this.companies.find({ order: { name: 'ASC' } }),
+        this.directions.find({ order: { name: 'ASC' } }),
+        this.departmentsService.findAll(),
+        this.positions.findAll({ all: true }),
+        this.employmentCatalogs.listWorkFormats(false),
+        this.employmentCatalogs.listEmploymentTypes(false),
+      ]);
+    const companiesById = new Map(companies.map((row) => [row.id, row]));
+    const directionsById = new Map(directions.map((row) => [row.id, row]));
+    const selectableDirections = directions.filter((direction) =>
+      isDirectionSelectable({
+        direction,
+        company:
+          direction.companyId != null
+            ? companiesById.get(direction.companyId) ?? null
+            : null,
+      }),
+    );
+    const selectableDepartments = departments.filter((department) =>
+      isDepartmentSelectable({
+        department,
+        direction:
+          department.directionId != null
+            ? directionsById.get(department.directionId) ?? null
+            : null,
+        company:
+          department.directionId != null
+            ? companiesById.get(
+                directionsById.get(department.directionId)?.companyId ?? '',
+              ) ?? null
+            : null,
+      }),
+    );
+    const selectableDepartmentsById = new Map(
+      selectableDepartments.map((row) => [row.id, row]),
+    );
+    const selectablePositions = positions.filter((position) =>
+      isPositionSelectable({
+        position,
+        department:
+          position.departmentId != null
+            ? selectableDepartmentsById.get(position.departmentId) ?? null
+            : null,
+        direction:
+          position.directionId != null
+            ? directionsById.get(position.directionId) ?? null
+            : null,
+        company:
+          position.directionId != null
+            ? companiesById.get(
+                directionsById.get(position.directionId)?.companyId ?? '',
+              ) ?? null
+            : null,
+      }),
+    );
     return {
-      companies: companies.map((c) => ({ id: c.id, name: c.name, code: c.code })),
-      directions: directions.map((d) => ({
+      companies: companies
+        .filter((c) => c.isActive)
+        .map((c) => ({ id: c.id, name: c.name, code: c.code })),
+      directions: selectableDirections.map((d) => ({
         id: d.id,
         name: d.name,
         code: d.code,
+        companyId: d.companyId,
+      })),
+      departments: selectableDepartments.map((d) => ({
+        id: d.id,
+        name: d.name,
+        description: d.description,
+        location: d.location,
+        directionId: d.directionId,
+        directionName: d.directionName,
+      })),
+      positions: selectablePositions.map((p) => ({
+        id: p.id,
+        name: p.name,
+        departmentId: p.departmentId,
+        directionId: p.directionId,
+        departmentName: p.departmentName,
+        directionName: p.directionName,
+      })),
+      workFormats: workFormats.map((row) => ({
+        id: row.id,
+        name: row.name,
+        sortOrder: row.sortOrder,
+      })),
+      employmentTypes: employmentTypes.map((row) => ({
+        id: row.id,
+        name: row.name,
+        sortOrder: row.sortOrder,
       })),
     };
   }

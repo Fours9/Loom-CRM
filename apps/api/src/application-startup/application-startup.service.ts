@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ApplicationBootstrapService } from '../platform/bootstrap/application-bootstrap.service';
 import { QuestionnaireSeedService } from '../modules/questionnaires/seed/questionnaire-seed.service';
+import { EmploymentAssignmentLifecycleService } from '../organization/employees/employment-assignment-lifecycle.service';
 
 /**
  * Single Nest OnModuleInit composition root.
@@ -13,11 +14,13 @@ export class ApplicationStartupService implements OnModuleInit {
   constructor(
     private readonly platformBootstrap: ApplicationBootstrapService,
     private readonly questionnaireSeed: QuestionnaireSeedService,
+    private readonly employmentLifecycle: EmploymentAssignmentLifecycleService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     await this.platformBootstrap.ensureReady();
     await this.questionnaireSeed.ensureEmployee360V1();
+    await this.employmentLifecycle.activateDueAssignments();
     this.logger.log('Application startup completed');
   }
 }

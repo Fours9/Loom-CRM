@@ -41,12 +41,14 @@ export class DepartmentsService {
   create(input: {
     name: string;
     description?: string | null;
+    location?: string | null;
     directionId?: string | null;
   }): Promise<Department> {
     return this.departments.save(
       this.departments.create({
         name: input.name,
         description: input.description ?? null,
+        location: input.location?.trim() || null,
         directionId: input.directionId ?? null,
         isActive: true,
         isHidden: false,
@@ -59,7 +61,7 @@ export class DepartmentsService {
     input: Partial<
       Pick<
         Department,
-        'name' | 'description' | 'directionId' | 'isActive' | 'isHidden'
+        'name' | 'description' | 'location' | 'directionId' | 'isActive' | 'isHidden'
       >
     >,
   ): Promise<Department> {

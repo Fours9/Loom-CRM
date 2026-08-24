@@ -17,6 +17,8 @@ import { EmployeeImportantDate } from '../../organization/employees/employee-imp
 import { EmploymentAssignment } from '../../organization/employees/employment-assignment.entity';
 import { Company } from '../../organization/companies/company.entity';
 import { Direction } from '../../organization/companies/direction.entity';
+import { WorkFormat } from '../../organization/employment-catalog/work-format.entity';
+import { EmploymentType } from '../../organization/employment-catalog/employment-type.entity';
 import { SkillGroup } from '../../organization/skills/skill-group.entity';
 import { Skill } from '../../organization/skills/skill.entity';
 import { PositionSkillRequirement } from '../../organization/position-requirements/position-skill-requirement.entity';
@@ -49,6 +51,7 @@ import { RestorePositionDirectionId1730000023000 } from './migrations/1730000023
 import { QuestionnaireAssignmentTitle1730000024000 } from './migrations/1730000024000-QuestionnaireAssignmentTitle';
 import { SkillNativeScale1730000025000 } from './migrations/1730000025000-SkillNativeScale';
 import { SkillGroupOptional1730000026000 } from './migrations/1730000026000-SkillGroupOptional';
+import { EmploymentCatalogsAndAssignmentFields1730000027000 } from './migrations/1730000027000-EmploymentCatalogsAndAssignmentFields';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -74,6 +77,8 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmploymentAssignment,
       Company,
       Direction,
+      WorkFormat,
+      EmploymentType,
       SkillGroup,
       Skill,
       PositionSkillRequirement,
@@ -108,6 +113,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       QuestionnaireAssignmentTitle1730000024000,
       SkillNativeScale1730000025000,
       SkillGroupOptional1730000026000,
+      EmploymentCatalogsAndAssignmentFields1730000027000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

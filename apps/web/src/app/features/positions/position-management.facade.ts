@@ -114,6 +114,7 @@ export class PositionManagementFacade {
 
   newDepartment = '';
   newDepartmentDirectionId = '';
+  newDepartmentLocation = '';
   formDepartmentIsActive = true;
   newDirection = '';
   formDirectionIsActive = true;
@@ -445,6 +446,7 @@ export class PositionManagementFacade {
     }
     const body = {
       name: this.newDepartment.trim(),
+      location: this.newDepartmentLocation.trim() || null,
       directionId: this.newDepartmentDirectionId || null,
     };
     const id = this.editingDepartmentId();
@@ -485,6 +487,7 @@ export class PositionManagementFacade {
     this.editingDepartmentId.set(d.id);
     this.newDepartment = d.name;
     this.newDepartmentDirectionId = d.directionId || '';
+    this.newDepartmentLocation = d.location || '';
     this.formDepartmentIsActive = d.isActive && !d.isHidden;
     this.openCatalog('department');
     this.error.set('');
@@ -494,6 +497,7 @@ export class PositionManagementFacade {
     this.editingDepartmentId.set(null);
     this.newDepartment = '';
     this.newDepartmentDirectionId = '';
+    this.newDepartmentLocation = '';
     this.formDepartmentIsActive = true;
   }
 
@@ -757,7 +761,6 @@ export class PositionManagementFacade {
     }
 
     this.editingId.set(result.position.id);
-    this.selectedPositionId.set(result.position.id);
     this.formIsActive = result.position.isActive;
     this.reload();
     this.loadPositionCatalog(result.position.id);

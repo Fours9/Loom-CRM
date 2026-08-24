@@ -11,7 +11,9 @@ Living companion to [ADR 0010](../adr/0010-position-catalog-and-questionnaire-co
 
 ## Position Catalog UI
 
-Product path: **`/positions`** (sidebar «Керування посадами»; `/settings/positions` redirects here) — three catalog rail columns (directions, departments, positions) plus a full-width **Groups + Skills** block below the rail (not a 4th rail column). Frontend feature: `apps/web/src/app/features/positions/` (lazy route); `/settings/positions` remains a compatibility redirect. Position edit modal attaches requirements; the inline details panel on `/positions` is still present (click the position name). **Dedicated catalog page** `/positions/:id/catalog` opens from the book icon on the position row (does not replace the inline panel). Absences admin keeps privacy only (no position CRUD there).
+Product path: **`/positions`** (sidebar «Керування посадами»; `/settings/positions` redirects here) — root page now has tabs **Керування посадами** and **Налаштування**. Management tab keeps the three catalog rail columns (directions, departments, positions) plus a full-width **Groups + Skills** block below the rail (not a 4th rail column). Settings tab manages **work formats** and **employment types** with `all=true` admin reads. Frontend feature: `apps/web/src/app/features/positions/` (lazy route); `/settings/positions` remains a compatibility redirect. Position edit modal attaches requirements. Clicking a position name/row does **nothing** for now (no inline catalog open). **Dedicated catalog page** `/positions/:id/catalog` opens from the book icon on the position row; the inline details panel component still exists on `/positions` but is not opened from the list click, and the standalone catalog page does **not** load settings catalogs. Absences admin keeps privacy only (no position CRUD there).
+
+Department management now includes optional `location` (`varchar(255)`). This value is used only as a People assignment form hint and does not own `assignment.workLocation`.
 
 ## Build
 
@@ -98,6 +100,8 @@ Boundaries:
 | `persistDraftRequirements` | Single persist entry. `lockUi: true` (create / Retry) uses `applying-drafts`. `lockUi: false` (edit picker) does not, so the dropdown stays open. Save/Close wait on in-flight picker persist. |
 | `PositionDraftSkillQueue` | Transient pending/failed/conflict commands. Monotonic `sequence` is **session-level apply order only**. Attach defaults: `required = true`, `targetLevel = skill.scaleMin` (native scale). The modal does not edit scale/`обовʼязкова`. Max **64** skills is enforced in the queue, not shown as a counter. |
 | `SettingsOrgApiService` | Legacy-named shared Organization HTTP client (relocation/rename deferred): positions, requirements, skill groups/skills. |
+
+People reads org hierarchy through `GET /employees/catalogs/org` and the shared frontend `OrganizationCatalogApiService`, not through `SettingsOrgApiService`. Backend returns **selectable** directions/departments/positions plus active work formats / employment types; `?all=true` for work formats / employment types is reserved for `PositionsManage`.
 | Backend | Persistence, validation, group/skill lifecycle. |
 
 Picker list order: `compareByUkNameThenId` (uk locale, then `id`). Chip order is **selection order** in the session; server membership is merged without reordering. After a full browser reload, chips follow the first catalog load (`createdAt ASC, id ASC`).

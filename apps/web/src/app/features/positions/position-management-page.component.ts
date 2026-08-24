@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { OrganizationCatalogColumnComponent } from './organization-catalog-column.component';
 import { PositionDetailsPanelComponent } from './position-details-panel.component';
 import { PositionEditDialogComponent } from './position-edit-dialog.component';
@@ -7,6 +7,7 @@ import { SkillGroupEditDialogComponent } from './skill-group-edit-dialog.compone
 import { DirectionEditDialogComponent } from './direction-edit-dialog.component';
 import { DepartmentEditDialogComponent } from './department-edit-dialog.component';
 import { PositionManagementFacade } from './position-management.facade';
+import { PositionSettingsTabComponent } from './position-settings-tab.component';
 
 @Component({
   selector: 'loom-position-management-page',
@@ -20,40 +21,64 @@ import { PositionManagementFacade } from './position-management.facade';
     SkillGroupEditDialogComponent,
     DirectionEditDialogComponent,
     DepartmentEditDialogComponent,
+    PositionSettingsTabComponent,
   ],
   template: `
     <section class="section">
       <h1>Керування посадами</h1>
       <p class="lead">Напрямки, відділи, посади та навички організації</p>
 
-      @if (
-        vm.error() &&
-        !vm.positionDialogOpen() &&
-        !vm.activeCatalogDialog()
-      ) {
-        <p class="error">{{ vm.error() }}</p>
-      }
+      <nav class="tabs" aria-label="Вкладки каталогу посад">
+        <button
+          type="button"
+          class="tab"
+          [class.active]="tab() === 'management'"
+          (click)="tab.set('management')"
+        >
+          Керування посадами
+        </button>
+        <button
+          type="button"
+          class="tab"
+          [class.active]="tab() === 'settings'"
+          (click)="tab.set('settings')"
+        >
+          Налаштування
+        </button>
+      </nav>
 
-      @if (!vm.canManage()) {
-        <p class="muted">Керувати довідниками може лише адміністратор або користувач з відповідними правами.</p>
-      }
+      @if (tab() === 'management') {
+        @if (
+          vm.error() &&
+          !vm.positionDialogOpen() &&
+          !vm.activeCatalogDialog()
+        ) {
+          <p class="error">{{ vm.error() }}</p>
+        }
 
-      <loom-organization-catalog-column />
-      <loom-position-details-panel />
-      @if (vm.positionDialogOpen()) {
-        <loom-position-edit-dialog />
-      }
-      @if (vm.activeCatalogDialog() === 'skill') {
-        <loom-skill-edit-dialog />
-      }
-      @if (vm.activeCatalogDialog() === 'group') {
-        <loom-skill-group-edit-dialog />
-      }
-      @if (vm.activeCatalogDialog() === 'direction') {
-        <loom-direction-edit-dialog />
-      }
-      @if (vm.activeCatalogDialog() === 'department') {
-        <loom-department-edit-dialog />
+        @if (!vm.canManage()) {
+          <p class="muted">Керувати довідниками може лише адміністратор або користувач з відповідними правами.</p>
+        }
+
+        <loom-organization-catalog-column />
+        <loom-position-details-panel />
+        @if (vm.positionDialogOpen()) {
+          <loom-position-edit-dialog />
+        }
+        @if (vm.activeCatalogDialog() === 'skill') {
+          <loom-skill-edit-dialog />
+        }
+        @if (vm.activeCatalogDialog() === 'group') {
+          <loom-skill-group-edit-dialog />
+        }
+        @if (vm.activeCatalogDialog() === 'direction') {
+          <loom-direction-edit-dialog />
+        }
+        @if (vm.activeCatalogDialog() === 'department') {
+          <loom-department-edit-dialog />
+        }
+      } @else {
+        <loom-position-settings-tab />
       }
     </section>
   `,
@@ -80,11 +105,30 @@ import { PositionManagementFacade } from './position-management.facade';
         color: var(--pw-danger);
         margin: 0;
       }
+      .tabs {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .tab {
+        border: 1px solid var(--pw-border);
+        background: var(--pw-surface);
+        border-radius: 999px;
+        padding: 0.45rem 0.9rem;
+        cursor: pointer;
+      }
+      .tab.active {
+        border-color: var(--pw-accent);
+        background: var(--pw-accent-soft);
+        color: var(--pw-accent);
+        font-weight: 700;
+      }
     `,
   ],
 })
 export class PositionManagementPageComponent implements OnInit {
   readonly vm = inject(PositionManagementFacade);
+  readonly tab = signal<'management' | 'settings'>('management');
 
   ngOnInit(): void {
     this.vm.reload();

@@ -14,10 +14,18 @@ export type OrgDepartment = {
   id: string;
   name: string;
   description: string | null;
+  location: string | null;
   directionId: string | null;
   directionName?: string | null;
   direction?: OrgDirection | null;
   isHidden: boolean;
+  isActive: boolean;
+};
+
+export type EmploymentCatalogItem = {
+  id: string;
+  name: string;
+  sortOrder: number;
   isActive: boolean;
 };
 
@@ -104,6 +112,7 @@ export class SettingsOrgApiService {
   createDepartment(body: {
     name: string;
     description?: string;
+    location?: string | null;
     directionId?: string | null;
   }): Observable<OrgDepartment> {
     return this.http.post<OrgDepartment>('/api/v1/departments', body);
@@ -114,7 +123,7 @@ export class SettingsOrgApiService {
     body: Partial<
       Pick<
         OrgDepartment,
-        'name' | 'description' | 'directionId' | 'isActive' | 'isHidden'
+        'name' | 'description' | 'location' | 'directionId' | 'isActive' | 'isHidden'
       >
     >,
   ): Observable<OrgDepartment> {
@@ -177,6 +186,65 @@ export class SettingsOrgApiService {
 
   deletePosition(id: string): Observable<unknown> {
     return this.http.delete(`/api/v1/positions/${id}`);
+  }
+
+  getWorkFormats(all = false): Observable<EmploymentCatalogItem[]> {
+    const params = all ? new HttpParams().set('all', '1') : undefined;
+    return this.http.get<EmploymentCatalogItem[]>('/api/v1/work-formats', {
+      params,
+    });
+  }
+
+  createWorkFormat(body: {
+    name: string;
+    sortOrder?: number;
+  }): Observable<EmploymentCatalogItem> {
+    return this.http.post<EmploymentCatalogItem>('/api/v1/work-formats', body);
+  }
+
+  updateWorkFormat(
+    id: string,
+    body: Partial<EmploymentCatalogItem>,
+  ): Observable<EmploymentCatalogItem> {
+    return this.http.patch<EmploymentCatalogItem>(
+      `/api/v1/work-formats/${id}`,
+      body,
+    );
+  }
+
+  deleteWorkFormat(id: string): Observable<unknown> {
+    return this.http.delete(`/api/v1/work-formats/${id}`);
+  }
+
+  getEmploymentTypes(all = false): Observable<EmploymentCatalogItem[]> {
+    const params = all ? new HttpParams().set('all', '1') : undefined;
+    return this.http.get<EmploymentCatalogItem[]>('/api/v1/employment-types', {
+      params,
+    });
+  }
+
+  createEmploymentType(body: {
+    name: string;
+    sortOrder?: number;
+  }): Observable<EmploymentCatalogItem> {
+    return this.http.post<EmploymentCatalogItem>(
+      '/api/v1/employment-types',
+      body,
+    );
+  }
+
+  updateEmploymentType(
+    id: string,
+    body: Partial<EmploymentCatalogItem>,
+  ): Observable<EmploymentCatalogItem> {
+    return this.http.patch<EmploymentCatalogItem>(
+      `/api/v1/employment-types/${id}`,
+      body,
+    );
+  }
+
+  deleteEmploymentType(id: string): Observable<unknown> {
+    return this.http.delete(`/api/v1/employment-types/${id}`);
   }
 
   getSkillGroups(all = false): Observable<OrgSkillGroup[]> {

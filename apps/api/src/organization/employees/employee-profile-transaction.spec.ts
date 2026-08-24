@@ -86,6 +86,8 @@ describe('EmployeeProfileService transactional audit', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
     );
 
     await expect(

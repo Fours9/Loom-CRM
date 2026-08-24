@@ -21,6 +21,9 @@ export class Department {
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  location!: string | null;
+
   /** Optional parent direction. */
   @Index()
   @Column({ name: 'direction_id', type: 'uuid', nullable: true })

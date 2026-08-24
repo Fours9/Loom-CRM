@@ -117,6 +117,17 @@ export type EmployeeProfileHeader = {
   completenessPercent: number;
 };
 
+export type EmploymentActivationBlockedReason =
+  | 'employee_inactive'
+  | 'company_inactive'
+  | 'direction_inactive'
+  | 'department_inactive'
+  | 'position_inactive'
+  | 'hierarchy_changed'
+  | 'activation_date_conflict'
+  | 'work_format_inactive'
+  | 'employment_type_inactive';
+
 export type ImportantDateItem = {
   id: EntityId;
   title: string;
@@ -156,8 +167,11 @@ export type EmployeeEmploymentSection = {
   contractType: string | null;
   startDate: string | null;
   endDate: string | null;
+  probationStartDate: string | null;
   probationEndDate: string | null;
   status: string;
+  activationBlockedReason: EmploymentActivationBlockedReason | null;
+  activationCheckedAt: string | null;
   company: NamedReference | null;
   direction: NamedReference | null;
   department: NamedReference | null;
@@ -221,6 +235,61 @@ export type EmployeeProfileResponse = {
   sections: EmployeeProfileSections;
   capabilities: EmployeeProfileCapabilities;
   completeness: ProfileCompleteness;
+};
+
+export type EmploymentAssignmentHistoryItem = {
+  id: EntityId;
+  status: string;
+  companyId: string | null;
+  directionId: string | null;
+  departmentId: string | null;
+  positionId: string | null;
+  functionalRole: string | null;
+  managerEmployeeId: string | null;
+  mentorEmployeeId: string | null;
+  hrResponsibleEmployeeId: string | null;
+  workLocation: string | null;
+  workFormat: string | null;
+  employmentType: string | null;
+  contractType: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  probationStartDate: string | null;
+  probationEndDate: string | null;
+  changeReason: string | null;
+  activationBlockedReason: EmploymentActivationBlockedReason | null;
+  activationCheckedAt: string | null;
+  updatedAt: string;
+  department: NamedReference | null;
+  position: NamedReference | null;
+  company: NamedReference | null;
+  direction: NamedReference | null;
+};
+
+export type CreateEmploymentAssignmentRequest = {
+  directionId?: EntityId | null;
+  departmentId?: EntityId | null;
+  positionId?: EntityId | null;
+  functionalRole?: string | null;
+  managerEmployeeId?: EntityId | null;
+  mentorEmployeeId?: EntityId | null;
+  hrResponsibleEmployeeId?: EntityId | null;
+  workLocation?: string | null;
+  workFormat?: string | null;
+  employmentType?: string | null;
+  contractType?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  probationStartDate?: string | null;
+  probationEndDate?: string | null;
+  changeReason?: string | null;
+};
+
+export type UpdateEmploymentAssignmentRequest =
+  CreateEmploymentAssignmentRequest;
+
+export type UpdateEmployeeEmploymentMetaRequest = {
+  hiredAt?: string | null;
 };
 
 /** Author of an audit timeline row (null actor = system event). */

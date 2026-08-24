@@ -48,6 +48,15 @@ import { PositionManagementFacade } from './position-management.facade';
             }
           </select>
         </label>
+        <label>
+          Локація відділу
+          <input
+            [(ngModel)]="vm.newDepartmentLocation"
+            name="newDepartmentLocation"
+            placeholder="Наприклад, Київ / Офіс 2"
+            maxlength="255"
+          />
+        </label>
       </form>
     </loom-catalog-edit-dialog>
   `,

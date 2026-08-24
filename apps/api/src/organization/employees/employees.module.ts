@@ -4,6 +4,7 @@ import { DepartmentsModule } from '../departments/departments.module';
 import { PositionsModule } from '../positions/positions.module';
 import { IdentityModule } from '../../platform/identity/identity.module';
 import { AuditModule } from '../../platform/audit/audit.module';
+import { EmploymentCatalogModule } from '../employment-catalog/employment-catalog.module';
 import { AuditLog } from '../../platform/audit/audit-log.entity';
 import { EmployeeAccessService } from '../access/employee-access.service';
 import { Employee } from './employee.entity';
@@ -24,6 +25,8 @@ import { EmployeeContactsFacade } from './employee-contacts.facade';
 import { PdfRenderer } from '../../platform/pdf/pdf-renderer';
 import { OrganizationEmployeeIdentityLookup } from '../identity/organization-employee-identity.lookup';
 import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
+import { BusinessDateClock } from './business-date-clock';
+import { EmploymentAssignmentLifecycleService } from './employment-assignment-lifecycle.service';
 
 @Module({
   imports: [
@@ -41,6 +44,7 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
     ]),
     DepartmentsModule,
     PositionsModule,
+    EmploymentCatalogModule,
     IdentityModule,
     AuditModule,
   ],
@@ -51,6 +55,8 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
     EmployeeSerializer,
     EmployeeProfileExportService,
     EmployeeContactsFacade,
+    BusinessDateClock,
+    EmploymentAssignmentLifecycleService,
     PdfRenderer,
     OrganizationEmployeeIdentityLookup,
     {
@@ -65,6 +71,8 @@ import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
     EmployeeAccessService,
     EmployeeIdentityLookup,
     EmployeeContactsFacade,
+    BusinessDateClock,
+    EmploymentAssignmentLifecycleService,
   ],
 })
 export class EmployeesModule {}

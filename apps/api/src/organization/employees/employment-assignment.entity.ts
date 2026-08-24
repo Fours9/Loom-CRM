@@ -87,6 +87,9 @@ export class EmploymentAssignment {
   @Column({ name: 'end_date', type: 'date', nullable: true })
   endDate!: string | null;
 
+  @Column({ name: 'probation_start_date', type: 'date', nullable: true })
+  probationStartDate!: string | null;
+
   @Column({ name: 'probation_end_date', type: 'date', nullable: true })
   probationEndDate!: string | null;
 
@@ -95,6 +98,12 @@ export class EmploymentAssignment {
 
   @Column({ name: 'change_reason', type: 'text', nullable: true })
   changeReason!: string | null;
+
+  @Column({ name: 'activation_blocked_reason', type: 'varchar', length: 64, nullable: true })
+  activationBlockedReason!: string | null;
+
+  @Column({ name: 'activation_checked_at', type: 'timestamptz', nullable: true })
+  activationCheckedAt!: Date | null;
 
   @Column({ name: 'created_by_user_id', type: 'uuid', nullable: true })
   createdByUserId!: string | null;

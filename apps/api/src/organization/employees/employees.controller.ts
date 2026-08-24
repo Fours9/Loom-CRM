@@ -177,6 +177,10 @@ class PatchPersonalDto {
   @IsOptional() @IsString() preferredName?: string | null;
 }
 
+class PatchEmploymentMetaDto {
+  @IsOptional() @IsString() hiredAt?: string | null;
+}
+
 class PersonalContactItemDto {
   @IsIn(['personal_phone', 'personal_email', 'personal_telegram'])
   type!: 'personal_phone' | 'personal_email' | 'personal_telegram';
@@ -258,7 +262,6 @@ class ReplaceImportantDatesDto {
 }
 
 class CreateAssignmentDto {
-  @IsOptional() @IsUUID() companyId?: string | null;
   @IsOptional() @IsUUID() directionId?: string | null;
   @IsOptional() @IsUUID() departmentId?: string | null;
   @IsOptional() @IsUUID() positionId?: string | null;
@@ -266,18 +269,18 @@ class CreateAssignmentDto {
   @IsOptional() @IsUUID() managerEmployeeId?: string | null;
   @IsOptional() @IsUUID() mentorEmployeeId?: string | null;
   @IsOptional() @IsUUID() hrResponsibleEmployeeId?: string | null;
-  @IsOptional() @IsString() workLocation?: string | null;
-  @IsOptional() @IsString() workFormat?: string | null;
-  @IsOptional() @IsString() employmentType?: string | null;
-  @IsOptional() @IsString() contractType?: string | null;
+  @IsOptional() @IsString() @MaxLength(255) workLocation?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) workFormat?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) employmentType?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) contractType?: string | null;
   @IsOptional() @IsString() startDate?: string | null;
   @IsOptional() @IsString() endDate?: string | null;
+  @IsOptional() @IsString() probationStartDate?: string | null;
   @IsOptional() @IsString() probationEndDate?: string | null;
   @IsOptional() @IsString() changeReason?: string | null;
 }
 
 class UpdateAssignmentDto {
-  @IsOptional() @IsUUID() companyId?: string | null;
   @IsOptional() @IsUUID() directionId?: string | null;
   @IsOptional() @IsUUID() departmentId?: string | null;
   @IsOptional() @IsUUID() positionId?: string | null;
@@ -285,12 +288,13 @@ class UpdateAssignmentDto {
   @IsOptional() @IsUUID() managerEmployeeId?: string | null;
   @IsOptional() @IsUUID() mentorEmployeeId?: string | null;
   @IsOptional() @IsUUID() hrResponsibleEmployeeId?: string | null;
-  @IsOptional() @IsString() workLocation?: string | null;
-  @IsOptional() @IsString() workFormat?: string | null;
-  @IsOptional() @IsString() employmentType?: string | null;
-  @IsOptional() @IsString() contractType?: string | null;
+  @IsOptional() @IsString() @MaxLength(255) workLocation?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) workFormat?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) employmentType?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) contractType?: string | null;
   @IsOptional() @IsString() startDate?: string | null;
   @IsOptional() @IsString() endDate?: string | null;
+  @IsOptional() @IsString() probationStartDate?: string | null;
   @IsOptional() @IsString() probationEndDate?: string | null;
   @IsOptional() @IsString() changeReason?: string | null;
 }
@@ -452,6 +456,16 @@ export class EmployeesController {
     @Body() dto: PatchPersonalDto,
   ) {
     return this.profile.patchPersonal(user, id, dto);
+  }
+
+  @Patch(':id/employment-meta')
+  @RequirePermissions(Permission.EmployeesEdit)
+  patchEmploymentMeta(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PatchEmploymentMetaDto,
+  ) {
+    return this.profile.patchEmploymentMeta(user, id, dto);
   }
 
   @Put(':id/personal-contacts')

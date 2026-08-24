@@ -208,7 +208,7 @@ import { PositionManagementFacade } from './position-management.facade';
           <ul>
             @for (p of vm.positions(); track p.id) {
               <li class="position-row">
-                <button type="button" class="select-pos" (click)="vm.selectPosition(p)">
+                <div class="select-pos">
                   <strong>{{ p.name }}</strong>
                   <small>
                     {{ vm.departmentLabel(p) }}
@@ -222,7 +222,7 @@ import { PositionManagementFacade } from './position-management.facade';
                   @if (!p.isActive) {
                     <small class="badge">вимкнено</small>
                   }
-                </button>
+                </div>
                 <span class="row-actions">
                   <button
                     type="button"
@@ -954,7 +954,6 @@ import { PositionManagementFacade } from './position-management.facade';
         color: inherit;
         border: 0;
         padding: 0.15rem 0;
-        cursor: pointer;
       }
       .row-actions {
         display: flex;

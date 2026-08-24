@@ -65,6 +65,9 @@ export class Employee {
   })
   employmentStatus!: string;
 
+  @Column({ name: 'hired_at', type: 'date', nullable: true })
+  hiredAt!: string | null;
+
   @Column({ name: 'current_assignment_id', type: 'uuid', nullable: true })
   currentAssignmentId!: string | null;
 
