@@ -28,6 +28,7 @@ import type {
   EmployeeProfileHistoryItem,
   EmployeeProfileResponse,
 } from '@loom/contracts-employees';
+import { Permission } from '@loom/contracts-auth';
 import { SessionStore } from '../../core/auth/session.store';
 import {
   CalendarPageComponent,
@@ -49,7 +50,7 @@ import {
 
 type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
-type AbsenceTabId = 'requests' | 'calendar' | 'schedule';
+type AbsenceTabId = 'position' | 'requests' | 'calendar' | 'schedule';
 type AdminTabId = 'history';
 
 @Component({
@@ -137,6 +138,7 @@ type AdminTabId = 'history';
           @switch (tab()) {
             @case ('data') {
               <loom-employee-data-panel
+                panelMode="employee-data"
                 [employeeId]="employeeId"
                 [profile]="profile()!"
                 [historyAssign]="historyAssign()"
@@ -146,43 +148,66 @@ type AdminTabId = 'history';
               />
             }
             @case ('absences') {
-              <nav class="tabs subtabs" role="tablist" aria-label="Робочий графік працівника">
+              <nav class="tabs subtabs" role="tablist" aria-label="Робота працівника">
                 <button
                   type="button"
                   class="tab"
                   role="tab"
-                  [attr.aria-selected]="absenceTab() === 'schedule'"
-                  [class.active]="absenceTab() === 'schedule'"
+                  [attr.aria-selected]="absenceTab() === 'position'"
+                  [class.active]="absenceTab() === 'position'"
                   (mousedown)="$event.preventDefault()"
-                  (click)="setAbsenceTab('schedule')"
+                  (click)="setAbsenceTab('position')"
                 >
-                  Графік роботи
+                  Посада
                 </button>
-                <button
-                  type="button"
-                  class="tab"
-                  role="tab"
-                  [attr.aria-selected]="absenceTab() === 'requests'"
-                  [class.active]="absenceTab() === 'requests'"
-                  (mousedown)="$event.preventDefault()"
-                  (click)="setAbsenceTab('requests')"
-                >
-                  Заявки
-                </button>
-                <button
-                  type="button"
-                  class="tab"
-                  role="tab"
-                  [attr.aria-selected]="absenceTab() === 'calendar'"
-                  [class.active]="absenceTab() === 'calendar'"
-                  (mousedown)="$event.preventDefault()"
-                  (click)="setAbsenceTab('calendar')"
-                >
-                  Календар
-                </button>
+                @if (canViewAbsencesSchedule()) {
+                  <button
+                    type="button"
+                    class="tab"
+                    role="tab"
+                    [attr.aria-selected]="absenceTab() === 'schedule'"
+                    [class.active]="absenceTab() === 'schedule'"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="setAbsenceTab('schedule')"
+                  >
+                    Графік роботи
+                  </button>
+                  <button
+                    type="button"
+                    class="tab"
+                    role="tab"
+                    [attr.aria-selected]="absenceTab() === 'requests'"
+                    [class.active]="absenceTab() === 'requests'"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="setAbsenceTab('requests')"
+                  >
+                    Заявки
+                  </button>
+                  <button
+                    type="button"
+                    class="tab"
+                    role="tab"
+                    [attr.aria-selected]="absenceTab() === 'calendar'"
+                    [class.active]="absenceTab() === 'calendar'"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="setAbsenceTab('calendar')"
+                  >
+                    Календар
+                  </button>
+                }
               </nav>
 
-              @if (absenceTab() === 'schedule') {
+              @if (absenceTab() === 'position') {
+                <loom-employee-data-panel
+                  panelMode="position"
+                  [employeeId]="employeeId"
+                  [profile]="profile()!"
+                  [historyAssign]="historyAssign()"
+                  (profileChange)="onDataProfileChange($event)"
+                  (historyAssignChange)="historyAssign.set($event)"
+                  (errorChange)="error.set($event)"
+                />
+              } @else if (absenceTab() === 'schedule') {
                 <app-employee-work-schedule-panel [employeeId]="profile()!.header.id" />
               } @else if (absenceTab() === 'requests') {
                 <app-employee-absence-requests-panel [employeeId]="profile()!.header.id" />
@@ -447,7 +472,7 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly profile = signal<EmployeeProfileResponse | null>(null);
   readonly tab = signal<PeopleProfileTabId>('data');
-  readonly absenceTab = signal<AbsenceTabId>('schedule');
+  readonly absenceTab = signal<AbsenceTabId>('position');
   readonly adminTab = signal<AdminTabId>('history');
   readonly audit = signal<EmployeeProfileHistoryItem[]>([]);
   readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
@@ -464,6 +489,12 @@ export class PeopleProfilePageComponent implements OnInit {
     }),
   );
 
+  readonly canViewAbsencesSchedule = computed(() =>
+    (this.session.user()?.permissions ?? []).includes(
+      Permission.AbsencesCalendarView,
+    ),
+  );
+
   constructor() {
     effect(() => {
       const visible = this.visibleTabs();
@@ -471,6 +502,12 @@ export class PeopleProfilePageComponent implements OnInit {
       const resolved = resolvePeopleProfileTab(current, visible);
       if (resolved !== current) {
         this.tab.set(resolved);
+      }
+    });
+
+    effect(() => {
+      if (!this.canViewAbsencesSchedule() && this.absenceTab() !== 'position') {
+        this.absenceTab.set('position');
       }
     });
   }
@@ -512,6 +549,7 @@ export class PeopleProfilePageComponent implements OnInit {
   }
 
   setAbsenceTab(id: AbsenceTabId): void {
+    if (id !== 'position' && !this.canViewAbsencesSchedule()) return;
     if (this.absenceTab() === id) return;
     this.withPreservedScroll(() => this.absenceTab.set(id));
   }
@@ -556,7 +594,7 @@ export class PeopleProfilePageComponent implements OnInit {
     this.historyAssign.set([]);
     this.error.set(null);
     this.tab.set('data');
-    this.absenceTab.set('schedule');
+    this.absenceTab.set('position');
   }
 
   /** Keep completeness bar at the same viewport Y when tab body reflows. */

@@ -31,12 +31,17 @@ const allPerms: Permission[] = [
 ];
 
 describe('visiblePeopleProfileTabs', () => {
-  it('always includes data, metrics, later', () => {
+  it('always includes data, absences (Робота), metrics, later', () => {
     const tabs = visiblePeopleProfileTabs({
       capabilities: capsNoHistory,
       permissions: [],
     });
-    expect(tabs.map((t) => t.id)).toEqual(['data', 'metrics', 'later']);
+    expect(tabs.map((t) => t.id)).toEqual([
+      'data',
+      'absences',
+      'metrics',
+      'later',
+    ]);
   });
 
   it('hides questionnaires without questionnaires.view', () => {
@@ -81,20 +86,20 @@ describe('visiblePeopleProfileTabs', () => {
     expect(tabs.some((t) => t.id === 'documents')).toBe(false);
   });
 
-  it('hides absences without absences.calendar.view', () => {
+  it('always shows absences (Робота) tab for Посада', () => {
     const tabs = visiblePeopleProfileTabs({
       capabilities: capsViewHistory,
       permissions: [Permission.DocumentsView],
     });
-    expect(tabs.some((t) => t.id === 'absences')).toBe(false);
+    expect(tabs.some((t) => t.id === 'absences')).toBe(true);
   });
 
-  it('labels absences tab as Робочий графік', () => {
+  it('labels absences tab as Робота', () => {
     const tabs = visiblePeopleProfileTabs({
       capabilities: capsViewHistory,
       permissions: [Permission.AbsencesCalendarView],
     });
-    expect(tabs.find((t) => t.id === 'absences')?.label).toBe('Робочий графік');
+    expect(tabs.find((t) => t.id === 'absences')?.label).toBe('Робота');
   });
 });
 
@@ -112,9 +117,7 @@ describe('resolvePeopleProfileTab', () => {
     expect(resolvePeopleProfileTab('documents', visible)).toBe('documents');
   });
 
-  it('falls back for unknown/hidden request', () => {
-    expect(
-      resolvePeopleProfileTab('absences' as PeopleProfileTabId, visible),
-    ).toBe('data');
+  it('keeps visible absences (Робота)', () => {
+    expect(resolvePeopleProfileTab('absences', visible)).toBe('absences');
   });
 });

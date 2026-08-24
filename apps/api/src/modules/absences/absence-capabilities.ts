@@ -49,6 +49,7 @@ export function detailCapabilities(
   const isAdmin = actor.role === UserRole.Admin;
   const pending = request.status === AbsenceRequestStatus.Pending;
   const approved = request.status === AbsenceRequestStatus.Approved;
+  const rejected = request.status === AbsenceRequestStatus.Rejected;
   const cancelled = request.status === AbsenceRequestStatus.Cancelled;
   const canModerate =
     permissions.has(actor.role, Permission.AbsencesApprove) &&
@@ -66,7 +67,8 @@ export function detailCapabilities(
       (isOwner || isAdmin) &&
       permissions.has(actor.role, Permission.AbsencesCancel),
     canAdjust: approved && canModerate,
-    canRequestDeletion: (approved || cancelled) && (isOwner || isAdmin),
+    // Align with PW approved|rejected; keep cancelled for legacy Loom rows.
+    canRequestDeletion: (approved || rejected || cancelled) && (isOwner || isAdmin),
     canManageAttachments:
       (pending && (isOwner || isAdmin)) ||
       (approved && canModerate),

@@ -7,10 +7,20 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { Permission } from '../../platform/permissions/permission.names';
 import { JwtAuthGuard } from '../../platform/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../platform/auth/decorators/current-user.decorator';
@@ -19,6 +29,7 @@ import { RequirePermissions } from '../../platform/permissions/require-permissio
 import { permissionsForRole } from '../../platform/permissions/role-permissions';
 import { User } from '../../platform/identity/user.entity';
 import { EmploymentCatalogService } from './employment-catalog.service';
+import { EMPLOYMENT_CATALOG_DESCRIPTION_MAX } from './employment-catalog.helpers';
 
 class CreateCatalogItemDto {
   @IsString()
@@ -27,8 +38,9 @@ class CreateCatalogItemDto {
   name!: string;
 
   @IsOptional()
-  @IsInt()
-  sortOrder?: number;
+  @IsString()
+  @MaxLength(EMPLOYMENT_CATALOG_DESCRIPTION_MAX)
+  description?: string | null;
 }
 
 class UpdateCatalogItemDto {
@@ -39,12 +51,20 @@ class UpdateCatalogItemDto {
   name?: string;
 
   @IsOptional()
-  @IsInt()
-  sortOrder?: number;
+  @IsString()
+  @MaxLength(EMPLOYMENT_CATALOG_DESCRIPTION_MAX)
+  description?: string | null;
 
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+class ReorderCatalogDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  orderedIds!: string[];
 }
 
 @Controller()
@@ -63,6 +83,12 @@ export class EmploymentCatalogController {
   @RequirePermissions(Permission.PositionsManage)
   createWorkFormat(@Body() dto: CreateCatalogItemDto) {
     return this.catalogs.createWorkFormat(dto);
+  }
+
+  @Put('work-formats/reorder')
+  @RequirePermissions(Permission.PositionsManage)
+  reorderWorkFormats(@Body() dto: ReorderCatalogDto) {
+    return this.catalogs.reorderWorkFormats(dto.orderedIds);
   }
 
   @Patch('work-formats/:id')
@@ -92,6 +118,12 @@ export class EmploymentCatalogController {
   @RequirePermissions(Permission.PositionsManage)
   createEmploymentType(@Body() dto: CreateCatalogItemDto) {
     return this.catalogs.createEmploymentType(dto);
+  }
+
+  @Put('employment-types/reorder')
+  @RequirePermissions(Permission.PositionsManage)
+  reorderEmploymentTypes(@Body() dto: ReorderCatalogDto) {
+    return this.catalogs.reorderEmploymentTypes(dto.orderedIds);
   }
 
   @Patch('employment-types/:id')

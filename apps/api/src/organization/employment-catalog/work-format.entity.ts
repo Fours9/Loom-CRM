@@ -14,6 +14,9 @@ export class WorkFormat {
   @Column({ type: 'varchar', length: 64, unique: true })
   name!: string;
 
+  @Column({ type: 'text', nullable: true })
+  description!: string | null;
+
   @Column({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder!: number;
 

@@ -31,8 +31,8 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 
 | Вкладка | Стан | Видимість |
 | --- | --- | --- |
-| Дані працівника | Основні · Контакти · Дати · Посада (редагування за capabilities; planned/blocked assignment history visible) | завжди |
-| Робочий графік | **Графік роботи** + Заявки + Календар (Absences `public-api`: schedule panel через `getEmployee` + `PUT .../schedule`; UI = `ScheduleEditor`. Empty API schedule ≠ default Пн–Пт — дефолт лише в draft при редагуванні. Compat TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)) | `absences.calendar.view` |
+| Дані працівника | Основні · Контакти · Дати (редагування за capabilities) | завжди |
+| Робота | **Посада** (planned/blocked assignment history) + **Графік роботи** + Заявки + Календар (Absences `public-api`: schedule panel через `getEmployee` + `PUT .../schedule`; UI = `ScheduleEditor`. Empty API schedule ≠ default Пн–Пт — дефолт лише в draft при редагуванні. Compat TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)). Підвкладки графіка — за `absences.calendar.view` | завжди (Посада); графік — `absences.calendar.view` |
 | Документи | Documents MVP + агрегат вкладень time-event (Absences) | `documents.view` |
 | Анкети | Directory `/questionnaires` + People panel; assign/cancel/reactivate/close/delete; fill wizard | `questionnaires.view` |
 | Показники | Stub (roadmap Phase 5 / 8) | завжди |
@@ -55,10 +55,11 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 
 PW-паритетна картка без змін: `/absences/employees/:id`.
 
-### Дані працівника -> Посада / Дати (living)
+### Робота -> Посада / Дані працівника -> Дати (living)
 
 - `Дати` редагує employee-level `hiredAt` через `PATCH /employees/:id/employment-meta`. Це дата початку роботи / найму і вона не змінюється автоматично від переводів.
-- `Посада` використовує shared org catalog snapshot (`directions -> departments -> positions`) і довідники `workFormats` / `employmentTypes`.
+- `Посада` (підвкладка вкладки **Робота**) використовує shared org catalog snapshot (`directions -> departments -> positions`) і довідники `workFormats` / `employmentTypes`.
+- Створення й редагування призначення — **модалка** (`EmploymentAssignmentDialogComponent`): один exclusive dialog slot (`create` | `edit`), крестик / Escape / backdrop close, scrollable body, кнопка **Створити** або **Зберегти**. Write path лишається `EmploymentAssignmentsApiService` → `EmployeeProfileService`.
 - `companyId` більше не вводиться в UI вручну; компанія лишається read-model, derived з обраного напрямку.
 - Майбутня дата переводу створює `planned` assignment. Поточне активне призначення не перемикається відразу; activation виконується lifecycle service.
 - Якщо planned assignment не може активуватися на дату старту, запис лишається `planned` і показує `activationBlockedReason` в історії/деталях.
@@ -153,6 +154,6 @@ assignment.status === 'changes_requested'
 
 ## Phase 7 — Documents (деталь)
 
-**Є:** `employee_documents`; permissions `documents.view` / `documents.manage`; People-вкладка Документи; upload/list/download/soft-delete; агрегат absence attachments; type-aware projection (manager не бачить чужі questionnaire/identity/medical/consent).
+**Є:** `employee_documents` + `employee_document_files` (одне подання → кілька файлів, як absence attachments); permissions `documents.view` / `documents.manage`; People-вкладка Документи; upload через модалку (multi-file в одному поданні), list/download/preview/soft-delete подання; агрегат absence attachments; type-aware projection (manager не бачить чужі questionnaire/identity/medical/consent).
 
 **Немає:** Platform Files (зараз interim `content_base64`); verification workflow; consent versions; окремий consents module.

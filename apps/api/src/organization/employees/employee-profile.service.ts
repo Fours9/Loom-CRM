@@ -70,7 +70,7 @@ type AssignmentWriteDto = {
   endDate?: string | null;
   probationStartDate?: string | null;
   probationEndDate?: string | null;
-  changeReason?: string | null;
+  comment?: string | null;
 };
 
 type AssignmentOrgState = {
@@ -1019,10 +1019,10 @@ export class EmployeeProfileService {
         64,
         'contractType',
       ),
-      changeReason: this.normalizeOptionalText(
-        dto.changeReason,
+      comment: this.normalizeOptionalText(
+        dto.comment,
         5000,
-        'changeReason',
+        'comment',
       ),
       startDate:
         dto.startDate === undefined
@@ -1365,7 +1365,7 @@ export class EmployeeProfileService {
             endDate: null,
             probationStartDate: normalized.probationStartDate ?? null,
             probationEndDate: normalized.probationEndDate ?? null,
-            changeReason: normalized.changeReason ?? null,
+            comment: normalized.comment ?? null,
             status,
             activationBlockedReason: null,
             activationCheckedAt: null,
@@ -1387,7 +1387,7 @@ export class EmployeeProfileService {
               metadata: {
                 assignmentId: assignment.id,
                 status,
-                changeReason: normalized.changeReason ?? null,
+                comment: normalized.comment ?? null,
               },
             },
             manager,
@@ -1538,8 +1538,8 @@ export class EmployeeProfileService {
           if (normalized.probationEndDate !== undefined) {
             row.probationEndDate = normalized.probationEndDate;
           }
-          if (normalized.changeReason !== undefined) {
-            row.changeReason = normalized.changeReason;
+          if (normalized.comment !== undefined) {
+            row.comment = normalized.comment;
           }
 
           if (row.status === 'ended') {
@@ -1678,7 +1678,7 @@ export class EmployeeProfileService {
       endDate: a.endDate,
       probationStartDate: a.probationStartDate,
       probationEndDate: a.probationEndDate,
-      changeReason: a.changeReason,
+      comment: a.comment,
       activationBlockedReason: a.activationBlockedReason,
       activationCheckedAt: a.activationCheckedAt
         ? a.activationCheckedAt.toISOString()
@@ -1805,6 +1805,7 @@ export class EmployeeProfileService {
       ]);
     const companiesById = new Map(companies.map((row) => [row.id, row]));
     const directionsById = new Map(directions.map((row) => [row.id, row]));
+    const departmentsById = new Map(departments.map((row) => [row.id, row]));
     const selectableDirections = directions.filter((direction) =>
       isDirectionSelectable({
         direction,
@@ -1829,15 +1830,12 @@ export class EmployeeProfileService {
             : null,
       }),
     );
-    const selectableDepartmentsById = new Map(
-      selectableDepartments.map((row) => [row.id, row]),
-    );
     const selectablePositions = positions.filter((position) =>
       isPositionSelectable({
         position,
         department:
           position.departmentId != null
-            ? selectableDepartmentsById.get(position.departmentId) ?? null
+            ? departmentsById.get(position.departmentId) ?? null
             : null,
         direction:
           position.directionId != null

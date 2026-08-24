@@ -277,7 +277,7 @@ class CreateAssignmentDto {
   @IsOptional() @IsString() endDate?: string | null;
   @IsOptional() @IsString() probationStartDate?: string | null;
   @IsOptional() @IsString() probationEndDate?: string | null;
-  @IsOptional() @IsString() changeReason?: string | null;
+  @IsOptional() @IsString() comment?: string | null;
 }
 
 class UpdateAssignmentDto {
@@ -296,7 +296,7 @@ class UpdateAssignmentDto {
   @IsOptional() @IsString() endDate?: string | null;
   @IsOptional() @IsString() probationStartDate?: string | null;
   @IsOptional() @IsString() probationEndDate?: string | null;
-  @IsOptional() @IsString() changeReason?: string | null;
+  @IsOptional() @IsString() comment?: string | null;
 }
 
 class StatusTransitionDto {

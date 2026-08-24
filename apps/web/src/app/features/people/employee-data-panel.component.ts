@@ -41,8 +41,23 @@ import {
   applyDepartmentLocationHint,
   markWorkLocationTouched,
 } from './work-location-hint.policy';
+import { EmploymentAssignmentDialogComponent } from './employment-assignment-dialog.component';
+import {
+  CLOSED_ASSIGNMENT_DIALOG,
+  closeAssignmentDialog,
+  emptyEmploymentAssignmentForm,
+  createEmploymentAssignmentForm,
+  employmentAssignmentFormFromHistory,
+  isAssignmentDialogOpen,
+  openCreateAssignmentDialog,
+  openEditAssignmentDialog,
+  toEmploymentAssignmentWrite,
+  type EmploymentAssignmentDialogState,
+  type EmploymentAssignmentForm,
+} from './employment-assignment-dialog.model';
 
-type DataTabId = 'basics' | 'contacts' | 'dates' | 'position';
+type DataTabId = 'basics' | 'contacts' | 'dates';
+export type EmployeeDataPanelMode = 'employee-data' | 'position';
 
 type ImportantDateDraft = {
   key: string;
@@ -56,8 +71,9 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 @Component({
   selector: 'loom-employee-data-panel',
   standalone: true,
-  imports: [FormsModule, EmployeeContactsEditorComponent],
+  imports: [FormsModule, EmployeeContactsEditorComponent, EmploymentAssignmentDialogComponent],
   template: `
+@if (panelMode === 'employee-data') {
 <nav class="tabs subtabs" role="tablist" aria-label="Дані працівника">
   <button
     type="button"
@@ -92,20 +108,10 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
   >
     Дати
   </button>
-  <button
-    type="button"
-    class="tab"
-    role="tab"
-    [attr.aria-selected]="dataTab() === 'position'"
-    [class.active]="dataTab() === 'position'"
-    (mousedown)="$event.preventDefault()"
-    (click)="setDataTab('position')"
-  >
-    Посада
-  </button>
 </nav>
+}
 
-@if (dataTab() === 'basics') {
+@if (panelMode === 'employee-data' && dataTab() === 'basics') {
   <div class="section-head">
     <h2>Основні</h2>
     @if (profile.capabilities.canEditBasic || profile.capabilities.canEditPersonal) {
@@ -155,7 +161,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
   }
 }
 
-@if (dataTab() === 'contacts') {
+@if (panelMode === 'employee-data' && dataTab() === 'contacts') {
   <div class="section-head">
     <h2>Контакти</h2>
     @if (
@@ -188,7 +194,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
   />
 }
 
-@if (dataTab() === 'dates') {
+@if (panelMode === 'employee-data' && dataTab() === 'dates') {
   <div class="section-head">
     <h2>Дати</h2>
     @if (
@@ -254,7 +260,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
           </label>
         } @else {
           <p class="muted">
-            Немає активного призначення — спочатку створіть його у вкладці «Посада».
+            Немає активного призначення — спочатку створіть його у вкладці «Робота» → «Посада».
           </p>
         }
       }
@@ -357,23 +363,14 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
   }
 }
 
-@if (dataTab() === 'position') {
+@if (panelMode === 'position') {
   <div class="section-head">
     <h2>Посада</h2>
     @if (profile.capabilities.canEditEmployment) {
       <div class="section-actions">
-        @if (creatingAssignment()) {
-          <button type="button" class="btn" (click)="saveAssignment()" [disabled]="busy()">
-            Зберегти
-          </button>
-          <button type="button" class="btn ghost" (click)="cancelCreatingAssignment()">
-            Скасувати
-          </button>
-        } @else {
-          <button type="button" class="btn ghost" (click)="startCreatingAssignment()">
-            Нове призначення
-          </button>
-        }
+        <button type="button" class="btn ghost" (click)="startCreatingAssignment()">
+          Нове призначення
+        </button>
       </div>
     }
   </div>
@@ -403,74 +400,6 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
   <p class="muted">Призначення ще не задано.</p>
 }
 
-  @if (creatingAssignment() && profile.capabilities.canEditEmployment) {
-    <div class="edit">
-      <label>Напрямок
-        <select
-          [(ngModel)]="assignmentForm.directionId"
-          name="ad"
-          (ngModelChange)="onCreateDirectionChange()"
-        >
-          <option value="">—</option>
-          @for (dir of directionOptions(); track dir.id) {
-            <option [value]="dir.id">{{ dir.name }}</option>
-          }
-        </select>
-      </label>
-      <label>Відділ
-        <select
-          [(ngModel)]="assignmentForm.departmentId"
-          name="adept"
-          (ngModelChange)="onCreateDepartmentChange()"
-        >
-          <option value="">—</option>
-          @for (dept of departmentOptions(assignmentForm); track dept.id) {
-            <option [value]="dept.id">{{ dept.label || dept.name }}</option>
-          }
-        </select>
-      </label>
-      <label>Посада
-        <select
-          [(ngModel)]="assignmentForm.positionId"
-          name="apos"
-          (ngModelChange)="onCreatePositionChange()"
-        >
-          <option value="">—</option>
-          @for (pos of positionOptions(assignmentForm); track pos.id) {
-            <option [value]="pos.id">{{ pos.label || pos.name }}</option>
-          }
-        </select>
-      </label>
-      <label>Формат роботи
-        <select [(ngModel)]="assignmentForm.workFormat" name="wf">
-          <option value="">—</option>
-          @for (item of orgCatalog()?.workFormats ?? []; track item.id) {
-            <option [value]="item.name">{{ item.name }}</option>
-          }
-        </select>
-      </label>
-      <label>Локація
-        <input
-          [(ngModel)]="assignmentForm.workLocation"
-          name="wl"
-          (ngModelChange)="onCreateWorkLocationInput($event)"
-        />
-      </label>
-      <label>Тип зайнятості
-        <select [(ngModel)]="assignmentForm.employmentType" name="et">
-          <option value="">—</option>
-          @for (item of orgCatalog()?.employmentTypes ?? []; track item.id) {
-            <option [value]="item.name">{{ item.name }}</option>
-          }
-        </select>
-      </label>
-      <label>Дата початку <input type="date" [(ngModel)]="assignmentForm.startDate" name="sd" /></label>
-      <label>Початок випроб. <input type="date" [(ngModel)]="assignmentForm.probationStartDate" name="ps" /></label>
-      <label>Кінець випроб. <input type="date" [(ngModel)]="assignmentForm.probationEndDate" name="pe" /></label>
-      <label>Причина зміни <input [(ngModel)]="assignmentForm.changeReason" name="cr" /></label>
-    </div>
-}
-
 @if (historyAssign.length) {
   <h3>Історія призначень</h3>
     <ul class="timeline assignments">
@@ -490,112 +419,44 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
             </div>
             @if (profile.capabilities.canEditEmployment) {
               <div class="history-actions">
-                @if (editingAssignmentId() === h.id) {
+                <button type="button" class="btn ghost sm" (click)="startEditAssignment(h)">
+                  Редагувати
+                </button>
+                @if (h.status !== 'active') {
                   <button
                     type="button"
-                    class="btn sm"
-                    (click)="saveEditedAssignment(h)"
-                    [disabled]="busy()"
+                    class="btn ghost sm danger"
+                    (click)="deleteAssignment(h)"
+                    [disabled]="busy() || deletingAssignmentId() === h.id"
                   >
-                    Зберегти
+                    Видалити
                   </button>
-                  <button type="button" class="btn ghost sm" (click)="cancelEditAssignment()">
-                    Скасувати
-                  </button>
-                } @else {
-                  <button type="button" class="btn ghost sm" (click)="startEditAssignment(h)">
-                    Редагувати
-                  </button>
-                  @if (h.status !== 'active') {
-                    <button
-                      type="button"
-                      class="btn ghost sm danger"
-                      (click)="deleteAssignment(h)"
-                      [disabled]="busy() || deletingAssignmentId() === h.id"
-                    >
-                      Видалити
-                    </button>
-                  }
                 }
               </div>
             }
           </div>
-          @if (editingAssignmentId() === h.id) {
-            <div class="edit">
-              <label>Напрямок
-                <select
-                  [(ngModel)]="editAssignmentForm.directionId"
-                  name="ead"
-                  (ngModelChange)="onEditDirectionChange()"
-                >
-                  <option value="">—</option>
-                  @for (dir of directionOptions(); track dir.id) {
-                    <option [value]="dir.id">{{ dir.name }}</option>
-                  }
-                </select>
-              </label>
-              <label>Відділ
-                <select
-                  [(ngModel)]="editAssignmentForm.departmentId"
-                  name="eadept"
-                  (ngModelChange)="onEditDepartmentChange()"
-                >
-                  <option value="">—</option>
-                  @for (dept of departmentOptions(editAssignmentForm); track dept.id) {
-                    <option [value]="dept.id">{{ dept.label || dept.name }}</option>
-                  }
-                </select>
-              </label>
-              <label>Посада
-                <select
-                  [(ngModel)]="editAssignmentForm.positionId"
-                  name="eapos"
-                  (ngModelChange)="onEditPositionChange()"
-                >
-                  <option value="">—</option>
-                  @for (pos of positionOptions(editAssignmentForm); track pos.id) {
-                    <option [value]="pos.id">{{ pos.label || pos.name }}</option>
-                  }
-                </select>
-              </label>
-              <label>Формат роботи
-                <select [(ngModel)]="editAssignmentForm.workFormat" name="ewf">
-                  <option value="">—</option>
-                  @if (isArchivalCatalogName(editAssignmentForm.workFormat, 'workFormat')) {
-                    <option [value]="editAssignmentForm.workFormat">
-                      {{ editAssignmentForm.workFormat }} (архівне)
-                    </option>
-                  }
-                  @for (item of orgCatalog()?.workFormats ?? []; track item.id) {
-                    <option [value]="item.name">{{ item.name }}</option>
-                  }
-                </select>
-              </label>
-              <label>Локація <input [(ngModel)]="editAssignmentForm.workLocation" name="ewl" /></label>
-              <label>Тип зайнятості
-                <select [(ngModel)]="editAssignmentForm.employmentType" name="eet">
-                  <option value="">—</option>
-                  @if (isArchivalCatalogName(editAssignmentForm.employmentType, 'employmentType')) {
-                    <option [value]="editAssignmentForm.employmentType">
-                      {{ editAssignmentForm.employmentType }} (архівне)
-                    </option>
-                  }
-                  @for (item of orgCatalog()?.employmentTypes ?? []; track item.id) {
-                    <option [value]="item.name">{{ item.name }}</option>
-                  }
-                </select>
-              </label>
-              <label>Початок <input type="date" [(ngModel)]="editAssignmentForm.startDate" name="esd" /></label>
-              <label>Кінець <input type="date" [(ngModel)]="editAssignmentForm.endDate" name="eed" /></label>
-              <label>Початок випроб. <input type="date" [(ngModel)]="editAssignmentForm.probationStartDate" name="eps" /></label>
-              <label>Кінець випроб. <input type="date" [(ngModel)]="editAssignmentForm.probationEndDate" name="epe" /></label>
-              <label>Причина <input [(ngModel)]="editAssignmentForm.changeReason" name="ecr" /></label>
-            </div>
-          }
         </li>
     }
   </ul>
   }
+}
+
+@if (openAssignmentDialog(); as dialog) {
+  <loom-employment-assignment-dialog
+    [state]="dialog"
+    [form]="assignmentForm"
+    [catalog]="orgCatalog()"
+    [departments]="departmentOptions(assignmentForm)"
+    [positions]="positionOptions(assignmentForm)"
+    [busy]="busy()"
+    [error]="assignmentDialogError()"
+    (closed)="cancelAssignmentDialog()"
+    (submitted)="submitAssignmentDialog()"
+    (directionChange)="onAssignmentDirectionChange()"
+    (departmentChange)="onAssignmentDepartmentChange()"
+    (positionChange)="onAssignmentPositionChange()"
+    (workLocationChange)="onAssignmentWorkLocationInput($event)"
+  />
 }
   `,
   styles: [
@@ -1079,6 +940,8 @@ export class EmployeeDataPanelComponent implements OnChanges {
   @Input({ required: true }) employeeId!: string;
   @Input({ required: true }) profile!: EmployeeProfileResponse;
   @Input() historyAssign: AssignmentHistoryItem[] = [];
+  /** `employee-data` = Основні/Контакти/Дати; `position` = призначення (вкладка Робота). */
+  @Input() panelMode: EmployeeDataPanelMode = 'employee-data';
 
   @Output() readonly profileChange = new EventEmitter<EmployeeProfileResponse>();
   @Output() readonly historyAssignChange = new EventEmitter<AssignmentHistoryItem[]>();
@@ -1088,8 +951,10 @@ export class EmployeeDataPanelComponent implements OnChanges {
   readonly editingBasics = signal(false);
   readonly editingContacts = signal(false);
   readonly editingDates = signal(false);
-  readonly creatingAssignment = signal(false);
-  readonly editingAssignmentId = signal<string | null>(null);
+  readonly assignmentDialog = signal<EmploymentAssignmentDialogState>(
+    CLOSED_ASSIGNMENT_DIALOG,
+  );
+  readonly assignmentDialogError = signal<string | null>(null);
   readonly deletingAssignmentId = signal<string | null>(null);
   readonly busy = signal(false);
   readonly orgCatalog = signal<OrganizationCatalogSnapshot | null>(null);
@@ -1111,46 +976,29 @@ export class EmployeeDataPanelComponent implements OnChanges {
   );
   readonly profileContactsAccess = profileContactsAccess;
   importantDateForms: ImportantDateDraft[] = [];
-  assignmentForm = {
-    directionId: '',
-    departmentId: '',
-    positionId: '',
-    workFormat: '',
-    workLocation: '',
-    employmentType: '',
-    startDate: '',
-    probationStartDate: '',
-    probationEndDate: '',
-    changeReason: '',
-  };
-  editAssignmentForm = {
-    directionId: '',
-    departmentId: '',
-    positionId: '',
-    workFormat: '',
-    workLocation: '',
-    employmentType: '',
-    startDate: '',
-    endDate: '',
-    probationStartDate: '',
-    probationEndDate: '',
-    changeReason: '',
-  };
+  assignmentForm: EmploymentAssignmentForm = emptyEmploymentAssignmentForm();
   private workLocationTouched = false;
   private departmentLocationHintApplied = false;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['profile'] && this.profile && !this.isEditing()) {
       this.applyProfile(this.profile);
-      this.loadOrgCatalog();
+      if (this.panelMode === 'position') {
+        this.loadOrgCatalog();
+      }
     }
     if (changes['employeeId'] && !changes['employeeId'].firstChange) {
       this.dataTab.set('basics');
       this.resetEditingModes();
       if (this.profile) {
         this.applyProfile(this.profile);
-        this.loadOrgCatalog();
+        if (this.panelMode === 'position') {
+          this.loadOrgCatalog();
+        }
       }
+    }
+    if (changes['panelMode'] && this.panelMode === 'position' && !this.orgCatalog()) {
+      this.loadOrgCatalog();
     }
   }
 
@@ -1169,8 +1017,7 @@ export class EmployeeDataPanelComponent implements OnChanges {
       this.editingBasics() ||
       this.editingContacts() ||
       this.editingDates() ||
-      this.creatingAssignment() ||
-      this.editingAssignmentId() !== null
+      isAssignmentDialogOpen(this.assignmentDialog())
     );
   }
 
@@ -1179,9 +1026,6 @@ export class EmployeeDataPanelComponent implements OnChanges {
     this.withPreservedScroll(() => {
       this.dataTab.set(id);
       this.resetEditingModes();
-      if (id === 'position' && !this.orgCatalog()) {
-        this.loadOrgCatalog();
-      }
     });
   }
 
@@ -1252,38 +1096,40 @@ export class EmployeeDataPanelComponent implements OnChanges {
     this.editingContacts.set(false);
     this.editingDates.set(false);
     this.importantDateForms = [];
-    this.editingAssignmentId.set(null);
-    this.assignmentForm = this.emptyAssignmentForm();
+    this.assignmentForm = createEmploymentAssignmentForm();
     this.workLocationTouched = false;
     this.departmentLocationHintApplied = false;
+    this.assignmentDialogError.set(null);
     this.errorChange.emit(null);
-    this.creatingAssignment.set(true);
-  }
-
-  cancelCreatingAssignment(): void {
-    this.creatingAssignment.set(false);
+    this.assignmentDialog.set(openCreateAssignmentDialog());
   }
 
   startEditAssignment(h: AssignmentHistoryItem): void {
-    this.creatingAssignment.set(false);
-    this.editingAssignmentId.set(h.id);
-    this.editAssignmentForm = {
-      directionId: h.directionId || '',
-      departmentId: h.departmentId || '',
-      positionId: h.positionId || '',
-      workFormat: h.workFormat || '',
-      workLocation: h.workLocation || '',
-      employmentType: h.employmentType || '',
-      startDate: h.startDate || '',
-      endDate: h.endDate || '',
-      probationStartDate: h.probationStartDate || '',
-      probationEndDate: h.probationEndDate || '',
-      changeReason: h.changeReason || '',
-    };
+    this.editingBasics.set(false);
+    this.editingContacts.set(false);
+    this.editingDates.set(false);
+    this.importantDateForms = [];
+    this.assignmentForm = employmentAssignmentFormFromHistory(h);
+    this.workLocationTouched = false;
+    this.departmentLocationHintApplied = false;
+    this.assignmentDialogError.set(null);
+    this.errorChange.emit(null);
+    this.assignmentDialog.set(
+      openEditAssignmentDialog({ assignmentId: h.id }),
+    );
   }
 
-  cancelEditAssignment(): void {
-    this.editingAssignmentId.set(null);
+  cancelAssignmentDialog(): void {
+    this.assignmentDialog.set(closeAssignmentDialog());
+    this.assignmentDialogError.set(null);
+  }
+
+  openAssignmentDialog(): Exclude<
+    EmploymentAssignmentDialogState,
+    { kind: 'closed' }
+  > | null {
+    const state = this.assignmentDialog();
+    return state.kind === 'closed' ? null : state;
   }
 
   statusLabel(status: string): string {
@@ -1319,19 +1165,6 @@ export class EmployeeDataPanelComponent implements OnChanges {
 
   directionOptions(): Array<{ id: string; name: string }> {
     return this.orgCatalog()?.directions ?? [];
-  }
-
-  isArchivalCatalogName(
-    value: string,
-    kind: 'workFormat' | 'employmentType',
-  ): boolean {
-    const trimmed = value.trim();
-    if (!trimmed) return false;
-    const rows =
-      kind === 'workFormat'
-        ? (this.orgCatalog()?.workFormats ?? [])
-        : (this.orgCatalog()?.employmentTypes ?? []);
-    return !rows.some((item) => item.name === trimmed);
   }
 
   departmentOptions(form: {
@@ -1403,41 +1236,22 @@ export class EmployeeDataPanelComponent implements OnChanges {
       : options;
   }
 
-  onCreateDirectionChange(): void {
-    const next = reduceEmploymentOrgFilter(
-      {
-        directionId: this.assignmentForm.directionId || null,
-        departmentId: this.assignmentForm.departmentId || null,
-        positionId: this.assignmentForm.positionId || null,
-      },
-      {
-        type: 'selectDirection',
-        directionId: this.assignmentForm.directionId || null,
-      },
-      this.orgCatalog() ?? { directions: [], departments: [], positions: [] },
-    );
-    this.assignmentForm.directionId = next.directionId ?? '';
-    this.assignmentForm.departmentId = next.departmentId ?? '';
-    this.assignmentForm.positionId = next.positionId ?? '';
+  onAssignmentDirectionChange(): void {
+    this.applyOrgAction({
+      type: 'selectDirection',
+      directionId: this.assignmentForm.directionId || null,
+    });
   }
 
-  onCreateDepartmentChange(): void {
+  onAssignmentDepartmentChange(): void {
+    this.applyOrgAction({
+      type: 'selectDepartment',
+      departmentId: this.assignmentForm.departmentId || null,
+    });
+    if (this.assignmentDialog().kind !== 'create') {
+      return;
+    }
     const snapshot = this.orgCatalog();
-    const next = reduceEmploymentOrgFilter(
-      {
-        directionId: this.assignmentForm.directionId || null,
-        departmentId: this.assignmentForm.departmentId || null,
-        positionId: this.assignmentForm.positionId || null,
-      },
-      {
-        type: 'selectDepartment',
-        departmentId: this.assignmentForm.departmentId || null,
-      },
-      snapshot ?? { directions: [], departments: [], positions: [] },
-    );
-    this.assignmentForm.directionId = next.directionId ?? '';
-    this.assignmentForm.departmentId = next.departmentId ?? '';
-    this.assignmentForm.positionId = next.positionId ?? '';
     const department = snapshot?.departments.find(
       (item) => item.id === this.assignmentForm.departmentId,
     );
@@ -1454,73 +1268,18 @@ export class EmployeeDataPanelComponent implements OnChanges {
     this.departmentLocationHintApplied = hinted.departmentLocationHintApplied;
   }
 
-  onCreatePositionChange(): void {
-    const next = reduceEmploymentOrgFilter(
-      {
-        directionId: this.assignmentForm.directionId || null,
-        departmentId: this.assignmentForm.departmentId || null,
-        positionId: this.assignmentForm.positionId || null,
-      },
-      { type: 'selectPosition', positionId: this.assignmentForm.positionId || null },
-      this.orgCatalog() ?? { directions: [], departments: [], positions: [] },
-    );
-    this.assignmentForm.directionId = next.directionId ?? '';
-    this.assignmentForm.departmentId = next.departmentId ?? '';
-    this.assignmentForm.positionId = next.positionId ?? '';
+  onAssignmentPositionChange(): void {
+    this.applyOrgAction({
+      type: 'selectPosition',
+      positionId: this.assignmentForm.positionId || null,
+    });
   }
 
-  onEditDirectionChange(): void {
-    const next = reduceEmploymentOrgFilter(
-      {
-        directionId: this.editAssignmentForm.directionId || null,
-        departmentId: this.editAssignmentForm.departmentId || null,
-        positionId: this.editAssignmentForm.positionId || null,
-      },
-      {
-        type: 'selectDirection',
-        directionId: this.editAssignmentForm.directionId || null,
-      },
-      this.orgCatalog() ?? { directions: [], departments: [], positions: [] },
-    );
-    this.editAssignmentForm.directionId = next.directionId ?? '';
-    this.editAssignmentForm.departmentId = next.departmentId ?? '';
-    this.editAssignmentForm.positionId = next.positionId ?? '';
-  }
-
-  onEditDepartmentChange(): void {
-    const next = reduceEmploymentOrgFilter(
-      {
-        directionId: this.editAssignmentForm.directionId || null,
-        departmentId: this.editAssignmentForm.departmentId || null,
-        positionId: this.editAssignmentForm.positionId || null,
-      },
-      {
-        type: 'selectDepartment',
-        departmentId: this.editAssignmentForm.departmentId || null,
-      },
-      this.orgCatalog() ?? { directions: [], departments: [], positions: [] },
-    );
-    this.editAssignmentForm.directionId = next.directionId ?? '';
-    this.editAssignmentForm.departmentId = next.departmentId ?? '';
-    this.editAssignmentForm.positionId = next.positionId ?? '';
-  }
-
-  onEditPositionChange(): void {
-    const next = reduceEmploymentOrgFilter(
-      {
-        directionId: this.editAssignmentForm.directionId || null,
-        departmentId: this.editAssignmentForm.departmentId || null,
-        positionId: this.editAssignmentForm.positionId || null,
-      },
-      { type: 'selectPosition', positionId: this.editAssignmentForm.positionId || null },
-      this.orgCatalog() ?? { directions: [], departments: [], positions: [] },
-    );
-    this.editAssignmentForm.directionId = next.directionId ?? '';
-    this.editAssignmentForm.departmentId = next.departmentId ?? '';
-    this.editAssignmentForm.positionId = next.positionId ?? '';
-  }
-
-  onCreateWorkLocationInput(value: string): void {
+  onAssignmentWorkLocationInput(value: string): void {
+    if (this.assignmentDialog().kind !== 'create') {
+      this.assignmentForm.workLocation = value;
+      return;
+    }
     const next = markWorkLocationTouched(
       {
         workLocation: this.assignmentForm.workLocation,
@@ -1532,6 +1291,23 @@ export class EmployeeDataPanelComponent implements OnChanges {
     this.assignmentForm.workLocation = next.workLocation;
     this.workLocationTouched = next.workLocationTouched;
     this.departmentLocationHintApplied = next.departmentLocationHintApplied;
+  }
+
+  private applyOrgAction(
+    action: Parameters<typeof reduceEmploymentOrgFilter>[1],
+  ): void {
+    const next = reduceEmploymentOrgFilter(
+      {
+        directionId: this.assignmentForm.directionId || null,
+        departmentId: this.assignmentForm.departmentId || null,
+        positionId: this.assignmentForm.positionId || null,
+      },
+      action,
+      this.orgCatalog() ?? { directions: [], departments: [], positions: [] },
+    );
+    this.assignmentForm.directionId = next.directionId ?? '';
+    this.assignmentForm.departmentId = next.departmentId ?? '';
+    this.assignmentForm.positionId = next.positionId ?? '';
   }
 
   private resetEditingModes(): void {
@@ -1554,24 +1330,9 @@ export class EmployeeDataPanelComponent implements OnChanges {
   }
 
   private resetEmploymentEditing(): void {
-    this.creatingAssignment.set(false);
-    this.editingAssignmentId.set(null);
+    this.assignmentDialog.set(closeAssignmentDialog());
+    this.assignmentDialogError.set(null);
     this.deletingAssignmentId.set(null);
-  }
-
-  private emptyAssignmentForm() {
-    return {
-      directionId: '',
-      departmentId: '',
-      positionId: '',
-      workFormat: '',
-      workLocation: '',
-      employmentType: '',
-      startDate: '',
-      probationStartDate: '',
-      probationEndDate: '',
-      changeReason: '',
-    };
   }
 
   private assignmentWriteError(err: unknown, fallback: string): string {
@@ -1596,9 +1357,11 @@ export class EmployeeDataPanelComponent implements OnChanges {
     };
     this.hiredAtForm = p.header.hiredAt ?? '';
     this.contactsBundleDraft.set(contactsBundleFromProfile(p));
-    this.assignmentForm = this.emptyAssignmentForm();
-    this.workLocationTouched = false;
-    this.departmentLocationHintApplied = false;
+    if (!isAssignmentDialogOpen(this.assignmentDialog())) {
+      this.assignmentForm = emptyEmploymentAssignmentForm();
+      this.workLocationTouched = false;
+      this.departmentLocationHintApplied = false;
+    }
   }
 
   saveBasics(): void {
@@ -1831,71 +1594,45 @@ export class EmployeeDataPanelComponent implements OnChanges {
     return [item.title, item.startDate, item.endDate].every((value) => !value.trim());
   }
 
-  saveAssignment(): void {
+  submitAssignmentDialog(): void {
+    const dialog = this.assignmentDialog();
+    if (dialog.kind === 'closed') return;
     this.busy.set(true);
+    this.assignmentDialogError.set(null);
     this.errorChange.emit(null);
-    this.assignmentsApi
-      .create(this.employeeId, {
-        departmentId: this.assignmentForm.departmentId || null,
-        positionId: this.assignmentForm.positionId || null,
-        directionId: this.assignmentForm.directionId || null,
-        workFormat: this.assignmentForm.workFormat || null,
-        workLocation: this.assignmentForm.workLocation || null,
-        employmentType: this.assignmentForm.employmentType || null,
-        startDate: this.assignmentForm.startDate || null,
-        probationStartDate: this.assignmentForm.probationStartDate || null,
-        probationEndDate: this.assignmentForm.probationEndDate || null,
-        changeReason: this.assignmentForm.changeReason || null,
-      })
-      .subscribe({
-        next: (next) => {
-          this.applyProfile(next);
-          this.profileChange.emit(next);
-          this.creatingAssignment.set(false);
-          this.busy.set(false);
-          this.reloadAssignments();
-        },
-        error: (err) => {
-          this.busy.set(false);
-          this.errorChange.emit(
-            this.assignmentWriteError(err, 'Не вдалося зберегти призначення'),
-          );
-        },
-      });
-  }
 
-  saveEditedAssignment(h: AssignmentHistoryItem): void {
-    this.busy.set(true);
-    this.errorChange.emit(null);
-    this.assignmentsApi
-      .update(this.employeeId, h.id, {
-        directionId: this.editAssignmentForm.directionId || null,
-        departmentId: this.editAssignmentForm.departmentId || null,
-        positionId: this.editAssignmentForm.positionId || null,
-        workFormat: this.editAssignmentForm.workFormat || null,
-        workLocation: this.editAssignmentForm.workLocation || null,
-        employmentType: this.editAssignmentForm.employmentType || null,
-        startDate: this.editAssignmentForm.startDate || null,
-        endDate: this.editAssignmentForm.endDate || null,
-        probationStartDate: this.editAssignmentForm.probationStartDate || null,
-        probationEndDate: this.editAssignmentForm.probationEndDate || null,
-        changeReason: this.editAssignmentForm.changeReason || null,
-      })
-      .subscribe({
-        next: (next) => {
-          this.applyProfile(next);
-          this.profileChange.emit(next);
-          this.editingAssignmentId.set(null);
-          this.busy.set(false);
-          this.reloadAssignments();
-        },
-        error: (err) => {
-          this.busy.set(false);
-          this.errorChange.emit(
-            this.assignmentWriteError(err, 'Не вдалося оновити призначення'),
+    const request$ =
+      dialog.kind === 'create'
+        ? this.assignmentsApi.create(
+            this.employeeId,
+            toEmploymentAssignmentWrite(this.assignmentForm, 'create'),
+          )
+        : this.assignmentsApi.update(
+            this.employeeId,
+            dialog.assignmentId,
+            toEmploymentAssignmentWrite(this.assignmentForm, 'edit'),
           );
-        },
-      });
+
+    request$.subscribe({
+      next: (next) => {
+        this.assignmentDialog.set(closeAssignmentDialog());
+        this.applyProfile(next);
+        this.profileChange.emit(next);
+        this.busy.set(false);
+        this.reloadAssignments();
+      },
+      error: (err) => {
+        this.busy.set(false);
+        const message = this.assignmentWriteError(
+          err,
+          dialog.kind === 'create'
+            ? 'Не вдалося створити призначення'
+            : 'Не вдалося оновити призначення',
+        );
+        this.assignmentDialogError.set(message);
+        this.errorChange.emit(message);
+      },
+    });
   }
 
   deleteAssignment(h: AssignmentHistoryItem): void {

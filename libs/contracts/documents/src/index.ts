@@ -30,8 +30,8 @@ export type EmployeeDocumentListItem = {
   createdAt: string;
   relatedStartDate: null;
   relatedEndDate: null;
-  /** Single file; id equals the parent document id. */
-  files: [EmployeeDocumentFileItem];
+  /** One or more files attached to this submission. */
+  files: EmployeeDocumentFileItem[];
   permissions: {
     canDelete: boolean;
   };

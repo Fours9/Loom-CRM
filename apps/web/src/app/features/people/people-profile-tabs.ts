@@ -18,7 +18,7 @@ export type PeopleProfileTab = {
 
 const ALL_TABS: readonly PeopleProfileTab[] = [
   { id: 'data', label: 'Дані працівника' },
-  { id: 'absences', label: 'Робочий графік' },
+  { id: 'absences', label: 'Робота' },
   { id: 'documents', label: 'Документи' },
   { id: 'questionnaires', label: 'Анкети' },
   { id: 'metrics', label: 'Показники' },
@@ -47,11 +47,11 @@ export function visiblePeopleProfileTabs(input: {
   return ALL_TABS.filter((tab) => {
     switch (tab.id) {
       case 'data':
+      case 'absences':
       case 'metrics':
       case 'later':
+        // «Робота» (absences) always hosts «Посада»; schedule subtabs gated in the page.
         return true;
-      case 'absences':
-        return hasPermission(perms, P.AbsencesCalendarView);
       case 'documents':
         return hasPermission(perms, P.DocumentsView);
       case 'questionnaires':

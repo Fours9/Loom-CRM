@@ -19,15 +19,21 @@ export class NotificationsController {
     return { count: await this.notifications.unreadCount(user.id) };
   }
 
+  @Post('read-all')
+  async markAll(@CurrentUser() user: User) {
+    await this.notifications.markAllRead(user.id);
+    return { ok: true };
+  }
+
   @Post(':id/read')
   async markRead(@CurrentUser() user: User, @Param('id') id: string) {
     await this.notifications.markRead(user.id, id);
     return { ok: true };
   }
 
-  @Post('read-all')
-  async markAll(@CurrentUser() user: User) {
-    await this.notifications.markAllRead(user.id);
+  @Post(':id/dismiss')
+  async dismiss(@CurrentUser() user: User, @Param('id') id: string) {
+    await this.notifications.dismiss(user.id, id);
     return { ok: true };
   }
 }

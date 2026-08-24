@@ -4,12 +4,21 @@ import { Repository } from 'typeorm';
 import { EmploymentType } from './employment-type.entity';
 import { WorkFormat } from './work-format.entity';
 import {
+  buildCatalogReorderUpdates,
   compareCatalogItems,
+  nextCatalogSortOrder,
+  normalizeCatalogDescription,
   normalizeCatalogName,
   type EmploymentCatalogItem,
 } from './employment-catalog.helpers';
 
 type CatalogKind = 'workFormat' | 'employmentType';
+
+export type EmploymentCatalogWriteInput = {
+  name?: string;
+  description?: string | null;
+  isActive?: boolean;
+};
 
 @Injectable()
 export class EmploymentCatalogService {
@@ -30,12 +39,14 @@ export class EmploymentCatalogService {
 
   async createWorkFormat(input: {
     name: string;
-    sortOrder?: number;
+    description?: string | null;
   }): Promise<WorkFormat> {
+    const existing = await this.workFormats.find();
     return this.workFormats.save(
       this.workFormats.create({
         name: normalizeCatalogName(input.name),
-        sortOrder: input.sortOrder ?? 0,
+        description: normalizeCatalogDescription(input.description),
+        sortOrder: nextCatalogSortOrder(existing),
         isActive: true,
       }),
     );
@@ -43,12 +54,14 @@ export class EmploymentCatalogService {
 
   async createEmploymentType(input: {
     name: string;
-    sortOrder?: number;
+    description?: string | null;
   }): Promise<EmploymentType> {
+    const existing = await this.employmentTypes.find();
     return this.employmentTypes.save(
       this.employmentTypes.create({
         name: normalizeCatalogName(input.name),
-        sortOrder: input.sortOrder ?? 0,
+        description: normalizeCatalogDescription(input.description),
+        sortOrder: nextCatalogSortOrder(existing),
         isActive: true,
       }),
     );
@@ -56,14 +69,14 @@ export class EmploymentCatalogService {
 
   async updateWorkFormat(
     id: string,
-    input: Partial<Pick<WorkFormat, 'name' | 'sortOrder' | 'isActive'>>,
+    input: EmploymentCatalogWriteInput,
   ): Promise<WorkFormat> {
     return this.updateCatalog(this.workFormats, 'Work format', id, input);
   }
 
   async updateEmploymentType(
     id: string,
-    input: Partial<Pick<EmploymentType, 'name' | 'sortOrder' | 'isActive'>>,
+    input: EmploymentCatalogWriteInput,
   ): Promise<EmploymentType> {
     return this.updateCatalog(
       this.employmentTypes,
@@ -71,6 +84,15 @@ export class EmploymentCatalogService {
       id,
       input,
     );
+  }
+
+  /** Single entry for list order: full permutation of ids → contiguous sort_order. */
+  async reorderWorkFormats(orderedIds: string[]): Promise<WorkFormat[]> {
+    return this.reorderCatalog(this.workFormats, orderedIds);
+  }
+
+  async reorderEmploymentTypes(orderedIds: string[]): Promise<EmploymentType[]> {
+    return this.reorderCatalog(this.employmentTypes, orderedIds);
   }
 
   async deleteWorkFormat(id: string): Promise<void> {
@@ -104,7 +126,9 @@ export class EmploymentCatalogService {
     repo: Repository<T>,
     all: boolean,
   ): Promise<T[]> {
-    const rows = all ? await repo.find() : await repo.find({ where: { isActive: true } as never });
+    const rows = all
+      ? await repo.find()
+      : await repo.find({ where: { isActive: true } as never });
     return [...rows].sort(compareCatalogItems);
   }
 
@@ -112,7 +136,7 @@ export class EmploymentCatalogService {
     repo: Repository<T>,
     label: string,
     id: string,
-    input: Partial<Pick<T, 'name' | 'sortOrder' | 'isActive'>>,
+    input: EmploymentCatalogWriteInput,
   ): Promise<T> {
     const row = await repo.findOne({ where: { id } as never });
     if (!row) {
@@ -121,16 +145,35 @@ export class EmploymentCatalogService {
     if (input.name !== undefined) {
       row.name = normalizeCatalogName(input.name);
     }
-    if (input.sortOrder !== undefined) {
-      if (!Number.isInteger(input.sortOrder)) {
-        throw new BadRequestException('sortOrder must be an integer');
-      }
-      row.sortOrder = input.sortOrder;
+    if (input.description !== undefined) {
+      row.description = normalizeCatalogDescription(input.description);
     }
     if (input.isActive !== undefined) {
       row.isActive = input.isActive;
     }
     return repo.save(row);
+  }
+
+  private async reorderCatalog<T extends WorkFormat | EmploymentType>(
+    repo: Repository<T>,
+    orderedIds: string[],
+  ): Promise<T[]> {
+    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string')) {
+      throw new BadRequestException('orderedIds must be a string array');
+    }
+    const rows = await repo.find();
+    const updates = buildCatalogReorderUpdates(
+      rows.map((row) => row.id),
+      orderedIds,
+    );
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    for (const update of updates) {
+      const row = byId.get(update.id);
+      if (!row) continue;
+      row.sortOrder = update.sortOrder;
+    }
+    await repo.save([...byId.values()]);
+    return this.listCatalog(repo, true);
   }
 
   private async deleteCatalog<T extends WorkFormat | EmploymentType>(

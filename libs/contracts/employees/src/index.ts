@@ -256,7 +256,7 @@ export type EmploymentAssignmentHistoryItem = {
   endDate: string | null;
   probationStartDate: string | null;
   probationEndDate: string | null;
-  changeReason: string | null;
+  comment: string | null;
   activationBlockedReason: EmploymentActivationBlockedReason | null;
   activationCheckedAt: string | null;
   updatedAt: string;
@@ -282,7 +282,7 @@ export type CreateEmploymentAssignmentRequest = {
   endDate?: string | null;
   probationStartDate?: string | null;
   probationEndDate?: string | null;
-  changeReason?: string | null;
+  comment?: string | null;
 };
 
 export type UpdateEmploymentAssignmentRequest =

@@ -64,4 +64,9 @@ export class NotificationsApi {
   markAllRead() {
     return this.http.post(`${this.base}/read-all`, {});
   }
+
+  /** Soft-hide from inbox; row stays in DB. */
+  dismiss(id: string) {
+    return this.http.post(`${this.base}/${id}/dismiss`, {});
+  }
 }

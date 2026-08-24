@@ -96,8 +96,8 @@ export class EmploymentAssignment {
   @Column({ type: 'varchar', length: 32, default: 'active' })
   status!: EmploymentAssignmentStatus;
 
-  @Column({ name: 'change_reason', type: 'text', nullable: true })
-  changeReason!: string | null;
+  @Column({ name: 'comment', type: 'text', nullable: true })
+  comment!: string | null;
 
   @Column({ name: 'activation_blocked_reason', type: 'varchar', length: 64, nullable: true })
   activationBlockedReason!: string | null;

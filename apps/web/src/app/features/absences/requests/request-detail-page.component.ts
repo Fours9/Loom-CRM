@@ -1,4 +1,4 @@
-﻿import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -437,7 +437,38 @@ import {
               <aside class="col actions-col">
                 @if (hasSidebarActions) {
                   <div class="card actions-card">
-                    <h2>Дії</h2>
+                    <div class="actions-card-head">
+                      <h2>Дії</h2>
+                      <div class="actions-card-tools">
+                        @if (!editing && canModify) {
+                          <button
+                            type="button"
+                            class="btn ghost sm"
+                            [disabled]="busy"
+                            (click)="startEdit()"
+                          >
+                            Редагувати
+                          </button>
+                        }
+                        @if (request.permissions.canDelete) {
+                          <button
+                            type="button"
+                            class="icon-btn danger"
+                            title="Видалити заявку"
+                            aria-label="Видалити заявку"
+                            [disabled]="busy"
+                            (click)="deletePending()"
+                          >
+                            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
+                              />
+                            </svg>
+                          </button>
+                        }
+                      </div>
+                    </div>
                     @if (editing) {
                       <label>
                         <span>
@@ -453,39 +484,40 @@ import {
                         <button type="button" class="btn secondary" [disabled]="busy" (click)="cancelEdit()">
                           Скасувати
                         </button>
-                @if (request.permissions.canDelete) {
-                        <button type="button" class="btn danger" [disabled]="busy" (click)="deletePending()">
-                          Видалити заявку
-                        </button>
-                }
                       </div>
                     } @else {
-                      @if (canModify) {
-                        <button type="button" class="btn" [disabled]="busy" (click)="startEdit()">Редагувати</button>
-                      }
                       @if (request.permissions.canApprove || request.permissions.canReject) {
+                        <div class="pw-form-actions decision-actions">
+                          @if (request.permissions.canApprove) {
+                            <button type="button" class="btn success" [disabled]="busy" (click)="approve()">
+                              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                <path
+                                  fill="currentColor"
+                                  d="M9.55 17.65 4.9 13l1.4-1.4 3.25 3.25L17.7 6.7l1.4 1.4z"
+                                />
+                              </svg>
+                              Затвердити
+                            </button>
+                          }
+                          @if (request.permissions.canReject) {
+                            <button type="button" class="btn danger" [disabled]="busy" (click)="reject()">
+                              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                <path
+                                  fill="currentColor"
+                                  d="M18.3 5.71 12 12.01 5.7 5.7 4.29 7.11 10.59 13.4 4.29 19.7 5.7 21.11 12 14.82l6.3 6.29 1.41-1.41-6.29-6.3 6.29-6.29z"
+                                />
+                              </svg>
+                              Відхилити
+                            </button>
+                          }
+                        </div>
                         <label>
                           <span>Коментар рішення (необовʼязково)</span>
                           <textarea [(ngModel)]="decisionComment" name="decisionComment" rows="2"></textarea>
                         </label>
                       }
-                      @if (request.permissions.canApprove || request.permissions.canReject) {
-                        <div class="pw-form-actions">
-                          @if (request.permissions.canApprove) {
-                            <button type="button" class="btn success" [disabled]="busy" (click)="approve()">Затвердити</button>
-                          }
-                          @if (request.permissions.canReject) {
-                            <button type="button" class="btn danger" [disabled]="busy" (click)="reject()">Відхилити</button>
-                          }
-                        </div>
-                      }
 
-                      @if (request.permissions.canDelete) {
-                        <button type="button" class="btn danger" [disabled]="busy" (click)="deletePending()">
-                          Видалити заявку
-                        </button>
-                }
-                @if (request.permissions.canRequestDeletion) {
+                      @if (request.permissions.canRequestDeletion) {
                         <label>
                           <span>Коментар (необовʼязково)</span>
                           <textarea [(ngModel)]="deletionComment" name="deletionComment" rows="2"></textarea>
@@ -493,13 +525,13 @@ import {
                         <button type="button" class="btn danger" [disabled]="busy" (click)="requestDeletion()">
                           Подати на видалення
                         </button>
-                }
-                @if (request.permissions.canApproveDeletion) {
+                      }
+                      @if (request.permissions.canApproveDeletion) {
                         <button type="button" class="btn danger" [disabled]="busy" (click)="approveDeletion()">
                           Підтвердити видалення
                         </button>
-                }
-                @if (request.permissions.canRejectDeletion) {
+                      }
+                      @if (request.permissions.canRejectDeletion) {
                         <label>
                           <span>Причина відхилення *</span>
                           <textarea [(ngModel)]="deletionRejectComment" name="deletionRejectComment" rows="2"></textarea>
@@ -603,6 +635,29 @@ import {
       }
       .actions-card {
         flex: 0 0 auto;
+      }
+      .actions-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      .actions-card-head h2 {
+        margin: 0;
+      }
+      .actions-card-tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.35rem;
+      }
+      .actions-card-tools .btn {
+        width: auto;
+      }
+      .actions-card-tools .icon-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
       }
       .card.history-card {
         flex: 1 1 auto;
@@ -837,6 +892,19 @@ import {
         color: var(--pw-text);
         border: 1px solid var(--pw-border-strong);
       }
+      .btn.ghost {
+        background: var(--pw-accent-soft, #e8eef5);
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 35%, var(--pw-border));
+        color: var(--pw-accent);
+      }
+      .btn.ghost:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--pw-accent) 16%, var(--pw-surface));
+        border-color: var(--pw-accent);
+      }
+      .btn.sm {
+        padding: 0.35rem 0.7rem;
+        font-size: 0.9rem;
+      }
       .muted { margin: 0; color: var(--pw-muted); font-size: 0.9rem; }
       .attachments { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
       .attachments li {
@@ -940,6 +1008,27 @@ import {
       }
       @media (min-width: 641px) {
         .pw-form-actions .btn {
+          width: auto;
+        }
+      }
+      .decision-actions {
+        display: flex;
+        gap: 0.5rem;
+      }
+      .decision-actions .btn {
+        flex: 1 1 0;
+        width: auto;
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+      }
+      .decision-actions .btn svg {
+        flex-shrink: 0;
+      }
+      @media (min-width: 641px) {
+        .decision-actions .btn {
           width: auto;
         }
       }

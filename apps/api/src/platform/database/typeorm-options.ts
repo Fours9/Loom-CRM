@@ -52,6 +52,11 @@ import { QuestionnaireAssignmentTitle1730000024000 } from './migrations/17300000
 import { SkillNativeScale1730000025000 } from './migrations/1730000025000-SkillNativeScale';
 import { SkillGroupOptional1730000026000 } from './migrations/1730000026000-SkillGroupOptional';
 import { EmploymentCatalogsAndAssignmentFields1730000027000 } from './migrations/1730000027000-EmploymentCatalogsAndAssignmentFields';
+import { PositionsDepartmentFkAndOrphanCleanup1730000028000 } from './migrations/1730000028000-PositionsDepartmentFkAndOrphanCleanup';
+import { NotificationsDismissedAt1730000029000 } from './migrations/1730000029000-NotificationsDismissedAt';
+import { EmployeeDocumentFiles1730000030000 } from './migrations/1730000030000-EmployeeDocumentFiles';
+import { EmploymentCatalogDescription1730000031000 } from './migrations/1730000031000-EmploymentCatalogDescription';
+import { EmploymentAssignmentComment1730000032000 } from './migrations/1730000032000-EmploymentAssignmentComment';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -114,6 +119,11 @@ export function getDataSourceOptions(): DataSourceOptions {
       SkillNativeScale1730000025000,
       SkillGroupOptional1730000026000,
       EmploymentCatalogsAndAssignmentFields1730000027000,
+      PositionsDepartmentFkAndOrphanCleanup1730000028000,
+      NotificationsDismissedAt1730000029000,
+      EmployeeDocumentFiles1730000030000,
+      EmploymentCatalogDescription1730000031000,
+      EmploymentAssignmentComment1730000032000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

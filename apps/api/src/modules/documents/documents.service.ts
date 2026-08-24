@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { User } from '../../platform/identity/user.entity';
 import { AuditService } from '../../platform/audit/audit.service';
@@ -13,6 +13,7 @@ import { PermissionService } from '../../platform/permissions/permission.service
 import { Employee } from '../../organization/employees/employee.entity';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
 import { EmployeeDocument } from './employee-document.entity';
+import { EmployeeDocumentFile } from './employee-document-file.entity';
 import {
   MANAGER_VISIBLE_DOCUMENT_TYPES,
   type EmployeeDocumentType,
@@ -22,6 +23,8 @@ import {
   DOCUMENT_MAX_FILE_SIZE,
 } from './document-limits';
 import { normalizeUploadedFileName } from '../../platform/http/normalize-uploaded-file-name';
+
+export const DOCUMENT_MAX_FILES_PER_SUBMISSION = 20;
 
 export type EmployeeDocumentFileDto = {
   id: string;
@@ -40,7 +43,7 @@ export type EmployeeDocumentListItemDto = {
   createdAt: string;
   relatedStartDate: null;
   relatedEndDate: null;
-  files: [EmployeeDocumentFileDto];
+  files: EmployeeDocumentFileDto[];
   permissions: { canDelete: boolean };
 };
 
@@ -54,6 +57,8 @@ export class DocumentsService {
   constructor(
     @InjectRepository(EmployeeDocument)
     private readonly documents: Repository<EmployeeDocument>,
+    @InjectRepository(EmployeeDocumentFile)
+    private readonly files: Repository<EmployeeDocumentFile>,
     private readonly access: EmployeeAccessService,
     private readonly permissions: PermissionService,
     private readonly audit: AuditService,
@@ -77,11 +82,29 @@ export class DocumentsService {
       order: { createdAt: 'DESC' },
     });
 
-    const items = rows
-      .filter((row) =>
-        this.canViewDocumentType(actor, employee, row.documentType),
+    const visible = rows.filter((row) =>
+      this.canViewDocumentType(actor, employee, row.documentType),
+    );
+    const fileRows =
+      visible.length === 0
+        ? []
+        : await this.files.find({
+            where: { documentId: In(visible.map((r) => r.id)) },
+            order: { createdAt: 'ASC' },
+          });
+
+    const byDocument = new Map<string, EmployeeDocumentFile[]>();
+    for (const file of fileRows) {
+      const list = byDocument.get(file.documentId) ?? [];
+      list.push(file);
+      byDocument.set(file.documentId, list);
+    }
+
+    const items = visible
+      .map((row) =>
+        this.toListItem(row, byDocument.get(row.id) ?? [], canManage),
       )
-      .map((row) => this.toListItem(row, canManage));
+      .filter((item) => item.files.length > 0);
 
     return {
       items,
@@ -93,45 +116,75 @@ export class DocumentsService {
     actor: User,
     employeeId: string,
     input: { title: string; documentType: EmployeeDocumentType },
-    file: Express.Multer.File | undefined,
+    uploaded: Express.Multer.File[],
   ): Promise<EmployeeDocumentListItemDto> {
-    if (!file?.buffer?.length) {
-      throw new BadRequestException('File is required');
+    const files = uploaded ?? [];
+    if (!files.length) {
+      throw new BadRequestException('At least one file is required');
     }
-    if (file.size > DOCUMENT_MAX_FILE_SIZE) {
-      throw new BadRequestException('File exceeds maximum size');
+    if (files.length > DOCUMENT_MAX_FILES_PER_SUBMISSION) {
+      throw new BadRequestException(
+        `Maximum ${DOCUMENT_MAX_FILES_PER_SUBMISSION} files per submission`,
+      );
     }
-    if (
-      !DOCUMENT_ALLOWED_MIME_TYPES.includes(
-        file.mimetype as (typeof DOCUMENT_ALLOWED_MIME_TYPES)[number],
-      )
-    ) {
-      throw new BadRequestException('Unsupported file type');
+
+    for (const file of files) {
+      if (!file?.buffer?.length) {
+        throw new BadRequestException('File is required');
+      }
+      if (file.size > DOCUMENT_MAX_FILE_SIZE) {
+        throw new BadRequestException('File exceeds maximum size');
+      }
+      if (
+        !DOCUMENT_ALLOWED_MIME_TYPES.includes(
+          file.mimetype as (typeof DOCUMENT_ALLOWED_MIME_TYPES)[number],
+        )
+      ) {
+        throw new BadRequestException('Unsupported file type');
+      }
     }
 
     const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
 
-    const fileName = normalizeUploadedFileName(file.originalname || 'file');
-    const id = uuidv4();
-    const storageKey = `db:employee-document:${id}`;
+    const title = input.title.trim();
+    if (!title) {
+      throw new BadRequestException('Title is required');
+    }
 
+    const documentId = uuidv4();
     const saved = await this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(EmployeeDocument);
-      const document = await repo.save(
-        repo.create({
-          id,
+      const docs = manager.getRepository(EmployeeDocument);
+      const fileRepo = manager.getRepository(EmployeeDocumentFile);
+
+      const document = await docs.save(
+        docs.create({
+          id: documentId,
           employeeId: employee.id,
           documentType: input.documentType,
-          title: input.title.trim(),
-          fileName,
-          mimeType: file.mimetype,
-          sizeBytes: file.size,
-          contentBase64: file.buffer.toString('base64'),
-          storageKey,
+          title,
           createdByUserId: actor.id,
         }),
       );
+
+      const savedFiles: EmployeeDocumentFile[] = [];
+      for (const file of files) {
+        const fileId = uuidv4();
+        const fileName = normalizeUploadedFileName(file.originalname || 'file');
+        savedFiles.push(
+          await fileRepo.save(
+            fileRepo.create({
+              id: fileId,
+              documentId: document.id,
+              fileName,
+              mimeType: file.mimetype,
+              sizeBytes: file.size,
+              contentBase64: file.buffer.toString('base64'),
+              storageKey: `db:employee-document-file:${fileId}`,
+            }),
+          ),
+        );
+      }
 
       await this.audit.record(
         {
@@ -143,27 +196,24 @@ export class DocumentsService {
             employeeId: employee.id,
             documentId: document.id,
             documentType: document.documentType,
-            sizeBytes: document.sizeBytes,
+            fileCount: savedFiles.length,
+            sizeBytes: savedFiles.reduce((sum, f) => sum + f.sizeBytes, 0),
           },
         },
         manager,
       );
 
-      return document;
+      return { document, files: savedFiles };
     });
 
-    return this.toListItem(saved, true);
+    return this.toListItem(saved.document, saved.files, true);
   }
 
-  async download(actor: User, documentId: string) {
-    const document = await this.documents
-      .createQueryBuilder('document')
-      .addSelect('document.contentBase64')
-      .where('document.id = :id', { id: documentId })
-      .andWhere('document.deleted_at IS NULL')
-      .getOne();
-
-    if (!document || !document.contentBase64) {
+  async downloadFile(actor: User, documentId: string, fileId: string) {
+    const document = await this.documents.findOne({
+      where: { id: documentId },
+    });
+    if (!document) {
       throw new NotFoundException('Document not found');
     }
 
@@ -178,10 +228,21 @@ export class DocumentsService {
       throw new NotFoundException('Document not found');
     }
 
+    const file = await this.files
+      .createQueryBuilder('file')
+      .addSelect('file.contentBase64')
+      .where('file.id = :fileId', { fileId })
+      .andWhere('file.document_id = :documentId', { documentId })
+      .getOne();
+
+    if (!file || !file.contentBase64) {
+      throw new NotFoundException('Document not found');
+    }
+
     return {
-      buffer: Buffer.from(document.contentBase64, 'base64'),
-      mimeType: document.mimeType ?? 'application/octet-stream',
-      fileName: normalizeUploadedFileName(document.fileName),
+      buffer: Buffer.from(file.contentBase64, 'base64'),
+      mimeType: file.mimeType ?? 'application/octet-stream',
+      fileName: normalizeUploadedFileName(file.fileName),
     };
   }
 
@@ -220,7 +281,6 @@ export class DocumentsService {
             employeeId: employee.id,
             documentId,
             documentType: document.documentType,
-            sizeBytes: document.sizeBytes,
           },
         },
         manager,
@@ -245,19 +305,13 @@ export class DocumentsService {
 
   private toListItem(
     row: EmployeeDocument,
+    files: EmployeeDocumentFile[],
     canDelete: boolean,
   ): EmployeeDocumentListItemDto {
     const createdAt =
       row.createdAt instanceof Date
         ? row.createdAt.toISOString()
         : String(row.createdAt);
-    const file: EmployeeDocumentFileDto = {
-      id: row.id,
-      fileName: normalizeUploadedFileName(row.fileName),
-      mimeType: row.mimeType,
-      sizeBytes: row.sizeBytes,
-      createdAt,
-    };
     return {
       source: 'employee_document',
       id: row.id,
@@ -267,7 +321,16 @@ export class DocumentsService {
       createdAt,
       relatedStartDate: null,
       relatedEndDate: null,
-      files: [file],
+      files: files.map((file) => ({
+        id: file.id,
+        fileName: normalizeUploadedFileName(file.fileName),
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        createdAt:
+          file.createdAt instanceof Date
+            ? file.createdAt.toISOString()
+            : String(file.createdAt),
+      })),
       permissions: { canDelete },
     };
   }

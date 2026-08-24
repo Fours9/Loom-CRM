@@ -30,6 +30,10 @@ export class Notification {
   @Column({ name: 'is_read', type: 'boolean', default: false })
   isRead!: boolean;
 
+  /** Soft-hide from inbox; row stays in DB. */
+  @Column({ name: 'dismissed_at', type: 'timestamptz', nullable: true })
+  dismissedAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }

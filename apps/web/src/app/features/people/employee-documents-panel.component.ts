@@ -17,6 +17,7 @@ import {
 import type { AbsenceType } from '@loom/contracts-absences';
 import { DocumentsApiService } from '../documents/public-api';
 import { EmployeeAbsenceDocumentsService } from '../absences/public-api';
+import { EmployeeDocumentUploadDialogComponent } from './employee-document-upload-dialog.component';
 
 type DocumentType = 'time_event' | EmployeeDocumentType;
 
@@ -68,52 +69,18 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
 @Component({
   selector: 'app-employee-documents-panel',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, EmployeeDocumentUploadDialogComponent],
   template: `
     <div class="panel">
       @if (canUpload()) {
-        <form class="upload" (ngSubmit)="submitUpload()">
-          <h3>Завантажити документ</h3>
-          <label>
-            Заголовок
-            <input
-              type="text"
-              name="title"
-              [(ngModel)]="uploadTitle"
-              maxlength="255"
-              required
-            />
-          </label>
-          <label>
-            Тип
-            <select name="documentType" [(ngModel)]="uploadType">
-              @for (t of uploadTypes; track t) {
-                <option [value]="t">{{ typeLabel(t) }}</option>
-              }
-            </select>
-          </label>
-          <label>
-            Файл
-            <input
-              #fileInput
-              type="file"
-              name="file"
-              accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-              (change)="onFileSelected($event)"
-            />
-          </label>
-          <div class="upload-actions">
-            <button type="submit" class="btn primary" [disabled]="uploadBusy() || !uploadFile">
-              {{ uploadBusy() ? 'Завантаження…' : 'Завантажити' }}
-            </button>
-            @if (uploadSuccess()) {
-              <span class="ok">Завантажено</span>
-            }
-            @if (uploadError()) {
-              <span class="error">{{ uploadError() }}</span>
-            }
-          </div>
-        </form>
+        <div class="toolbar">
+          <button type="button" class="btn primary" (click)="openUploadDialog()">
+            Додати документи
+          </button>
+          @if (uploadSuccess()) {
+            <span class="ok">Завантажено</span>
+          }
+        </div>
       }
 
       <div class="filters">
@@ -190,7 +157,26 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
                       </a>
                     }
                   </div>
-                  <span class="muted">{{ formatDate(row.createdAt) }}</span>
+                  <div class="doc-head-actions">
+                    <span class="muted">{{ formatDate(row.createdAt) }}</span>
+                    @if (row.canDelete) {
+                      <button
+                        type="button"
+                        class="icon-btn danger"
+                        title="Видалити подання"
+                        aria-label="Видалити подання документів"
+                        [disabled]="deleteBusyId() === row.id"
+                        (click)="deleteRow(row)"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M9 3h6l1 2h5v2H3V5h5l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9zm-1 12h12a1 1 0 0 0 1-1V8H5v12a1 1 0 0 0 1 1z"
+                          />
+                        </svg>
+                      </button>
+                    }
+                  </div>
                 </div>
                 <ul class="files">
                   @for (file of row.files; track file.id) {
@@ -228,23 +214,6 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
                             />
                           </svg>
                         </button>
-                        @if (row.canDelete) {
-                          <button
-                            type="button"
-                            class="icon-btn danger"
-                            title="Видалити"
-                            aria-label="Видалити документ"
-                            [disabled]="deleteBusyId() === row.id"
-                            (click)="deleteRow(row)"
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path
-                                fill="currentColor"
-                                d="M9 3h6l1 2h5v2H3V5h5l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9zm-1 12h12a1 1 0 0 0 1-1V8H5v12a1 1 0 0 0 1 1z"
-                              />
-                            </svg>
-                          </button>
-                        }
                       </div>
                     </li>
                   }
@@ -255,11 +224,24 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         }
       }
     </div>
+
+    @if (uploadDialogOpen()) {
+      <loom-employee-document-upload-dialog
+        [busy]="uploadBusy()"
+        [error]="uploadError()"
+        (closed)="closeUploadDialog()"
+        (submitted)="submitUpload($event)"
+      />
+    }
   `,
   styles: [
     `
       .panel { display: grid; gap: 1rem; }
-      .upload, .filters, .doc-row {
+      .toolbar {
+        display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;
+        justify-content: flex-end;
+      }
+      .filters, .doc-row {
         display: grid; gap: 0.6rem;
         padding: 0.85rem; border: 1px solid var(--pw-border);
         border-radius: 10px; background: var(--pw-surface);
@@ -273,9 +255,9 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         padding: 0.45rem 0.55rem; border: 1px solid var(--pw-border);
         border-radius: 8px; background: var(--pw-bg); color: inherit;
       }
-      .upload-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
       .doc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
       .doc-head { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+      .doc-head-actions { display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0; }
       .doc-title { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; min-width: 0; }
       .badge {
         display: inline-block; padding: 0.1rem 0.45rem;
@@ -311,15 +293,9 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         border-color: transparent;
         font-weight: 600;
       }
-      .btn.primary:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
-      }
       .muted { color: var(--pw-muted); margin: 0; }
-      .error { color: #b42318; margin: 0; }
       .warn { color: #b54708; margin: 0; }
       .ok { color: #067647; }
-      h3 { margin: 0; font-size: 0.95rem; }
     `,
   ],
 })
@@ -329,7 +305,6 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
 
   @Input({ required: true }) employeeId!: string;
 
-  readonly uploadTypes = [...EMPLOYEE_DOCUMENT_TYPES];
   readonly allFilterTypes: DocumentType[] = ['time_event', ...EMPLOYEE_DOCUMENT_TYPES];
 
   readonly loading = signal(false);
@@ -337,17 +312,13 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
   readonly absencesFailed = signal(false);
   readonly canUpload = signal(false);
   readonly visibleRows = signal<DocumentListRow[]>([]);
+  readonly uploadDialogOpen = signal(false);
   readonly uploadBusy = signal(false);
   readonly uploadSuccess = signal(false);
   readonly uploadError = signal<string | null>(null);
   readonly deleteBusyId = signal<string | null>(null);
 
   private allRows: DocumentListRow[] = [];
-  private fileInputEl: HTMLInputElement | null = null;
-
-  uploadTitle = '';
-  uploadType: EmployeeDocumentType = 'employment';
-  uploadFile: File | null = null;
 
   filterType = '';
   filterQuery = '';
@@ -357,6 +328,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['employeeId'] && this.employeeId) {
+      this.closeUploadDialog();
       this.reload();
     }
   }
@@ -365,11 +337,15 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
     return DOCUMENT_TYPE_LABELS[type as DocumentType] ?? type;
   }
 
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.fileInputEl = input;
-    this.uploadFile = input.files?.[0] ?? null;
+  openUploadDialog(): void {
+    this.uploadError.set(null);
     this.uploadSuccess.set(false);
+    this.uploadDialogOpen.set(true);
+  }
+
+  closeUploadDialog(): void {
+    if (this.uploadBusy()) return;
+    this.uploadDialogOpen.set(false);
     this.uploadError.set(null);
   }
 
@@ -490,33 +466,36 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
     this.visibleRows.set(rows);
   }
 
-  submitUpload(): void {
-    if (!this.uploadFile || !this.uploadTitle.trim()) {
-      this.uploadError.set('Вкажіть заголовок і файл');
+  submitUpload(input: {
+    title: string;
+    documentType: EmployeeDocumentType;
+    files: File[];
+  }): void {
+    if (!input.files.length || !input.title.trim()) {
+      this.uploadError.set('Вкажіть заголовок і хоча б один файл');
       return;
     }
     this.uploadBusy.set(true);
     this.uploadError.set(null);
     this.uploadSuccess.set(false);
+
     this.documentsApi
       .uploadEmployeeDocument(this.employeeId, {
-        title: this.uploadTitle.trim(),
-        documentType: this.uploadType,
-        file: this.uploadFile,
+        title: input.title.trim(),
+        documentType: input.documentType,
+        files: input.files,
       })
       .subscribe({
         next: () => {
           this.uploadBusy.set(false);
           this.uploadSuccess.set(true);
-          this.uploadTitle = '';
-          this.uploadFile = null;
-          if (this.fileInputEl) this.fileInputEl.value = '';
+          this.uploadDialogOpen.set(false);
           this.reloadDocumentsOnly();
         },
         error: (err) => {
           this.uploadBusy.set(false);
           this.uploadError.set(
-            err?.error?.message ?? 'Не вдалося завантажити документ',
+            err?.error?.message ?? 'Не вдалося завантажити документ(и)',
           );
         },
       });
@@ -603,7 +582,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
 
   private fetchBlob(row: DocumentListRow, file: DocumentFileRow) {
     return row.source === 'employee_document'
-      ? this.documentsApi.downloadDocument(row.id)
+      ? this.documentsApi.downloadDocumentFile(row.id, file.id)
       : this.absenceDocsApi.downloadAttachment(row.id, file.id);
   }
 }

@@ -25,8 +25,15 @@ export type OrgDepartment = {
 export type EmploymentCatalogItem = {
   id: string;
   name: string;
+  description: string | null;
   sortOrder: number;
   isActive: boolean;
+};
+
+export type EmploymentCatalogWriteBody = {
+  name?: string;
+  description?: string | null;
+  isActive?: boolean;
 };
 
 export type OrgPosition = {
@@ -197,19 +204,25 @@ export class SettingsOrgApiService {
 
   createWorkFormat(body: {
     name: string;
-    sortOrder?: number;
+    description?: string | null;
   }): Observable<EmploymentCatalogItem> {
     return this.http.post<EmploymentCatalogItem>('/api/v1/work-formats', body);
   }
 
   updateWorkFormat(
     id: string,
-    body: Partial<EmploymentCatalogItem>,
+    body: EmploymentCatalogWriteBody,
   ): Observable<EmploymentCatalogItem> {
     return this.http.patch<EmploymentCatalogItem>(
       `/api/v1/work-formats/${id}`,
       body,
     );
+  }
+
+  reorderWorkFormats(orderedIds: string[]): Observable<EmploymentCatalogItem[]> {
+    return this.http.put<EmploymentCatalogItem[]>('/api/v1/work-formats/reorder', {
+      orderedIds,
+    });
   }
 
   deleteWorkFormat(id: string): Observable<unknown> {
@@ -225,7 +238,7 @@ export class SettingsOrgApiService {
 
   createEmploymentType(body: {
     name: string;
-    sortOrder?: number;
+    description?: string | null;
   }): Observable<EmploymentCatalogItem> {
     return this.http.post<EmploymentCatalogItem>(
       '/api/v1/employment-types',
@@ -235,11 +248,20 @@ export class SettingsOrgApiService {
 
   updateEmploymentType(
     id: string,
-    body: Partial<EmploymentCatalogItem>,
+    body: EmploymentCatalogWriteBody,
   ): Observable<EmploymentCatalogItem> {
     return this.http.patch<EmploymentCatalogItem>(
       `/api/v1/employment-types/${id}`,
       body,
+    );
+  }
+
+  reorderEmploymentTypes(
+    orderedIds: string[],
+  ): Observable<EmploymentCatalogItem[]> {
+    return this.http.put<EmploymentCatalogItem[]>(
+      '/api/v1/employment-types/reorder',
+      { orderedIds },
     );
   }
 

@@ -782,8 +782,8 @@ export class AbsenceRequestsService {
             recipientId: emp.userId,
             type:
               status === AbsenceRequestStatus.Approved
-                ? 'absence.request.approved'
-                : 'absence.request.rejected',
+                ? 'request.approved'
+                : 'request.rejected',
             title:
               status === AbsenceRequestStatus.Approved
                 ? 'Заявку схвалено'

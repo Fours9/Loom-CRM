@@ -43,7 +43,7 @@ import { PositionSettingsTabComponent } from './position-settings-tab.component'
           [class.active]="tab() === 'settings'"
           (click)="tab.set('settings')"
         >
-          Налаштування
+          Формати
         </button>
       </nav>
 

@@ -60,6 +60,7 @@ export function pwPermissions(
   const isAdmin = actor.role === UserRole.Admin;
   const pending = request.status === AbsenceRequestStatus.Pending;
   const approved = request.status === AbsenceRequestStatus.Approved;
+  const rejected = request.status === AbsenceRequestStatus.Rejected;
   const cancelled = request.status === AbsenceRequestStatus.Cancelled;
   const deletionRequested =
     request.status === AbsenceRequestStatus.DeletionRequested;
@@ -80,7 +81,10 @@ export function pwPermissions(
       pending &&
       (isOwner || isAdmin || isCreator) &&
       permissions.has(actor.role, Permission.AbsencesCancel),
-    canRequestDeletion: (approved || cancelled) && (isOwner || isAdmin),
+    // PW: approved|rejected + admin|dept manager. Loom also keeps cancelled (legacy) + owner.
+    canRequestDeletion:
+      (approved || rejected || cancelled) &&
+      (isAdmin || isOwner || ctx.canManageSubmissionDepartment),
     canApproveDeletion: deletionRequested && isAdmin,
     canRejectDeletion: deletionRequested && isAdmin,
     canManageAttachments:

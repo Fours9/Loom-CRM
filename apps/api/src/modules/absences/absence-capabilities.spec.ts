@@ -109,6 +109,30 @@ describe('pwPermissions', () => {
     expect(
       pwPermissions(manager, cancelled, employee, permissions, managed)
         .canRequestDeletion,
+    ).toBe(true);
+  });
+
+  it('admin and submission-dept manager can request deletion for rejected (PW)', () => {
+    const rejected = {
+      status: AbsenceRequestStatus.Rejected,
+      createdByUserId: 'u-emp',
+    } as AbsenceRequest;
+
+    expect(
+      pwPermissions(admin, rejected, employee, permissions, managed)
+        .canRequestDeletion,
+    ).toBe(true);
+    expect(
+      pwPermissions(manager, rejected, employee, permissions, managed)
+        .canRequestDeletion,
+    ).toBe(true);
+    expect(
+      pwPermissions(owner, rejected, employee, permissions, unmanaged)
+        .canRequestDeletion,
+    ).toBe(true);
+    expect(
+      pwPermissions(manager, rejected, employee, permissions, unmanaged)
+        .canRequestDeletion,
     ).toBe(false);
   });
 });

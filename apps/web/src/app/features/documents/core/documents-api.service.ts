@@ -19,22 +19,29 @@ export class DocumentsApiService {
 
   uploadEmployeeDocument(
     employeeId: string,
-    input: { title: string; documentType: EmployeeDocumentType; file: File },
+    input: {
+      title: string;
+      documentType: EmployeeDocumentType;
+      files: File[];
+    },
   ): Observable<UploadEmployeeDocumentResponse> {
     const form = new FormData();
-    form.append('file', input.file, input.file.name);
     form.append('title', input.title);
     form.append('documentType', input.documentType);
+    for (const file of input.files) {
+      form.append('files', file, file.name);
+    }
     return this.http.post<UploadEmployeeDocumentResponse>(
       `/api/v1/documents/employees/${employeeId}`,
       form,
     );
   }
 
-  downloadDocument(id: string): Observable<Blob> {
-    return this.http.get(`/api/v1/documents/${id}/download`, {
-      responseType: 'blob',
-    });
+  downloadDocumentFile(documentId: string, fileId: string): Observable<Blob> {
+    return this.http.get(
+      `/api/v1/documents/${documentId}/files/${fileId}/download`,
+      { responseType: 'blob' },
+    );
   }
 
   deleteDocument(id: string): Observable<{ ok: true }> {

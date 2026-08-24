@@ -530,7 +530,7 @@ employment_assignment
 ├── work_format
 ├── start_date
 ├── end_date
-├── change_reason
+├── comment
 └── status
 ```
 
@@ -875,7 +875,7 @@ employment_assignments
 - end_date nullable
 - probation_end_date nullable
 - status
-- change_reason nullable
+- comment nullable
 - created_by
 - created_at
 ```

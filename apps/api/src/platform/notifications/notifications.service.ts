@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { Notification } from './notification.entity';
 
 export type CreateNotificationInput = {
@@ -32,13 +32,14 @@ export class NotificationsService {
       body: input.body,
       payload: input.payload ?? null,
       isRead: false,
+      dismissedAt: null,
     });
     return repo.save(row);
   }
 
   listForUser(userId: string): Promise<Notification[]> {
     return this.notifications.find({
-      where: { recipientUserId: userId },
+      where: { recipientUserId: userId, dismissedAt: IsNull() },
       order: { createdAt: 'DESC' },
       take: 100,
     });
@@ -46,21 +47,33 @@ export class NotificationsService {
 
   async unreadCount(userId: string): Promise<number> {
     return this.notifications.count({
-      where: { recipientUserId: userId, isRead: false },
+      where: {
+        recipientUserId: userId,
+        isRead: false,
+        dismissedAt: IsNull(),
+      },
     });
   }
 
   async markRead(userId: string, id: string): Promise<void> {
     await this.notifications.update(
-      { id, recipientUserId: userId },
+      { id, recipientUserId: userId, dismissedAt: IsNull() },
       { isRead: true },
     );
   }
 
   async markAllRead(userId: string): Promise<void> {
     await this.notifications.update(
-      { recipientUserId: userId, isRead: false },
+      { recipientUserId: userId, isRead: false, dismissedAt: IsNull() },
       { isRead: true },
+    );
+  }
+
+  /** Soft-hide from inbox; does not delete the row. */
+  async dismiss(userId: string, id: string): Promise<void> {
+    await this.notifications.update(
+      { id, recipientUserId: userId, dismissedAt: IsNull() },
+      { dismissedAt: new Date(), isRead: true },
     );
   }
 }

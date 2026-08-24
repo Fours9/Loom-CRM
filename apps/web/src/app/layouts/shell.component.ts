@@ -158,32 +158,50 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
                         [attr.data-frame]="frameTone(n.type)"
                         (mouseenter)="markReadOnHover(n)"
                       >
-                        @if (n.relatedAssignmentId) {
-                          <a
-                            [routerLink]="['/questionnaires', n.relatedAssignmentId]"
-                            (click)="markNotificationRead(n)"
-                          >
-                            <strong>{{ n.title }}</strong>
-                            <span>{{ n.body }}</span>
-                          </a>
-                        } @else if (n.relatedRequestId) {
-                          <a
-                            [routerLink]="['/absences/requests', n.relatedRequestId]"
-                            (click)="markNotificationRead(n)"
-                          >
-                            <strong>{{ n.title }}</strong>
-                            <span>{{ n.body }}</span>
-                          </a>
-                        } @else {
+                        <div class="notif-top">
+                          @if (n.relatedAssignmentId) {
+                            <a
+                              class="notif-body"
+                              [routerLink]="['/questionnaires', n.relatedAssignmentId]"
+                              (click)="markNotificationRead(n)"
+                            >
+                              <strong>{{ n.title }}</strong>
+                              <span>{{ n.body }}</span>
+                            </a>
+                          } @else if (n.relatedRequestId) {
+                            <a
+                              class="notif-body"
+                              [routerLink]="['/absences/requests', n.relatedRequestId]"
+                              (click)="markNotificationRead(n)"
+                            >
+                              <strong>{{ n.title }}</strong>
+                              <span>{{ n.body }}</span>
+                            </a>
+                          } @else {
+                            <button
+                              type="button"
+                              class="plain notif-body"
+                              (click)="markNotificationRead(n)"
+                            >
+                              <strong>{{ n.title }}</strong>
+                              <span>{{ n.body }}</span>
+                            </button>
+                          }
                           <button
                             type="button"
-                            class="plain"
-                            (click)="markNotificationRead(n)"
+                            class="icon-btn danger notif-dismiss"
+                            title="Прибрати зі списку"
+                            aria-label="Прибрати зі списку"
+                            (click)="dismissNotification($event, n)"
                           >
-                            <strong>{{ n.title }}</strong>
-                            <span>{{ n.body }}</span>
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                              <path
+                                fill="currentColor"
+                                d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
+                              />
+                            </svg>
                           </button>
-                        }
+                        </div>
                         <small>{{ n.createdAt | date: 'short' }}</small>
                       </li>
                     }
@@ -533,12 +551,60 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
         overflow: auto;
       }
       .dropdown li {
+        position: relative;
         display: grid;
         gap: 0.2rem;
         padding: 0.55rem 0.65rem;
       }
-      .dropdown li.unread {
-        box-shadow: inset 3px 0 0 var(--pw-accent);
+      .dropdown li.unread::after {
+        content: '';
+        position: absolute;
+        top: -0.15rem;
+        right: -0.15rem;
+        width: 0.65rem;
+        height: 0.65rem;
+        border-radius: 999px;
+        background: #eab308;
+        border: 2px solid var(--pw-surface);
+        box-shadow: 0 0 0 1px color-mix(in srgb, #eab308 35%, transparent);
+        pointer-events: none;
+        z-index: 1;
+      }
+      .notif-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.35rem;
+      }
+      .notif-body {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .notif-dismiss {
+        flex: 0 0 auto;
+        margin-top: 0.05rem;
+      }
+      .dropdown .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        padding: 0;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--pw-muted);
+        cursor: pointer;
+      }
+      .dropdown .icon-btn:hover {
+        background: color-mix(in srgb, var(--pw-danger, #a32d2d) 12%, transparent);
+        color: var(--pw-danger, #a32d2d);
+      }
+      .dropdown .icon-btn.danger {
+        color: var(--pw-danger, #a32d2d);
+      }
+      .dropdown .icon-btn svg {
+        display: block;
       }
       .dropdown a,
       .plain {
@@ -1013,12 +1079,34 @@ export class ShellComponent implements OnInit, OnDestroy {
     if (n.isRead) {
       return;
     }
-    n.isRead = true;
+    this.notifications = this.notifications.map((item) =>
+      item.id === n.id ? { ...item, isRead: true } : item,
+    );
     this.unreadCount = Math.max(0, this.unreadCount - 1);
     this.notificationsApi.markRead(n.id).subscribe({
       error: () => {
-        n.isRead = false;
+        this.notifications = this.notifications.map((item) =>
+          item.id === n.id ? { ...item, isRead: false } : item,
+        );
         this.unreadCount += 1;
+      },
+    });
+  }
+
+  dismissNotification(event: Event, n: AppNotification): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const wasUnread = !n.isRead;
+    this.notifications = this.notifications.filter((item) => item.id !== n.id);
+    if (wasUnread) {
+      this.unreadCount = Math.max(0, this.unreadCount - 1);
+    }
+    this.notificationsApi.dismiss(n.id).subscribe({
+      error: () => {
+        this.notifications = [n, ...this.notifications];
+        if (wasUnread) {
+          this.unreadCount += 1;
+        }
       },
     });
   }
