@@ -1,7 +1,20 @@
 /**
  * Guard for PostgreSQL integration specs.
- * Never use the normal local/demo/shared loom_crm DATABASE_URL.
+ * Destructive suites (TRUNCATE) must never target demo/shared/prod DBs.
  */
+
+const ALLOWED_TEST_DB = 'loom_crm_test';
+
+/**
+ * Allow only `loom_crm_test` or names matching `*_test` (lowercase snake).
+ * Rejects `loom_crm`, `production`, `staging`, `company_crm`, etc.
+ */
+export function isAllowedIsolatedTestDatabaseName(dbName: string): boolean {
+  if (!dbName) return false;
+  if (dbName === ALLOWED_TEST_DB) return true;
+  return /^[a-z][a-z0-9]*(_[a-z0-9]+)*_test$/.test(dbName);
+}
+
 export function requireIsolatedTestDatabaseUrl(): string {
   const url = process.env.TEST_DATABASE_URL?.trim();
   if (!url) {
@@ -21,10 +34,12 @@ export function requireIsolatedTestDatabaseUrl(): string {
   } catch {
     throw new Error('TEST_DATABASE_URL is not a valid URL');
   }
-  const dbName = parsed.pathname.replace(/^\//, '').split('/')[0] ?? '';
-  if (dbName === 'loom_crm') {
+  const dbName = decodeURIComponent(
+    parsed.pathname.replace(/^\//, '').split('/')[0] ?? '',
+  );
+  if (!isAllowedIsolatedTestDatabaseName(dbName)) {
     throw new Error(
-      'TEST_DATABASE_URL must not target loom_crm; use an isolated DB (e.g. loom_crm_test)',
+      `TEST_DATABASE_URL database must be "${ALLOWED_TEST_DB}" or match *_test (got "${dbName}")`,
     );
   }
   return url;

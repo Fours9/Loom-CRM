@@ -24,6 +24,32 @@ export class EmploymentCatalogValidationError extends Error {
   }
 }
 
+/** Stable HTTP 400 messages (pre-typed-error wording). */
+export function employmentCatalogValidationMessage(
+  code: EmploymentCatalogValidationCode,
+): string {
+  switch (code) {
+    case 'name_required':
+      return 'Catalog name is required';
+    case 'name_too_long':
+      return 'Catalog name must be at most 64 characters';
+    case 'description_too_long':
+      return `Catalog description must be at most ${EMPLOYMENT_CATALOG_DESCRIPTION_MAX} characters`;
+    case 'invalid_permutation':
+      return 'orderedIds must include every catalog item exactly once';
+    case 'unknown_id':
+      return 'orderedIds contains unknown id';
+    case 'duplicate_id':
+      return 'orderedIds contains duplicate id';
+    case 'ordered_ids_invalid':
+      return 'orderedIds must be a string array';
+    default: {
+      const _exhaustive: never = code;
+      return _exhaustive;
+    }
+  }
+}
+
 /** Internal invariant after lock + validated permutation; maps to HTTP 500. */
 export class CatalogInvariantError extends Error {
   constructor(message = 'Catalog invariant violated') {

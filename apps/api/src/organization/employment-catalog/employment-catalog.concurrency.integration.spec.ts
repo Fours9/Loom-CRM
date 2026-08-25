@@ -1,9 +1,8 @@
+import { BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { WorkFormat } from './work-format.entity';
 import { EmploymentCatalogService } from './employment-catalog.service';
 import { requireIsolatedTestDatabaseUrl } from '../../platform/database/require-isolated-test-database-url';
-import { BadRequestException } from '@nestjs/common';
-import { EmploymentCatalogValidationError } from './employment-catalog.helpers';
 
 /**
  * Real PostgreSQL concurrency for employment catalog writers.
@@ -87,11 +86,7 @@ describe('EmploymentCatalogService concurrency (integration)', () => {
       const c = finalRows.find((r) => r.name === 'C')!;
       expect(c.sortOrder).toBe(2);
     } else {
-      const err = reorder.reason;
-      const isValidation =
-        err instanceof BadRequestException ||
-        err instanceof EmploymentCatalogValidationError;
-      expect(isValidation).toBe(true);
+      expect(reorder.reason).toBeInstanceOf(BadRequestException);
     }
   });
 
@@ -117,13 +112,9 @@ describe('EmploymentCatalogService concurrency (integration)', () => {
     expect(del.status).toBe('fulfilled');
 
     if (reorder.status === 'rejected') {
-      const err = reorder.reason;
-      expect(
-        err instanceof BadRequestException ||
-          err instanceof EmploymentCatalogValidationError,
-      ).toBe(true);
+      expect(reorder.reason).toBeInstanceOf(BadRequestException);
     } else {
-      // reorder won first: A and C remain with contiguous orders after delete applied after
+      // reorder won first: A and C remain; orders stay distinct after serialized delete
       const orders = remaining.map((r) => r.sortOrder).sort((x, y) => x - y);
       expect(new Set(orders).size).toBe(orders.length);
     }

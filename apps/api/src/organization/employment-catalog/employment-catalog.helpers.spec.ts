@@ -2,6 +2,7 @@ import {
   buildCatalogReorderUpdates,
   compareCatalogItems,
   EmploymentCatalogValidationError,
+  employmentCatalogValidationMessage,
   nextCatalogSortOrder,
   normalizeCatalogDescription,
 } from './employment-catalog.helpers';
@@ -53,5 +54,14 @@ describe('employment-catalog.helpers', () => {
     expect(normalizeCatalogDescription('  hello  ')).toBe('hello');
     expect(normalizeCatalogDescription('   ')).toBeNull();
     expect(normalizeCatalogDescription(null)).toBeNull();
+  });
+
+  it('employmentCatalogValidationMessage keeps stable API wording', () => {
+    expect(employmentCatalogValidationMessage('unknown_id')).toBe(
+      'orderedIds contains unknown id',
+    );
+    expect(employmentCatalogValidationMessage('invalid_permutation')).toBe(
+      'orderedIds must include every catalog item exactly once',
+    );
   });
 });

@@ -80,7 +80,7 @@ People «Посада» (under Робота) create/edit uses a dedicated modal 
 
 ### Application startup
 
-Single Nest `OnModuleInit` in `apps/api/src/application-startup/` orchestrates `ApplicationBootstrapService.ensureReady()` then `QuestionnaireSeedService.ensureEmployee360V1()`. Platform must not import Questionnaires; seed services do not self-init via `OnModuleInit`.
+Single Nest `OnModuleInit` in `apps/api/src/application-startup/` orchestrates `ApplicationBootstrapService.ensureReady()`, then `QuestionnaireSeedService.ensureEmployee360V1()`, then `EmploymentAssignmentLifecycleService.activateDueAssignments()`. Platform must not import Questionnaires; seed services do not self-init via `OnModuleInit`.
 
 ### Profile completeness
 

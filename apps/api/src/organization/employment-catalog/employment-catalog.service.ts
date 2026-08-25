@@ -13,6 +13,7 @@ import {
   CatalogInvariantError,
   compareCatalogItems,
   EmploymentCatalogValidationError,
+  employmentCatalogValidationMessage,
   nextCatalogSortOrder,
   normalizeCatalogDescription,
   normalizeCatalogName,
@@ -168,7 +169,9 @@ export class EmploymentCatalogService {
 
   private rethrowMapped(error: unknown): never {
     if (error instanceof EmploymentCatalogValidationError) {
-      throw new BadRequestException(error.code);
+      throw new BadRequestException(
+        employmentCatalogValidationMessage(error.code),
+      );
     }
     if (error instanceof CatalogInvariantError) {
       throw new InternalServerErrorException(error.message);
