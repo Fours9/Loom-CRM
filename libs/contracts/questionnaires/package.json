@@ -6,7 +6,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "lint": "echo \"no lint\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "pnpm --filter @loom/position-skill-catalog build && tsc -p tsconfig.json --noEmit",
     "test": "echo \"no tests\"",
     "build": "echo \"contracts are source-only\""
   },
