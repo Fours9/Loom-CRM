@@ -11,6 +11,8 @@ describe('list core completeness parity helpers', () => {
     phoneNumber: null as string | null,
     workEmail: 'w@ex.com',
     personalPhoneNumber: null as string | null,
+    personalEmail: null as string | null,
+    personalTelegram: null as string | null,
     photoUrl: null as string | null,
     birthDate: null as string | null,
     city: null as string | null,

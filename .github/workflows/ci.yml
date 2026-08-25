@@ -61,9 +61,10 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      - name: Integration tests (employment catalog concurrency)
+      - name: Integration tests
         run: |
           pnpm --filter @loom/api test:integration:ensure-db
+          DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter @loom/api migration:run
           pnpm --filter @loom/api test:integration
 
       - name: Build

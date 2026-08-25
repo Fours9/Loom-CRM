@@ -1,13 +1,17 @@
+import { DataSource } from 'typeorm';
 import { allocateNextAssignmentCode } from './assignments/questionnaire-assignment-code';
+import { requireIsolatedTestDatabaseUrl } from '../../platform/database/require-isolated-test-database-url';
 
-const runDb = process.env.DATABASE_URL ? describe : describe.skip;
-
-runDb('Questionnaire assignment code allocator (live PG)', () => {
+/**
+ * Live PostgreSQL concurrency for assignment code allocator.
+ * Requires migrated TEST_DATABASE_URL (loom_crm_test).
+ */
+describe('Questionnaire assignment code allocator (integration)', () => {
   it('two parallel allocate TX for same prefix yield distinct codes and advance counter', async () => {
-    const { DataSource } = await import('typeorm');
+    const url = requireIsolatedTestDatabaseUrl();
     const ds = new DataSource({
       type: 'postgres',
-      url: process.env.DATABASE_URL,
+      url,
       synchronize: false,
     });
     await ds.initialize();
