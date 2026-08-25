@@ -11,6 +11,8 @@
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "typecheck": "pnpm --filter @loom/position-skill-catalog build && pnpm --filter @loom/employee-contacts build && pnpm --filter @loom/questionnaire-schema build && tsc -p tsconfig.build.json --noEmit",
     "test": "jest",
+    "test:integration": "jest --config jest.integration.config.js",
+    "test:integration:ensure-db": "node ./scripts/ensure-test-db.cjs",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/platform/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/platform/database/data-source.ts",
     "migration:show": "typeorm-ts-node-commonjs migration:show -d src/platform/database/data-source.ts",

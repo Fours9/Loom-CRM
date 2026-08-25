@@ -1,5 +1,7 @@
 export const DOCUMENT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MiB
 
+export const DOCUMENT_MAX_FILES_PER_SUBMISSION = 20;
+
 export const DOCUMENT_ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',

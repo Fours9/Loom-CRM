@@ -40,7 +40,7 @@ export class NotificationsService {
   listForUser(userId: string): Promise<Notification[]> {
     return this.notifications.find({
       where: { recipientUserId: userId, dismissedAt: IsNull() },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'DESC', id: 'DESC' },
       take: 100,
     });
   }

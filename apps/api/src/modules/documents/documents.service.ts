@@ -21,10 +21,9 @@ import {
 import {
   DOCUMENT_ALLOWED_MIME_TYPES,
   DOCUMENT_MAX_FILE_SIZE,
+  DOCUMENT_MAX_FILES_PER_SUBMISSION,
 } from './document-limits';
 import { normalizeUploadedFileName } from '../../platform/http/normalize-uploaded-file-name';
-
-export const DOCUMENT_MAX_FILES_PER_SUBMISSION = 20;
 
 export type EmployeeDocumentFileDto = {
   id: string;
@@ -79,7 +78,7 @@ export class DocumentsService {
 
     const rows = await this.documents.find({
       where: { employeeId: employee.id },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'DESC', id: 'DESC' },
     });
 
     const visible = rows.filter((row) =>
@@ -90,7 +89,7 @@ export class DocumentsService {
         ? []
         : await this.files.find({
             where: { documentId: In(visible.map((r) => r.id)) },
-            order: { createdAt: 'ASC' },
+            order: { createdAt: 'ASC', id: 'ASC' },
           });
 
     const byDocument = new Map<string, EmployeeDocumentFile[]>();

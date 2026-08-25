@@ -26,6 +26,7 @@ const ALLOWED_MIME = new Set([
   'image/png',
 ]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILES = 20;
 
 @Component({
   selector: 'loom-employee-document-upload-dialog',
@@ -136,7 +137,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
               }
             </ul>
           } @else {
-            <p class="muted hint">PDF / JPG / PNG, до 10 МБ кожен.</p>
+            <p class="muted hint">PDF / JPG / PNG, до 10 МБ кожен, не більше 20 файлів.</p>
           }
         </div>
 
@@ -431,6 +432,10 @@ export class EmployeeDocumentUploadDialogComponent implements OnInit, OnDestroy 
     const next = [...this.pending()];
     const errors: string[] = [];
     for (const file of picked) {
+      if (next.length >= MAX_FILES) {
+        errors.push('Не більше 20 файлів');
+        break;
+      }
       if (!ALLOWED_MIME.has(file.type)) {
         errors.push(`${file.name}: недозволений тип`);
         continue;

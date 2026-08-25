@@ -51,6 +51,8 @@ Historical Review uses `submission.context_json` (or registry if null), never cu
 
 ## Migrations
 
+Таблиця відстежує зареєстровані міграції від початку Position Catalog (1900+), включно із суміжними Platform/Organization/Documents змінами.
+
 | Migration class / file | PR | What |
 | --- | --- | --- |
 | `PositionsDirectionId1730000019000` | PR3 | briefly added `positions.direction_id` |
@@ -63,7 +65,10 @@ Historical Review uses `submission.context_json` (or registry if null), never cu
 | `SkillGroupOptional1730000026000` | this increment | `skills.group_id` nullable (optional live classification) |
 | `EmploymentCatalogsAndAssignmentFields1730000027000` | employment catalogs | `departments.location`, `hired_at`, work formats / employment types, planned assignment fields |
 | `PositionsDepartmentFkAndOrphanCleanup1730000028000` | follow-up | clear orphan `positions.department_id`; add `FK_positions_department` ON DELETE SET NULL |
+| `NotificationsDismissedAt1730000029000` | platform | soft-dismiss inbox (`notifications.dismissed_at`) |
+| `EmployeeDocumentFiles1730000030000` | documents | `employee_document_files`; multi-file submissions |
 | `EmploymentCatalogDescription1730000031000` | employment catalogs | nullable `description` on `work_formats` / `employment_types` (order via DnD / `sort_order`, not a form field) |
+| `EmploymentAssignmentComment1730000032000` | employment | rename `employment_assignments.change_reason` → `comment` |
 
 **Hierarchy:** Direction ←(optional) Department ←(optional) Position. Position stores `directionId` (Decision #10 / ADR 0010): department set → inherit; no department → optional manual.
 

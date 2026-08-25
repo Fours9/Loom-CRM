@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 export type EmploymentCatalogItem = {
   id: string;
   name: string;
@@ -9,6 +7,30 @@ export type EmploymentCatalogItem = {
 };
 
 export const EMPLOYMENT_CATALOG_DESCRIPTION_MAX = 500;
+
+export type EmploymentCatalogValidationCode =
+  | 'name_required'
+  | 'name_too_long'
+  | 'description_too_long'
+  | 'invalid_permutation'
+  | 'unknown_id'
+  | 'duplicate_id'
+  | 'ordered_ids_invalid';
+
+export class EmploymentCatalogValidationError extends Error {
+  constructor(readonly code: EmploymentCatalogValidationCode) {
+    super(code);
+    this.name = 'EmploymentCatalogValidationError';
+  }
+}
+
+/** Internal invariant after lock + validated permutation; maps to HTTP 500. */
+export class CatalogInvariantError extends Error {
+  constructor(message = 'Catalog invariant violated') {
+    super(message);
+    this.name = 'CatalogInvariantError';
+  }
+}
 
 export function compareCatalogItems<T extends EmploymentCatalogItem>(
   a: T,
@@ -27,10 +49,10 @@ export function compareCatalogItems<T extends EmploymentCatalogItem>(
 export function normalizeCatalogName(raw: string): string {
   const name = raw.trim();
   if (!name) {
-    throw new BadRequestException('Catalog name is required');
+    throw new EmploymentCatalogValidationError('name_required');
   }
   if (name.length > 64) {
-    throw new BadRequestException('Catalog name must be at most 64 characters');
+    throw new EmploymentCatalogValidationError('name_too_long');
   }
   return name;
 }
@@ -46,9 +68,7 @@ export function normalizeCatalogDescription(
     return null;
   }
   if (description.length > EMPLOYMENT_CATALOG_DESCRIPTION_MAX) {
-    throw new BadRequestException(
-      `Catalog description must be at most ${EMPLOYMENT_CATALOG_DESCRIPTION_MAX} characters`,
-    );
+    throw new EmploymentCatalogValidationError('description_too_long');
   }
   return description;
 }
@@ -72,18 +92,16 @@ export function buildCatalogReorderUpdates(
   orderedIds: readonly string[],
 ): Array<{ id: string; sortOrder: number }> {
   if (orderedIds.length !== existingIds.length) {
-    throw new BadRequestException(
-      'orderedIds must include every catalog item exactly once',
-    );
+    throw new EmploymentCatalogValidationError('invalid_permutation');
   }
   const existing = new Set(existingIds);
   const seen = new Set<string>();
   for (const id of orderedIds) {
     if (!existing.has(id)) {
-      throw new BadRequestException('orderedIds contains unknown id');
+      throw new EmploymentCatalogValidationError('unknown_id');
     }
     if (seen.has(id)) {
-      throw new BadRequestException('orderedIds contains duplicate id');
+      throw new EmploymentCatalogValidationError('duplicate_id');
     }
     seen.add(id);
   }

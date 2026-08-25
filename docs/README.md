@@ -20,15 +20,15 @@
 
 | Шар / модуль | Стан |
 | --- | --- |
-| **Platform** | auth, identity, permissions, audit, notifications, settings, health, bootstrap, DB |
-| **Organization** | employees (Profile Core), departments, positions, schedules, access scope |
-| **Absences** | повний PW-паритетний модуль відсутностей |
-| **Documents** | MVP: `employee_documents` + `employee_document_files`, People-вкладка + агрегат вкладень Absences (storage поки `content_base64`; Platform Files — planned) |
+| **Platform** | auth, identity, permissions, audit, notifications (soft-dismiss: `dismissed_at`, `POST …/dismiss`), settings, health, bootstrap, DB |
+| **Organization** | employees (Profile Core), departments, positions, schedules, access scope; assignment free-text field `comment` (was `change_reason`) |
+| **Absences** | повний PW-паритетний модуль; `canRequestDeletion` для approved\|rejected\|cancelled (`pwPermissions`) |
+| **Documents** | MVP: `employee_documents` + `employee_document_files` (multi-file upload), People-вкладка + агрегат вкладень Absences (storage поки `content_base64`; Platform Files — planned) |
 | **Questionnaires** | Phase 3: immersive fill; unattached `new` + attach/detach; template types (360=Повна); print stubs; PDF layout contract in roadmap (not shipped) |
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
-**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робота** (Посада · Графік роботи · Заявки · Календар; Absences `public-api`), Документи, **Анкети** (Questionnaires — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [catalog](product/questionnaire-360-field-catalog.md); fill wizard `/questionnaires/:id`), Показники (stub), **Адміністрування** (підвкладка Історія), Згодом (stub); visibility gated by permissions/capabilities (вкладка Робота завжди; підвкладки графіка — `absences.calendar.view`). Історія: актор + UA summary. Employment: `hiredAt` now lives on `employees.hired_at`; assignment `startDate` is the transfer date; planned assignments activate through lifecycle service; create/edit assignment у People — модалка (scroll + Створити/Зберегти). Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
+**Профіль UI:** `/people/:id` — вкладки Дані працівника, **Робота** (Посада · Графік роботи · Заявки · Календар; Absences `public-api`), Документи, **Анкети** (Questionnaires — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [catalog](product/questionnaire-360-field-catalog.md); fill wizard `/questionnaires/:id`), Показники (stub), **Адміністрування** (підвкладка Історія), Згодом (stub); visibility gated by permissions/capabilities (вкладка Робота завжди; підвкладки графіка — `absences.calendar.view`). Історія: актор + UA summary. Employment: `hiredAt` on `employees.hired_at`; assignment `startDate` = transfer date; planned activation via lifecycle; assignment free-text **`comment`** (API/DB; historical audit JSON may still have `changeReason` — no backfill); create/edit у модалці. Список `/people`: core `completenessPercent`, filter/sort. PW-картка: `/absences/employees/:id`. Living: [hr-profile-roadmap](product/hr-profile-roadmap.md).
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 

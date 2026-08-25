@@ -4,7 +4,7 @@ import {
 } from './notification-frame';
 
 describe('normalizeNotificationType', () => {
-  it('strips absence. prefix used by Loom API', () => {
+  it('strips absence.request. prefix used by Loom API', () => {
     expect(normalizeNotificationType('absence.request.approved')).toBe(
       'request.approved',
     );
@@ -14,6 +14,10 @@ describe('normalizeNotificationType', () => {
     expect(normalizeNotificationType('request.rejected')).toBe(
       'request.rejected',
     );
+  });
+
+  it('does not strip unrelated absence. prefixes', () => {
+    expect(normalizeNotificationType('absence.foo')).toBe('absence.foo');
   });
 });
 

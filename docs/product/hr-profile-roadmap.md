@@ -59,7 +59,7 @@ PW-паритетна картка без змін: `/absences/employees/:id`.
 
 - `Дати` редагує employee-level `hiredAt` через `PATCH /employees/:id/employment-meta`. Це дата початку роботи / найму і вона не змінюється автоматично від переводів.
 - `Посада` (підвкладка вкладки **Робота**) використовує shared org catalog snapshot (`directions -> departments -> positions`) і довідники `workFormats` / `employmentTypes`.
-- Створення й редагування призначення — **модалка** (`EmploymentAssignmentDialogComponent`): один exclusive dialog slot (`create` | `edit`), крестик / Escape / backdrop close, scrollable body, кнопка **Створити** або **Зберегти**. Write path лишається `EmploymentAssignmentsApiService` → `EmployeeProfileService`.
+- Створення й редагування призначення — **модалка** (`EmploymentAssignmentDialogComponent`): один exclusive dialog slot (`create` | `edit`), крестик / Escape / backdrop close, scrollable body, кнопка **Створити** або **Зберегти**. Поле **Коментар** → API/DB `comment` (не плутати з `employees.comment`). Historical audit metadata may still have `changeReason`; new assignment API/domain/audit uses `comment`; no backfill. Write path лишається `EmploymentAssignmentsApiService` → `EmployeeProfileService`.
 - `companyId` більше не вводиться в UI вручну; компанія лишається read-model, derived з обраного напрямку.
 - Майбутня дата переводу створює `planned` assignment. Поточне активне призначення не перемикається відразу; activation виконується lifecycle service.
 - Якщо planned assignment не може активуватися на дату старту, запис лишається `planned` і показує `activationBlockedReason` в історії/деталях.
@@ -154,6 +154,15 @@ assignment.status === 'changes_requested'
 
 ## Phase 7 — Documents (деталь)
 
-**Є:** `employee_documents` + `employee_document_files` (одне подання → кілька файлів, як absence attachments); permissions `documents.view` / `documents.manage`; People-вкладка Документи; upload через модалку (multi-file в одному поданні), list/download/preview/soft-delete подання; агрегат absence attachments; type-aware projection (manager не бачить чужі questionnaire/identity/medical/consent).
+**Є:** `employee_documents` + `employee_document_files` (одне подання → кілька файлів, як absence attachments); permissions `documents.view` / `documents.manage`; People-вкладка Документи; upload через модалку (multi-file в одному поданні, FE cumulative max 20), list/download (`…/files/:fileId/download`)/preview/soft-delete подання; агрегат absence attachments; type-aware projection (manager не бачить чужі questionnaire/identity/medical/consent).
 
 **Немає:** Platform Files (зараз interim `content_base64`); verification workflow; consent versions; окремий consents module.
+
+## Notifications inbox (living)
+
+- Soft-dismiss: `POST /api/v1/notifications/:id/dismiss` → `dismissed_at`; list/unread exclude dismissed (не hard delete).
+- Frame tones: normalize legacy `absence.request.*` → `request.*` only; new absences emits use `request.approved` / `request.rejected`.
+
+## Absences deletion (living)
+
+- `pwPermissions.canRequestDeletion`: statuses **approved | rejected | cancelled**; actors admin | owner | submission-department manager. Runtime SoT = `pw-permissions.ts` only.

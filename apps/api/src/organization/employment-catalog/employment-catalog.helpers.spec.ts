@@ -1,6 +1,7 @@
 import {
-  compareCatalogItems,
   buildCatalogReorderUpdates,
+  compareCatalogItems,
+  EmploymentCatalogValidationError,
   nextCatalogSortOrder,
   normalizeCatalogDescription,
 } from './employment-catalog.helpers';
@@ -31,8 +32,16 @@ describe('employment-catalog.helpers', () => {
 
   it('buildCatalogReorderUpdates rejects incomplete permutations', () => {
     expect(() => buildCatalogReorderUpdates(['a', 'b'], ['a'])).toThrow(
-      /exactly once/,
+      EmploymentCatalogValidationError,
     );
+    try {
+      buildCatalogReorderUpdates(['a', 'b'], ['a']);
+    } catch (error) {
+      expect(error).toBeInstanceOf(EmploymentCatalogValidationError);
+      expect((error as EmploymentCatalogValidationError).code).toBe(
+        'invalid_permutation',
+      );
+    }
   });
 
   it('nextCatalogSortOrder appends after max', () => {

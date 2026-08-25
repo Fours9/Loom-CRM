@@ -20,9 +20,9 @@ Forbidden: Platform → Absences / Documents / Questionnaires; Organization → 
 
 ## Layers
 
-1. **Platform** — auth, identity, permissions, audit, notifications, settings, files (**planned**), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`, `normalizeUploadedFileName`).
+1. **Platform** — auth, identity, permissions, audit, notifications (list/unread exclude soft-dismissed; `POST /notifications/:id/dismiss` sets `dismissed_at`), settings, files (**planned**), health, bootstrap, database; shared HTTP helpers (e.g. `attachmentContentDisposition`, `normalizeUploadedFileName`).
 2. **Organization** — employees (Profile Core: contacts, emergency, important dates, employment assignments), departments, positions / Position Catalog (sidebar **`/positions`** «Керування посадами» — UI in `apps/web/src/app/features/positions/`; directions/departments/positions rail + full-width Groups+Skills block + position edit modal; root `/positions` tabs **Керування посадами** and **Формати** — employment catalogs with description + drag-reorder (`EmploymentCatalogService` single entry; [position-catalog.md](dev/position-catalog.md)); per-position catalog at **`/positions/:id/catalog`** via the book icon (does not load settings); [ADR 0010](adr/0010-position-catalog-and-questionnaire-context.md)), schedules, access scope. Skill native scale (`range`/`percent`) is independent of questionnaire matrix 0–5. Skill group is optional live classification (`group_id` nullable). `DELETE` skill/group is hard delete; `PATCH isActive` toggles. `SkillsService` is the application entry point for skill/group mutations (generated group codes, Group→Skill lock protocol). `PositionRequirementsService` lists requirements `createdAt ASC, id ASC`. Pre-create requirements exist only as a frontend draft queue.
-3. **Business modules** — absences (product UI: **Робочий календар** / TimeEvent domain — [ADR 0008](adr/0008-work-calendar-via-absences.md)); documents (MVP: employee file list/upload + People aggregate with time-event attachments); **questionnaires** (360° policy catalog + module — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [field catalog](product/questionnaire-360-field-catalog.md)); later onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
+3. **Business modules** — absences (product UI: **Робочий календар** / TimeEvent domain — [ADR 0008](adr/0008-work-calendar-via-absences.md); deletion workflow includes **rejected** via `pwPermissions.canRequestDeletion`); documents (MVP: employee multi-file submissions + People aggregate with time-event attachments); **questionnaires** (360° policy catalog + module — [ADR 0009](adr/0009-questionnaire-360-mvp.md), [field catalog](product/questionnaire-360-field-catalog.md)); later onboarding, reviews, goals, skills (see [hr-profile-roadmap.md](product/hr-profile-roadmap.md)).
 
 ### Position direction invariant
 
@@ -44,10 +44,11 @@ Practical semantics:
 - `companyId` is derived only from the resolved direction; write DTO no longer accepts it.
 - Future-effective transfers persist as `status='planned'`; activation runs through `EmploymentAssignmentLifecycleService` from the startup composition root, not from profile reads.
 - `employees.hired_at` is now the employee-level hire/work-start date. Assignment `startDate` is the effective transfer date and no longer doubles as hire date.
+- Assignment free-text field is **`comment`** (column/API; was `change_reason` / `changeReason`). Historical audit JSON may contain `changeReason`; new writes use `comment`. No backfill. Do not confuse with `employees.comment` or questionnaire assignment service comment.
 
 ### Documents MVP
 
-Documents module owns `employee_documents` (submission) + `employee_document_files` (attachments; interim `content_base64` until Platform Files). Sensitive document types (`questionnaire`, `identity`, `medical`, `consent`) are projected server-side: owner + admin only; department managers see only employment/education/certificate/other when viewing others. Upload/delete: `documents.manage` (Admin). View: `documents.view` (all roles) + `EmployeeAccessService` scope.
+Documents module owns `employee_documents` (submission) + `employee_document_files` (attachments; interim `content_base64` until Platform Files). Upload: `POST …/documents/employees/:employeeId` with `files` (multi, max 20; limits in `document-limits.ts`). Download: `GET …/documents/:documentId/files/:fileId/download`. List orders documents `createdAt DESC, id DESC` and files `createdAt ASC, id ASC`. Sensitive document types (`questionnaire`, `identity`, `medical`, `consent`) are projected server-side: owner + admin only; department managers see only employment/education/certificate/other when viewing others. Upload/delete: `documents.manage` (Admin). View: `documents.view` (all roles) + `EmployeeAccessService` scope.
 
 ### Identity roles (runtime)
 
@@ -59,7 +60,7 @@ Password lifecycle is **Platform `AuthService`** only. `CurrentUserResponse.must
 
 CRM employee profile: `/people/:id` — tabs Дані працівника, Робота (Посада · Графік роботи · Заявки · Календар), Документи, Анкети (Questionnaires 360 — [ADR 0009](adr/0009-questionnaire-360-mvp.md)), Показники (stub), Адміністрування (підвкладка Історія), Згодом (stub). Tab «Робота» always visible (hosts Посада); schedule/requests/calendar subtabs gated by `absences.calendar.view`. Also gated: `documents.view`, `questionnaires.view`, `capabilities.canViewHistory` (hide, not empty-state). History timeline: actor label + UA summary. People list `/people`: core `completenessPercent`, `sortBy=completeness`, `maxCompleteness`. Absences PW-parity card: `/absences/employees/:id` (unchanged). Living phase status: [hr-profile-roadmap.md](product/hr-profile-roadmap.md). Work calendar intent: [work-calendar-roadmap.md](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md). Boundaries: [ADR 0007](adr/0007-employee-profile-boundaries.md).
 
-People «Посада» (under Робота) create/edit uses a dedicated modal dialog (exclusive create|edit state, scrollable body, Create/Save). FE write entry remains `EmploymentAssignmentsApiService`; cascade filters stay in `employment-org-filter.policy`.
+People «Посада» (under Робота) create/edit uses a dedicated modal dialog (exclusive create|edit state, scrollable body, Create/Save; free-text field **Коментар** → API `comment`). FE write entry remains `EmploymentAssignmentsApiService`; cascade filters stay in `employment-org-filter.policy`.
 
 ### Questionnaires FE boundary
 

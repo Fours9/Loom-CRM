@@ -8,13 +8,13 @@ export type NotificationFrameTone =
 
 /**
  * Loom absences historically emit `absence.request.*`; PW uses `request.*`.
- * Normalize so frame tones match either source (including rows already in DB).
+ * Normalize only that legacy prefix so frame tones match either source.
  */
 export function normalizeNotificationType(
   notificationType: string | null | undefined,
 ): string {
   if (!notificationType) return '';
-  return notificationType.startsWith('absence.')
+  return notificationType.startsWith('absence.request.')
     ? notificationType.slice('absence.'.length)
     : notificationType;
 }

@@ -1,11 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityTarget, ObjectLiteral, Repository } from 'typeorm';
 import { EmploymentType } from './employment-type.entity';
 import { WorkFormat } from './work-format.entity';
 import {
   buildCatalogReorderUpdates,
+  CatalogInvariantError,
   compareCatalogItems,
+  EmploymentCatalogValidationError,
   nextCatalogSortOrder,
   normalizeCatalogDescription,
   normalizeCatalogName,
@@ -27,6 +34,7 @@ export class EmploymentCatalogService {
     private readonly workFormats: Repository<WorkFormat>,
     @InjectRepository(EmploymentType)
     private readonly employmentTypes: Repository<EmploymentType>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async listWorkFormats(all = false): Promise<WorkFormat[]> {
@@ -41,29 +49,37 @@ export class EmploymentCatalogService {
     name: string;
     description?: string | null;
   }): Promise<WorkFormat> {
-    const existing = await this.workFormats.find();
-    return this.workFormats.save(
-      this.workFormats.create({
-        name: normalizeCatalogName(input.name),
-        description: normalizeCatalogDescription(input.description),
-        sortOrder: nextCatalogSortOrder(existing),
-        isActive: true,
-      }),
-    );
+    return this.withCatalogWriter(WorkFormat, 'work_formats', async (repo) => {
+      const existing = await repo.find();
+      return repo.save(
+        repo.create({
+          name: normalizeCatalogName(input.name),
+          description: normalizeCatalogDescription(input.description),
+          sortOrder: nextCatalogSortOrder(existing),
+          isActive: true,
+        }),
+      );
+    });
   }
 
   async createEmploymentType(input: {
     name: string;
     description?: string | null;
   }): Promise<EmploymentType> {
-    const existing = await this.employmentTypes.find();
-    return this.employmentTypes.save(
-      this.employmentTypes.create({
-        name: normalizeCatalogName(input.name),
-        description: normalizeCatalogDescription(input.description),
-        sortOrder: nextCatalogSortOrder(existing),
-        isActive: true,
-      }),
+    return this.withCatalogWriter(
+      EmploymentType,
+      'employment_types',
+      async (repo) => {
+        const existing = await repo.find();
+        return repo.save(
+          repo.create({
+            name: normalizeCatalogName(input.name),
+            description: normalizeCatalogDescription(input.description),
+            sortOrder: nextCatalogSortOrder(existing),
+            isActive: true,
+          }),
+        );
+      },
     );
   }
 
@@ -71,36 +87,43 @@ export class EmploymentCatalogService {
     id: string,
     input: EmploymentCatalogWriteInput,
   ): Promise<WorkFormat> {
-    return this.updateCatalog(this.workFormats, 'Work format', id, input);
+    return this.withCatalogWriter(WorkFormat, 'work_formats', (repo) =>
+      this.updateCatalog(repo, 'Work format', id, input),
+    );
   }
 
   async updateEmploymentType(
     id: string,
     input: EmploymentCatalogWriteInput,
   ): Promise<EmploymentType> {
-    return this.updateCatalog(
-      this.employmentTypes,
-      'Employment type',
-      id,
-      input,
+    return this.withCatalogWriter(EmploymentType, 'employment_types', (repo) =>
+      this.updateCatalog(repo, 'Employment type', id, input),
     );
   }
 
   /** Single entry for list order: full permutation of ids → contiguous sort_order. */
   async reorderWorkFormats(orderedIds: string[]): Promise<WorkFormat[]> {
-    return this.reorderCatalog(this.workFormats, orderedIds);
+    return this.withCatalogWriter(WorkFormat, 'work_formats', (repo) =>
+      this.reorderCatalog(repo, orderedIds),
+    );
   }
 
   async reorderEmploymentTypes(orderedIds: string[]): Promise<EmploymentType[]> {
-    return this.reorderCatalog(this.employmentTypes, orderedIds);
+    return this.withCatalogWriter(EmploymentType, 'employment_types', (repo) =>
+      this.reorderCatalog(repo, orderedIds),
+    );
   }
 
   async deleteWorkFormat(id: string): Promise<void> {
-    await this.deleteCatalog(this.workFormats, 'Work format', id);
+    await this.withCatalogWriter(WorkFormat, 'work_formats', (repo) =>
+      this.deleteCatalog(repo, 'Work format', id),
+    );
   }
 
   async deleteEmploymentType(id: string): Promise<void> {
-    await this.deleteCatalog(this.employmentTypes, 'Employment type', id);
+    await this.withCatalogWriter(EmploymentType, 'employment_types', (repo) =>
+      this.deleteCatalog(repo, 'Employment type', id),
+    );
   }
 
   async assertActiveValue(
@@ -110,16 +133,47 @@ export class EmploymentCatalogService {
     if (value == null) {
       return;
     }
-    const normalized = normalizeCatalogName(value);
-    const row =
-      kind === 'workFormat'
-        ? await this.workFormats.findOne({ where: { name: normalized } })
-        : await this.employmentTypes.findOne({ where: { name: normalized } });
-    if (!row || !row.isActive) {
-      throw new BadRequestException(
-        `${kind === 'workFormat' ? 'Work format' : 'Employment type'} is inactive`,
-      );
+    try {
+      const normalized = normalizeCatalogName(value);
+      const row =
+        kind === 'workFormat'
+          ? await this.workFormats.findOne({ where: { name: normalized } })
+          : await this.employmentTypes.findOne({ where: { name: normalized } });
+      if (!row || !row.isActive) {
+        throw new BadRequestException(
+          `${kind === 'workFormat' ? 'Work format' : 'Employment type'} is inactive`,
+        );
+      }
+    } catch (error) {
+      this.rethrowMapped(error);
     }
+  }
+
+  private async withCatalogWriter<TEntity extends ObjectLiteral, TResult>(
+    entity: EntityTarget<TEntity>,
+    table: 'work_formats' | 'employment_types',
+    work: (repo: Repository<TEntity>) => Promise<TResult>,
+  ): Promise<TResult> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        await manager.query(
+          `LOCK TABLE "${table}" IN SHARE ROW EXCLUSIVE MODE`,
+        );
+        return work(manager.getRepository(entity));
+      });
+    } catch (error) {
+      this.rethrowMapped(error);
+    }
+  }
+
+  private rethrowMapped(error: unknown): never {
+    if (error instanceof EmploymentCatalogValidationError) {
+      throw new BadRequestException(error.code);
+    }
+    if (error instanceof CatalogInvariantError) {
+      throw new InternalServerErrorException(error.message);
+    }
+    throw error;
   }
 
   private async listCatalog<T extends EmploymentCatalogItem>(
@@ -158,8 +212,11 @@ export class EmploymentCatalogService {
     repo: Repository<T>,
     orderedIds: string[],
   ): Promise<T[]> {
-    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string')) {
-      throw new BadRequestException('orderedIds must be a string array');
+    if (
+      !Array.isArray(orderedIds) ||
+      orderedIds.some((id) => typeof id !== 'string')
+    ) {
+      throw new EmploymentCatalogValidationError('ordered_ids_invalid');
     }
     const rows = await repo.find();
     const updates = buildCatalogReorderUpdates(
@@ -169,7 +226,11 @@ export class EmploymentCatalogService {
     const byId = new Map(rows.map((row) => [row.id, row]));
     for (const update of updates) {
       const row = byId.get(update.id);
-      if (!row) continue;
+      if (!row) {
+        throw new CatalogInvariantError(
+          'Reorder update id missing after validated permutation',
+        );
+      }
       row.sortOrder = update.sortOrder;
     }
     await repo.save([...byId.values()]);

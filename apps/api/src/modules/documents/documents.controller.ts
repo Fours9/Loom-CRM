@@ -20,12 +20,12 @@ import { Permission } from '../../platform/permissions/permission.names';
 import { RequirePermissions } from '../../platform/permissions/require-permissions.decorator';
 import { PermissionsGuard } from '../../platform/permissions/permissions.guard';
 import { attachmentContentDisposition } from '../../platform/http/content-disposition';
-import {
-  DOCUMENT_MAX_FILES_PER_SUBMISSION,
-  DocumentsService,
-} from './documents.service';
+import { DocumentsService } from './documents.service';
 import { UploadEmployeeDocumentDto } from './upload-employee-document.dto';
-import { DOCUMENT_MAX_FILE_SIZE } from './document-limits';
+import {
+  DOCUMENT_MAX_FILE_SIZE,
+  DOCUMENT_MAX_FILES_PER_SUBMISSION,
+} from './document-limits';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
