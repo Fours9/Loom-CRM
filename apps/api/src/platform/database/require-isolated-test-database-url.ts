@@ -5,14 +5,9 @@
 
 const ALLOWED_TEST_DB = 'loom_crm_test';
 
-/**
- * Allow only `loom_crm_test` or names matching `*_test` (lowercase snake).
- * Rejects `loom_crm`, `production`, `staging`, `company_crm`, etc.
- */
+/** Allow only `loom_crm_test` (matches ensure-test-db.cjs / CI). */
 export function isAllowedIsolatedTestDatabaseName(dbName: string): boolean {
-  if (!dbName) return false;
-  if (dbName === ALLOWED_TEST_DB) return true;
-  return /^[a-z][a-z0-9]*(_[a-z0-9]+)*_test$/.test(dbName);
+  return dbName === ALLOWED_TEST_DB;
 }
 
 export function requireIsolatedTestDatabaseUrl(): string {
@@ -39,7 +34,7 @@ export function requireIsolatedTestDatabaseUrl(): string {
   );
   if (!isAllowedIsolatedTestDatabaseName(dbName)) {
     throw new Error(
-      `TEST_DATABASE_URL database must be "${ALLOWED_TEST_DB}" or match *_test (got "${dbName}")`,
+      `TEST_DATABASE_URL database must be "${ALLOWED_TEST_DB}" (got "${dbName}")`,
     );
   }
   return url;

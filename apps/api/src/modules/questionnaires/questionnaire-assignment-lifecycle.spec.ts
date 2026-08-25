@@ -23,8 +23,6 @@ function employeeActor(): User {
 }
 
 describe('QuestionnaireAssignmentService lifecycle', () => {
-  const employee = { id: 'emp-1', userId: 'emp-user' };
-
   function buildService(opts: {
     status: string;
     reviewedAt?: Date | null;

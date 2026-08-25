@@ -43,7 +43,6 @@ export function contactsBundleFromProfile(
   profile: EmployeeProfileResponse,
 ): EmployeeContactsBundle {
   const contacts = profile.sections.contacts ?? [];
-  const personal = profile.sections.personal;
   const emergency = profile.sections.emergencyContact ?? [];
 
   return normalizeEmployeeContactsBundle({

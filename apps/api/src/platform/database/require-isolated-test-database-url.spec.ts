@@ -21,8 +21,8 @@ describe('requireIsolatedTestDatabaseUrl', () => {
     expect(requireIsolatedTestDatabaseUrl()).toContain('loom_crm_test');
   });
 
-  it('allows other *_test names', () => {
-    expect(isAllowedIsolatedTestDatabaseName('ci_catalog_test')).toBe(true);
+  it('rejects other *_test names (ensure-db only creates loom_crm_test)', () => {
+    expect(isAllowedIsolatedTestDatabaseName('ci_catalog_test')).toBe(false);
   });
 
   it('rejects loom_crm, production, staging, company_crm', () => {

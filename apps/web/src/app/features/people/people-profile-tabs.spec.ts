@@ -3,7 +3,6 @@ import type { EmployeeProfileCapabilities } from '@loom/contracts-employees';
 import {
   resolvePeopleProfileTab,
   visiblePeopleProfileTabs,
-  type PeopleProfileTabId,
 } from './people-profile-tabs';
 
 const capsViewHistory: EmployeeProfileCapabilities = {

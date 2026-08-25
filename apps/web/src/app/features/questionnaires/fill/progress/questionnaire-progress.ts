@@ -7,7 +7,6 @@ import {
   completionPercentVisible,
   isQuestionnaireFieldVisible,
   areStepVisibleRequiredValid,
-  listInactiveOwnAnswers,
 } from '@loom/questionnaire-schema';
 import {
   collectStepIssues,
@@ -206,13 +205,6 @@ export function reviewRowsForStep(
     title: '',
     steps: allSteps,
   });
-  const schema = {
-    code: 'x',
-    version: 1,
-    title: '',
-    steps: allSteps,
-  };
-  const inactive = new Set(listInactiveOwnAnswers(schema, answers));
 
   const rows: Array<{
     fieldKey: string;

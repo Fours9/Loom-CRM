@@ -610,7 +610,7 @@ export class EmployeesService {
         d.isWorkingDay !== undefined
           ? Boolean(d.isWorkingDay)
           : d.isDayOff !== undefined
-            ? !Boolean(d.isDayOff)
+            ? !d.isDayOff
             : true;
       return this.schedules.create({
         employeeId,

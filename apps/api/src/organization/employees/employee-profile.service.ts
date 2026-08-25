@@ -32,9 +32,6 @@ import {
 } from './employee-history.projector';
 import {
   isPersonalContactType,
-  legacyPersonalFromContacts,
-  normalizePersonalContactsForWrite,
-  PERSONAL_CONTACT_TYPES,
   resolvePrimaryPersonalValue,
   type PersonalContactWriteInput,
 } from './employee-personal-contacts';
@@ -44,7 +41,7 @@ import { Position } from '../positions/position.entity';
 import { Department } from '../departments/department.entity';
 import { DepartmentsService } from '../departments/departments.service';
 import { EmploymentCatalogService } from '../employment-catalog/employment-catalog.service';
-import { BusinessDateClock, type DateOnly } from './business-date-clock';
+import { BusinessDateClock } from './business-date-clock';
 import { didAssignmentHierarchyDrift } from './assignment-hierarchy-drift.policy';
 import {
   getPositionBlockedReason,

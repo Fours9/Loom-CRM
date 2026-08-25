@@ -16,7 +16,7 @@ describe('QuestionnaireAutosaveQueue', () => {
 
   it('debounces to a single save', async () => {
     const save = jest.fn(async () => ({ ok: true as const, revision: 1 }));
-    let generation = 1;
+    const generation = 1;
     const q = new QuestionnaireAutosaveQueue({
       debounceMs: 1300,
       isBlocked: () => false,

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource, EntityManager, getMetadataArgsStorage } from 'typeorm';
 import { Skill } from './skill.entity';
@@ -219,13 +221,10 @@ describe('Skill group optional schema', () => {
   });
 
   it('registers SkillGroupOptional1730000026000 in typeorm-options migrations[]', () => {
-    const src = require('node:fs').readFileSync(
-      require('node:path').join(
-        __dirname,
-        '../../platform/database/typeorm-options.ts',
-      ),
+    const src = readFileSync(
+      join(__dirname, '../../platform/database/typeorm-options.ts'),
       'utf8',
-    ) as string;
+    );
     expect(src).toContain("from './migrations/1730000026000-SkillGroupOptional'");
     expect(src).toContain('SkillGroupOptional1730000026000');
     expect(new SkillGroupOptional1730000026000().name).toBe(
