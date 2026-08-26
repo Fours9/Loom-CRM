@@ -26,7 +26,10 @@ function Test-Fours9OnlyCommit([string]$sha) {
 git fetch hr586 | Out-Null
 
 $branch = '_hr586_push_tmp'
-git branch -D $branch 2>$null | Out-Null
+git show-ref --verify --quiet "refs/heads/$branch"
+if ($LASTEXITCODE -eq 0) {
+  git branch -D $branch | Out-Null
+}
 
 # Lines: "+ <sha>" = not on hr586; "- <sha>" = equivalent patch already there
 $cherry = @(git cherry hr586/master master)
@@ -62,7 +65,12 @@ try {
   Write-Host 'hr586/master updated.'
 }
 finally {
-  if ($failed) { git cherry-pick --abort 2>$null | Out-Null }
+  if ($failed) {
+    git cherry-pick --abort 2>&1 | Out-Null
+  }
   git checkout master | Out-Null
-  git branch -D $branch 2>$null | Out-Null
+  git show-ref --verify --quiet "refs/heads/$branch"
+  if ($LASTEXITCODE -eq 0) {
+    git branch -D $branch | Out-Null
+  }
 }
