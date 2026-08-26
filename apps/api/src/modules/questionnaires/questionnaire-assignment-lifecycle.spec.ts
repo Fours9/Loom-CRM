@@ -221,6 +221,12 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         })),
       } as never,
       {} as never,
+      {
+        repairContextJson: jest.fn(async (raw: unknown) => ({
+          contextJson: raw ?? null,
+          changed: false,
+        })),
+      } as never,
       access as never,
       users as never,
       permissions as never,

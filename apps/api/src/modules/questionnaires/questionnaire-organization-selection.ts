@@ -167,3 +167,16 @@ export async function resolveQuestionnaireOrganizationSelection(
     directionName: null,
   };
 }
+
+/** Write Position-SoT org triple into draft answers (keeps draft ≡ frozen context). */
+export function applyCanonicalOrganizationAnswers(
+  answers: Record<string, unknown>,
+  org: Pick<
+    QuestionnaireOrganizationSelection,
+    'directionId' | 'departmentId' | 'positionId'
+  >,
+): void {
+  answers['company_work.direction_id'] = org.directionId;
+  answers['company_work.department_id'] = org.departmentId;
+  answers['company_work.position_id'] = org.positionId;
+}

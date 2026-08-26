@@ -22,6 +22,7 @@ import { QuestionnaireResponseService } from './questionnaire-response.service';
 import { QuestionnaireSubmissionService } from './questionnaire-submission.service';
 import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import { QuestionnairePositionContextSyncService } from './questionnaire-position-context-sync.service';
+import { QuestionnaireContextSkillIdBackfillService } from './assignments/questionnaire-context-skill-id-backfill.service';
 import { QuestionnaireSeedService } from './seed/questionnaire-seed.service';
 import { QuestionnairesController } from './questionnaires.controller';
 
@@ -54,6 +55,7 @@ import { QuestionnairesController } from './questionnaires.controller';
     QuestionnaireSubmissionService,
     QuestionnaireProposalService,
     QuestionnairePositionContextSyncService,
+    QuestionnaireContextSkillIdBackfillService,
     QuestionnaireSeedService,
   ],
   controllers: [QuestionnairesController],

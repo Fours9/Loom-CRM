@@ -494,6 +494,7 @@ const ORG_SYNC_KEYS = [
         padding: 0.75rem;
         border: var(--q-panel-border);
         background: var(--q-panel-bg);
+        color: var(--pw-text, inherit);
         display: grid;
         gap: 0.4rem;
         flex: 0 0 auto;
@@ -501,10 +502,58 @@ const ORG_SYNC_KEYS = [
       .banner.conflict {
         border-color: #f04438;
         background: #fef3f2;
+        color: #7a271a;
+      }
+      html[data-theme='dark'] .wizard .banner.conflict {
+        background: color-mix(in srgb, #f04438 28%, #1a2438);
+        border-color: #f97066;
+        color: #fecaca;
       }
       .banner.review {
         background: color-mix(in srgb, #b45309 12%, var(--pw-surface));
         border-color: color-mix(in srgb, #b45309 45%, var(--pw-border));
+        color: var(--pw-text, inherit);
+      }
+      html[data-theme='dark'] .wizard .banner.review {
+        background: color-mix(in srgb, #b45309 22%, #1a2438);
+        border-color: #f59e0b;
+        color: #fde68a;
+      }
+      .errors,
+      .warnings {
+        border-radius: 10px;
+        padding: 0.75rem;
+        border: 1px solid #f04438;
+        background: #fef3f2;
+        color: #7a271a;
+        display: grid;
+        gap: 0.35rem;
+      }
+      .warnings {
+        border-color: #f59e0b;
+        background: #fffbeb;
+        color: #92400e;
+      }
+      html[data-theme='dark'] .wizard .errors {
+        background: color-mix(in srgb, #f04438 28%, #1a2438);
+        border-color: #f97066;
+        color: #fecaca;
+      }
+      html[data-theme='dark'] .wizard .warnings {
+        background: color-mix(in srgb, #f59e0b 22%, #1a2438);
+        border-color: #fbbf24;
+        color: #fde68a;
+      }
+      .errors p,
+      .warnings p,
+      .errors ul,
+      .warnings ul {
+        margin: 0;
+      }
+      .errors .linkish,
+      .warnings .linkish {
+        color: inherit;
+        text-decoration: underline;
       }
       .resolve-actions {
         display: flex;
@@ -519,8 +568,9 @@ const ORG_SYNC_KEYS = [
       }
       .warn {
         margin: 0;
-        color: #b42318;
+        color: inherit;
         font-size: 0.9rem;
+        opacity: 0.95;
       }
       .review-block {
         border: var(--q-panel-border);
@@ -840,6 +890,11 @@ export class QuestionnaireWizardShellComponent {
    */
   private async patchThenSyncPositionContext(): Promise<void> {
     if (!this.store.editable() || this.store.conflict()) return;
+
+    // Draft org empty but freeze has org → seed first. Otherwise sync would
+    // replace a captured skill matrix with an empty catalog.
+    this.seedDraftOrgFromContextIfEmpty();
+
     const flushed = await this.autosave.flush();
     if (!flushed) return;
 
@@ -855,6 +910,7 @@ export class QuestionnaireWizardShellComponent {
         }),
       );
       this.store.applyPositionContextSync(synced);
+      this.syncDesiredExtrasFromContext(synced);
     } catch (err: unknown) {
       const message =
         (err as { error?: { message?: string } })?.error?.message ||
@@ -862,6 +918,42 @@ export class QuestionnaireWizardShellComponent {
       this.store.applySaveError(this.store.getGeneration(), message);
       this.store.markDirtyIfNeeded();
     }
+  }
+
+  private seedDraftOrgFromContextIfEmpty(): void {
+    const detail = this.store.assignment();
+    const catalog = detail?.context?.positionCatalog;
+    if (!catalog) return;
+    const answers = this.store.answers();
+    const draftEmpty = ORG_SYNC_KEYS.every((key) => {
+      const v = answers[key];
+      return v == null || v === '';
+    });
+    const contextHasOrg =
+      catalog.directionId != null ||
+      catalog.departmentId != null ||
+      catalog.positionId != null;
+    if (!draftEmpty || !contextHasOrg) return;
+    this.store.setAnswersPatch({
+      'company_work.direction_id': catalog.directionId,
+      'company_work.department_id': catalog.departmentId,
+      'company_work.position_id': catalog.positionId,
+    });
+  }
+
+  private syncDesiredExtrasFromContext(detail: {
+    context?: {
+      positionCatalog?: {
+        skills?: Array<{ code: string; source?: string }>;
+      };
+    } | null;
+  }): void {
+    const skills = detail.context?.positionCatalog?.skills ?? [];
+    this.desiredExtraSkillCodes.set(
+      skills
+        .filter((s) => s.source === 'questionnaire_extra')
+        .map((s) => s.code),
+    );
   }
 
   reviewRows(stepKey: string) {
@@ -1008,6 +1100,19 @@ export class QuestionnaireWizardShellComponent {
       );
       queueMicrotask(() => this.submitErrorEl?.nativeElement.focus());
       return;
+    }
+
+    // Managing: freeze context ≡ draft org (canonical parents) before submit.
+    if (this.store.assignment()?.templateType === 'managing') {
+      await this.patchThenSyncPositionContext();
+      if (this.store.saveState() === 'error') {
+        this.store.finishSubmitError(
+          this.store.saveError() ??
+            'Не вдалося синхронізувати посаду перед надсиланням',
+        );
+        queueMicrotask(() => this.submitErrorEl?.nativeElement.focus());
+        return;
+      }
     }
 
     const id = this.store.assignment()?.id;

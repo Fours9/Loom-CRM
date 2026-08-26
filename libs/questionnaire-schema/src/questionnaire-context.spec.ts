@@ -1,4 +1,6 @@
 import {
+  backfillV2ContextSkillIds,
+  listV2SkillCodesMissingSkillId,
   parseQuestionnaireContext,
   resolveAllowedSkillCodesFromContextJson,
 } from '@loom/contracts-questionnaires';
@@ -192,6 +194,33 @@ describe('parseQuestionnaireContext (strict)', () => {
         }),
       }).ok,
     ).toBe(false);
+  });
+
+  it('backfills missing V2 skillIds by code map', () => {
+    const raw = {
+      version: 2,
+      positionCatalog: validCatalog({
+        skills: [
+          {
+            ...validSkill,
+            scaleKind: 'range' as const,
+            scaleMin: 0,
+            scaleMax: 5,
+            source: 'position_requirement',
+          },
+        ],
+      }),
+    };
+    expect(listV2SkillCodesMissingSkillId(raw)).toEqual(['sewing']);
+    const filled = backfillV2ContextSkillIds(
+      raw,
+      new Map([['sewing', '11111111-1111-4111-8111-111111111111']]),
+    );
+    expect(filled.ok).toBe(true);
+    if (filled.ok) {
+      expect(filled.changed).toBe(true);
+      expect(parseQuestionnaireContext(filled.value).ok).toBe(true);
+    }
   });
 
   it('rejects skillId on V1', () => {

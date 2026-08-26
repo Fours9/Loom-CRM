@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { type PositionSkillContext, type QuestionnaireContextV2 } from '@loom/contracts-questionnaires';
+import { type PositionSkillContext, type QuestionnaireContextV2, parseQuestionnaireContext } from '@loom/contracts-questionnaires';
 import {
   InvalidPositionSkillsMatrix,
   parsePositionSkillsMatrixStrict,
@@ -33,7 +33,7 @@ import {
   staleRatingCodes,
   validateDesiredExtraSkillCodes,
 } from './questionnaire-position-context-sync.policy';
-import { resolveQuestionnaireOrganizationSelection } from './questionnaire-organization-selection';
+import { resolveQuestionnaireOrganizationSelection, applyCanonicalOrganizationAnswers } from './questionnaire-organization-selection';
 
 const MATRIX_KEY = 'skills.matrix';
 
@@ -151,10 +151,33 @@ export class QuestionnairePositionContextSyncService {
         ...(lockedResponse.answersJson ?? {}),
       } as Record<string, unknown>;
 
+      const existingCtx = parseQuestionnaireContext(
+        lockedAssignment.contextJson,
+      );
+      if (existingCtx.ok) {
+        const catalog = existingCtx.context.positionCatalog;
+        const draftEmpty = [
+          'company_work.direction_id',
+          'company_work.department_id',
+          'company_work.position_id',
+        ].every((key) => {
+          const v = answers[key];
+          return v == null || v === '';
+        });
+        const contextHasOrg =
+          catalog.directionId != null ||
+          catalog.departmentId != null ||
+          catalog.positionId != null;
+        if (draftEmpty && contextHasOrg) {
+          applyCanonicalOrganizationAnswers(answers, catalog);
+        }
+      }
+
       const org = await resolveQuestionnaireOrganizationSelection(
         answers,
         manager,
       );
+      applyCanonicalOrganizationAnswers(answers, org);
 
       const baseSnapshot = await this.positionCatalog.buildSnapshotForPosition(
         lockedAssignment.employeeId,

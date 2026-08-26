@@ -356,8 +356,17 @@ let rowUiSeq = 0;
       }
       .field-error {
         margin: 0;
-        color: #b42318;
+        padding: 0.35rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid #f04438;
+        background: #fef3f2;
+        color: #7a271a;
         font-size: 0.85rem;
+      }
+      :host-context(html[data-theme='dark']) .field-error {
+        background: color-mix(in srgb, #f04438 28%, #1a2438);
+        border-color: #f97066;
+        color: #fecaca;
       }
       .child-field {
         display: grid;

@@ -1002,3 +1002,83 @@ export function resolveAllowedSkillCodesFromContextJson(
     allowedSkillCodes: parsed.context.positionCatalog.skills.map((s) => s.code),
   };
 }
+
+/**
+ * Pre-skillId V2 freezes (source + scale present, skillId omitted) need a one-time
+ * catalog lookup by immutable skill `code` before strict parse.
+ */
+export function listV2SkillCodesMissingSkillId(raw: unknown): string[] {
+  if (!isPlainObject(raw) || raw['version'] !== 2) return [];
+  const pc = raw['positionCatalog'];
+  if (!isPlainObject(pc) || !Array.isArray(pc['skills'])) return [];
+  const codes: string[] = [];
+  for (const item of pc['skills']) {
+    if (!isPlainObject(item)) continue;
+    if (typeof item['skillId'] === 'string') continue;
+    if (typeof item['code'] === 'string') codes.push(item['code']);
+  }
+  return codes;
+}
+
+/**
+ * Copy V2 context_json and set `skillId` on skills that lack it.
+ * Does not invent ids — every missing code must exist in `skillIdByCode`.
+ */
+export function backfillV2ContextSkillIds(
+  raw: unknown,
+  skillIdByCode: ReadonlyMap<string, string>,
+):
+  | { ok: true; value: Record<string, unknown>; changed: boolean }
+  | { ok: false; error: string } {
+  if (!isPlainObject(raw)) {
+    return fail('context must be an object');
+  }
+  if (raw['version'] !== 2) {
+    return { ok: true, value: raw, changed: false };
+  }
+  const pc = raw['positionCatalog'];
+  if (!isPlainObject(pc) || !Array.isArray(pc['skills'])) {
+    return fail('positionCatalog.skills missing or invalid');
+  }
+
+  let changed = false;
+  const skills: unknown[] = [];
+  for (let i = 0; i < pc['skills'].length; i += 1) {
+    const item = pc['skills'][i];
+    if (!isPlainObject(item)) {
+      return fail(`positionCatalog.skills[${i}] must be an object`);
+    }
+    if (typeof item['skillId'] === 'string') {
+      skills.push(item);
+      continue;
+    }
+    const code = item['code'];
+    if (typeof code !== 'string') {
+      return fail(`positionCatalog.skills[${i}].code must be a string`);
+    }
+    const skillId = skillIdByCode.get(code);
+    if (!skillId || !isUuidString(skillId)) {
+      return fail(
+        `positionCatalog.skills[${i}]: no catalog skillId for code ${code}`,
+      );
+    }
+    skills.push({ ...item, skillId });
+    changed = true;
+  }
+
+  if (!changed) {
+    return { ok: true, value: raw, changed: false };
+  }
+
+  return {
+    ok: true,
+    changed: true,
+    value: {
+      ...raw,
+      positionCatalog: {
+        ...pc,
+        skills,
+      },
+    },
+  };
+}

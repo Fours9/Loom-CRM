@@ -16,7 +16,7 @@ Accepted.
 - Organization `skill_groups` / `skills` / position requirements, duties, goal templates + Position Catalog UI: **shipped (PR5)**
 - `PositionCatalogFacade` (`buildSnapshotForEmployee` + **`buildSnapshotForPosition`**), assign/attach capture, `questionnaire_* .context_json`: **shipped (PR6)**; new captures write **V2**; empty allowlist + fail-closed invalid context: **shipped**
 - `QuestionnairePositionContextSyncService` (`POST …/sync-position-context`): **shipped** — set-algebra extras, prune stale ratings, always bump revision
-- Native skill scale (`range`/`percent`): V1 matrix 0–5 / V2 native; `skillId` on V2; Managing `desiredExtraSkillCodes` sync; `employee_skill_assessments` + profile «Матриця навичок» + Managing add_skill proposals: **this increment**
+- Native skill scale (`range`/`percent`): V1 matrix 0–5 / V2 native; `skillId` on V2; Managing `desiredExtraSkillCodes` sync; `employee_skill_assessments` + profile «Матриця навичок» + Managing add_skill proposals: **this increment**; pre-skillId V2 freezes get one-time `skillId` backfill by code on load/submit: **this increment**
 - Optional skill group (`group_id` nullable) + HTTP `DELETE` = hard delete (skill/group): **this increment**
 - PR7 closeout: living docs + catalog sync; optional fill suggestions from `goalTemplates` / `duties` **not** shipped (context fields available for future UI)
 
@@ -98,7 +98,7 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
     - `context == null` / **Context V1:** questionnaire ratings stay **0..5**; frozen `scaleKind`/`min`/`max` are **requirement hints only** (rating `4` ≠ `4%`).
     - **Context V2:** ratings use frozen native skill scale (`scaleKind`/`scaleMin`/`scaleMax` **required** on each skill row, plus `skillId`). Percent → 0..100 (or skill bounds); range → `scaleMin`..`scaleMax`. Helper: `resolveMatrixRatingPolicy(contextVersion, skill)`.
     - Forbidden: silent conversion between percent and range; `gap = targetLevel - rating.level` across mismatched meanings.
-    - Managing sync uses explicit `desiredExtraSkillCodes` (not null-rating transport). Matrix answers persist **rated** levels only. Profile bridge: `employee_skill_assessments` + Managing `add_skill` proposals (`insertConfirmedIfAbsent`).
+    - Managing sync uses explicit `desiredExtraSkillCodes` (not null-rating transport). Matrix answers persist **rated** levels only. Profile bridge: `employee_skill_assessments` + Managing `add_skill` proposals (`insertConfirmedIfAbsent`) for **extras** and **rated position requirements**.
 
 17. **Skill lifecycle:** deactivate (`PATCH isActive:false` / `softDeleteSkill`) **409** while any `position_skill_requirement` exists. Hard delete / scale mutation also **409** while any `employee_skill_assessment` exists (profile SoT). `DELETE /skills/:id` = **hard delete**: lock skill → assessments check → bulk `DELETE` requirements `WHERE skillId` → remove skill (FK stays RESTRICT). Attach only requires an **active skill**. Scale kind change with existing requirements → 409. Same-kind bound shrink allowed only if all existing `targetLevel` still fit. Skill row is the pessimistic lock root for scale update, deactivate, hard delete, requirement attach/`skillId` change, and assessment insert on proposal Accept. Max **64** skills per position (`MAX_POSITION_SKILLS`); same ceiling for `|requirements ∪ extras|` on Managing sync.
 

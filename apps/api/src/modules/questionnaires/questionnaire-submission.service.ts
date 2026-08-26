@@ -33,6 +33,11 @@ import type {
 } from '@loom/contracts-questionnaires';
 import { parseQuestionnaireContext } from '@loom/contracts-questionnaires';
 import { validateDraftAnswersForSubmit } from './questionnaire-answers-validation';
+import { QuestionnaireContextSkillIdBackfillService } from './assignments/questionnaire-context-skill-id-backfill.service';
+import {
+  applyCanonicalOrganizationAnswers,
+  resolveQuestionnaireOrganizationSelection,
+} from './questionnaire-organization-selection';
 import {
   applyReopenTransition,
   toSubmissionSummaryDto,
@@ -65,6 +70,7 @@ export class QuestionnaireSubmissionService {
     private readonly permissions: PermissionService,
     private readonly responseService: QuestionnaireResponseService,
     private readonly proposals: QuestionnaireProposalService,
+    private readonly contextSkillIdBackfill: QuestionnaireContextSkillIdBackfillService,
     private readonly notifications: NotificationsService,
     private readonly dataSource: DataSource,
   ) {}
@@ -168,6 +174,16 @@ export class QuestionnaireSubmissionService {
       if (assignment.contextJson == null) {
         allowedSkillCodes = undefined;
       } else {
+        const repaired = await this.contextSkillIdBackfill.repairContextJson(
+          assignment.contextJson,
+          manager,
+        );
+        if (repaired.changed && repaired.contextJson) {
+          assignment.contextJson = repaired.contextJson;
+          await manager
+            .getRepository(QuestionnaireAssignment)
+            .save(assignment);
+        }
         const parsed = parseQuestionnaireContext(assignment.contextJson);
         if (!parsed.ok) {
           this.logger.error(
@@ -194,15 +210,31 @@ export class QuestionnaireSubmissionService {
 
       if (context) {
         const catalog = context.positionCatalog;
-        const draftOrg = {
-          directionId: answers['company_work.direction_id'] ?? null,
-          departmentId: answers['company_work.department_id'] ?? null,
-          positionId: answers['company_work.position_id'] ?? null,
-        };
+        const draftEmpty = [
+          'company_work.direction_id',
+          'company_work.department_id',
+          'company_work.position_id',
+        ].every((key) => {
+          const v = answers[key];
+          return v == null || v === '';
+        });
+        const contextHasOrg =
+          catalog.directionId != null ||
+          catalog.departmentId != null ||
+          catalog.positionId != null;
+        if (draftEmpty && contextHasOrg) {
+          applyCanonicalOrganizationAnswers(answers, catalog);
+        }
+        const resolved = await resolveQuestionnaireOrganizationSelection(
+          answers,
+          manager,
+        );
+        applyCanonicalOrganizationAnswers(answers, resolved);
+        response.answersJson = answers;
         if (
-          draftOrg.directionId !== catalog.directionId ||
-          draftOrg.departmentId !== catalog.departmentId ||
-          draftOrg.positionId !== catalog.positionId
+          resolved.directionId !== catalog.directionId ||
+          resolved.departmentId !== catalog.departmentId ||
+          resolved.positionId !== catalog.positionId
         ) {
           throw new BadRequestException(
             'company_work org refs must match assignment context (sync required)',

@@ -96,6 +96,30 @@ export class QuestionnaireRevisionCoordinator {
       throw new Error('Немає assignment');
     }
 
+    if (detail.templateType === 'managing') {
+      try {
+        const extras =
+          detail.context?.version === 2
+            ? (detail.context.positionCatalog.skills ?? [])
+                .filter((s) => s.source === 'questionnaire_extra')
+                .map((s) => s.code)
+            : [];
+        const synced = await firstValueFrom(
+          this.api.syncPositionContext(id, {
+            expectedDraftRevision: this.store.revision(),
+            desiredExtraSkillCodes: extras,
+          }),
+        );
+        this.store.applyPositionContextSync(synced);
+      } catch (err: unknown) {
+        const message =
+          (err as { error?: { message?: string } })?.error?.message ||
+          'Не вдалося синхронізувати посаду перед надсиланням';
+        this.store.finishSubmitError(message);
+        throw err;
+      }
+    }
+
     try {
       await firstValueFrom(this.api.submit(id));
       this.store.clearSubmittingKeepAnswers();

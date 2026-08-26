@@ -322,11 +322,15 @@ export class QuestionnaireProposalService {
       matrixRatings.map((r) => [r.skillCode, r.level] as const),
     );
 
-    const extras = parsedCtx.context.positionCatalog.skills.filter(
-      (s) => s.source === 'questionnaire_extra',
+    const skillCandidates = parsedCtx.context.positionCatalog.skills.filter(
+      (s) => {
+        if (s.source === 'questionnaire_extra') return true;
+        // Position requirements → profile assessment only when rated here.
+        return levelByCode.has(s.code) && levelByCode.get(s.code) != null;
+      },
     );
 
-    for (const frozen of extras) {
+    for (const frozen of skillCandidates) {
       if (!frozen.skillId) continue;
       if (
         frozen.scaleKind == null ||

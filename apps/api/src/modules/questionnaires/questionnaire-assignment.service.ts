@@ -66,12 +66,15 @@ import type {
   QuestionnaireDirectoryResponse,
   QuestionnaireTemplateListResponse,
 } from '@loom/contracts-questionnaires';
+import { parseQuestionnaireContext } from '@loom/contracts-questionnaires';
 import { Employee } from '../../organization/employees/employee.entity';
 import { EmployeeContactsFacade } from '../../organization/employees/employee-contacts.facade';
 import { CurrentEmploymentAssignmentResolver } from '../../organization/employment-catalog/current-employment-assignment.resolver';
 import { PositionCatalogFacade } from '../../organization/position-catalog/position-catalog.facade';
 import { buildQuestionnaireProfileMirror } from './proposals/questionnaire-profile-mirror';
 import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
+import { QuestionnaireContextSkillIdBackfillService } from './assignments/questionnaire-context-skill-id-backfill.service';
+import { applyCanonicalOrganizationAnswers } from './questionnaire-organization-selection';
 
 @Injectable()
 export class QuestionnaireAssignmentService {
@@ -89,6 +92,7 @@ export class QuestionnaireAssignmentService {
     private readonly contactsFacade: EmployeeContactsFacade,
     private readonly positionCatalog: PositionCatalogFacade,
     private readonly currentEmployment: CurrentEmploymentAssignmentResolver,
+    private readonly contextSkillIdBackfill: QuestionnaireContextSkillIdBackfillService,
     private readonly access: EmployeeAccessService,
     private readonly users: UsersService,
     private readonly permissions: PermissionService,
@@ -175,6 +179,13 @@ export class QuestionnaireAssignmentService {
         );
 
       await this.responseService.ensureResponse(assignment.id, manager);
+      if (contextJson) {
+        await this.seedCompanyWorkAnswersFromContext(
+          assignment.id,
+          contextJson,
+          manager,
+        );
+      }
       return assignment.id;
     });
 
@@ -344,6 +355,25 @@ export class QuestionnaireAssignmentService {
           order: { submissionNumber: 'DESC' },
         })
       : [];
+
+    const repairedAssignment = await this.contextSkillIdBackfill.repairContextJson(
+      assignment.contextJson,
+    );
+    if (repairedAssignment.changed && repairedAssignment.contextJson) {
+      assignment.contextJson = repairedAssignment.contextJson;
+      await this.assignments.save(assignment);
+    }
+
+    for (const submission of submissions) {
+      const repairedSubmission =
+        await this.contextSkillIdBackfill.repairContextJson(
+          submission.contextJson,
+        );
+      if (repairedSubmission.changed && repairedSubmission.contextJson) {
+        submission.contextJson = repairedSubmission.contextJson;
+        await this.submissions.save(submission);
+      }
+    }
 
     const schema = assignment.templateVersion.schemaJson as {
       code: string;
@@ -615,6 +645,15 @@ export class QuestionnaireAssignmentService {
       assignment.status = 'assigned';
       assignment.reviewedAt = null;
       await manager.getRepository(QuestionnaireAssignment).save(assignment);
+
+      await this.responseService.ensureResponse(assignment.id, manager);
+      if (!sameEmployeeReattach && assignment.contextJson) {
+        await this.seedCompanyWorkAnswersFromContext(
+          assignment.id,
+          assignment.contextJson,
+          manager,
+        );
+      }
 
       await this.audit.record(
         {
@@ -1180,6 +1219,28 @@ export class QuestionnaireAssignmentService {
         canStartFill: lifecycle.canStartFill,
       },
     };
+  }
+
+  /**
+   * After attach/create capture: seed draft org refs from frozen context so
+   * submit (draft ≡ context) works before the user touches org fields.
+   */
+  private async seedCompanyWorkAnswersFromContext(
+    assignmentId: string,
+    contextJson: Record<string, unknown>,
+    manager: EntityManager,
+  ): Promise<void> {
+    const parsed = parseQuestionnaireContext(contextJson);
+    if (!parsed.ok) return;
+    const response = await manager.getRepository(QuestionnaireResponse).findOne({
+      where: { assignmentId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!response) return;
+    const answers = { ...(response.answersJson ?? {}) };
+    applyCanonicalOrganizationAnswers(answers, parsed.context.positionCatalog);
+    response.answersJson = answers;
+    await manager.getRepository(QuestionnaireResponse).save(response);
   }
 }
 
