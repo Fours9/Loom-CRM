@@ -4,19 +4,20 @@ import {
 } from '@nestjs/common';
 import {
   parseQuestionnaireContext,
-  type QuestionnaireContextV1,
+  type QuestionnaireContext,
 } from '@loom/contracts-questionnaires';
 
 const logger = new Logger('QuestionnaireContext');
 
 /**
- * Expose parsed QuestionnaireContextV1 or null (legacy only when raw is null).
+ * Expose parsed QuestionnaireContext (V1 historical or V2) or null
+ * (legacy only when raw is null).
  * Non-null invalid context is a server data-integrity failure (HTTP 500).
  */
 export function parseAssignmentContext(
   raw: unknown,
   meta?: { assignmentId?: string; submissionId?: string },
-): QuestionnaireContextV1 | null {
+): QuestionnaireContext | null {
   if (raw == null) return null;
   const parsed = parseQuestionnaireContext(raw);
   if (!parsed.ok) {

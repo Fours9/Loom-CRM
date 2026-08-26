@@ -31,6 +31,9 @@ Thumbs.db
 !.vscode/extensions.json
 !.vscode/settings.json
 
+# Local-only machine notes (dual GitHub remotes, etc.) — do not commit
+docs/dev/*.local.md
+
 # Test / coverage
 coverage/
 .nyc_output/

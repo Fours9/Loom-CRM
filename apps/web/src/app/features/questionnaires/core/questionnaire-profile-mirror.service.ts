@@ -38,13 +38,14 @@ export class QuestionnaireProfileMirrorService {
   }
 }
 
-/** Map profile response into flat keys matching seed proposalMapping.field. */
+/** Map profile response into flat keys matching seed proposalMapping.field / profileMirrorKey. */
 export function flattenEmployeeProfileMirror(
   profile: EmployeeProfileResponse,
 ): Record<string, unknown> {
   const overview = profile.sections.overview;
   const personal = profile.sections.personal;
   const contacts = profile.sections.contacts ?? [];
+  const employment = profile.sections.employment;
 
   const primaryPhone =
     contacts.find((c) => c.type === 'personal_phone' && c.isPrimary)?.value ??
@@ -63,7 +64,7 @@ export function flattenEmployeeProfileMirror(
     personal?.personalTelegram ??
     null;
 
-  return {
+  const mirror: Record<string, unknown> = {
     lastName: overview?.lastName ?? null,
     firstName: overview?.firstName ?? null,
     middleName: overview?.middleName ?? null,
@@ -77,4 +78,16 @@ export function flattenEmployeeProfileMirror(
     personal_telegram: telegram,
     contactsBundle: contactsBundleFromProfile(profile),
   };
+
+  if (employment) {
+    mirror['directionId'] = employment.directionId ?? null;
+    mirror['departmentId'] = employment.departmentId ?? null;
+    mirror['positionId'] = employment.positionId ?? null;
+    mirror['workFormat'] = employment.workFormat ?? null;
+    mirror['employmentType'] = employment.employmentType ?? null;
+    mirror['startDate'] = employment.startDate ?? null;
+    mirror['probationEndDate'] = employment.probationEndDate ?? null;
+  }
+
+  return mirror;
 }

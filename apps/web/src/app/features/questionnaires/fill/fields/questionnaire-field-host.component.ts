@@ -9,16 +9,28 @@ import {
 import { FormsModule } from '@angular/forms';
 import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
 import { parseNumberInput } from '../validation/questionnaire-validation';
+import { QuestionnaireOrganizationRefFieldComponent } from './questionnaire-organization-ref-field.component';
 
 let rowUiSeq = 0;
 
 @Component({
   selector: 'loom-questionnaire-field-host',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, QuestionnaireOrganizationRefFieldComponent],
   template: `
     <div class="field" [attr.data-field-key]="field.key">
       @switch (field.valueType) {
+        @case ('organization_ref') {
+          <loom-questionnaire-organization-ref-field
+            [field]="field"
+            [value]="value"
+            [answers]="answers"
+            [profileMirror]="profileMirror"
+            [disabled]="disabled"
+            (valueChange)="emitValue($event)"
+            (answersPatch)="onOrgAnswersPatch($event)"
+          />
+        }
         @case ('textarea') {
           <label [attr.for]="inputId">{{ field.label }}</label>
           @if (field.helpText) {
@@ -367,9 +379,14 @@ let rowUiSeq = 0;
 export class QuestionnaireFieldHostComponent implements OnChanges {
   @Input({ required: true }) field!: QuestionnaireSchemaField;
   @Input() value: unknown;
+  @Input() answers: Record<string, unknown> = {};
+  @Input() profileMirror: Record<string, unknown> = {};
   @Input() disabled = false;
   @Input() error: string | null = null;
   @Output() readonly valueChange = new EventEmitter<unknown>();
+  @Output() readonly answersPatch = new EventEmitter<
+    Record<string, string | null>
+  >();
 
   numberDraft = '';
   numberError: string | null = null;
@@ -510,6 +527,11 @@ export class QuestionnaireFieldHostComponent implements OnChanges {
 
   emitValue(value: unknown): void {
     this.valueChange.emit(value);
+  }
+
+  /** Atomic org cascade patch (includes the edited field key). */
+  onOrgAnswersPatch(patch: Record<string, string | null>): void {
+    this.answersPatch.emit(patch);
   }
 
   private emitRows(): void {

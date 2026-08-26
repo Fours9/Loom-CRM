@@ -21,6 +21,7 @@ import { WorkFormat } from '../../organization/employment-catalog/work-format.en
 import { EmploymentType } from '../../organization/employment-catalog/employment-type.entity';
 import { SkillGroup } from '../../organization/skills/skill-group.entity';
 import { Skill } from '../../organization/skills/skill.entity';
+import { EmployeeSkillAssessment } from '../../organization/skills/employee-skill-assessment.entity';
 import { PositionSkillRequirement } from '../../organization/position-requirements/position-skill-requirement.entity';
 import { PositionDuty } from '../../organization/position-requirements/position-duty.entity';
 import { PositionGoalTemplate } from '../../organization/position-requirements/position-goal-template.entity';
@@ -57,6 +58,7 @@ import { NotificationsDismissedAt1730000029000 } from './migrations/173000002900
 import { EmployeeDocumentFiles1730000030000 } from './migrations/1730000030000-EmployeeDocumentFiles';
 import { EmploymentCatalogDescription1730000031000 } from './migrations/1730000031000-EmploymentCatalogDescription';
 import { EmploymentAssignmentComment1730000032000 } from './migrations/1730000032000-EmploymentAssignmentComment';
+import { EmployeeSkillAssessments1730000033000 } from './migrations/1730000033000-EmployeeSkillAssessments';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -86,6 +88,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmploymentType,
       SkillGroup,
       Skill,
+      EmployeeSkillAssessment,
       PositionSkillRequirement,
       PositionDuty,
       PositionGoalTemplate,
@@ -124,6 +127,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeDocumentFiles1730000030000,
       EmploymentCatalogDescription1730000031000,
       EmploymentAssignmentComment1730000032000,
+      EmployeeSkillAssessments1730000033000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

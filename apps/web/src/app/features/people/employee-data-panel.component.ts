@@ -36,7 +36,7 @@ import {
   filterDepartmentsForSelection,
   filterPositionsForSelection,
   reduceEmploymentOrgFilter,
-} from './employment-org-filter.policy';
+} from '../../shared/organization/employment-org-filter.policy';
 import {
   applyDepartmentLocationHint,
   markWorkLocationTouched,

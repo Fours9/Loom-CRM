@@ -390,6 +390,30 @@ export class QuestionnaireDraftStore {
     this.saveError.set(null);
   }
 
+  setAnswersPatch(patch: Record<string, unknown>): void {
+    if (!this.editable() || this.conflict()) return;
+    if (Object.keys(patch).length === 0) return;
+    this.answers.update((prev) => ({ ...prev, ...patch }));
+    if (this.saveState() !== 'saving') {
+      this.saveState.set('dirty');
+    }
+    this.saveError.set(null);
+  }
+
+  /**
+   * Apply Managing sync-position-context detail (draft answers + context + revision).
+   */
+  applyPositionContextSync(detail: QuestionnaireAssignmentDetail): boolean {
+    if (!this.editable() || this.conflict()) return false;
+    this.assignment.set(detail);
+    this.answers.set({ ...(detail.draft?.answers ?? {}) });
+    this.revision.set(detail.draft?.revision ?? 0);
+    this.lastSavedAt.set(detail.draft?.updatedAt ?? this.lastSavedAt());
+    this.saveState.set('saved');
+    this.saveError.set(null);
+    return true;
+  }
+
   markSaving(gen: number): boolean {
     if (gen !== this.generation) return false;
     this.saveState.set('saving');

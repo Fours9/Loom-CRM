@@ -167,6 +167,48 @@ describe('parseQuestionnaireContext (strict)', () => {
     expect(parsed.ok).toBe(true);
   });
 
+  it('V2 requires skillId and full scale', () => {
+    const v2 = {
+      version: 2,
+      positionCatalog: validCatalog({
+        skills: [
+          {
+            ...validSkill,
+            skillId: '11111111-1111-4111-8111-111111111111',
+            scaleKind: 'range',
+            scaleMin: 0,
+            scaleMax: 5,
+            source: 'position_requirement',
+          },
+        ],
+      }),
+    };
+    expect(parseQuestionnaireContext(v2).ok).toBe(true);
+    expect(
+      parseQuestionnaireContext({
+        version: 2,
+        positionCatalog: validCatalog({
+          skills: [{ ...validSkill, source: 'position_requirement' }],
+        }),
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('rejects skillId on V1', () => {
+    expect(
+      parseQuestionnaireContext(
+        validContext({
+          skills: [
+            {
+              ...validSkill,
+              skillId: '11111111-1111-4111-8111-111111111111',
+            },
+          ],
+        }),
+      ).ok,
+    ).toBe(false);
+  });
+
   it('rejects goalTemplates not array', () => {
     expect(
       parseQuestionnaireContext(validContext({ goalTemplates: {} })).ok,

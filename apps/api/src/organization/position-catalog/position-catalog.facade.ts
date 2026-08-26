@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
-import type { PositionCatalogContextV1 } from '@loom/contracts-questionnaires';
+import type { QuestionnaireContextV2 } from '@loom/contracts-questionnaires';
 import { PositionCatalogReadService } from './position-catalog-read.service';
 
 /**
@@ -15,7 +15,15 @@ export class PositionCatalogFacade {
   buildSnapshotForEmployee(
     employeeId: string,
     manager?: EntityManager,
-  ): Promise<PositionCatalogContextV1> {
+  ): Promise<QuestionnaireContextV2> {
     return this.reads.buildSnapshotForEmployee(employeeId, manager);
+  }
+
+  buildSnapshotForPosition(
+    employeeId: string,
+    positionId: string | null,
+    manager?: EntityManager,
+  ): Promise<QuestionnaireContextV2> {
+    return this.reads.buildSnapshotForPosition(employeeId, positionId, manager);
   }
 }

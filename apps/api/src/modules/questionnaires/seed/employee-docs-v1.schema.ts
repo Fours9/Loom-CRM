@@ -16,7 +16,7 @@ export const EMPLOYEE_DOCS_V1_SCHEMA = {
     {
       key: 'profile_mirror',
       label: 'Особисті дані',
-      fields: buildProfileMirrorIdentityFields('namesOnly'),
+      fields: buildProfileMirrorIdentityFields('docsManagingPersonal'),
     },
     {
       key: 'onboarding',

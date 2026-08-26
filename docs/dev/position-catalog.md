@@ -7,7 +7,18 @@ Living companion to [ADR 0010](../adr/0010-position-catalog-and-questionnaire-co
 | Package | Role |
 | --- | --- |
 | `@loom/position-skill-catalog` | Pure registry (`isSkillCode`) + identity (`isSkillIdentityCode`) + `MAX_POSITION_SKILLS` — Position Catalog custom codes + legacy matrix |
-| `@loom/contracts-questionnaires` | `QuestionnaireContextV1`, `QUESTIONNAIRE_VALUE_TYPES`, `position_skills_matrix` |
+| `@loom/contracts-questionnaires` | `QuestionnaireContextV1`/`V2`, `QUESTIONNAIRE_VALUE_TYPES`, `position_skills_matrix`, `organization_ref` |
+
+## Facade
+
+`PositionCatalogFacade` (Organization → Questionnaires):
+
+| Method | Use |
+| --- | --- |
+| `buildSnapshotForEmployee(employeeId, manager?)` | Attach/create capture from employment-resolved position; `employmentAssignmentId` set when resolved from EA |
+| `buildSnapshotForPosition(employeeId, positionId, manager?)` | Explicit position (Managing sync); **`employmentAssignmentId` always `null`**; org parents from Position row |
+
+Both return **`QuestionnaireContextV2`** (skills with `source: position_requirement`).
 
 ## Position Catalog UI
 
@@ -29,13 +40,16 @@ API `dev`/`build`/`typecheck` already build this package before Nest compile.
 | Assignment | Rows | Validation | Review labels |
 | --- | --- | --- | --- |
 | `context_json == null` (**legacy_registry**) | full `@loom/position-skill-catalog` | `skillCode ∈ registry` | registry |
-| `context_json.version === 1` (**context**) | frozen `positionCatalog.skills` (incl. custom codes; `[]` = no ratings) | ⊆ frozen codes (**not** ∩ registry) | frozen context (not live catalog) |
+| `context_json.version === 1` (**historical**) | frozen `skills[]` (no `source`) | ⊆ frozen codes; all codes = requirements | frozen context |
+| `context_json.version === 2` (**current**) | frozen `skills[]` with required `skillId` + native scale + `source`: `position_requirement` \| `questionnaire_extra` | ⊆ frozen codes; extras via `desiredExtraSkillCodes` on sync (unrated extras OK) | frozen context |
 
 `ratings[].level` is always questionnaire **0–5**. `targetLevel` on the requirement/frozen row is the skill’s **native** scale (`range` / `percent`) — do not convert or gap-compare.
 
 `custom[]` stays extra-catalog (not identity).
 
 Never auto-upgrade legacy null to a live Position Catalog snapshot (`ensureContextCaptured` from live catalog is forbidden — would invalidate pre-PR6 ratings).
+
+**Managing sync:** `POST …/sync-position-context` replaces **assignment** context with V2 via `buildSnapshotForPosition` (set-algebra extras + prune + always bump revision). **Submission** context stays immutable.
 
 Historical Review uses `submission.context_json` (or registry if null), never current `assignment.context_json`.
 
@@ -91,7 +105,7 @@ Transition rules:
 - Transition `department -> null` with omitted `directionId` preserves the previously inherited direction as the new manual direction.
 - `DepartmentsService` separately keeps child `positions.direction_id` in sync via transactional cascade when a parent department changes its direction.
 
-**Context modes:** `context_json == null` → legacy_registry; valid v1 (including `skills: []`) → frozen allowlist; non-null invalid → data-integrity error (not legacy).
+**Context modes:** `context_json == null` → legacy_registry; valid v1 (no `source`) → historical frozen allowlist; valid v2 (`source` required) → requirements + extras; non-null invalid → data-integrity error (not legacy).
 
 Schema via TypeORM migrations only — never `synchronize: true`.
 
@@ -161,4 +175,4 @@ After pulling Track B / Managing·Docs schema changes, if local DB already has `
 ALLOW_QUESTIONNAIRE_TEST_RESET=YES pnpm questionnaires:reset -- --execute
 ```
 
-Then restart API so seed refreshes published v1. See [questionnaire-test-reset.md](./questionnaire-test-reset.md). Do **not** mutate published v1 after the first production assignment — publish version 2 instead.
+Then restart API so seed refreshes latest published schema via `schemaForPublishedVersion`. See [questionnaire-test-reset.md](./questionnaire-test-reset.md). Do **not** mutate a published version that already has assignments in production — publish the next version instead (non-prod seed auto-publishes next on drift).

@@ -34,7 +34,11 @@ export function proposalMatchesCurrentValue(input: {
   currentProfileValue: unknown;
   schemaField?: SchemaFieldForProposal | null;
 }): boolean {
-  const change = input.proposal.proposedChanges as ProposalChangeShape;
+  const change = input.proposal.proposedChanges as ProposalChangeShape & {
+    kind?: string;
+  };
+  if (change.kind === 'add_skill') return false;
+  if (change.kind && change.kind !== 'field_update') return false;
   if (!change.section || !change.field) return false;
 
   let profileVal = input.currentProfileValue;

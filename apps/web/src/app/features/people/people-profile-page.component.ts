@@ -42,6 +42,7 @@ import { EmployeeHistoryPanelComponent } from './employee-history-panel.componen
 import {
   EmployeeDataPanelComponent,
 } from './employee-data-panel.component';
+import { EmployeeSkillsMatrixPanelComponent } from './employee-skills-matrix-panel.component';
 import {
   resolvePeopleProfileTab,
   visiblePeopleProfileTabs,
@@ -52,6 +53,7 @@ type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
 type AbsenceTabId = 'position' | 'requests' | 'calendar' | 'schedule';
 type AdminTabId = 'history';
+type MetricsTabId = 'skills';
 
 @Component({
   selector: 'loom-people-profile-page',
@@ -66,6 +68,7 @@ type AdminTabId = 'history';
     EmployeeProfileCompletenessComponent,
     EmployeeHistoryPanelComponent,
     EmployeeDataPanelComponent,
+    EmployeeSkillsMatrixPanelComponent,
   ],
   template: `
     @if (loading()) {
@@ -253,8 +256,26 @@ type AdminTabId = 'history';
               }
             }
             @case ('metrics') {
-              <h2>Показники</h2>
-              <p class="muted">Розділ у розробці. Тут з’являться KPI, цілі та метрики працівника.</p>
+              <nav
+                class="tabs subtabs"
+                role="tablist"
+                aria-label="Показники працівника"
+              >
+                <button
+                  type="button"
+                  class="tab"
+                  role="tab"
+                  [attr.aria-selected]="metricsTab() === 'skills'"
+                  [class.active]="metricsTab() === 'skills'"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="setMetricsTab('skills')"
+                >
+                  Матриця навичок
+                </button>
+              </nav>
+              @if (metricsTab() === 'skills') {
+                <loom-employee-skills-matrix-panel [employeeId]="employeeId" />
+              }
             }
             @case ('administration') {
               <nav
@@ -474,6 +495,7 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly tab = signal<PeopleProfileTabId>('data');
   readonly absenceTab = signal<AbsenceTabId>('position');
   readonly adminTab = signal<AdminTabId>('history');
+  readonly metricsTab = signal<MetricsTabId>('skills');
   readonly audit = signal<EmployeeProfileHistoryItem[]>([]);
   readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
 
@@ -557,6 +579,11 @@ export class PeopleProfilePageComponent implements OnInit {
   setAdminTab(id: AdminTabId): void {
     if (this.adminTab() === id) return;
     this.withPreservedScroll(() => this.adminTab.set(id));
+  }
+
+  setMetricsTab(id: MetricsTabId): void {
+    if (this.metricsTab() === id) return;
+    this.withPreservedScroll(() => this.metricsTab.set(id));
   }
 
   onDataProfileChange(next: EmployeeProfileResponse): void {

@@ -2,6 +2,8 @@ import type {
   QuestionnaireSchemaField,
   QuestionnaireSchemaJson,
   QuestionnaireSchemaStep,
+  QuestionnaireContext,
+  PositionSkillContext,
 } from '@loom/contracts-questionnaires';
 import {
   completionPercentVisible,
@@ -27,8 +29,11 @@ import {
 import {
   formatPositionSkillsMatrixReviewSummary,
   parsePositionSkillsMatrixStrict,
+  resolveMatrixRatingPolicy,
 } from '@loom/questionnaire-schema';
 import { skillDefinitionByCode } from '@loom/position-skill-catalog';
+import type { OrganizationCatalogSnapshot } from '../../../../core/api/organization-catalog-api.service';
+import { resolveOrganizationReviewLabel } from './organization-review-label';
 
 export type QuestionnaireStepUiState =
   | 'not_started'
@@ -191,6 +196,11 @@ export function reviewRowsForStep(
   allSteps: QuestionnaireSchemaStep[],
   options?: {
     skillLabelByCode?: (code: string) => string;
+    contextVersion?: 1 | 2 | null;
+    contextSkills?: PositionSkillContext[] | null;
+    historicalContext?: QuestionnaireContext | null;
+    liveCatalog?: OrganizationCatalogSnapshot | null;
+    reviewMode?: 'draft' | 'historical';
   },
 ): Array<{
   fieldKey: string;
@@ -227,7 +237,7 @@ export function reviewRowsForStep(
     rows.push({
       fieldKey: field.key,
       label: field.label,
-      display: formatReviewDisplay(field, resolved.value, options?.skillLabelByCode),
+      display: formatReviewDisplay(field, resolved.value, options),
       sourceLabel: visible ? reviewSourceLabel(resolved.source) : null,
       inactive: !visible && hasOwn,
     });
@@ -238,7 +248,14 @@ export function reviewRowsForStep(
 function formatReviewDisplay(
   field: QuestionnaireSchemaField,
   value: unknown,
-  skillLabelByCode?: (code: string) => string,
+  options?: {
+    skillLabelByCode?: (code: string) => string;
+    contextVersion?: 1 | 2 | null;
+    contextSkills?: PositionSkillContext[] | null;
+    historicalContext?: QuestionnaireContext | null;
+    liveCatalog?: OrganizationCatalogSnapshot | null;
+    reviewMode?: 'draft' | 'historical';
+  },
 ): string {
   if (field.valueType === 'contacts_bundle') {
     try {
@@ -252,16 +269,36 @@ function formatReviewDisplay(
   if (field.valueType === 'position_skills_matrix') {
     try {
       const matrix = parsePositionSkillsMatrixStrict(value);
+      const skillsByCode = new Map(
+        (options?.contextSkills ?? []).map((s) => [s.code, s]),
+      );
+      const version = options?.contextVersion ?? null;
       return formatPositionSkillsMatrixReviewSummary(
         matrix,
         (code) =>
-          skillLabelByCode?.(code) ??
+          options?.skillLabelByCode?.(code) ??
           skillDefinitionByCode(code)?.labelUa ??
           code,
+        (code, level) => {
+          const policy = resolveMatrixRatingPolicy(
+            version,
+            skillsByCode.get(code) ?? null,
+          );
+          return policy.unit === '%' ? `${level}%` : String(level);
+        },
       );
     } catch {
       return '—';
     }
+  }
+  if (field.valueType === 'organization_ref') {
+    return resolveOrganizationReviewLabel({
+      field,
+      value,
+      historicalContext: options?.historicalContext ?? null,
+      liveCatalog: options?.liveCatalog ?? null,
+      mode: options?.reviewMode ?? 'draft',
+    });
   }
   if (field.valueType === 'repeating_group') {
     const rows = Array.isArray(value) ? value : [];

@@ -29,9 +29,15 @@ type SeedTemplateSpec = {
   title: string;
   type: QuestionnaireType;
   schema: QuestionnaireSchemaJson;
-  /** Full 360 seed has fail-closed prod drift; stubs may refresh when 0 assignments. */
-  failClosedOnSchemaDrift: boolean;
 };
+
+/** Align checked-in seed `version` with the published row being written/compared. */
+export function schemaForPublishedVersion(
+  seed: Record<string, unknown>,
+  version: number,
+): Record<string, unknown> {
+  return { ...seed, version };
+}
 
 @Injectable()
 export class QuestionnaireSeedService {
@@ -55,21 +61,18 @@ export class QuestionnaireSeedService {
       title: EMPLOYEE_360_TEMPLATE_TITLE,
       type: 'full',
       schema: EMPLOYEE_360_V1_SCHEMA,
-      failClosedOnSchemaDrift: true,
     });
     await this.ensurePublishedTemplate({
       code: EMPLOYEE_MANAGING_TEMPLATE_CODE,
       title: EMPLOYEE_MANAGING_TEMPLATE_TITLE,
       type: 'managing',
       schema: EMPLOYEE_MANAGING_V1_SCHEMA,
-      failClosedOnSchemaDrift: false,
     });
     await this.ensurePublishedTemplate({
       code: EMPLOYEE_DOCS_TEMPLATE_CODE,
       title: EMPLOYEE_DOCS_TEMPLATE_TITLE,
       type: 'docs',
       schema: EMPLOYEE_DOCS_V1_SCHEMA,
-      failClosedOnSchemaDrift: false,
     });
   }
 
@@ -100,16 +103,17 @@ export class QuestionnaireSeedService {
       this.logger.log(`Created questionnaire template ${spec.code}`);
     }
 
-    const existing = await this.versions.findOne({
-      where: { templateId: template.id, version: 1 },
+    const latest = await this.versions.findOne({
+      where: { templateId: template.id },
+      order: { version: 'DESC' },
     });
 
-    if (!existing) {
+    if (!latest) {
       await this.versions.save(
         this.versions.create({
           templateId: template.id,
           version: 1,
-          schemaJson: seedSchema,
+          schemaJson: schemaForPublishedVersion(seedSchema, 1),
           publishedAt: new Date(),
         }),
       );
@@ -127,18 +131,18 @@ export class QuestionnaireSeedService {
       return;
     }
 
-    const schemaEqual = schemasStructurallyEqual(
-      existing.schemaJson,
+    const expectedForLatest = schemaForPublishedVersion(
       seedSchema,
+      latest.version,
+    );
+    const schemaEqual = schemasStructurallyEqual(
+      latest.schemaJson,
+      expectedForLatest,
     );
     const titleOk = template.title === spec.title;
     const statusOk = template.status === 'published';
-    const publishedAtOk = !!existing.publishedAt;
+    const publishedAtOk = !!latest.publishedAt;
     const typeOk = template.type === spec.type;
-
-    if (schemaEqual && titleOk && statusOk && publishedAtOk && typeOk) {
-      return;
-    }
 
     // Type/title/status are metadata-only (not part of immutable published schema).
     if (!typeOk || !titleOk || !statusOk) {
@@ -151,40 +155,49 @@ export class QuestionnaireSeedService {
       );
     }
 
-    if (schemaEqual && publishedAtOk) {
+    if (schemaEqual) {
+      if (!publishedAtOk) {
+        latest.publishedAt = new Date();
+        await this.versions.save(latest);
+      }
       return;
     }
 
+    if (isProd) {
+      throw new Error(
+        `Published questionnaire ${spec.code} v${latest.version} differs from checked-in seed. ` +
+          'Published versions are immutable in production. Create a new version.',
+      );
+    }
+
     const assignmentCount = await this.assignments.count({
-      where: { templateVersionId: existing.id },
+      where: { templateVersionId: latest.id },
     });
 
-    if (!schemaEqual && isProd && spec.failClosedOnSchemaDrift) {
-      throw new Error(
-        `Published questionnaire ${spec.code} v1 differs from checked-in seed. ` +
-          'Published versions are immutable in production. Create version 2.',
+    if (assignmentCount === 0) {
+      latest.schemaJson = schemaForPublishedVersion(
+        seedSchema,
+        latest.version,
       );
-    }
-
-    if (!schemaEqual && assignmentCount > 0) {
-      throw new Error(
-        `${spec.code} v1 schema differs from seed but ${assignmentCount} assignment(s) exist. ` +
-          'Run `pnpm questionnaires:reset -- --execute` (non-prod) or publish version 2.',
-      );
-    }
-
-    if (!schemaEqual && assignmentCount === 0) {
-      existing.schemaJson = seedSchema;
-      if (!existing.publishedAt) existing.publishedAt = new Date();
-      await this.versions.save(existing);
+      if (!latest.publishedAt) latest.publishedAt = new Date();
+      await this.versions.save(latest);
       this.logger.log(
-        `Refreshed ${spec.code} v1 schema_json from seed (0 assignments)`,
+        `Refreshed ${spec.code} v${latest.version} schema_json from seed (0 assignments)`,
       );
+      return;
     }
 
-    if (!publishedAtOk) {
-      existing.publishedAt = new Date();
-      await this.versions.save(existing);
-    }
+    const next = latest.version + 1;
+    await this.versions.save(
+      this.versions.create({
+        templateId: template.id,
+        version: next,
+        schemaJson: schemaForPublishedVersion(seedSchema, next),
+        publishedAt: new Date(),
+      }),
+    );
+    this.logger.log(
+      `Published ${spec.code} template version ${next} (seed drift; ${assignmentCount} assignment(s) on v${latest.version})`,
+    );
   }
 }

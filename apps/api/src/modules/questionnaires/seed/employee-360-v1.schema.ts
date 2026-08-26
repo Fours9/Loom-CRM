@@ -211,7 +211,7 @@ export const EMPLOYEE_360_V1_SCHEMA = {
     {
       key: 'company_work',
       label: 'Робота в компанії',
-      fields: buildCompanyWorkFields(),
+      fields: buildCompanyWorkFields('full'),
     },
     {
       key: 'education',

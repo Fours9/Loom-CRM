@@ -3,9 +3,11 @@ import {
   ElementRef,
   ViewChild,
   computed,
+  effect,
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -28,10 +30,24 @@ import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coord
 import { shouldShowReviewSubmit } from './questionnaire-fill-session.policy';
 import { validateFieldValue } from './validation/questionnaire-validation';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
-import { fieldsByKey, listInactiveOwnAnswers } from '@loom/questionnaire-schema';
 import { resolveQuestionnaireFieldDisplay } from './display/questionnaire-display-value';
 import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
-import type { PositionSkillsMatrixAnswer } from '@loom/questionnaire-schema';
+import {
+  fieldsByKey,
+  listInactiveOwnAnswers,
+  pruneUnratedMatrixRatings,
+  type PositionSkillsMatrixAnswer,
+} from '@loom/questionnaire-schema';
+import {
+  OrganizationCatalogApiService,
+  type OrganizationCatalogSnapshot,
+} from '../../../core/api/organization-catalog-api.service';
+
+const ORG_SYNC_KEYS = [
+  'company_work.direction_id',
+  'company_work.department_id',
+  'company_work.position_id',
+] as const;
 
 @Component({
   selector: 'loom-questionnaire-wizard-shell',
@@ -234,16 +250,24 @@ import type { PositionSkillsMatrixAnswer } from '@loom/questionnaire-schema';
                             <loom-questionnaire-skills-matrix-field
                               [value]="fieldValue(field.key)"
                               [availableSkills]="contextSkills()"
+                              [desiredExtraCodes]="desiredExtraSkillCodes()"
+                              [contextVersion]="
+                                store.assignment()?.context?.version ?? null
+                              "
                               [disabled]="!store.editable() || !!store.conflict()"
                               (matrixChange)="onSkillsMatrixChange(field.key, $event)"
+                              (desiredExtraCodesChange)="onDesiredExtrasChange($event)"
                             />
                           } @else {
                             <loom-questionnaire-field-host
                               [field]="field"
                               [value]="fieldValue(field.key)"
+                              [answers]="store.answers()"
+                              [profileMirror]="store.profileMirror()"
                               [disabled]="!store.editable() || !!store.conflict()"
                               [error]="fieldError(field.key)"
                               (valueChange)="onFieldChange(field.key, $event)"
+                              (answersPatch)="onAnswersPatch($event)"
                             />
                           }
                         }
@@ -261,16 +285,24 @@ import type { PositionSkillsMatrixAnswer } from '@loom/questionnaire-schema';
                     <loom-questionnaire-skills-matrix-field
                       [value]="fieldValue(block.field.key)"
                       [availableSkills]="contextSkills()"
+                      [desiredExtraCodes]="desiredExtraSkillCodes()"
+                      [contextVersion]="
+                        store.assignment()?.context?.version ?? null
+                      "
                       [disabled]="!store.editable() || !!store.conflict()"
                       (matrixChange)="onSkillsMatrixChange(block.field.key, $event)"
+                      (desiredExtraCodesChange)="onDesiredExtrasChange($event)"
                     />
                   } @else {
                     <loom-questionnaire-field-host
                       [field]="block.field"
                       [value]="fieldValue(block.field.key)"
+                      [answers]="store.answers()"
+                      [profileMirror]="store.profileMirror()"
                       [disabled]="!store.editable() || !!store.conflict()"
                       [error]="fieldError(block.field.key)"
                       (valueChange)="onFieldChange(block.field.key, $event)"
+                      (answersPatch)="onAnswersPatch($event)"
                     />
                   }
                 }
@@ -584,6 +616,7 @@ export class QuestionnaireWizardShellComponent {
   private readonly autosave = inject(QuestionnaireAutosaveCoordinator);
   readonly revision = inject(QuestionnaireRevisionCoordinator);
   private readonly api = inject(QuestionnairesApiService);
+  private readonly orgCatalogApi = inject(OrganizationCatalogApiService);
 
   readonly resolveBusy = input(false);
   readonly navigationComplete = output<void>();
@@ -592,6 +625,31 @@ export class QuestionnaireWizardShellComponent {
 
   readonly introKey = QUESTIONNAIRE_INTRO_STEP;
   readonly reviewKey = QUESTIONNAIRE_REVIEW_STEP;
+
+  /** Pending questionnaire extras synced via sync-position-context (not null ratings). */
+  readonly desiredExtraSkillCodes = signal<string[]>([]);
+  readonly orgCatalog = signal<OrganizationCatalogSnapshot | null>(null);
+  private orgCatalogRequested = false;
+
+  private readonly loadOrgCatalog = effect(() => {
+    if (this.orgCatalogRequested) return;
+    this.orgCatalogRequested = true;
+    this.orgCatalogApi.getSnapshot().subscribe({
+      next: (snap) => this.orgCatalog.set(snap),
+      error: () => this.orgCatalog.set(null),
+    });
+  });
+
+  /** Reset desired extras whenever assignment/context is loaded or synced. */
+  private readonly syncDesiredExtrasFromAssignment = effect(() => {
+    const skills =
+      this.store.assignment()?.context?.positionCatalog?.skills ?? [];
+    this.desiredExtraSkillCodes.set(
+      skills
+        .filter((s) => s.source === 'questionnaire_extra')
+        .map((s) => s.code),
+    );
+  });
 
   @ViewChild('submitErrorEl') submitErrorEl?: ElementRef<HTMLElement>;
 
@@ -635,10 +693,12 @@ export class QuestionnaireWizardShellComponent {
       code: s.code,
       labelUa: s.labelUa,
       group: s.group,
+      skillId: s.skillId,
       targetLevel: s.targetLevel,
       scaleKind: s.scaleKind,
       scaleMin: s.scaleMin,
       scaleMax: s.scaleMax,
+      source: s.source,
     }));
   });
 
@@ -737,6 +797,23 @@ export class QuestionnaireWizardShellComponent {
 
   onFieldChange(fieldKey: string, value: unknown): void {
     this.store.setAnswer(fieldKey, value);
+    if ((ORG_SYNC_KEYS as readonly string[]).includes(fieldKey)) {
+      void this.patchThenSyncPositionContext();
+      return;
+    }
+    this.autosave.scheduleSave();
+  }
+
+  onAnswersPatch(patch: Record<string, string | null>): void {
+    this.store.setAnswersPatch(patch);
+    if (
+      (ORG_SYNC_KEYS as readonly string[]).some((key) =>
+        Object.prototype.hasOwnProperty.call(patch, key),
+      )
+    ) {
+      void this.patchThenSyncPositionContext();
+      return;
+    }
     this.autosave.scheduleSave();
   }
 
@@ -745,27 +822,81 @@ export class QuestionnaireWizardShellComponent {
     this.autosave.scheduleSave();
   }
 
+  onDesiredExtrasChange(codes: string[]): void {
+    this.desiredExtraSkillCodes.set(codes);
+    void this.patchThenSyncPositionContext();
+  }
+
   onSkillsMatrixChange(
     fieldKey: string,
     value: PositionSkillsMatrixAnswer,
   ): void {
-    this.store.setAnswer(fieldKey, value);
+    this.store.setAnswer(fieldKey, pruneUnratedMatrixRatings(value));
     this.autosave.scheduleSave();
+  }
+
+  /**
+   * Flush draft PATCH, then POST sync-position-context and apply detail.
+   */
+  private async patchThenSyncPositionContext(): Promise<void> {
+    if (!this.store.editable() || this.store.conflict()) return;
+    const flushed = await this.autosave.flush();
+    if (!flushed) return;
+
+    const detail = this.store.assignment();
+    if (!detail) return;
+    if (detail.templateType !== 'managing') return;
+
+    try {
+      const synced = await firstValueFrom(
+        this.api.syncPositionContext(detail.id, {
+          expectedDraftRevision: this.store.revision(),
+          desiredExtraSkillCodes: this.desiredExtraSkillCodes(),
+        }),
+      );
+      this.store.applyPositionContextSync(synced);
+    } catch (err: unknown) {
+      const message =
+        (err as { error?: { message?: string } })?.error?.message ||
+        'Не вдалося синхронізувати контекст посади';
+      this.store.applySaveError(this.store.getGeneration(), message);
+      this.store.markDirtyIfNeeded();
+    }
   }
 
   reviewRows(stepKey: string) {
     const step = this.store.schemaSteps().find((s) => s.key === stepKey);
     if (!step) return [];
     const labelByCode = this.skillLabelByCode();
+    const reviewContext = this.reviewContext();
+    const historical =
+      !this.store.editable() &&
+      (this.store.assignment()?.submissions.length ?? 0) > 0;
     return reviewRowsForStep(
       step,
       this.store.answers(),
       this.store.profileMirror(),
       this.store.schemaSteps(),
-      labelByCode
-        ? { skillLabelByCode: (code) => labelByCode.get(code) ?? code }
-        : undefined,
+      {
+        skillLabelByCode: labelByCode
+          ? (code) => labelByCode.get(code) ?? code
+          : undefined,
+        contextVersion: reviewContext?.version ?? null,
+        contextSkills: reviewContext?.positionCatalog.skills ?? null,
+        historicalContext: historical ? reviewContext : null,
+        liveCatalog: this.orgCatalog(),
+        reviewMode: historical ? 'historical' : 'draft',
+      },
     );
+  }
+
+  private reviewContext() {
+    const detail = this.store.assignment();
+    if (!detail) return null;
+    if (!this.store.editable() && detail.submissions.length > 0) {
+      return detail.submissions[0]?.context ?? null;
+    }
+    return detail.context ?? null;
   }
 
   /**

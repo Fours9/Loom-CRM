@@ -6,6 +6,7 @@ import type {
   PositionDutyContext,
   PositionGoalTemplateContext,
   PositionSkillContext,
+  QuestionnaireContextV2,
 } from '@loom/contracts-questionnaires';
 import { Employee } from '../employees/employee.entity';
 import { EmploymentAssignment } from '../employees/employment-assignment.entity';
@@ -19,6 +20,17 @@ import {
   compareActiveEmploymentAssignments,
   resolveEmploymentPosition,
 } from './resolve-employment-position';
+
+type SnapshotRepos = {
+  employee: Repository<Employee>;
+  employmentAssignments: Repository<EmploymentAssignment>;
+  positions: Repository<Position>;
+  departments: Repository<Department>;
+  directions: Repository<Direction>;
+  skillRequirements: Repository<PositionSkillRequirement>;
+  duties: Repository<PositionDuty>;
+  goalTemplates: Repository<PositionGoalTemplate>;
+};
 
 /**
  * Canonical manager-aware Position Catalog reads for frozen questionnaire context.
@@ -48,42 +60,21 @@ export class PositionCatalogReadService {
   async buildSnapshotForEmployee(
     employeeId: string,
     manager?: EntityManager,
-  ): Promise<PositionCatalogContextV1> {
-    const employeeRepo = manager
-      ? manager.getRepository(Employee)
-      : this.employees;
-    const eaRepo = manager
-      ? manager.getRepository(EmploymentAssignment)
-      : this.employmentAssignments;
-    const positionRepo = manager
-      ? manager.getRepository(Position)
-      : this.positions;
-    const departmentRepo = manager
-      ? manager.getRepository(Department)
-      : this.departments;
-    const directionRepo = manager
-      ? manager.getRepository(Direction)
-      : this.directions;
-    const skillReqRepo = manager
-      ? manager.getRepository(PositionSkillRequirement)
-      : this.skillRequirements;
-    const dutyRepo = manager
-      ? manager.getRepository(PositionDuty)
-      : this.duties;
-    const goalRepo = manager
-      ? manager.getRepository(PositionGoalTemplate)
-      : this.goalTemplates;
+  ): Promise<QuestionnaireContextV2> {
+    const repos = this.repos(manager);
 
-    const employee = await employeeRepo.findOne({ where: { id: employeeId } });
+    const employee = await repos.employee.findOne({ where: { id: employeeId } });
     if (!employee) {
       throw new NotFoundException('Employee not found');
     }
 
     const currentAssignment = employee.currentAssignmentId
-      ? await eaRepo.findOne({ where: { id: employee.currentAssignmentId } })
+      ? await repos.employmentAssignments.findOne({
+          where: { id: employee.currentAssignmentId },
+        })
       : null;
 
-    const activeRows = await eaRepo.find({
+    const activeRows = await repos.employmentAssignments.find({
       where: { employeeId: employee.id, status: 'active' },
     });
     activeRows.sort(compareActiveEmploymentAssignments);
@@ -113,26 +104,114 @@ export class PositionCatalogReadService {
       })),
     });
 
+    return this.buildSnapshotFromResolvedPosition(
+      {
+        employeeId: employee.id,
+        employmentAssignmentId: resolved.employmentAssignmentId,
+        positionId: resolved.positionId,
+        departmentId: resolved.departmentId,
+        directionId: resolved.directionId,
+      },
+      repos,
+    );
+  }
+
+  /**
+   * Snapshot for an explicit position (not employment-resolved).
+   * `employmentAssignmentId` is always null; org parents come from the Position row.
+   */
+  async buildSnapshotForPosition(
+    employeeId: string,
+    positionId: string | null,
+    manager?: EntityManager,
+  ): Promise<QuestionnaireContextV2> {
+    const repos = this.repos(manager);
+
+    const employee = await repos.employee.findOne({ where: { id: employeeId } });
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+
+    let departmentId: string | null = null;
+    let directionId: string | null = null;
+    if (positionId) {
+      const position = await repos.positions.findOne({
+        where: { id: positionId },
+      });
+      if (!position) {
+        throw new NotFoundException('Position not found');
+      }
+      departmentId = position.departmentId;
+      directionId = position.directionId;
+    }
+
+    return this.buildSnapshotFromResolvedPosition(
+      {
+        employeeId: employee.id,
+        employmentAssignmentId: null,
+        positionId,
+        departmentId,
+        directionId,
+      },
+      repos,
+    );
+  }
+
+  private repos(manager?: EntityManager): SnapshotRepos {
+    if (!manager) {
+      return {
+        employee: this.employees,
+        employmentAssignments: this.employmentAssignments,
+        positions: this.positions,
+        departments: this.departments,
+        directions: this.directions,
+        skillRequirements: this.skillRequirements,
+        duties: this.duties,
+        goalTemplates: this.goalTemplates,
+      };
+    }
+    return {
+      employee: manager.getRepository(Employee),
+      employmentAssignments: manager.getRepository(EmploymentAssignment),
+      positions: manager.getRepository(Position),
+      departments: manager.getRepository(Department),
+      directions: manager.getRepository(Direction),
+      skillRequirements: manager.getRepository(PositionSkillRequirement),
+      duties: manager.getRepository(PositionDuty),
+      goalTemplates: manager.getRepository(PositionGoalTemplate),
+    };
+  }
+
+  private async buildSnapshotFromResolvedPosition(
+    resolved: {
+      employeeId: string;
+      employmentAssignmentId: string | null;
+      positionId: string | null;
+      departmentId: string | null;
+      directionId: string | null;
+    },
+    repos: SnapshotRepos,
+  ): Promise<QuestionnaireContextV2> {
     const capturedAt = new Date().toISOString();
 
     const departmentName = resolved.departmentId
       ? (
-          await departmentRepo.findOne({
+          await repos.departments.findOne({
             where: { id: resolved.departmentId },
           })
         )?.name ?? null
       : null;
     const directionName = resolved.directionId
       ? (
-          await directionRepo.findOne({
+          await repos.directions.findOne({
             where: { id: resolved.directionId },
           })
         )?.name ?? null
       : null;
 
     if (!resolved.positionId) {
-      return {
-        employeeId: employee.id,
+      const positionCatalog: PositionCatalogContextV1 = {
+        employeeId: resolved.employeeId,
         employmentAssignmentId: resolved.employmentAssignmentId,
         positionId: null,
         positionName: null,
@@ -145,23 +224,24 @@ export class PositionCatalogReadService {
         goalTemplates: [],
         duties: [],
       };
+      return { version: 2, positionCatalog };
     }
 
-    const position = await positionRepo.findOne({
+    const position = await repos.positions.findOne({
       where: { id: resolved.positionId },
     });
 
     const [skillReqs, duties, goals] = await Promise.all([
-      skillReqRepo.find({
+      repos.skillRequirements.find({
         where: { positionId: resolved.positionId },
         relations: ['skill', 'skill.group'],
         order: { skillId: 'ASC' },
       }),
-      dutyRepo.find({
+      repos.duties.find({
         where: { positionId: resolved.positionId, isActive: true },
         order: { sortOrder: 'ASC', id: 'ASC' },
       }),
-      goalRepo.find({
+      repos.goalTemplates.find({
         where: { positionId: resolved.positionId, isActive: true },
         order: { sortOrder: 'ASC', id: 'ASC' },
       }),
@@ -170,6 +250,7 @@ export class PositionCatalogReadService {
     const skills: PositionSkillContext[] = skillReqs
       .filter((r) => r.skill)
       .map((r) => ({
+        skillId: r.skill!.id,
         code: r.skill!.code,
         labelUa: r.skill!.name,
         group: r.skill!.group?.code ?? '',
@@ -179,6 +260,7 @@ export class PositionCatalogReadService {
         scaleKind: r.skill!.scaleKind,
         scaleMin: r.skill!.scaleMin,
         scaleMax: r.skill!.scaleMax,
+        source: 'position_requirement',
       }));
 
     const dutiesCtx: PositionDutyContext[] = duties.map((d) => ({
@@ -194,8 +276,8 @@ export class PositionCatalogReadService {
       sortOrder: g.sortOrder,
     }));
 
-    return {
-      employeeId: employee.id,
+    const positionCatalog: PositionCatalogContextV1 = {
+      employeeId: resolved.employeeId,
       employmentAssignmentId: resolved.employmentAssignmentId,
       positionId: resolved.positionId,
       positionName: position?.name ?? null,
@@ -208,5 +290,7 @@ export class PositionCatalogReadService {
       goalTemplates,
       duties: dutiesCtx,
     };
+
+    return { version: 2, positionCatalog };
   }
 }

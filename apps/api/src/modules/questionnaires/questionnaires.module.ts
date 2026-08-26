@@ -2,12 +2,14 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EmployeesModule } from '../../organization/employees/employees.module';
 import { PositionCatalogModule } from '../../organization/position-catalog/position-catalog.module';
+import { SkillsModule } from '../../organization/skills/skills.module';
 import { AuditModule } from '../../platform/audit/audit.module';
 import { IdentityModule } from '../../platform/identity/identity.module';
 import { NotificationsModule } from '../../platform/notifications/notifications.module';
 import { PermissionsModule } from '../../platform/permissions/permissions.module';
 import { User } from '../../platform/identity/user.entity';
 import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
+import { Skill } from '../../organization/skills/skill.entity';
 import { QuestionnaireTemplate } from './questionnaire-template.entity';
 import { QuestionnaireTemplateVersion } from './questionnaire-template-version.entity';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
@@ -19,6 +21,7 @@ import { QuestionnaireAssignmentService } from './questionnaire-assignment.servi
 import { QuestionnaireResponseService } from './questionnaire-response.service';
 import { QuestionnaireSubmissionService } from './questionnaire-submission.service';
 import { QuestionnaireProposalService } from './questionnaire-proposal.service';
+import { QuestionnairePositionContextSyncService } from './questionnaire-position-context-sync.service';
 import { QuestionnaireSeedService } from './seed/questionnaire-seed.service';
 import { QuestionnairesController } from './questionnaires.controller';
 
@@ -34,10 +37,12 @@ import { QuestionnairesController } from './questionnaires.controller';
       QuestionnaireProfileProposal,
       EmployeeContact,
       User,
+      Skill,
     ]),
     // Feature modules import concrete capabilities — not OrganizationModule aggregator.
     EmployeesModule,
     PositionCatalogModule,
+    SkillsModule,
     IdentityModule,
     PermissionsModule,
     AuditModule,
@@ -48,6 +53,7 @@ import { QuestionnairesController } from './questionnaires.controller';
     QuestionnaireResponseService,
     QuestionnaireSubmissionService,
     QuestionnaireProposalService,
+    QuestionnairePositionContextSyncService,
     QuestionnaireSeedService,
   ],
   controllers: [QuestionnairesController],

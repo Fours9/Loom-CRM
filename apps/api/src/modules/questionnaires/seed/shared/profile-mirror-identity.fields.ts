@@ -1,6 +1,6 @@
 import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
 
-const NAME_FIELDS: QuestionnaireSchemaField[] = [
+const NAME_CORE_FIELDS: QuestionnaireSchemaField[] = [
   {
     key: 'personal.last_name',
     label: 'Прізвище',
@@ -31,18 +31,19 @@ const NAME_FIELDS: QuestionnaireSchemaField[] = [
     createsProfileProposal: true,
     proposalMapping: { section: 'overview', field: 'middleName' },
   },
-  {
-    key: 'personal.preferred_name',
-    label: "Ім'я для звернення",
-    valueType: 'text',
-    requiredPolicy: 'voluntary',
-    uiGroup: 'identity_preferred',
-    createsProfileProposal: true,
-    proposalMapping: { section: 'header', field: 'preferredName' },
-  },
 ];
 
-const FULL_EXTRA_FIELDS: QuestionnaireSchemaField[] = [
+const PREFERRED_NAME_FIELD: QuestionnaireSchemaField = {
+  key: 'personal.preferred_name',
+  label: "Ім'я для звернення",
+  valueType: 'text',
+  requiredPolicy: 'voluntary',
+  uiGroup: 'identity_preferred',
+  createsProfileProposal: true,
+  proposalMapping: { section: 'header', field: 'preferredName' },
+};
+
+const BIRTH_CITY_FIELDS: QuestionnaireSchemaField[] = [
   {
     key: 'personal.birth_date',
     label: 'Дата народження',
@@ -59,6 +60,9 @@ const FULL_EXTRA_FIELDS: QuestionnaireSchemaField[] = [
     createsProfileProposal: true,
     proposalMapping: { section: 'personal', field: 'city' },
   },
+];
+
+const LANGUAGE_FIELDS: QuestionnaireSchemaField[] = [
   {
     key: 'personal.preferred_language',
     label: 'Бажана мова',
@@ -86,10 +90,18 @@ const FULL_EXTRA_FIELDS: QuestionnaireSchemaField[] = [
 
 /** Shared profile_mirror identity fields for full / managing / docs seeds. */
 export function buildProfileMirrorIdentityFields(
-  mode: 'full' | 'namesOnly',
+  mode: 'full' | 'namesOnly' | 'docsManagingPersonal',
 ): QuestionnaireSchemaField[] {
-  if (mode === 'namesOnly') {
-    return [...NAME_FIELDS];
+  if (mode === 'docsManagingPersonal') {
+    return [...NAME_CORE_FIELDS, ...BIRTH_CITY_FIELDS];
   }
-  return [...NAME_FIELDS, ...FULL_EXTRA_FIELDS];
+  if (mode === 'namesOnly') {
+    return [...NAME_CORE_FIELDS, PREFERRED_NAME_FIELD];
+  }
+  return [
+    ...NAME_CORE_FIELDS,
+    PREFERRED_NAME_FIELD,
+    ...BIRTH_CITY_FIELDS,
+    ...LANGUAGE_FIELDS,
+  ];
 }

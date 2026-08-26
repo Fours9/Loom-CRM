@@ -7,6 +7,7 @@ import {
 export type ContactsBundleProposalCandidate = {
   targetSection: 'contacts';
   proposedChanges: {
+    kind: 'field_update';
     section: 'contacts';
     field: string;
     answerKey: string;
@@ -54,6 +55,7 @@ export function buildContactsBundleProposalCandidates(input: {
     candidates.push({
       targetSection: 'contacts',
       proposedChanges: {
+        kind: 'field_update',
         section: 'contacts',
         field: item.field,
         answerKey,
@@ -67,6 +69,7 @@ export function buildContactsBundleProposalCandidates(input: {
     candidates.push({
       targetSection: 'contacts',
       proposedChanges: {
+        kind: 'field_update',
         section: 'contacts',
         field: 'personal_replace',
         answerKey,
@@ -80,6 +83,7 @@ export function buildContactsBundleProposalCandidates(input: {
     candidates.push({
       targetSection: 'contacts',
       proposedChanges: {
+        kind: 'field_update',
         section: 'contacts',
         field: 'emergency_replace',
         answerKey,

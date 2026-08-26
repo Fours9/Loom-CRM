@@ -135,6 +135,19 @@ export class QuestionnairesApiService {
     );
   }
 
+  syncPositionContext(
+    assignmentId: string,
+    body: {
+      expectedDraftRevision: number;
+      desiredExtraSkillCodes: string[];
+    },
+  ): Observable<QuestionnaireAssignmentDetail> {
+    return this.http.post<QuestionnaireAssignmentDetail>(
+      `/api/v1/questionnaires/assignments/${assignmentId}/sync-position-context`,
+      body,
+    );
+  }
+
   submit(assignmentId: string): Observable<QuestionnaireSubmissionSummary> {
     return this.http.post<QuestionnaireSubmissionSummary>(
       `/api/v1/questionnaires/assignments/${assignmentId}/submit`,

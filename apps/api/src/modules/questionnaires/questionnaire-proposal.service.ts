@@ -28,7 +28,14 @@ import {
   type EmployeeContactsBundle,
   type EmployeeContactsEmergencyItem,
 } from '@loom/employee-contacts';
-import type { QuestionnaireProfileProposalItem } from '@loom/contracts-questionnaires';
+import type {
+  QuestionnaireProfileProposalItem,
+  QuestionnaireProposedChange,
+} from '@loom/contracts-questionnaires';
+import { parseQuestionnaireContext } from '@loom/contracts-questionnaires';
+import {
+  parsePositionSkillsMatrixStrict,
+} from '@loom/questionnaire-schema';
 import {
   proposalMatchesCurrentValue,
   valuesEqual,
@@ -38,6 +45,14 @@ import {
   buildContactsBundleProposalCandidates,
   contactsReplaceSetStale,
 } from './proposals/contacts-bundle-projector';
+import { canApplySkillAddProposal } from './proposals/skill-add-proposal.policy';
+import {
+  InvalidProposedChangeError,
+  parseQuestionnaireProposedChange,
+} from './proposals/questionnaire-proposed-change';
+import { EmployeeSkillAssessmentsFacade } from '../../organization/skills/employee-skill-assessments.facade';
+import { SkillsService } from '../../organization/skills/skills.service';
+import { Skill } from '../../organization/skills/skill.entity';
 
 type ProposalMapping = { section: string; field: string };
 type SchemaField = {
@@ -80,6 +95,8 @@ export class QuestionnaireProposalService {
     private readonly permissions: PermissionService,
     private readonly contactsFacade: EmployeeContactsFacade,
     private readonly profiles: EmployeeProfileService,
+    private readonly assessments: EmployeeSkillAssessmentsFacade,
+    private readonly skillsCatalog: SkillsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -100,7 +117,7 @@ export class QuestionnaireProposalService {
       .getRepository(QuestionnaireAssignment)
       .findOne({
         where: { id: submission.response.assignmentId },
-        relations: { templateVersion: true },
+        relations: { templateVersion: { template: true } },
       });
     if (!assignment?.templateVersion) return;
     if (!assignment.employeeId) return;
@@ -143,13 +160,7 @@ export class QuestionnaireProposalService {
 
     const candidates: Array<{
       targetSection: string;
-      proposedChanges: {
-        section: string;
-        field: string;
-        answerKey: string;
-        from: unknown;
-        to: unknown;
-      };
+      proposedChanges: QuestionnaireProposedChange;
     }> = [];
 
     for (const field of scalarFields) {
@@ -192,6 +203,7 @@ export class QuestionnaireProposalService {
       candidates.push({
         targetSection: mapping.section,
         proposedChanges: {
+          kind: 'field_update',
           section: mapping.section,
           field: mapping.field,
           answerKey: field.key,
@@ -222,25 +234,31 @@ export class QuestionnaireProposalService {
       );
     }
 
+    if (assignment.templateVersion.template?.type === 'managing') {
+      await this.appendManagingSkillAddCandidates(manager, {
+        employeeId: employee.id,
+        submission,
+        candidates,
+      });
+    }
+
     const now = new Date();
 
     const allPending = await proposalRepo.find({
       where: { employeeId: employee.id, status: 'pending' },
     });
     const profileEqual = allPending.filter((p) => {
-      const change = p.proposedChanges as {
-        section?: string;
-        field?: string;
-        answerKey?: string;
-      };
+      let change: QuestionnaireProposedChange;
+      try {
+        change = parseQuestionnaireProposedChange(p.proposedChanges);
+      } catch {
+        return false;
+      }
+      if (change.kind !== 'field_update') return false;
       const schemaField = change.answerKey
         ? fieldsByKey.get(change.answerKey)
         : null;
-      const profileKey =
-        change.section && change.field
-          ? `${change.section}.${change.field}`
-          : null;
-      if (!profileKey) return false;
+      const profileKey = `${change.section}.${change.field}`;
       return proposalMatchesCurrentValue({
         proposal: p,
         currentProfileValue: current[profileKey],
@@ -270,11 +288,97 @@ export class QuestionnaireProposalService {
         submissionId: submission.id,
         employeeId: employee.id,
         targetSection: c.targetSection,
-        proposedChanges: c.proposedChanges,
+        proposedChanges: c.proposedChanges as unknown as Record<string, unknown>,
         status: 'pending',
       }),
     );
     await proposalRepo.save(rows);
+  }
+
+  private async appendManagingSkillAddCandidates(
+    manager: EntityManager,
+    input: {
+      employeeId: string;
+      submission: QuestionnaireSubmission;
+      candidates: Array<{
+        targetSection: string;
+        proposedChanges: QuestionnaireProposedChange;
+      }>;
+    },
+  ): Promise<void> {
+    const parsedCtx = parseQuestionnaireContext(input.submission.contextJson);
+    if (!parsedCtx.ok) return;
+
+    let matrixRatings: Array<{ skillCode: string; level: number | null }> = [];
+    try {
+      const matrix = parsePositionSkillsMatrixStrict(
+        input.submission.snapshotJson?.['skills.matrix'],
+      );
+      matrixRatings = matrix.ratings;
+    } catch {
+      matrixRatings = [];
+    }
+    const levelByCode = new Map(
+      matrixRatings.map((r) => [r.skillCode, r.level] as const),
+    );
+
+    const extras = parsedCtx.context.positionCatalog.skills.filter(
+      (s) => s.source === 'questionnaire_extra',
+    );
+
+    for (const frozen of extras) {
+      if (!frozen.skillId) continue;
+      if (
+        frozen.scaleKind == null ||
+        frozen.scaleMin == null ||
+        frozen.scaleMax == null
+      ) {
+        continue;
+      }
+
+      const sourceScale = {
+        kind: frozen.scaleKind,
+        min: frozen.scaleMin,
+        max: frozen.scaleMax,
+      };
+      const proposedLevel = levelByCode.has(frozen.code)
+        ? (levelByCode.get(frozen.code) ?? null)
+        : null;
+
+      const liveSkill = await manager.getRepository(Skill).findOne({
+        where: { id: frozen.skillId },
+      });
+      const gate = canApplySkillAddProposal({
+        liveSkill,
+        proposedLevel,
+        sourceScale,
+      });
+      if (!gate.ok) continue;
+
+      if (
+        await this.assessments.hasConfirmed(
+          input.employeeId,
+          frozen.skillId,
+          manager,
+        )
+      ) {
+        continue;
+      }
+
+      input.candidates.push({
+        targetSection: 'skills',
+        proposedChanges: {
+          kind: 'add_skill',
+          section: 'skills',
+          field: frozen.code,
+          skillId: frozen.skillId,
+          skillCode: frozen.code,
+          labelUa: frozen.labelUa,
+          proposedLevel,
+          sourceScale,
+        },
+      });
+    }
   }
 
   async listForEmployee(actor: User, employeeId: string) {
@@ -314,21 +418,29 @@ export class QuestionnaireProposalService {
       const assignmentId = assignmentBySubmission.get(p.submissionId);
       if (!assignmentId) continue;
 
-      const change = p.proposedChanges as {
-        section?: string;
-        field?: string;
-        answerKey?: string;
-      };
+      let change: QuestionnaireProposedChange;
+      try {
+        change = parseQuestionnaireProposedChange(p.proposedChanges);
+      } catch {
+        continue;
+      }
+
+      if (change.kind === 'add_skill') {
+        if (
+          await this.assessments.hasConfirmed(employeeId, change.skillId)
+        ) {
+          continue;
+        }
+        dtos.push(this.toDto(p, assignmentId));
+        continue;
+      }
+
       const schema = schemaByAssignment.get(assignmentId);
       const schemaField = change.answerKey
         ? schema?.fieldsByKey.get(change.answerKey)
         : undefined;
-      const profileKey =
-        change.section && change.field
-          ? `${change.section}.${change.field}`
-          : null;
+      const profileKey = `${change.section}.${change.field}`;
       if (
-        profileKey &&
         proposalMatchesCurrentValue({
           proposal: p,
           currentProfileValue: current[profileKey],
@@ -353,13 +465,29 @@ export class QuestionnaireProposalService {
   }
 
   async accept(actor: User, proposalId: string) {
+    return this.resolveProposal(actor, proposalId, 'accept');
+  }
+
+  async reject(actor: User, proposalId: string) {
+    return this.resolveProposal(actor, proposalId, 'reject');
+  }
+
+  async resolveProposal(
+    actor: User,
+    proposalId: string,
+    decision: 'accept' | 'reject',
+  ) {
     if (
       !this.permissions.has(
         actor.role,
         Permission.QuestionnairesApplyProfileChanges,
       )
     ) {
-      throw new ForbiddenException('Cannot apply profile changes');
+      throw new ForbiddenException(
+        decision === 'accept'
+          ? 'Cannot apply profile changes'
+          : 'Cannot reject profile changes',
+      );
     }
 
     const proposal = await this.proposals.findOne({
@@ -379,13 +507,15 @@ export class QuestionnaireProposalService {
     const employee = await this.access.getEmployeeOrFail(proposal.employeeId);
     await this.access.requireCanView(actor, employee);
 
-    const change = proposal.proposedChanges as {
-      section: string;
-      field: string;
-      answerKey?: string;
-      from?: unknown;
-      to: unknown;
-    };
+    let change: QuestionnaireProposedChange;
+    try {
+      change = parseQuestionnaireProposedChange(proposal.proposedChanges);
+    } catch (err) {
+      if (err instanceof InvalidProposedChangeError) {
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
 
     await this.dataSource.transaction(async (manager) => {
       const locked = await manager
@@ -395,62 +525,42 @@ export class QuestionnaireProposalService {
           lock: { mode: 'pessimistic_write' },
         });
       if (!locked || locked.status !== 'pending') {
-        throw new BadRequestException('Proposal is no longer pending');
+        throw new ConflictException('Proposal is no longer pending');
       }
 
-      await this.applyChangeInTransaction(manager, actor, proposal.employeeId, change);
+      if (decision === 'accept') {
+        await this.applyChangeInTransaction(
+          manager,
+          actor,
+          proposal.employeeId,
+          change,
+          {
+            submissionId: proposal.submissionId,
+            assignmentId,
+          },
+        );
+        locked.status = 'accepted';
+      } else {
+        locked.status = 'rejected';
+      }
 
-      locked.status = 'accepted';
       locked.reviewedByUserId = actor.id;
       locked.reviewedAt = new Date();
       await manager.getRepository(QuestionnaireProfileProposal).save(locked);
 
-      await supersedePendingForSameField(manager, {
-        employeeId: proposal.employeeId,
-        section: change.section,
-        field: change.field,
-        exceptProposalId: proposal.id,
-      });
+      if (decision === 'accept') {
+        await supersedePendingForSameField(manager, {
+          employeeId: proposal.employeeId,
+          section: change.section,
+          field: change.field,
+          exceptProposalId: proposal.id,
+        });
+      }
     });
 
     const saved = await this.proposals.findOne({ where: { id: proposalId } });
     if (!saved) throw new NotFoundException('Proposal not found');
     return this.toDto(saved, assignmentId);
-  }
-
-  async reject(actor: User, proposalId: string) {
-    if (
-      !this.permissions.has(
-        actor.role,
-        Permission.QuestionnairesApplyProfileChanges,
-      )
-    ) {
-      throw new ForbiddenException('Cannot reject profile changes');
-    }
-
-    const proposal = await this.proposals.findOne({
-      where: { id: proposalId },
-      relations: { submission: { response: true } },
-    });
-    if (!proposal) throw new NotFoundException('Proposal not found');
-    if (proposal.status !== 'pending') {
-      throw new BadRequestException(`Proposal is ${proposal.status}`);
-    }
-
-    const assignmentId = proposal.submission?.response?.assignmentId;
-    if (!assignmentId) {
-      throw new NotFoundException('Proposal assignment not found');
-    }
-
-    const employee = await this.access.getEmployeeOrFail(proposal.employeeId);
-    await this.access.requireCanView(actor, employee);
-
-    proposal.status = 'rejected';
-    proposal.reviewedByUserId = actor.id;
-    proposal.reviewedAt = new Date();
-    await this.proposals.save(proposal);
-
-    return this.toDto(proposal, assignmentId);
   }
 
   async latestSnapshotSummary(
@@ -510,13 +620,20 @@ export class QuestionnaireProposalService {
     manager: EntityManager,
     actor: User,
     employeeId: string,
-    change: {
-      section: string;
-      field: string;
-      from?: unknown;
-      to: unknown;
-    },
+    change: QuestionnaireProposedChange,
+    provenance: { submissionId: string; assignmentId: string },
   ): Promise<void> {
+    if (change.kind === 'add_skill') {
+      await this.applySkillAddInTransaction(
+        manager,
+        actor,
+        employeeId,
+        change,
+        provenance,
+      );
+      return;
+    }
+
     if (change.section === 'overview' || change.section === 'header') {
       const value =
         typeof change.to === 'string'
@@ -564,15 +681,49 @@ export class QuestionnaireProposalService {
     );
   }
 
+  private async applySkillAddInTransaction(
+    manager: EntityManager,
+    actor: User,
+    employeeId: string,
+    change: Extract<QuestionnaireProposedChange, { kind: 'add_skill' }>,
+    provenance: { submissionId: string; assignmentId: string },
+  ): Promise<void> {
+    // Lock order: proposal (already locked) → Skill → insertConfirmedIfAbsent
+    let liveSkill: Skill;
+    try {
+      liveSkill = await this.skillsCatalog.lockSkill(manager, change.skillId);
+    } catch (err) {
+      if (err instanceof NotFoundException) {
+        throw new ConflictException('SKILL_MISSING');
+      }
+      throw err;
+    }
+
+    const gate = canApplySkillAddProposal({
+      liveSkill,
+      proposedLevel: change.proposedLevel,
+      sourceScale: change.sourceScale,
+    });
+    if (!gate.ok) {
+      throw new ConflictException(gate.reason);
+    }
+
+    await this.assessments.insertConfirmedIfAbsent(manager, {
+      employeeId,
+      skillId: change.skillId,
+      level: change.proposedLevel,
+      assessedBy: actor.id,
+      assessedAt: new Date(),
+      sourceSubmissionId: provenance.submissionId,
+      sourceAssignmentId: provenance.assignmentId,
+    });
+  }
+
   private async applyContactChangeInTransaction(
     manager: EntityManager,
     actor: User,
     employeeId: string,
-    change: {
-      field: string;
-      from?: unknown;
-      to: unknown;
-    },
+    change: Extract<QuestionnaireProposedChange, { kind: 'field_update' }>,
   ): Promise<void> {
     const current = await this.contactsFacade.readContactsBundle(
       manager,

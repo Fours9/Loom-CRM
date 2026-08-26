@@ -19,7 +19,7 @@ import {
   requireActorAccessAssignmentType,
   requireCanEditDraft,
 } from './assignments/questionnaire-assignment-access';
-import { normalizeDraftAnswersForPatch } from './questionnaire-answers-validation';
+import { normalizeDraftAnswersForPatch, validateOrganizationRefAnswers } from './questionnaire-answers-validation';
 
 @Injectable()
 export class QuestionnaireResponseService {
@@ -92,6 +92,11 @@ export class QuestionnaireResponseService {
       normalizedAnswers = normalizeDraftAnswersForPatch(
         schema,
         input.answers ?? {},
+      );
+      await validateOrganizationRefAnswers(
+        schema,
+        normalizedAnswers,
+        this.dataSource.manager,
       );
     } catch (err) {
       if (

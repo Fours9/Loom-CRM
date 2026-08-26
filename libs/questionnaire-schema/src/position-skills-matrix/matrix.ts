@@ -6,12 +6,22 @@ import {
   isSkillIdentityCode,
 } from '@loom/position-skill-catalog';
 import { InvalidPositionSkillsMatrix } from './errors';
+import { validateRatingLevelAgainstPolicy } from './rating-policy';
 
 export const POSITION_SKILLS_MATRIX_LIMITS = {
   maxRatings: MAX_POSITION_SKILLS,
   maxCustom: 20,
   nameMaxLength: 120,
   commentMaxLength: 500,
+} as const;
+
+/** Wide structural envelope for draft PATCH; submit enforces policy bounds. */
+const PARSE_LEVEL_ENVELOPE_MIN = -1000;
+const PARSE_LEVEL_ENVELOPE_MAX = 10000;
+
+const DEFAULT_LEVEL_BOUNDS = {
+  min: SKILL_LEVEL_MIN,
+  max: SKILL_LEVEL_MAX,
 } as const;
 
 export type PositionSkillRating = {
@@ -54,9 +64,9 @@ function parseLevel(raw: unknown, label: string): number | null {
   if (typeof raw !== 'number' || !Number.isInteger(raw)) {
     throw new InvalidPositionSkillsMatrix(`${label}: level must be an integer`);
   }
-  if (raw < SKILL_LEVEL_MIN || raw > SKILL_LEVEL_MAX) {
+  if (raw < PARSE_LEVEL_ENVELOPE_MIN || raw > PARSE_LEVEL_ENVELOPE_MAX) {
     throw new InvalidPositionSkillsMatrix(
-      `${label}: level must be ${SKILL_LEVEL_MIN}..${SKILL_LEVEL_MAX}`,
+      `${label}: level must be ${PARSE_LEVEL_ENVELOPE_MIN}..${PARSE_LEVEL_ENVELOPE_MAX}`,
     );
   }
   return raw;
@@ -180,6 +190,30 @@ export function canonicalizePositionSkillsMatrix(
   return { ratings, custom };
 }
 
+/**
+ * Drop unrated registry rows (level == null) and empty custom rows.
+ * Intended for FE emit / submit payload; draft canonicalize keeps incomplete rows.
+ */
+export function pruneUnratedMatrixRatings(
+  matrix: PositionSkillsMatrixAnswer,
+): PositionSkillsMatrixAnswer {
+  const ratings = matrix.ratings.filter(
+    (r) => r.skillCode.length > 0 && r.level != null,
+  );
+  const custom = matrix.custom
+    .map((c) => ({
+      name: c.name.trim(),
+      level: c.level,
+      comment: c.comment,
+    }))
+    .filter(
+      (c) =>
+        c.name.length > 0 || c.level != null || (c.comment?.length ?? 0) > 0,
+    );
+
+  return canonicalizePositionSkillsMatrix({ ratings, custom });
+}
+
 export function emptyPositionSkillsMatrix(): PositionSkillsMatrixAnswer {
   return { ratings: [], custom: [] };
 }
@@ -196,10 +230,12 @@ export function isPositionSkillsMatrixMeaningful(
 /**
  * Semantic validation for SUBMIT.
  * @param allowedSkillCodes when set (frozen context), ratings must be ⊆ this set
+ * @param levelBoundsByCode optional per-skill min/max (v2 scales); missing → 0..5
  */
 export function validatePositionSkillsMatrixForSubmit(
   matrix: PositionSkillsMatrixAnswer,
   allowedSkillCodes?: ReadonlySet<string> | readonly string[],
+  levelBoundsByCode?: ReadonlyMap<string, { min: number; max: number }>,
 ): void {
   const allowed =
     allowedSkillCodes == null
@@ -237,6 +273,13 @@ export function validatePositionSkillsMatrixForSubmit(
         `rating.level required for "${r.skillCode}"`,
       );
     }
+    const bounds =
+      levelBoundsByCode?.get(r.skillCode) ?? DEFAULT_LEVEL_BOUNDS;
+    validateRatingLevelAgainstPolicy(
+      r.level,
+      bounds,
+      `rating.level for "${r.skillCode}"`,
+    );
   }
 
   for (const c of matrix.custom) {
@@ -249,17 +292,26 @@ export function validatePositionSkillsMatrixForSubmit(
         `custom.level required for "${name}"`,
       );
     }
+    validateRatingLevelAgainstPolicy(
+      c.level,
+      DEFAULT_LEVEL_BOUNDS,
+      `custom.level for "${name}"`,
+    );
   }
 }
 
 export function formatPositionSkillsMatrixReviewSummary(
   matrix: PositionSkillsMatrixAnswer,
   labelByCode: (code: string) => string,
+  formatLevel?: (code: string, level: number) => string,
 ): string {
   const parts: string[] = [];
   for (const r of matrix.ratings) {
     if (r.level == null) continue;
-    parts.push(`${labelByCode(r.skillCode)}: ${r.level}`);
+    const levelText = formatLevel
+      ? formatLevel(r.skillCode, r.level)
+      : String(r.level);
+    parts.push(`${labelByCode(r.skillCode)}: ${levelText}`);
   }
   for (const c of matrix.custom) {
     if (!c.name.trim() || c.level == null) continue;

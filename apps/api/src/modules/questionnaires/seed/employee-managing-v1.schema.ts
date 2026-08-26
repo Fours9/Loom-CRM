@@ -34,12 +34,12 @@ export const EMPLOYEE_MANAGING_V1_SCHEMA = {
     {
       key: 'profile_mirror',
       label: 'Особисті дані',
-      fields: buildProfileMirrorIdentityFields('namesOnly'),
+      fields: buildProfileMirrorIdentityFields('docsManagingPersonal'),
     },
     {
       key: 'company_work',
       label: 'Робота в компанії',
-      fields: buildCompanyWorkFields(),
+      fields: buildCompanyWorkFields('managing'),
     },
     {
       key: 'grade',

@@ -35,7 +35,14 @@ $env:ALLOW_QUESTIONNAIRE_TEST_RESET = 'YES'
 3. `questionnaire_responses`
 4. `questionnaire_assignments`
 
-**Не** використовується `TRUNCATE … CASCADE`. Templates/versions лишаються; API startup оновить `schema_json` v1 якщо assignments = 0.
+**Не** використовується `TRUNCATE … CASCADE`. Templates/versions лишаються; API startup оновить schema через `QuestionnaireSeedService.ensureEmployee360V1()` (усі три шаблони).
+
+### Seed / latest-version (living)
+
+- Порівняння й запис schema йдуть через `schemaForPublishedVersion(seed, version)` — вирівнює checked-in `version` із номером рядка `questionnaire_template_versions`.
+- Non-prod: якщо latest schema ≠ seed і **0** assignments на latest → **in-place refresh** того ж version; якщо є assignments → **publish next version** (не мутувати зайнятий published row).
+- Prod: drift seed ↔ published → fail (immutable); потрібна нова версія вручну.
+- Після reset (assignments = 0) + restart API seed знову може refresh latest `schema_json`.
 
 ## Snapshot DoD (обовʼязково після UX schema pass)
 
@@ -55,14 +62,14 @@ Breaking answer shapes (наприклад `family.other_dates_note` text → `f
 
 ## Track B / Managing·Docs
 
-Після зміни published schema `employee-managing` або `employee-docs` (Track B): якщо локально вже є MAN/DOC assignments (або застарілий `schema_json`), виконати reset перед smoke:
+Після зміни published schema `employee-managing` або `employee-docs` (Track B / UX parity): якщо локально вже є MAN/DOC assignments (або застарілий `schema_json`), виконати reset перед smoke:
 
 ```bash
 ALLOW_QUESTIONNAIRE_TEST_RESET=YES pnpm questionnaires:reset -- --execute
 ```
 
-Потім restart API (seed refresh). Деталі Position Catalog / matrix modes: [position-catalog.md](./position-catalog.md).
+Потім restart API (seed refresh latest via `schemaForPublishedVersion`). Деталі Position Catalog / matrix / Context V2: [position-catalog.md](./position-catalog.md).
 
 ## Коли потрібен reset
 
-Перед in-place refresh `employee-360` / `employee-managing` / `employee-docs` v1 (breaking answer shapes). Після першого **production** assignment — не мутувати published v1; публікувати version 2.
+Перед in-place refresh latest published version `employee-360` / `employee-managing` / `employee-docs` (breaking answer shapes). Після першого **production** assignment — не мутувати зайнятий published version; публікувати наступну (seed non-prod уже робить auto-publish next при drift + assignments > 0).

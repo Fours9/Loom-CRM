@@ -74,7 +74,7 @@ export function resolveQuestionnaireFieldDisplay(
     return { value: undefined, source: 'none' };
   }
 
-  const mirrorKey = field.proposalMapping?.field;
+  const mirrorKey = field.profileMirrorKey ?? field.proposalMapping?.field;
   if (mirrorKey && hasOwn(profileMirror, mirrorKey)) {
     let value: unknown = profileMirror[mirrorKey];
     if (field.valueType === 'multi_choice' && field.key === 'personal.preferred_language') {

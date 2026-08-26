@@ -377,13 +377,30 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
   }
 
   proposalLabel(p: QuestionnaireProfileProposalItem): string {
-    const c = p.proposedChanges as { answerKey?: string; field?: string };
-    return c.answerKey || c.field || p.targetSection;
+    const c = p.proposedChanges;
+    switch (c.kind) {
+      case 'add_skill':
+        return c.labelUa || c.skillCode || p.targetSection;
+      case 'field_update':
+        return c.answerKey || c.field || p.targetSection;
+      default:
+        return p.targetSection;
+    }
   }
 
   formatChange(p: QuestionnaireProfileProposalItem): string {
-    const c = p.proposedChanges as { from?: unknown; to?: unknown };
-    return `${JSON.stringify(c.from ?? null)} → ${JSON.stringify(c.to ?? null)}`;
+    const c = p.proposedChanges;
+    switch (c.kind) {
+      case 'add_skill': {
+        const level =
+          c.proposedLevel == null ? 'без оцінки' : String(c.proposedLevel);
+        return `Додати навичку · рівень: ${level}`;
+      }
+      case 'field_update':
+        return `${JSON.stringify(c.from ?? null)} → ${JSON.stringify(c.to ?? null)}`;
+      default:
+        return '';
+    }
   }
 
   async acceptProposal(id: string): Promise<void> {

@@ -55,6 +55,7 @@ function makeHarness(
     requirements?: Array<Pick<PositionSkillRequirement, 'id' | 'skillId' | 'targetLevel'>>;
     group?: SkillGroup;
     groups?: SkillGroup[];
+    assessmentCount?: number;
   } = {},
 ): Harness {
   const skill = opts.skill ?? skillRow();
@@ -66,6 +67,7 @@ function makeHarness(
   const reqDelete = jest.fn();
   const skillRemove = jest.fn();
   const groupRemove = jest.fn();
+  const assessmentCount = opts.assessmentCount ?? 0;
 
   const manager = {
     getRepository: (entity: unknown) => {
@@ -181,10 +183,15 @@ function makeHarness(
     count: async () => reqs.length,
   };
 
+  const assessmentsFacade = {
+    countForSkill: async () => assessmentCount,
+  };
+
   const service = new SkillsService(
     groupsRepo as never,
     skillsRepo as never,
     requirementsRepo as never,
+    assessmentsFacade as never,
     dataSource,
   );
 
@@ -487,6 +494,28 @@ describe('SkillsService hard delete', () => {
     await service.hardDeleteSkill('skill-1');
     expect(reqDelete).toHaveBeenCalledWith({ skillId: 'skill-1' });
     expect(skillRemove).toHaveBeenCalled();
+  });
+
+  it('blocks hard-delete when assessments exist', async () => {
+    const { service } = makeHarness({
+      skill: skillRow(),
+      requirements: [],
+      assessmentCount: 1,
+    });
+    await expect(service.hardDeleteSkill('skill-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('blocks scale change when assessments exist', async () => {
+    const { service } = makeHarness({
+      skill: skillRow({ scaleKind: 'range', scaleMin: 0, scaleMax: 5 }),
+      requirements: [],
+      assessmentCount: 2,
+    });
+    await expect(
+      service.updateSkill('skill-1', { scaleMax: 10 }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('bulk-deletes only the target skill requirements', async () => {

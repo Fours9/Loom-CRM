@@ -39,13 +39,17 @@ export {
   POSITION_SKILLS_MATRIX_LIMITS,
   emptyPositionSkillsMatrix,
   canonicalizePositionSkillsMatrix,
+  pruneUnratedMatrixRatings,
   parsePositionSkillsMatrixStrict,
   isPositionSkillsMatrixMeaningful,
   validatePositionSkillsMatrixForSubmit,
   formatPositionSkillsMatrixReviewSummary,
+  resolveMatrixRatingPolicy,
+  validateRatingLevelAgainstPolicy,
 } from './position-skills-matrix';
 export type {
   PositionSkillsMatrixAnswer,
   PositionSkillRating,
   PositionSkillCustom,
+  MatrixRatingPolicy,
 } from './position-skills-matrix';

@@ -65,7 +65,7 @@ export class QuestionnaireAssignment {
   @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
   reviewedAt!: Date | null;
 
-  /** Frozen QuestionnaireContextV1; null = legacy registry mode (ADR 0010). */
+  /** Frozen QuestionnaireContext (V1|V2); null = legacy registry mode (ADR 0010). */
   @Column({ name: 'context_json', type: 'jsonb', nullable: true })
   contextJson!: Record<string, unknown> | null;
 

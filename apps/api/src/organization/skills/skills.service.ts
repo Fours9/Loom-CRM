@@ -15,6 +15,7 @@ import {
 } from '@loom/position-skill-catalog';
 import { SkillGroup } from './skill-group.entity';
 import { Skill } from './skill.entity';
+import { EmployeeSkillAssessmentsFacade } from './employee-skill-assessments.facade';
 import { PositionSkillRequirement } from '../position-requirements/position-skill-requirement.entity';
 
 const GENERATE_CODE_ATTEMPTS = 8;
@@ -36,6 +37,7 @@ export class SkillsService {
     private readonly skills: Repository<Skill>,
     @InjectRepository(PositionSkillRequirement)
     private readonly requirements: Repository<PositionSkillRequirement>,
+    private readonly assessments: EmployeeSkillAssessmentsFacade,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -241,6 +243,19 @@ export class SkillsService {
     }
   }
 
+  /** Hard-delete / scale mutation blocked while any assessments reference the skill. */
+  async assertNoAssessmentsBlockingSkillMutation(
+    skillId: string,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const count = await this.assessments.countForSkill(skillId, manager);
+    if (count > 0) {
+      throw new ConflictException(
+        'Skill has employee assessments; hard-delete and scale changes are blocked',
+      );
+    }
+  }
+
   assertScalePair(kind: SkillScaleKind, scaleMin: number, scaleMax: number): void {
     const check = validateSkillScaleBounds(kind, scaleMin, scaleMax);
     if (!check.ok) throw new BadRequestException(check.error);
@@ -311,6 +326,13 @@ export class SkillsService {
           throw new BadRequestException('scaleKind must be range or percent');
         }
         this.assertScalePair(nextKind, nextMin, nextMax);
+        const scaleChanged =
+          nextKind !== row.scaleKind ||
+          nextMin !== row.scaleMin ||
+          nextMax !== row.scaleMax;
+        if (scaleChanged) {
+          await this.assertNoAssessmentsBlockingSkillMutation(id, manager);
+        }
         const reqs = await reqRepo.find({ where: { skillId: id } });
         if (nextKind !== row.scaleKind && reqs.length > 0) {
           throw new ConflictException(
@@ -361,6 +383,7 @@ export class SkillsService {
   async hardDeleteSkill(id: string): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const row = await this.lockSkill(manager, id);
+      await this.assertNoAssessmentsBlockingSkillMutation(id, manager);
       await manager.getRepository(PositionSkillRequirement).delete({ skillId: id });
       await manager.getRepository(Skill).remove(row);
     });

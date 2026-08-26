@@ -45,6 +45,9 @@ import { EmployeeProfileExportService } from './employee-profile-export.service'
 import { contentDisposition } from './employee-pdf-filename';
 import { EmployeeHistoryQueryDto } from './employee-history-query.dto';
 import { EmployeeListQueryDto } from './employee-list-query.dto';
+import { EmployeeAccessService } from '../access/employee-access.service';
+import { EmployeeSkillAssessmentsFacade } from '../skills/employee-skill-assessments.facade';
+import type { EmployeeSkillAssessmentListResponse } from '@loom/contracts-employees';
 
 class CreateEmployeeDto {
   @IsString()
@@ -311,6 +314,8 @@ export class EmployeesController {
     private readonly employees: EmployeesService,
     private readonly profile: EmployeeProfileService,
     private readonly exportService: EmployeeProfileExportService,
+    private readonly access: EmployeeAccessService,
+    private readonly assessmentsFacade: EmployeeSkillAssessmentsFacade,
   ) {}
 
   @Get()
@@ -385,6 +390,38 @@ export class EmployeesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.profile.employmentHistory(user, id);
+  }
+
+  @Get(':id/skill-assessments')
+  @RequirePermissions(Permission.EmployeesView)
+  async listSkillAssessments(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<EmployeeSkillAssessmentListResponse> {
+    const employee = await this.access.getEmployeeOrFail(id);
+    await this.access.requireCanView(user, employee);
+    const rows = await this.assessmentsFacade.listForEmployee(id);
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        employeeId: row.employeeId,
+        skillId: row.skillId,
+        assessmentType: row.assessmentType,
+        level: row.level,
+        assessedBy: row.assessedBy,
+        assessedAt: row.assessedAt.toISOString(),
+        skill: row.skill
+          ? {
+              id: row.skill.id,
+              code: row.skill.code,
+              name: row.skill.name,
+              scaleKind: row.skill.scaleKind,
+              scaleMin: row.skill.scaleMin,
+              scaleMax: row.skill.scaleMax,
+            }
+          : null,
+      })),
+    };
   }
 
   @Post(':id/employment-assignments')

@@ -41,6 +41,7 @@ import { Position } from '../positions/position.entity';
 import { Department } from '../departments/department.entity';
 import { DepartmentsService } from '../departments/departments.service';
 import { EmploymentCatalogService } from '../employment-catalog/employment-catalog.service';
+import { CurrentEmploymentAssignmentResolver } from '../employment-catalog/current-employment-assignment.resolver';
 import { BusinessDateClock } from './business-date-clock';
 import { didAssignmentHierarchyDrift } from './assignment-hierarchy-drift.policy';
 import {
@@ -153,6 +154,7 @@ export class EmployeeProfileService {
     private readonly departmentsService: DepartmentsService,
     private readonly positions: PositionsService,
     private readonly employmentCatalogs: EmploymentCatalogService,
+    private readonly currentEmployment: CurrentEmploymentAssignmentResolver,
     private readonly businessDateClock: BusinessDateClock,
   ) {}
 
@@ -467,7 +469,7 @@ export class EmployeeProfileService {
     const caps = await this.capabilities(actor, employee);
 
     // Completeness facts: always load full rows (role-independent score).
-    const [contacts, emergencyAll, importantDatesAll, assignment] =
+    const [contacts, emergencyAll, importantDatesAll, resolvedAssignment] =
       await Promise.all([
         this.contacts.find({
           where: { employeeId: id },
@@ -481,16 +483,15 @@ export class EmployeeProfileService {
           where: { employeeId: id, isActive: true },
           order: { priority: 'ASC' },
         }),
-        employee.currentAssignmentId
-          ? this.assignments.findOne({
-              where: { id: employee.currentAssignmentId },
-              relations: ['department', 'position', 'company', 'direction'],
-            })
-          : this.assignments.findOne({
-              where: { employeeId: id, status: 'active' },
-              relations: ['department', 'position', 'company', 'direction'],
-            }),
+        this.currentEmployment.resolve(employee),
       ]);
+
+    const assignment = resolvedAssignment
+      ? await this.assignments.findOne({
+          where: { id: resolvedAssignment.id },
+          relations: ['department', 'position', 'company', 'direction'],
+        })
+      : null;
 
     const facts = buildProfileCompletenessFacts({
       employee,

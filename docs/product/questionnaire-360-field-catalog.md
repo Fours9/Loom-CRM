@@ -28,6 +28,7 @@ type Questionnaire360ValueType =
   | 'multi_choice'
   | 'employee_reference'
   | 'catalog_reference'
+  | 'organization_ref'
   | 'repeating_group'
   | 'contacts_bundle'
   | 'position_skills_matrix';
@@ -67,7 +68,12 @@ type Questionnaire360FieldDefinition = {
     | 'process';
   mvpStatus: 'in_mvp' | 'excluded' | 'later_module';
   createsProfileProposal?: boolean;
+  /** Profile *proposal* path (submit → pending proposal). */
   proposalMapping?: { section: string; field: string };
+  /** Display default from assignment `profileMirror` only — not a proposal. */
+  profileMirrorKey?: string;
+  organizationEntity?: string;
+  cascadeParentKey?: string;
   profileField?: string;
   notes?: string;
 };
@@ -132,19 +138,28 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 
 ## Fields — block 1 `personal` (mirror / proposals)
 
+**Template personal slices** (`buildProfileMirrorIdentityFields`):
+
+| Mode | Templates | Fields |
+| --- | --- | --- |
+| `full` | `employee-360` | ПІБ + `preferred_name` + `birth_date` + `city` + language |
+| `docsManagingPersonal` | `employee-managing`, `employee-docs` | ПІБ + **`birth_date` + `city` only** — **no** `preferred_name`, no language |
+
 | key | order | label | valueType | requiredPolicy | filledBy | visibility | sensitivity | destination | mvpStatus | createsProfileProposal | proposalMapping / profileField | notes |
 |-----|-------|-------|-----------|----------------|----------|------------|-------------|-------------|-----------|------------------------|--------------------------------|-------|
 | personal.last_name | 10 | Прізвище | text | recommended | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | overview.lastName | read-only mirror in wizard |
 | personal.first_name | 20 | Ім'я | text | recommended | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | overview.firstName | |
 | personal.middle_name | 30 | По батькові | text | voluntary | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | overview.middleName | |
-| personal.preferred_name | 35 | Ім'я для звернення | text | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | header.preferredName | under ПІБ row (`uiGroup` identity_preferred) |
-| personal.birth_date | 40 | Дата народження | date | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | personal.birthDate | |
-| personal.city | 50 | Місто проживання | text | recommended | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | personal.city | |
+| personal.preferred_name | 35 | Ім'я для звернення | text | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | header.preferredName | **full only**; under ПІБ (`uiGroup` identity_preferred) |
+| personal.birth_date | 40 | Дата народження | date | recommended | employee_owner | employee_owner, admin | personal | employee_profile | in_mvp | true | personal.birthDate | full + Docs/Managing |
+| personal.city | 50 | Місто проживання | text | recommended | employee_owner | employee_owner, manager_in_scope, admin | personal | employee_profile | in_mvp | true | personal.city | full + Docs/Managing |
 | personal.photo_status | 60 | Фото для профілю | single_choice | voluntary | employee_owner | employee_owner, admin | personal | consents | later_module | false | — | options: added, later, declined — legal consent → Consents; not employees.photo_consent_status |
-| personal.preferred_language | 110 | Бажана мова | multi_choice | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | personal.preferredLanguage | options: uk, en, other; profile canonical `uk,en,other:Текст` |
-| personal.preferred_language_other | 111 | Інша мова | text | voluntary | employee_owner | employee_owner, admin | normal | employee_profile | in_mvp | false | — | visibleWhen includes `other`; no separate proposal |
+| personal.preferred_language | 110 | Бажана мова | multi_choice | voluntary | employee_owner | employee_owner, manager_in_scope, admin | normal | employee_profile | in_mvp | true | personal.preferredLanguage | **full only**; options: uk, en, other; profile canonical `uk,en,other:Текст` |
+| personal.preferred_language_other | 111 | Інша мова | text | voluntary | employee_owner | employee_owner, admin | normal | employee_profile | in_mvp | false | — | **full only**; visibleWhen includes `other` |
 
 `preferred_language` options: `{uk,en,other}` / labels Українська, Англійська, Інша.
+
+**`proposalMapping` vs `profileMirrorKey`:** proposals write via `proposalMapping` on submit; `profileMirrorKey` only hydrates display defaults from assignment `profileMirror` (employment org refs / dates use mirror keys, not proposals).
 
 ---
 
@@ -189,7 +204,11 @@ Documented for completeness; `mvpStatus: excluded`. Existing `employee_emergency
 
 ## Fields — block 4 `company_work` (in_mvp snapshot)
 
-Fill step «Робота в компанії». Snapshot-only for MVP (org assignment SoT remains Profile Core; may mirror later).
+Fill step «Робота в компанії». Org assignment SoT remains Profile Core.
+
+### Full 360 — unchanged text snapshot
+
+`employee-360` keeps the historical free-text / multi_choice shape (`buildCompanyWorkFields('full')`). Do **not** convert Full to `organization_ref`.
 
 | key | order | label | valueType | notes |
 |-----|-------|-------|-----------|-------|
@@ -200,8 +219,8 @@ Fill step «Робота в компанії». Snapshot-only for MVP (org assig
 | company_work.manager | 50 | Безпосередній керівник | text | |
 | company_work.mentor | 60 | Наставник | text | |
 | company_work.hr_responsible | 70 | HR-відповідальний | text | |
-| company_work.start_date | 80 | Дата виходу на роботу | date | |
-| company_work.probation_end | 90 | Кінець випроб. терміну | date | |
+| company_work.start_date | 80 | Дата виходу на роботу | date | mirror EA `startDate` (not `hiredAt`) |
+| company_work.probation_end | 90 | Кінець випроб. терміну | date | mirror EA `probationEndDate` |
 | company_work.status | 100 | Статус | multi_choice | internship, probation, active, leave |
 | company_work.work_format | 110 | Формат роботи | multi_choice | office, production, hybrid, remote |
 | company_work.schedule | 120 | Графік | multi_choice | nine_to_six, shifts, flexible, other |
@@ -209,6 +228,19 @@ Fill step «Робота в компанії». Snapshot-only for MVP (org assig
 | company_work.employment_type | 130 | Тип зайнятості | multi_choice | full_time, part_time, project, hourly |
 | company_work.contract_type | 140 | Тип оформлення | multi_choice | staff, fop, gph |
 | company_work.location | 150 | Локація роботи | text | |
+
+### Managing — `organization_ref` + snapshot tail
+
+`employee-managing` uses catalog UUIDs / names via `organization_ref` + `profileMirrorKey` autofill; cascade Direction → Department → Position. Shared FE filter: `employment-org-filter.policy` (same as People «Посада»).
+
+| key | valueType | organizationEntity | profileMirrorKey | notes |
+|-----|-----------|--------------------|------------------|-------|
+| company_work.direction_id | organization_ref | direction | directionId | |
+| company_work.department_id | organization_ref | department | departmentId | cascadeParent → direction_id |
+| company_work.position_id | organization_ref | position | positionId | cascadeParent → department_id; drives skills sync |
+| company_work.work_format | organization_ref | work_format | workFormat | catalog name/id (not multi_choice enum) |
+| company_work.employment_type | organization_ref | employment_type | employmentType | catalog name/id |
+| + snapshot tail | text/date/multi_choice | — | startDate / probationEndDate on dates | functional_role, manager, mentor, hr_responsible, status, schedule(+other), contract_type, location |
 
 All: voluntary, questionnaire_snapshot, in_mvp, filledBy employee_owner.
 
@@ -252,14 +284,17 @@ Managing does **not** use separate `skills.self_assessment` / `skills.custom` / 
 
 | key | valueType | notes |
 |-----|-----------|-------|
-| skills.matrix | `position_skills_matrix` | Answer = map/list of `{ skillCode, rating 0–5 }` against registry codes |
+| skills.matrix | `position_skills_matrix` | Answer = map/list of `{ skillCode, rating 0–5 }` |
 
 **Row source / validation** ([ADR 0010](../adr/0010-position-catalog-and-questionnaire-context.md), [position-catalog.md](../dev/position-catalog.md)):
 
 | Mode | Rows | Validation |
 | --- | --- | --- |
 | Legacy (`assignment.context_json == null`) | full `@loom/position-skill-catalog` | `skillCode ∈ registry` |
-| Context (`version === 1`) | frozen `context.positionCatalog.skills` | ∈ registry ∧ ⊆ context codes |
+| Context V1 (historical) | frozen `skills[]` (no `source`) | ⊆ context codes; all treated as requirements |
+| Context V2 (new captures + sync) | `skills[]` with `source`: `position_requirement` \| `questionnaire_extra` | ⊆ context codes; **every** `questionnaire_extra` must appear in ratings on submit |
+
+**`POST …/assignments/:id/sync-position-context`:** Managing only; rebuilds V2 from draft `company_work.position_id` via `buildSnapshotForPosition`; set-algebra carries/adds extras, prunes stale requirement ratings, **always** bumps draft revision. See ADR 0010.
 
 Future Skills module may still introduce manager assessment / custom skills as separate keys; not in managing v1.
 
@@ -410,7 +445,8 @@ Legal versioned consents → future Consents module. MVP stores attestation bool
 6. **Preferred language:** multi_choice in answers; profile/proposal canonical `uk,en,other:Текст` (`other:` last segment).
 7. FE: People via `questionnaires/public-api.ts`; fill private. Domain pure helpers in `@loom/questionnaire-schema` (not contracts).
 8. **Pre-prod schema refresh:** [`docs/dev/questionnaire-test-reset.md`](../dev/questionnaire-test-reset.md) + snapshot DoD before/after breaking v1 changes. After Track B Managing/Docs schema changes, if local MAN/DOC assignments exist → `pnpm questionnaires:reset -- --execute` (see also [position-catalog.md](../dev/position-catalog.md)).
-9. **Position Catalog context:** fill uses frozen `assignment.context` for `position_skills_matrix` when present; `goalTemplates` / `duties` captured but not yet surfaced in wizard suggestions.
+9. **Position Catalog context:** fill uses frozen `assignment.context` for `position_skills_matrix` when present (V2 `source` / extras). Managing may call `sync-position-context` after changing `company_work.position_id`. `goalTemplates` / `duties` captured but not yet surfaced in wizard suggestions.
+10. **Org lists:** Managing `organization_ref` uses `GET /employees/catalogs/org` + shared `employment-org-filter.policy` (cascade parity with People assignment).
 
 ---
 
@@ -420,8 +456,8 @@ Legal versioned consents → future Consents module. MVP stores attestation bool
 |----------|------|
 | This catalog | policy SoT |
 | `employee-360-v1` seed | full template — catalog `in_mvp` rows |
-| `employee-managing-v1` seed | managing — grade / skills.matrix / career+probation goals |
-| `employee-docs-v1` seed | docs — onboarding repeating_groups / hr_documents |
+| `employee-managing-v1` seed | managing — docsManagingPersonal · org_ref company_work · grade / skills.matrix / career+probation |
+| `employee-docs-v1` seed | docs — docsManagingPersonal · onboarding repeating_groups / hr_documents |
 | `schema_json` in DB | runtime SoT after publish |
 | `@loom/questionnaire-schema` | pure helpers (not contracts); API uses built `dist/` |
 | `@loom/position-skill-catalog` | skill codes for `position_skills_matrix` |

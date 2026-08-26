@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsDateString,
   IsIn,
   IsInt,
@@ -100,6 +101,17 @@ export class ResolveQuestionnaireChangesDto {
   @IsInt()
   @Min(0)
   expectedDraftRevision?: number;
+}
+
+export class SyncQuestionnairePositionContextDto {
+  @IsInt()
+  @Min(0)
+  expectedDraftRevision!: number;
+
+  /** Explicit selected catalog extras (not null-rating transport). */
+  @IsArray()
+  @IsString({ each: true })
+  desiredExtraSkillCodes!: string[];
 }
 
 export class QuestionnaireDirectoryQueryDto {

@@ -23,11 +23,15 @@ import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import { QuestionnaireResponseService } from './questionnaire-response.service';
 import {
   InvalidPositionSkillsMatrix,
+  parsePositionSkillsMatrixStrict,
   projectVisibleQuestionnaireAnswers,
 } from '@loom/questionnaire-schema';
 import { InvalidEmployeeContactsBundle } from '@loom/employee-contacts';
-import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
-import { resolveAllowedSkillCodesFromContextJson } from '@loom/contracts-questionnaires';
+import type {
+  QuestionnaireContext,
+  QuestionnaireSchemaJson,
+} from '@loom/contracts-questionnaires';
+import { parseQuestionnaireContext } from '@loom/contracts-questionnaires';
 import { validateDraftAnswersForSubmit } from './questionnaire-answers-validation';
 import {
   applyReopenTransition,
@@ -153,20 +157,62 @@ export class QuestionnaireSubmissionService {
   ): Promise<QuestionnaireSubmission> {
     const schema = assignment.templateVersion
       .schemaJson as unknown as QuestionnaireSchemaJson;
+    const answers = response.answersJson ?? {};
     try {
-      const resolved = resolveAllowedSkillCodesFromContextJson(
-        assignment.contextJson,
-      );
-      if (!resolved.ok) {
-        this.logger.error(
-          `Invalid questionnaire context_json on submit (data integrity): ${resolved.error} assignmentId=${assignment.id}`,
-        );
-        throw new InternalServerErrorException(
-          'Questionnaire context is corrupted',
-        );
+      let context: QuestionnaireContext | null = null;
+      let allowedSkillCodes: readonly string[] | undefined;
+      let levelBoundsByCode:
+        | Map<string, { min: number; max: number }>
+        | undefined;
+
+      if (assignment.contextJson == null) {
+        allowedSkillCodes = undefined;
+      } else {
+        const parsed = parseQuestionnaireContext(assignment.contextJson);
+        if (!parsed.ok) {
+          this.logger.error(
+            `Invalid questionnaire context_json on submit (data integrity): ${parsed.error} assignmentId=${assignment.id}`,
+          );
+          throw new InternalServerErrorException(
+            'Questionnaire context is corrupted',
+          );
+        }
+        context = parsed.context;
+        allowedSkillCodes = context.positionCatalog.skills.map((s) => s.code);
+        if (context.version === 2) {
+          levelBoundsByCode = new Map();
+          for (const skill of context.positionCatalog.skills) {
+            if (skill.scaleMin != null && skill.scaleMax != null) {
+              levelBoundsByCode.set(skill.code, {
+                min: skill.scaleMin,
+                max: skill.scaleMax,
+              });
+            }
+          }
+        }
       }
-      validateDraftAnswersForSubmit(schema, response.answersJson ?? {}, {
-        allowedSkillCodes: resolved.allowedSkillCodes,
+
+      if (context) {
+        const catalog = context.positionCatalog;
+        const draftOrg = {
+          directionId: answers['company_work.direction_id'] ?? null,
+          departmentId: answers['company_work.department_id'] ?? null,
+          positionId: answers['company_work.position_id'] ?? null,
+        };
+        if (
+          draftOrg.directionId !== catalog.directionId ||
+          draftOrg.departmentId !== catalog.departmentId ||
+          draftOrg.positionId !== catalog.positionId
+        ) {
+          throw new BadRequestException(
+            'company_work org refs must match assignment context (sync required)',
+          );
+        }
+      }
+
+      validateDraftAnswersForSubmit(schema, answers, {
+        allowedSkillCodes,
+        levelBoundsByCode,
       });
     } catch (err) {
       if (
@@ -177,10 +223,7 @@ export class QuestionnaireSubmissionService {
       }
       throw err;
     }
-    const snapshotJson = projectVisibleQuestionnaireAnswers(
-      schema,
-      response.answersJson ?? {},
-    );
+    const snapshotJson = projectVisibleQuestionnaireAnswers(schema, answers);
 
     const latest = await manager.getRepository(QuestionnaireSubmission).findOne({
       where: { responseId: response.id },

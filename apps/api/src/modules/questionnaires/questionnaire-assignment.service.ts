@@ -68,6 +68,7 @@ import type {
 } from '@loom/contracts-questionnaires';
 import { Employee } from '../../organization/employees/employee.entity';
 import { EmployeeContactsFacade } from '../../organization/employees/employee-contacts.facade';
+import { CurrentEmploymentAssignmentResolver } from '../../organization/employment-catalog/current-employment-assignment.resolver';
 import { PositionCatalogFacade } from '../../organization/position-catalog/position-catalog.facade';
 import { buildQuestionnaireProfileMirror } from './proposals/questionnaire-profile-mirror';
 import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
@@ -87,6 +88,7 @@ export class QuestionnaireAssignmentService {
     private readonly submissions: Repository<QuestionnaireSubmission>,
     private readonly contactsFacade: EmployeeContactsFacade,
     private readonly positionCatalog: PositionCatalogFacade,
+    private readonly currentEmployment: CurrentEmploymentAssignmentResolver,
     private readonly access: EmployeeAccessService,
     private readonly users: UsersService,
     private readonly permissions: PermissionService,
@@ -149,12 +151,10 @@ export class QuestionnaireAssignmentService {
 
       let contextJson: Record<string, unknown> | null = null;
       if (employee) {
-        const positionCatalog =
-          await this.positionCatalog.buildSnapshotForEmployee(
-            employee.id,
-            manager,
-          );
-        contextJson = { version: 1, positionCatalog };
+        contextJson = (await this.positionCatalog.buildSnapshotForEmployee(
+          employee.id,
+          manager,
+        )) as Record<string, unknown>;
       }
 
       const assignment = await manager
@@ -370,24 +370,64 @@ export class QuestionnaireAssignmentService {
     );
 
     let profileMirror: Record<string, unknown> | null = null;
-    if (
-      employee &&
-      (this.access.isOwner(actor, employee) || this.access.isAdmin(actor))
-    ) {
-      const contactsBundle = await this.contactsFacade.readContactsBundle(
-        this.dataSource.manager,
-        employee.id,
+    if (employee) {
+      const includePersonal = this.access.canViewPersonalContacts(
+        actor,
+        employee,
       );
-      profileMirror = buildQuestionnaireProfileMirror(
-        {
-          ...employee,
-          workEmail: employee.workEmail,
-          workPhone: employee.phoneNumber,
-          workTelegram: employee.telegram,
-        },
-        [],
-        contactsBundle,
-      );
+      const includeEmployment =
+        this.access.isOwner(actor, employee) ||
+        this.access.isAdmin(actor) ||
+        (await this.access.canViewEmployeeProfile(actor, employee));
+
+      if (includePersonal || includeEmployment) {
+        let employment = null;
+        if (includeEmployment) {
+          const ea = await this.currentEmployment.resolve(employee);
+          employment = ea
+            ? {
+                directionId: ea.directionId,
+                departmentId: ea.departmentId,
+                positionId: ea.positionId,
+                workFormat: ea.workFormat,
+                employmentType: ea.employmentType,
+                startDate: ea.startDate,
+                probationEndDate: ea.probationEndDate,
+              }
+            : {
+                directionId: null,
+                departmentId: employee.departmentId,
+                positionId: employee.positionId,
+                workFormat: null,
+                employmentType: null,
+                startDate: null,
+                probationEndDate: null,
+              };
+        }
+
+        const contactsBundle = includePersonal
+          ? await this.contactsFacade.readContactsBundle(
+              this.dataSource.manager,
+              employee.id,
+            )
+          : null;
+
+        profileMirror = buildQuestionnaireProfileMirror(
+          {
+            ...employee,
+            workEmail: employee.workEmail,
+            workPhone: employee.phoneNumber,
+            workTelegram: employee.telegram,
+          },
+          [],
+          contactsBundle,
+          {
+            includePersonal,
+            includeEmployment,
+            employment,
+          },
+        );
+      }
     }
 
     return {
@@ -563,12 +603,11 @@ export class QuestionnaireAssignmentService {
       }
 
       if (!sameEmployeeReattach) {
-        const positionCatalog =
-          await this.positionCatalog.buildSnapshotForEmployee(
+        assignment.contextJson =
+          (await this.positionCatalog.buildSnapshotForEmployee(
             employee.id,
             manager,
-          );
-        assignment.contextJson = { version: 1, positionCatalog };
+          )) as Record<string, unknown>;
       }
 
       assignment.employeeId = employee.id;

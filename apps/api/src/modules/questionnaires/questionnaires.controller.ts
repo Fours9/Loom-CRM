@@ -21,6 +21,7 @@ import { QuestionnaireAssignmentService } from './questionnaire-assignment.servi
 import { QuestionnaireResponseService } from './questionnaire-response.service';
 import { QuestionnaireSubmissionService } from './questionnaire-submission.service';
 import { QuestionnaireProposalService } from './questionnaire-proposal.service';
+import { QuestionnairePositionContextSyncService } from './questionnaire-position-context-sync.service';
 import {
   AttachQuestionnaireAssignmentDto,
   CreateQuestionnaireAssignmentDto,
@@ -31,6 +32,7 @@ import {
   RequestQuestionnaireChangesDto,
   ResolveQuestionnaireChangesDto,
   ReviewQuestionnaireSubmissionDto,
+  SyncQuestionnairePositionContextDto,
 } from './questionnaire.dto';
 
 @Controller('questionnaires')
@@ -41,6 +43,7 @@ export class QuestionnairesController {
     private readonly responses: QuestionnaireResponseService,
     private readonly submissions: QuestionnaireSubmissionService,
     private readonly proposals: QuestionnaireProposalService,
+    private readonly positionContextSync: QuestionnairePositionContextSyncService,
   ) {}
 
   @Get('directory')
@@ -134,6 +137,20 @@ export class QuestionnairesController {
     @Body() dto: PatchQuestionnaireDraftDto,
   ) {
     return this.responses.patchDraft(actor, id, dto);
+  }
+
+  /** Managing only; service enforces editable + revision match. */
+  @Post('assignments/:id/sync-position-context')
+  @RequirePermissions(Permission.QuestionnairesView)
+  syncPositionContext(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SyncQuestionnairePositionContextDto,
+  ) {
+    return this.positionContextSync.sync(actor, id, {
+      expectedDraftRevision: dto.expectedDraftRevision,
+      desiredExtraSkillCodes: dto.desiredExtraSkillCodes,
+    });
   }
 
   @Post('assignments/:id/submit')

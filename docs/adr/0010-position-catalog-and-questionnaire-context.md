@@ -7,15 +7,16 @@ Accepted.
 ## Implementation status
 
 - `@loom/position-skill-catalog` pure skill code registry: **shipped (PR1)**; identity syntax + `MAX_POSITION_SKILLS` + Position Catalog custom codes: **this increment**
-- `QuestionnaireContextV1` + `parseQuestionnaireContext` in contracts: **shipped** (strict full-shape + unknown-key reject on `1708c21`)
-- Track B published schemas `employee-managing` / `employee-docs` + `position_skills_matrix` fill/validation: **shipped (PR2)**
+- `QuestionnaireContextV1` / **`QuestionnaireContextV2`** + `parseQuestionnaireContext` in contracts: **shipped** (V2 requires `skill.source`; V1 historical keep no-source shape; unknown-key reject)
+- Track B published schemas `employee-managing` / `employee-docs` + `position_skills_matrix` fill/validation: **shipped (PR2)**; Managing/Docs UX parity (org refs, personal slice, skills sync): **shipped**
 - `departments.direction_id`: **shipped**; hierarchy Direction ← Dept ← Position
 - `positions.direction_id`: **restored** (`1730000023000-RestorePositionDirectionId`) — denormalized inherit from department when set, else optional manual (Decision #10). Earlier PR3 add + `1730000022000` drop are historical only.
 - employment-assignment consistency (auto-fill dept/direction from catalog parents): **shipped**
 - Settings «Керування посадами» (`/settings/positions`): **shipped (PR4)**; **superseded UI location:** sidebar **`/positions`** (suitcase icon; `/settings/positions` redirects); skills as full-width Groups+Skills block + position edit modal: **this increment**
 - Organization `skill_groups` / `skills` / position requirements, duties, goal templates + Position Catalog UI: **shipped (PR5)**
-- `PositionCatalogFacade`, assign/attach capture, `questionnaire_* .context_json`: **shipped (PR6)**; empty allowlist + fail-closed invalid context: **shipped (`1708c21`)**
-- Native skill scale (`range`/`percent`) independent of questionnaire 0–5: **this increment**
+- `PositionCatalogFacade` (`buildSnapshotForEmployee` + **`buildSnapshotForPosition`**), assign/attach capture, `questionnaire_* .context_json`: **shipped (PR6)**; new captures write **V2**; empty allowlist + fail-closed invalid context: **shipped**
+- `QuestionnairePositionContextSyncService` (`POST …/sync-position-context`): **shipped** — set-algebra extras, prune stale ratings, always bump revision
+- Native skill scale (`range`/`percent`): V1 matrix 0–5 / V2 native; `skillId` on V2; Managing `desiredExtraSkillCodes` sync; `employee_skill_assessments` + profile «Матриця навичок» + Managing add_skill proposals: **this increment**
 - Optional skill group (`group_id` nullable) + HTTP `DELETE` = hard delete (skill/group): **this increment**
 - PR7 closeout: living docs + catalog sync; optional fill suggestions from `goalTemplates` / `duties` **not** shipped (context fields available for future UI)
 
@@ -40,25 +41,36 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
 
 5. **Context envelope:**
    ```ts
-   QuestionnaireContextV1 = { version: 1; positionCatalog: PositionCatalogContextV1 }
+   QuestionnaireContextV1 = { version: 1; positionCatalog: PositionCatalogContextV1 } // historical
+   QuestionnaireContextV2 = { version: 2; positionCatalog: PositionCatalogContextV1 } // new captures; skills require source
    ```
-   `parseQuestionnaireContext` is **strict fail-closed**: exact `version = 1`, full `positionCatalog` shape (required arrays/fields), reject unknown keys. Envelope-only checks are insufficient.
+   `parseQuestionnaireContext` is **strict fail-closed**: `version ∈ {1,2}`, full `positionCatalog` shape, reject unknown keys. V2 skills require `source: position_requirement | questionnaire_extra`. V1 skills must omit `source`.
 
-6. **Capture:** write `QuestionnaireContextV1` in the **same TX** as attach / create-with-employee (after PR6). Unattached `new` → `context_json = null`.
+6. **Capture:** write context in the **same TX** as attach / create-with-employee (after PR6). Unattached `new` → `context_json = null`. **New captures use V2** (`buildSnapshotForEmployee` / `buildSnapshotForPosition`). Historical V1 rows remain valid.
+
+6b. **Immutability vs replaceability:**
+   - **Submission** `context_json` is immutable forever (historical Review uses it).
+   - **Assignment** `context_json` may be replaced: Managing `sync-position-context` may overwrite assignment V1/V2 with a fresh V2 (does not mutate past submissions).
 
 7. **Legacy (`context_json = null`):** means **legacy_registry mode** forever — matrix rows and validation use `@loom/position-skill-catalog`; Review uses registry labels. **Do not** auto-`ensureContextCaptured` from live Position Catalog (would invalidate pre-PR6 ratings outside the new matrix). Non-null **invalid** context is a **server data-integrity** failure (HTTP 500), never silent legacy and never 400.
 
 8. **Validation modes:**
    - Legacy null: `skillCode ∈ registry` (`allowedSkillCodes` omitted / `undefined`); UI = full registry
    - Context set (including `skills: []`): `skillCode ⊆ frozen context skill codes` (**not** ∩ registry). Empty array = allow none
+   - V2 submit: every `questionnaire_extra` in context must appear in `skills.matrix` ratings (unused extras → 400)
+   - Managing submit with context + answered `company_work.position_id`: answer position **must equal** `context.positionCatalog.positionId`
    - PATCH = structural (`isSkillIdentityCode`); SUBMIT = semantic (same split as contacts)
    - `custom[]` remains extra-catalog (not identity, not in allowlist)
 
-9. **Position resolve precedence** for Facade snapshot:
+9. **Position resolve precedence** for Facade `buildSnapshotForEmployee`:
    1. `employee.currentAssignmentId` (belongs + active) → `positionId`
    2. else deterministic active employment assignment
    3. else legacy `employee.positionId`
    4. else position null / empty skills
+
+9b. **`buildSnapshotForPosition(employeeId, positionId, manager)`:** explicit position choice (Managing sync / draft position). Org parents from the Position row; **`employmentAssignmentId` is always `null`**. Skills from live requirements get `source: position_requirement`.
+
+9c. **`sync-position-context` (Managing):** set-algebra over draft rating codes vs old/new requirement/extra sets (`computePositionContextSyncSets`) — carry extras, promote new extras from active Skill rows, **prune** stale old-requirement ratings from draft matrix; write V2 context; **always** bump response `revision` (CAS on `expectedDraftRevision`).
 
 10. **Hierarchy & EmploymentAssignment:** Direction ←(optional) Department ←(optional) Position. Position stores `directionId`: if `departmentId` is set, direction is **inherited** from the department (forced sync); if no department, direction may be chosen manually. Assignment must match `position.departmentId` / `position.directionId` when those are set (auto-fill).
     - Partial update semantics:
@@ -80,24 +92,24 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
 
 14. **Sensitive fields:** `grade.net_salary` and `manager_review` deferred until field/step sensitivity + scoped manager completion ACL exist. Track B does not ship them.
 
-15. **Skill codes:** `@loom/position-skill-catalog` holds legacy registry (`isSkillCode`) **and** identity syntax (`isSkillIdentityCode`). Registry is SoT **only for legacy null context**. Position Catalog UI may create custom skills (`code` omitted → generated `skill_<hex>`; `code` provided → registry identity + unique; **no live group match** — `skillDefinitionByCode().group` is seed/legacy metadata only). **`code` is identity** (not editable via PATCH). Snapshot capture includes all attached skills (no `isSkillCode` filter).
+15. **Skill identity:** `@loom/position-skill-catalog` holds legacy registry (`isSkillCode`) **and** identity syntax (`isSkillIdentityCode`). Registry is SoT **only for legacy null context**. Position Catalog UI may create custom skills (`code` omitted → generated `skill_<hex>`; `code` provided → registry identity + unique). **`code` is the immutable questionnaire/domain answer key** (not editable via PATCH). **Context V2 additionally freezes `skillId`** (exact `skills.id` catalog-row identity) for cross-store writes such as profile assessment proposals — lookup by frozen `skillId`, never “same code → new row”. Snapshot capture includes all attached skills (no `isSkillCode` filter).
 
-16. **Two independent scales (do not mix):**
-    - `PositionSkillRequirement.targetLevel` = target in the skill’s **native** scale (`range` or `percent`, `scaleMin`..`scaleMax`)
-    - `position_skills_matrix.ratings[].level` = questionnaire assessment **0..5** (published schema)
-    - Forbidden: compare, subtract, `gap = targetLevel - rating.level`, display as one scale, or convert `80% → 4`. Future normalization is a separate ADR.
-    - Frozen skill rows may include optional all-or-none `scaleKind`/`scaleMin`/`scaleMax` (absent = old V1 snapshots). Fill may show “Вимога посади: 80%” next to “Ваша оцінка: 0–5”.
+16. **Versioned matrix rating semantics:**
+    - `context == null` / **Context V1:** questionnaire ratings stay **0..5**; frozen `scaleKind`/`min`/`max` are **requirement hints only** (rating `4` ≠ `4%`).
+    - **Context V2:** ratings use frozen native skill scale (`scaleKind`/`scaleMin`/`scaleMax` **required** on each skill row, plus `skillId`). Percent → 0..100 (or skill bounds); range → `scaleMin`..`scaleMax`. Helper: `resolveMatrixRatingPolicy(contextVersion, skill)`.
+    - Forbidden: silent conversion between percent and range; `gap = targetLevel - rating.level` across mismatched meanings.
+    - Managing sync uses explicit `desiredExtraSkillCodes` (not null-rating transport). Matrix answers persist **rated** levels only. Profile bridge: `employee_skill_assessments` + Managing `add_skill` proposals (`insertConfirmedIfAbsent`).
 
-17. **Skill lifecycle:** deactivate (`PATCH isActive:false` / `softDeleteSkill`) **409** while any `position_skill_requirement` exists. `DELETE /skills/:id` = **hard delete**: lock skill → bulk `DELETE` requirements `WHERE skillId` → remove skill (FK stays RESTRICT). Attach only requires an **active skill** (missing/inactive group does not block persist). Scale kind change with existing requirements → 409. Same-kind bound shrink allowed only if all existing `targetLevel` still fit. Skill row is the pessimistic lock root for scale update, deactivate, hard delete, and requirement attach/`skillId` change. Max **64** skills per position (`MAX_POSITION_SKILLS`).
+17. **Skill lifecycle:** deactivate (`PATCH isActive:false` / `softDeleteSkill`) **409** while any `position_skill_requirement` exists. Hard delete / scale mutation also **409** while any `employee_skill_assessment` exists (profile SoT). `DELETE /skills/:id` = **hard delete**: lock skill → assessments check → bulk `DELETE` requirements `WHERE skillId` → remove skill (FK stays RESTRICT). Attach only requires an **active skill**. Scale kind change with existing requirements → 409. Same-kind bound shrink allowed only if all existing `targetLevel` still fit. Skill row is the pessimistic lock root for scale update, deactivate, hard delete, requirement attach/`skillId` change, and assessment insert on proposal Accept. Max **64** skills per position (`MAX_POSITION_SKILLS`); same ceiling for `|requirements ∪ extras|` on Managing sync.
 
 18. **Skill group identity and lifecycle:** Public `POST /skill-groups` does **not** accept `code` (`name` + optional `sortOrder` only). Position Catalog custom groups get generated immutable `group_<12hex>` (unique-violation retry), same idea as custom skills. Seeded `TECH` / `BEAUTY` / `OFFICE` stay migration/seed. **Group is optional live classification / sorting** (`skills.group_id` nullable) — not registry identity. Create/move **into** a uuid group requires that group to be **active**. Ungrouped skills (`groupId = null`) skip group lock. Deactivate group (`PATCH isActive:false` / `softDeleteGroup`) is **409** while any **active** skill remains. `DELETE /skill-groups/:id` = ungroup skills (`SET group_id = null`) then remove the group (not 409 because skills exist). Attach = active skill only. Group `isActive` gates Position Catalog **picker** availability (`skill.isActive AND (ungrouped OR group.isActive)`), not the persist/attach invariant. Membership mutations that lock both Group and Skill always lock **Group then Skill** (move locks **target** group only). Re-enable with omitted `groupId`: pre-read membership without lock, then Group→Skill and revalidate (409 if membership changed). `lockGroup(null)` is forbidden. Hard delete of the live catalog does **not** mutate frozen questionnaire `context_json`; legacy `context_json = null` still uses the immutable registry. Pre-create position skill requirements are a **frontend draft queue only** (not persisted without `positionId`); see [position-catalog.md](../dev/position-catalog.md).
 
 ## Consequences
 
-- Track B Managing/Docs and Position Catalog UI are both shipped; fill can use frozen context for skills matrix (including custom Position Catalog skill codes).
+- Track B Managing/Docs and Position Catalog UI are both shipped; fill can use frozen context for skills matrix (including custom Position Catalog skill codes and V2 `questionnaire_extra`).
 - Pre-PR6 answers remain valid after PR6 deploy (legacy_registry mode).
-- Native skill scale and questionnaire 0–5 stay independent; no implicit conversion.
-- Pre-PR6 answers remain valid after PR6 deploy (legacy_registry mode).
+- Historical V1 submission contexts stay immutable; assignment context may be upgraded to V2 via sync.
+- Native skill scale: V1 questionnaire ratings stay 0–5; V2 ratings follow frozen native scale. Profile assessments are a separate Organization store bridged by proposals.
 - Immutable submissions stay interpretable years later via `version` + frozen context.
 - Cross-employee reattach after fill is rejected — safer than multi-subject history in one assignment.
 - Optional wizard suggestions from `goalTemplates` / `duties` remain polish (context already captured).

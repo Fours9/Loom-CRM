@@ -306,3 +306,26 @@ export type EmployeeProfileHistoryItem = {
   createdAt: string;
   metadata: Record<string, unknown> | null;
 };
+
+/** Confirmed profile skill assessment (People «Матриця навичок»). */
+export type EmployeeSkillAssessmentItem = {
+  id: EntityId;
+  employeeId: EntityId;
+  skillId: EntityId;
+  assessmentType: 'confirmed' | 'self' | 'manager';
+  level: number | null;
+  assessedBy: EntityId | null;
+  assessedAt: string;
+  skill: {
+    id: EntityId;
+    code: string;
+    name: string;
+    scaleKind: 'range' | 'percent';
+    scaleMin: number;
+    scaleMax: number;
+  } | null;
+};
+
+export type EmployeeSkillAssessmentListResponse = {
+  items: EmployeeSkillAssessmentItem[];
+};

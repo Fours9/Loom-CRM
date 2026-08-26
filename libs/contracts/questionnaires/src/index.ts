@@ -125,10 +125,39 @@ export const QUESTIONNAIRE_VALUE_TYPES = [
   'repeating_group',
   'contacts_bundle',
   'position_skills_matrix',
+  'organization_ref',
 ] as const;
 
 export type QuestionnaireValueType =
   (typeof QUESTIONNAIRE_VALUE_TYPES)[number];
+
+export type OrganizationEntityKind =
+  | 'direction'
+  | 'department'
+  | 'position'
+  | 'work_format'
+  | 'employment_type';
+
+export type ProfileMirrorKey =
+  | 'lastName'
+  | 'firstName'
+  | 'middleName'
+  | 'preferredName'
+  | 'birthDate'
+  | 'city'
+  | 'preferredLanguage'
+  | 'personal_phone'
+  | 'personal_phone_secondary'
+  | 'personal_email'
+  | 'personal_telegram'
+  | 'contactsBundle'
+  | 'directionId'
+  | 'departmentId'
+  | 'positionId'
+  | 'workFormat'
+  | 'employmentType'
+  | 'startDate'
+  | 'probationEndDate';
 
 export type QuestionnaireSchemaField = {
   key: string;
@@ -146,6 +175,12 @@ export type QuestionnaireSchemaField = {
   children?: QuestionnaireSchemaField[];
   createsProfileProposal?: boolean;
   proposalMapping?: { section: string; field: string };
+  /** Display default from assignment.profileMirror (not a profile proposal). */
+  profileMirrorKey?: ProfileMirrorKey;
+  /** For valueType organization_ref. */
+  organizationEntity?: OrganizationEntityKind;
+  /** Cascade parent answer key for organization_ref (e.g. company_work.direction_id). */
+  cascadeParentKey?: string;
   visibleWhen?: QuestionnaireVisibleWhen;
   uiGroup?: string;
   uiGroupLabel?: string;
@@ -227,7 +262,7 @@ export type QuestionnaireSubmissionSummary = {
   reviewedByUserId: EntityId | null;
   changeRequestResolution: QuestionnaireChangeRequestResolution | null;
   /** Frozen context at submit; null = legacy registry labels (ADR 0010). */
-  context: QuestionnaireContextV1 | null;
+  context: QuestionnaireContext | null;
 };
 
 export type QuestionnaireDraftDto = {
@@ -297,7 +332,7 @@ export type QuestionnaireAssignmentDetail = {
   completionPercent: number;
   profileMirror: Record<string, unknown> | null;
   /** Frozen fill context; null = legacy registry mode (ADR 0010). */
-  context: QuestionnaireContextV1 | null;
+  context: QuestionnaireContext | null;
   capabilities: {
     canEditDraft: boolean;
     canSubmit: boolean;
@@ -371,13 +406,31 @@ export type QuestionnaireDirectoryResponse = {
   };
 };
 
-export type QuestionnaireProposedChange = {
-  section: string;
-  field: string;
-  answerKey: string;
-  from: unknown;
-  to: unknown;
-};
+export type QuestionnaireProposedChange =
+  | {
+      kind: 'field_update';
+      section: string;
+      field: string;
+      answerKey: string;
+      from: unknown;
+      to: unknown;
+    }
+  | {
+      kind: 'add_skill';
+      section: 'skills';
+      /** skillCode — supersede identity among skill proposals */
+      field: string;
+      skillId: string;
+      skillCode: string;
+      labelUa: string;
+      proposedLevel: number | null;
+      /** Frozen context skill scale at submit — never live Skill at generate time */
+      sourceScale: {
+        kind: 'range' | 'percent';
+        min: number;
+        max: number;
+      };
+    };
 
 export type QuestionnaireProfileProposalItem = {
   id: EntityId;
@@ -412,6 +465,10 @@ export type QuestionnaireSnapshotSummary = {
 
 // ─── Assignment / submission fill context (ADR 0010) ─────────────────
 
+export type PositionSkillSource =
+  | 'position_requirement'
+  | 'questionnaire_extra';
+
 export type PositionSkillContext = {
   code: string;
   labelUa: string;
@@ -419,9 +476,16 @@ export type PositionSkillContext = {
   targetLevel: number | null;
   required: boolean;
   weight: number | null;
+  /**
+   * Exact catalog row id. Required on Context V2; absent on historical V1.
+   * `code` remains the questionnaire answer identity.
+   */
+  skillId?: string;
   scaleKind?: 'range' | 'percent';
   scaleMin?: number;
   scaleMax?: number;
+  /** Present on Context V2 skills; absent on historical V1. */
+  source?: PositionSkillSource;
 };
 
 export type PositionGoalTemplateContext = {
@@ -437,7 +501,7 @@ export type PositionDutyContext = {
   sortOrder: number;
 };
 
-/** Frozen position catalog slice inside QuestionnaireContextV1. */
+/** Frozen position catalog slice inside QuestionnaireContextV1/V2. */
 export type PositionCatalogContextV1 = {
   employeeId: string;
   employmentAssignmentId: string | null;
@@ -456,13 +520,21 @@ export type PositionCatalogContextV1 = {
 /**
  * Versioned envelope for questionnaire_assignments.context_json /
  * questionnaire_submissions.context_json. Fail-closed on unknown version.
+ * V1 = historical; new captures after Context V2 deploy use version 2.
  */
 export type QuestionnaireContextV1 = {
   version: 1;
   positionCatalog: PositionCatalogContextV1;
 };
 
-export type QuestionnaireContext = QuestionnaireContextV1;
+export type QuestionnaireContextV2 = {
+  version: 2;
+  positionCatalog: PositionCatalogContextV1;
+};
+
+export type QuestionnaireContext =
+  | QuestionnaireContextV1
+  | QuestionnaireContextV2;
 
 const CONTEXT_ROOT_KEYS = new Set(['version', 'positionCatalog']);
 const POSITION_CATALOG_KEYS = new Set([
@@ -486,9 +558,15 @@ const SKILL_ITEM_KEYS = new Set([
   'targetLevel',
   'required',
   'weight',
+  'skillId',
   'scaleKind',
   'scaleMin',
   'scaleMax',
+  'source',
+]);
+const SKILL_SOURCES = new Set<PositionSkillSource>([
+  'position_requirement',
+  'questionnaire_extra',
 ]);
 const GOAL_ITEM_KEYS = new Set([
   'goalKind',
@@ -500,6 +578,13 @@ const DUTY_ITEM_KEYS = new Set(['title', 'description', 'sortOrder']);
 
 function fail(error: string): { ok: false; error: string } {
   return { ok: false, error };
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuidString(value: string): boolean {
+  return UUID_RE.test(value);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -563,6 +648,7 @@ function expectNullableInteger(
 function parseSkillItem(
   raw: unknown,
   path: string,
+  requireSource: boolean,
 ): { ok: true; value: PositionSkillContext } | { ok: false; error: string } {
   if (!isPlainObject(raw)) {
     return fail(`${path} must be an object`);
@@ -609,6 +695,23 @@ function parseSkillItem(
     weight: weight.value,
   };
 
+  if (requireSource) {
+    // Context V2: skillId + full native scale required.
+    const skillId = expectString(raw['skillId'], `${path}.skillId`);
+    if (!skillId.ok) return skillId;
+    if (!isUuidString(skillId.value)) {
+      return fail(`${path}.skillId must be a UUID`);
+    }
+    value.skillId = skillId.value;
+    if (!scalePresent) {
+      return fail(
+        `${path} scaleKind, scaleMin and scaleMax are required on context version 2`,
+      );
+    }
+  } else if (raw['skillId'] !== undefined) {
+    return fail(`${path}.skillId is not allowed on context version 1`);
+  }
+
   if (scalePresent) {
     const scaleKind = raw['scaleKind'];
     const scaleMin = raw['scaleMin'];
@@ -633,6 +736,18 @@ function parseSkillItem(
     value.scaleKind = scaleKind;
     value.scaleMin = scaleMin;
     value.scaleMax = scaleMax;
+  }
+
+  if (requireSource) {
+    const source = raw['source'];
+    if (typeof source !== 'string' || !SKILL_SOURCES.has(source as PositionSkillSource)) {
+      return fail(
+        `${path}.source must be position_requirement or questionnaire_extra`,
+      );
+    }
+    value.source = source as PositionSkillSource;
+  } else if (raw['source'] !== undefined) {
+    return fail(`${path}.source is not allowed on context version 1`);
   }
 
   return { ok: true, value };
@@ -707,14 +822,14 @@ function parseDutyItem(
 
 /**
  * Strict fail-closed parser for frozen questionnaire context.
- * Rejects unknown keys and incomplete positionCatalog shapes.
+ * Accepts version 1 (historical) and version 2 (skills require `source`).
  * Note: `raw === null` is not "legacy" here — callers treat DB null separately;
  * this function returns ok:false for null.
  */
 export function parseQuestionnaireContext(
   raw: unknown,
 ):
-  | { ok: true; context: QuestionnaireContextV1 }
+  | { ok: true; context: QuestionnaireContext }
   | { ok: false; error: string } {
   if (raw == null) {
     return fail('context is null');
@@ -725,9 +840,11 @@ export function parseQuestionnaireContext(
   const unknownRoot = rejectUnknownKeys(raw, CONTEXT_ROOT_KEYS, 'context');
   if (unknownRoot) return fail(unknownRoot);
 
-  if (raw['version'] !== 1) {
-    return fail(`unsupported context version: ${String(raw['version'])}`);
+  const version = raw['version'];
+  if (version !== 1 && version !== 2) {
+    return fail(`unsupported context version: ${String(version)}`);
   }
+  const requireSkillSource = version === 2;
 
   const pcRaw = raw['positionCatalog'];
   if (!isPlainObject(pcRaw)) {
@@ -795,7 +912,11 @@ export function parseQuestionnaireContext(
 
   const skills: PositionSkillContext[] = [];
   for (let i = 0; i < pcRaw['skills'].length; i += 1) {
-    const item = parseSkillItem(pcRaw['skills'][i], `positionCatalog.skills[${i}]`);
+    const item = parseSkillItem(
+      pcRaw['skills'][i],
+      `positionCatalog.skills[${i}]`,
+      requireSkillSource,
+    );
     if (!item.ok) return item;
     skills.push(item.value);
   }
@@ -820,26 +941,42 @@ export function parseQuestionnaireContext(
     duties.push(item.value);
   }
 
-  return {
-    ok: true,
-    context: {
-      version: 1,
-      positionCatalog: {
-        employeeId: employeeId.value,
-        employmentAssignmentId: employmentAssignmentId.value,
-        positionId: positionId.value,
-        positionName: positionName.value,
-        departmentId: departmentId.value,
-        departmentName: departmentName.value,
-        directionId: directionId.value,
-        directionName: directionName.value,
-        capturedAt: capturedAt.value,
-        skills,
-        goalTemplates,
-        duties,
-      },
-    },
+  const positionCatalog: PositionCatalogContextV1 = {
+    employeeId: employeeId.value,
+    employmentAssignmentId: employmentAssignmentId.value,
+    positionId: positionId.value,
+    positionName: positionName.value,
+    departmentId: departmentId.value,
+    departmentName: departmentName.value,
+    directionId: directionId.value,
+    directionName: directionName.value,
+    capturedAt: capturedAt.value,
+    skills,
+    goalTemplates,
+    duties,
   };
+
+  if (version === 2) {
+    return { ok: true, context: { version: 2, positionCatalog } };
+  }
+  return { ok: true, context: { version: 1, positionCatalog } };
+}
+
+/** Partition skill codes from a parsed context for sync set-algebra. */
+export function classifyContextSkillCodes(context: QuestionnaireContext): {
+  requirementCodes: Set<string>;
+  extraCodes: Set<string>;
+} {
+  const requirementCodes = new Set<string>();
+  const extraCodes = new Set<string>();
+  for (const skill of context.positionCatalog.skills) {
+    if (context.version === 1 || skill.source !== 'questionnaire_extra') {
+      requirementCodes.add(skill.code);
+    } else {
+      extraCodes.add(skill.code);
+    }
+  }
+  return { requirementCodes, extraCodes };
 }
 
 /**

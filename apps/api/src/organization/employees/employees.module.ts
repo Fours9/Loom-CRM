@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DepartmentsModule } from '../departments/departments.module';
 import { PositionsModule } from '../positions/positions.module';
+import { SkillsModule } from '../skills/skills.module';
 import { IdentityModule } from '../../platform/identity/identity.module';
 import { AuditModule } from '../../platform/audit/audit.module';
 import { EmploymentCatalogModule } from '../employment-catalog/employment-catalog.module';
@@ -44,6 +45,7 @@ import { EmploymentAssignmentLifecycleService } from './employment-assignment-li
     ]),
     DepartmentsModule,
     PositionsModule,
+    SkillsModule,
     EmploymentCatalogModule,
     IdentityModule,
     AuditModule,
@@ -73,6 +75,7 @@ import { EmploymentAssignmentLifecycleService } from './employment-assignment-li
     EmployeeContactsFacade,
     BusinessDateClock,
     EmploymentAssignmentLifecycleService,
+    EmploymentCatalogModule,
   ],
 })
 export class EmployeesModule {}

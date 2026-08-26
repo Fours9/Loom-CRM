@@ -203,20 +203,24 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       { find: jest.fn(async () => []) } as never,
       {
         buildSnapshotForEmployee: jest.fn(async (employeeId: string) => ({
-          employeeId,
-          employmentAssignmentId: null,
-          positionId: null,
-          positionName: null,
-          departmentId: null,
-          departmentName: null,
-          directionId: null,
-          directionName: null,
-          capturedAt: '2026-01-01T00:00:00.000Z',
-          skills: [],
-          goalTemplates: [],
-          duties: [],
+          version: 2,
+          positionCatalog: {
+            employeeId,
+            employmentAssignmentId: null,
+            positionId: null,
+            positionName: null,
+            departmentId: null,
+            departmentName: null,
+            directionId: null,
+            directionName: null,
+            capturedAt: '2026-01-01T00:00:00.000Z',
+            skills: [],
+            goalTemplates: [],
+            duties: [],
+          },
         })),
       } as never,
+      {} as never,
       access as never,
       users as never,
       permissions as never,
@@ -303,7 +307,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       expect(ctx.assignment.reviewedAt).toBeNull();
       expect(ctx.assignment.contextJson).toEqual(
         expect.objectContaining({
-          version: 1,
+          version: 2,
           positionCatalog: expect.objectContaining({ employeeId: 'emp-2' }),
         }),
       );
@@ -421,7 +425,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
       expect(ctx.assignment.contextJson).toEqual(
         expect.objectContaining({
-          version: 1,
+          version: 2,
           positionCatalog: expect.objectContaining({ employeeId: 'emp-2' }),
         }),
       );
