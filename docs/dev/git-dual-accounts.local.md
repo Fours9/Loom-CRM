@@ -47,20 +47,20 @@ git pushboth
 Alias (локальний `git config`):
 
 ```text
-pushboth = !git push origin HEAD && pwsh -File scripts/git-push-hr586.ps1
+pushboth = !git push origin HEAD && powershell -NoProfile -File scripts/git-push-hr586.ps1
 ```
 
 Налаштувати:
 
 ```powershell
-git config alias.pushboth "!git push origin HEAD && pwsh -File scripts/git-push-hr586.ps1"
+git config alias.pushboth "!git push origin HEAD && powershell -NoProfile -File scripts/git-push-hr586.ps1"
 ```
 
 Або вручну:
 
 ```powershell
 git push origin HEAD
-pwsh -File scripts/git-push-hr586.ps1
+powershell -NoProfile -File scripts/git-push-hr586.ps1
 ```
 
 Скрипт `scripts/git-push-hr586.ps1` cherry-pick’ає на `hr586/master` лише спільні коміти і **пропускає** Fours9-only (шпаргалка).
