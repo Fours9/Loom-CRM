@@ -1,7 +1,6 @@
 # Git: два дзеркала Loom-CRM (шпаргалка)
 
-Шпаргалка для машини з двома remote (`origin` = Fours9, `hr586` = дзеркало).  
-На **hr586** цей файл може навмисно відсутній, якщо пушите лише в `origin`.
+Шпаргалка **лише для Fours9** (`origin`). На **hr586** цього файлу і коміту з ним **не має бути ніколи**.
 
 ## Два акаунти = два remote
 
@@ -10,7 +9,7 @@
 | `origin` | **Fours9**    | https://github.com/Fours9/Loom-CRM |
 | `hr586`  | **hr586**     | https://github.com/hr586/Loom-CRM |
 
-Це **два окремі однакові репо**, не два колабори на одному.
+Це **два окремі дзеркала**. Історія може розходитись: на `origin` є коміт шпаргалки; на `hr586` — ні.
 
 URL мають містити username (щоб Credential Manager не плутав акаунти):
 
@@ -31,36 +30,40 @@ git credential-manager github list
 
 ## Щоденні операції
 
-Upstream гілки `master` тримайте на **origin** (основне дзеркало):
+Upstream гілки `master` тримайте на **origin**:
 
 ```powershell
 git branch -u origin/master master
 ```
 
-### Після коміту — пуш в ОБИДВА
+### Після коміту — пуш в ОБИДВА (безпечно)
+
+**Не** робіть `git push hr586 HEAD` з локального `master` — підтягне коміт шпаргалки.
 
 ```powershell
 git pushboth
 ```
 
-Alias (локальний `git config`, не в репо):
+Alias (локальний `git config`):
 
 ```text
-pushboth = !git push origin HEAD && git push hr586 HEAD
+pushboth = !git push origin HEAD && pwsh -File scripts/git-push-hr586.ps1
 ```
 
-Якщо alias зник:
+Налаштувати:
 
 ```powershell
-git config alias.pushboth "!git push origin HEAD && git push hr586 HEAD"
+git config alias.pushboth "!git push origin HEAD && pwsh -File scripts/git-push-hr586.ps1"
 ```
 
 Або вручну:
 
 ```powershell
 git push origin HEAD
-git push hr586 HEAD
+pwsh -File scripts/git-push-hr586.ps1
 ```
+
+Скрипт `scripts/git-push-hr586.ps1` cherry-pick’ає на `hr586/master` лише спільні коміти і **пропускає** Fours9-only (шпаргалка).
 
 ### Не робіть так без потреби
 
