@@ -26,6 +26,8 @@ import {
   computeProfileCompleteness,
 } from './employee-profile-completeness';
 import type { EmployeeListQueryDto } from './employee-list-query.dto';
+import { pickLegacyOrgAssignmentPatch } from './legacy-org-assignment-patch';
+import type { DisplayedDirectionRef } from './resolve-employee-displayed-direction';
 
 export type ScheduleDayInput = {
   weekday: number;
@@ -129,7 +131,8 @@ export class EmployeesService {
       rows = rows.filter((e) => !e.userId);
     }
 
-    const scoreById = await this.batchCoreCompleteness(rows);
+    const { scoreById, assignmentDirectionByEmployee } =
+      await this.batchCoreCompleteness(rows);
 
     if (query.maxCompleteness != null) {
       const max = query.maxCompleteness;
@@ -163,6 +166,7 @@ export class EmployeesService {
         this.serializer.toListDto(e, actor, {
           canViewWorkContacts: true,
           completenessPercent: scoreById.get(e.id) ?? 0,
+          assignmentDirection: assignmentDirectionByEmployee.get(e.id) ?? null,
         }),
       ),
     );
@@ -172,11 +176,18 @@ export class EmployeesService {
    * Core completeness only (parity with profile assignment resolution).
    * currentAssignmentId wins; active-by-employee only when currentAssignmentId is absent.
    */
-  private async batchCoreCompleteness(
-    rows: Employee[],
-  ): Promise<Map<string, number>> {
+  private async batchCoreCompleteness(rows: Employee[]): Promise<{
+    scoreById: Map<string, number>;
+    assignmentDirectionByEmployee: Map<string, DisplayedDirectionRef | null>;
+  }> {
     const scoreById = new Map<string, number>();
-    if (rows.length === 0) return scoreById;
+    const assignmentDirectionByEmployee = new Map<
+      string,
+      DisplayedDirectionRef | null
+    >();
+    if (rows.length === 0) {
+      return { scoreById, assignmentDirectionByEmployee };
+    }
 
     const employeeIds = rows.map((e) => e.id);
     const currentIds = rows
@@ -195,7 +206,10 @@ export class EmployeesService {
           },
         }),
         currentIds.length
-          ? this.assignments.find({ where: { id: In(currentIds) } })
+          ? this.assignments.find({
+              where: { id: In(currentIds) },
+              relations: ['direction'],
+            })
           : Promise.resolve([] as EmploymentAssignment[]),
         withoutCurrent.length
           ? this.assignments.find({
@@ -203,6 +217,7 @@ export class EmployeesService {
                 employeeId: In(withoutCurrent),
                 status: 'active',
               },
+              relations: ['direction'],
             })
           : Promise.resolve([] as EmploymentAssignment[]),
       ]);
@@ -232,6 +247,15 @@ export class EmployeesService {
 
     for (const e of rows) {
       const assignment = assignmentByEmployee.get(e.id) ?? null;
+      assignmentDirectionByEmployee.set(
+        e.id,
+        assignment?.directionId
+          ? {
+              id: assignment.directionId,
+              name: assignment.direction?.name ?? null,
+            }
+          : null,
+      );
       const scored = computeProfileCompleteness(
         buildProfileCompletenessFacts({
           employee: e,
@@ -251,7 +275,7 @@ export class EmployeesService {
       scoreById.set(e.id, scored.core.percent);
     }
 
-    return scoreById;
+    return { scoreById, assignmentDirectionByEmployee };
   }
 
   async findOne(actor: User, id: string) {
@@ -275,8 +299,12 @@ export class EmployeesService {
       }),
     );
 
+    const assignmentDirection = await this.resolveAssignmentDirection(employee);
+
     return {
-      ...(await this.serializer.toDetailDto(employee, actor)),
+      ...(await this.serializer.toDetailDto(employee, actor, {
+        assignmentDirection,
+      })),
       schedule: schedule.map((day) => this.toScheduleDto(day)),
       managedDepartmentIds: managed.map((m) => m.departmentId),
       managedDepartments,
@@ -288,6 +316,41 @@ export class EmployeesService {
         actor,
         employee,
       ),
+    };
+  }
+
+  private async resolveAssignmentDirection(
+    employee: Employee,
+  ): Promise<DisplayedDirectionRef | null> {
+    let assignment: EmploymentAssignment | null = null;
+    if (employee.currentAssignmentId) {
+      assignment = await this.assignments.findOne({
+        where: { id: employee.currentAssignmentId },
+        relations: ['direction'],
+      });
+      if (
+        !assignment ||
+        assignment.employeeId !== employee.id ||
+        assignment.status !== 'active'
+      ) {
+        assignment = null;
+      }
+    }
+    if (!assignment) {
+      assignment =
+        (await this.assignments
+          .createQueryBuilder('ea')
+          .leftJoinAndSelect('ea.direction', 'direction')
+          .where('ea.employee_id = :employeeId', { employeeId: employee.id })
+          .andWhere('ea.status = :status', { status: 'active' })
+          .orderBy('ea.start_date', 'DESC', 'NULLS LAST')
+          .addOrderBy('ea.id', 'DESC')
+          .getOne()) ?? null;
+    }
+    if (!assignment?.directionId) return null;
+    return {
+      id: assignment.directionId,
+      name: assignment.direction?.name ?? null,
     };
   }
 
@@ -390,13 +453,14 @@ export class EmployeesService {
     if (dto.employeeNumber !== undefined && this.access.isAdmin(actor)) {
       employee.employeeNumber = dto.employeeNumber.trim();
     }
-    if (dto.departmentId !== undefined) {
-      const departmentId = this.optionalUuid(dto.departmentId);
+    const orgPatch = pickLegacyOrgAssignmentPatch(actor, dto);
+    if (orgPatch.departmentId !== undefined) {
+      const departmentId = this.optionalUuid(orgPatch.departmentId);
       if (departmentId) await this.departments.getOrFail(departmentId);
       employee.departmentId = departmentId;
     }
-    if (dto.positionId !== undefined) {
-      const positionId = this.optionalUuid(dto.positionId);
+    if (orgPatch.positionId !== undefined) {
+      const positionId = this.optionalUuid(orgPatch.positionId);
       if (positionId) await this.positions.getOrFail(positionId);
       employee.positionId = positionId;
     }

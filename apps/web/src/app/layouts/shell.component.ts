@@ -28,6 +28,7 @@ import { ViewportService } from '../core/viewport/viewport.service';
 import { NotificationsApi } from '../core/notifications/notifications.api';
 import { AppNotification } from '../core/notifications/notification.models';
 import { notificationFrameTone } from '../core/notifications/notification-frame';
+import { PERSON_AVATAR_PATH } from '../shared/icons/person-avatar-icon';
 
 @Component({
   selector: 'loom-shell',
@@ -262,7 +263,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
                     (click)="onNavLinkClick()"
                   >
                     <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                      <path fill="currentColor" [attr.d]="navIconPath('/absences')" />
+                      <path fill="currentColor" [attr.d]="navIconPath('absences-home')" />
                     </svg>
                     <span class="nav-label">{{ 'nav.home' | t }}</span>
                   </a>
@@ -275,7 +276,7 @@ import { notificationFrameTone } from '../core/notifications/notification-frame'
                     (click)="onNavLinkClick()"
                   >
                     <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                      <path fill="currentColor" [attr.d]="navIconPath('/people')" />
+                      <path fill="currentColor" [attr.d]="navIconPath('/absences/employees')" />
                     </svg>
                     <span class="nav-label">{{ 'nav.employees' | t }}</span>
                   </a>
@@ -924,7 +925,12 @@ export class ShellComponent implements OnInit, OnDestroy {
       case '/':
         return 'M12 3 4 9v12h5v-7h6v7h5V9l-8-6z';
       case '/people':
+      case '/absences/employees':
+        // Two people — team/list of employees
         return 'M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-8 0a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 8 11zm8 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4zM8 13c-.29 0-.62.02-.97.05C4.84 13.42 2 14.53 2 17v2h6v-2c0-.7.18-2.32 2.39-3.47C9.5 13.18 8.74 13 8 13z';
+      case 'absences-home':
+        // Single person — Absences self/home card
+        return PERSON_AVATAR_PATH;
       case '/positions':
         return 'M20 6h-4V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v11a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V8a2 2 0 0 0-2-2zM10 4h4v2h-4V4zm10 15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8h16v11z';
       case '/questionnaires':

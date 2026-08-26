@@ -43,6 +43,9 @@ export type EmployeeListItem = {
   departmentName: string | null;
   positionId: EntityId | null;
   positionName: string | null;
+  /** Derived display: current EA → position.direction → department.direction. */
+  directionId: EntityId | null;
+  directionName: string | null;
 
   calendarColor: string | null;
   role: 'employee' | 'department_manager' | 'admin';
@@ -326,6 +329,65 @@ export type EmployeeSkillAssessmentItem = {
   } | null;
 };
 
+/** @deprecated Prefer EmployeeSkillMatrixResponse (profile/extra projection). */
 export type EmployeeSkillAssessmentListResponse = {
   items: EmployeeSkillAssessmentItem[];
+};
+
+export type EmployeeSkillMatrixSkill = {
+  id: EntityId;
+  code: string;
+  name: string;
+  scaleKind: 'range' | 'percent';
+  scaleMin: number;
+  scaleMax: number;
+};
+
+export type EmployeeSkillMatrixAssessment = {
+  id: EntityId;
+  level: number | null;
+  assessedBy: EntityId | null;
+  assessedAt: string;
+};
+
+export type EmployeeSkillMatrixRequirement = {
+  targetLevel: number | null;
+  required: boolean;
+  weight: number | null;
+};
+
+/**
+ * Profile row: requirement != null, assessment may be null.
+ * Extra row: requirement == null, assessment != null.
+ */
+export type EmployeeSkillMatrixItem = {
+  skill: EmployeeSkillMatrixSkill;
+  assessment: EmployeeSkillMatrixAssessment | null;
+  requirement: EmployeeSkillMatrixRequirement | null;
+};
+
+export type EmployeeSkillMatrixResponse = {
+  profileItems: EmployeeSkillMatrixItem[];
+  extraItems: EmployeeSkillMatrixItem[];
+  capabilities: { canEdit: boolean };
+};
+
+export type CreateEmployeeSkillAssessmentRequest = {
+  skillId: EntityId;
+  level?: number | null;
+};
+
+export type UpdateEmployeeSkillAssessmentRequest = {
+  level: number | null;
+};
+
+/**
+ * Set / update confirmed level by skillId.
+ * - Existing assessment → update level
+ * - No assessment + current position requirement → insert confirmed
+ * - No assessment + not a requirement → 409 (create via POST extra first)
+ */
+export type UpsertEmployeeSkillAssessmentRequest = {
+  skillId: EntityId;
+  level: number | null;
 };

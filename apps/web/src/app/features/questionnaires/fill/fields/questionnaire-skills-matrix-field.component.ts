@@ -8,6 +8,7 @@ import {
   SimpleChanges,
   inject,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   SKILL_DEFINITIONS,
@@ -28,6 +29,7 @@ import {
   SettingsOrgApiService,
   type OrgSkill,
 } from '../../../settings/settings-org-api.service';
+import { classifyManagingMatrixSkills } from './questionnaire-skills-matrix-classify';
 import { Subscription } from 'rxjs';
 
 /** Fill presentation row. Frozen context is used literally; null input → registry. */
@@ -63,224 +65,254 @@ type RatingUiMode = 'percent' | 'digits' | 'slider';
 @Component({
   selector: 'loom-questionnaire-skills-matrix-field',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, NgTemplateOutlet],
   template: `
     <div class="matrix" [class.disabled]="disabled">
       <p class="hint">Оцініть навички за шкалою навички.</p>
-      @if (groups.length === 0 && availableSkills !== null) {
+      @if (profileGroups.length === 0 && extraGroups.length === 0 && availableSkills !== null) {
         <p class="empty">Немає навичок у знімку посади.</p>
       }
-      @for (group of groups; track group.code) {
-        <section class="group">
-          <h3>{{ group.label }}</h3>
-          <ul>
-            @for (skill of group.skills; track skill.code) {
-              <li>
-                <span class="label">
-                  {{ skill.labelUa }}
-                  @if (nativeHint(skill); as hint) {
-                    <small>{{ hint }}</small>
-                  }
-                </span>
-                @switch (ratingUi(skill)) {
-                  @case ('percent') {
-                    <div class="scale-controls" role="group" [attr.aria-label]="skill.labelUa">
-                      <input
-                        type="range"
-                        class="range"
-                        [min]="policyFor(skill).min"
-                        [max]="policyFor(skill).max"
-                        [step]="1"
-                        [disabled]="disabled"
-                        [ngModel]="levelFor(skill.code)"
-                        (ngModelChange)="setLevelFromNumber(skill.code, $event)"
-                      />
-                      <label class="num-wrap">
-                        <input
-                          type="number"
-                          class="num"
-                          [min]="policyFor(skill).min"
-                          [max]="policyFor(skill).max"
-                          [step]="1"
-                          [disabled]="disabled"
-                          [ngModel]="levelFor(skill.code)"
-                          (ngModelChange)="setLevelFromNumber(skill.code, $event)"
-                        />
-                        <span class="unit">%</span>
-                      </label>
-                      @if (levelFor(skill.code) != null) {
-                        <button
-                          type="button"
-                          class="clear"
-                          [disabled]="disabled"
-                          (click)="clearLevel(skill.code)"
-                        >
-                          ✕
-                        </button>
-                      }
-                    </div>
-                  }
-                  @case ('slider') {
-                    <div class="scale-controls" role="group" [attr.aria-label]="skill.labelUa">
-                      <input
-                        type="range"
-                        class="range"
-                        [min]="policyFor(skill).min"
-                        [max]="policyFor(skill).max"
-                        [step]="1"
-                        [disabled]="disabled"
-                        [ngModel]="levelFor(skill.code)"
-                        (ngModelChange)="setLevelFromNumber(skill.code, $event)"
-                      />
-                      <input
-                        type="number"
-                        class="num"
-                        [min]="policyFor(skill).min"
-                        [max]="policyFor(skill).max"
-                        [step]="1"
-                        [disabled]="disabled"
-                        [ngModel]="levelFor(skill.code)"
-                        (ngModelChange)="setLevelFromNumber(skill.code, $event)"
-                      />
-                      @if (levelFor(skill.code) != null) {
-                        <button
-                          type="button"
-                          class="clear"
-                          [disabled]="disabled"
-                          (click)="clearLevel(skill.code)"
-                        >
-                          ✕
-                        </button>
-                      }
-                    </div>
-                  }
-                  @default {
-                    <div class="dots" role="group" [attr.aria-label]="skill.labelUa">
-                      @for (lvl of digitLevels(skill); track lvl) {
-                        <button
-                          type="button"
-                          class="dot"
-                          [class.active]="levelFor(skill.code) === lvl"
-                          [disabled]="disabled"
-                          (click)="setLevel(skill.code, lvl)"
-                        >
-                          {{ lvl }}
-                        </button>
-                      }
-                      @if (levelFor(skill.code) != null) {
-                        <button
-                          type="button"
-                          class="clear"
-                          [disabled]="disabled"
-                          (click)="clearLevel(skill.code)"
-                        >
-                          ✕
-                        </button>
-                      }
-                    </div>
-                  }
-                }
-                @if (isExtraSkill(skill.code)) {
-                  <button
-                    type="button"
-                    class="clear"
-                    [disabled]="disabled"
-                    (click)="removeExtra(skill.code)"
-                  >
-                    Видалити
-                  </button>
-                }
-              </li>
-            }
-          </ul>
-        </section>
-      }
 
-      @if (matrix.custom.length) {
-        <section class="custom">
-          <h3>Додаткові (застарілі)</h3>
-          @for (row of matrix.custom; track $index; let i = $index) {
-            <div class="custom-row">
-              <span class="label">{{ row.name || '—' }}</span>
-              <div class="dots">
-                @for (lvl of customLevels; track lvl) {
-                  <button
-                    type="button"
-                    class="dot"
-                    [class.active]="row.level === lvl"
-                    [disabled]="disabled"
-                    (click)="setCustomLevel(i, lvl)"
-                  >
-                    {{ lvl }}
-                  </button>
+      @if (profileGroups.length) {
+        <section class="bucket">
+          <h2>{{ profileBucketTitle }}</h2>
+          @for (group of profileGroups; track group.code) {
+            <section class="group">
+              <h3>{{ group.label }}</h3>
+              <ul>
+                @for (skill of group.skills; track skill.code) {
+                  <ng-container
+                    *ngTemplateOutlet="skillRow; context: { skill: skill, removable: false }"
+                  />
                 }
-              </div>
-              <button
-                type="button"
-                class="clear"
-                [disabled]="disabled"
-                (click)="removeCustom(i)"
-              >
-                Видалити
-              </button>
-            </div>
+              </ul>
+            </section>
           }
         </section>
       }
 
-      <section class="add-skill">
-        @if (!pickerOpen) {
-          <button
-            type="button"
-            class="add"
-            [disabled]="disabled"
-            (click)="openPicker()"
-          >
-            Додати навичку
-          </button>
-        } @else {
-          <div class="picker">
-            <label>
-              Навичка
-              <select
-                [disabled]="disabled || pickerLoading"
-                [(ngModel)]="pickerSkillCode"
-              >
-                <option value="">
-                  {{ pickerLoading ? 'Завантаження…' : '— оберіть —' }}
-                </option>
-                @for (skill of pickerSkills; track skill.code) {
-                  <option [value]="skill.code">
-                    {{ skill.name
-                    }}{{ skill.group?.name ? ' · ' + skill.group?.name : '' }}
-                  </option>
+      @if (extraGroups.length || matrix.custom.length || availableSkills !== null) {
+        <section class="bucket">
+          <h2>{{ extraBucketTitle }}</h2>
+          @for (group of extraGroups; track group.code) {
+            <section class="group">
+              <h3>{{ group.label }}</h3>
+              <ul>
+                @for (skill of group.skills; track skill.code) {
+                  <ng-container
+                    *ngTemplateOutlet="skillRow; context: { skill: skill, removable: true }"
+                  />
                 }
-              </select>
-            </label>
-            @if (pickerError) {
-              <p class="picker-error">{{ pickerError }}</p>
-            }
-            <div class="picker-actions">
+              </ul>
+            </section>
+          }
+
+          @if (matrix.custom.length) {
+            <section class="custom">
+              <h3>Додаткові (застарілі)</h3>
+              @for (row of matrix.custom; track $index; let i = $index) {
+                <div class="custom-row">
+                  <span class="label">{{ row.name || '—' }}</span>
+                  <div class="dots">
+                    @for (lvl of customLevels; track lvl) {
+                      <button
+                        type="button"
+                        class="dot"
+                        [class.active]="row.level === lvl"
+                        [disabled]="disabled"
+                        (click)="setCustomLevel(i, lvl)"
+                      >
+                        {{ lvl }}
+                      </button>
+                    }
+                  </div>
+                  <button
+                    type="button"
+                    class="clear"
+                    [disabled]="disabled"
+                    (click)="removeCustom(i)"
+                  >
+                    Видалити
+                  </button>
+                </div>
+              }
+            </section>
+          }
+
+          <section class="add-skill">
+            @if (!pickerOpen) {
               <button
                 type="button"
                 class="add"
-                [disabled]="disabled || !pickerSkillCode"
-                (click)="confirmAddSkill()"
-              >
-                Додати
-              </button>
-              <button
-                type="button"
-                class="clear"
                 [disabled]="disabled"
-                (click)="closePicker()"
+                (click)="openPicker()"
               >
-                Скасувати
+                Додати навичку
               </button>
-            </div>
-          </div>
-        }
-      </section>
+            } @else {
+              <div class="picker">
+                <label>
+                  Навичка
+                  <select
+                    [disabled]="disabled || pickerLoading"
+                    [(ngModel)]="pickerSkillCode"
+                  >
+                    <option value="">
+                      {{ pickerLoading ? 'Завантаження…' : '— оберіть —' }}
+                    </option>
+                    @for (skill of pickerSkills; track skill.code) {
+                      <option [value]="skill.code">
+                        {{ skill.name
+                        }}{{ skill.group?.name ? ' · ' + skill.group?.name : '' }}
+                      </option>
+                    }
+                  </select>
+                </label>
+                @if (pickerError) {
+                  <p class="picker-error">{{ pickerError }}</p>
+                }
+                <div class="picker-actions">
+                  <button
+                    type="button"
+                    class="add"
+                    [disabled]="disabled || !pickerSkillCode"
+                    (click)="confirmAddSkill()"
+                  >
+                    Додати
+                  </button>
+                  <button
+                    type="button"
+                    class="clear"
+                    [disabled]="disabled"
+                    (click)="closePicker()"
+                  >
+                    Скасувати
+                  </button>
+                </div>
+              </div>
+            }
+          </section>
+        </section>
+      }
+
+      <ng-template #skillRow let-skill="skill" let-removable="removable">
+        <li>
+          <span class="label">
+            {{ skill.labelUa }}
+            @if (nativeHint(skill); as hint) {
+              <small>{{ hint }}</small>
+            }
+          </span>
+          @switch (ratingUi(skill)) {
+            @case ('percent') {
+              <div class="scale-controls" role="group" [attr.aria-label]="skill.labelUa">
+                <input
+                  type="range"
+                  class="range"
+                  [min]="policyFor(skill).min"
+                  [max]="policyFor(skill).max"
+                  [step]="1"
+                  [disabled]="disabled"
+                  [ngModel]="levelFor(skill.code)"
+                  (ngModelChange)="setLevelFromNumber(skill.code, $event)"
+                />
+                <label class="num-wrap">
+                  <input
+                    type="number"
+                    class="num"
+                    [min]="policyFor(skill).min"
+                    [max]="policyFor(skill).max"
+                    [step]="1"
+                    [disabled]="disabled"
+                    [ngModel]="levelFor(skill.code)"
+                    (ngModelChange)="setLevelFromNumber(skill.code, $event)"
+                  />
+                  <span class="unit">%</span>
+                </label>
+                @if (levelFor(skill.code) != null) {
+                  <button
+                    type="button"
+                    class="clear"
+                    [disabled]="disabled"
+                    (click)="clearLevel(skill.code)"
+                  >
+                    ✕
+                  </button>
+                }
+              </div>
+            }
+            @case ('slider') {
+              <div class="scale-controls" role="group" [attr.aria-label]="skill.labelUa">
+                <input
+                  type="range"
+                  class="range"
+                  [min]="policyFor(skill).min"
+                  [max]="policyFor(skill).max"
+                  [step]="1"
+                  [disabled]="disabled"
+                  [ngModel]="levelFor(skill.code)"
+                  (ngModelChange)="setLevelFromNumber(skill.code, $event)"
+                />
+                <input
+                  type="number"
+                  class="num"
+                  [min]="policyFor(skill).min"
+                  [max]="policyFor(skill).max"
+                  [step]="1"
+                  [disabled]="disabled"
+                  [ngModel]="levelFor(skill.code)"
+                  (ngModelChange)="setLevelFromNumber(skill.code, $event)"
+                />
+                @if (levelFor(skill.code) != null) {
+                  <button
+                    type="button"
+                    class="clear"
+                    [disabled]="disabled"
+                    (click)="clearLevel(skill.code)"
+                  >
+                    ✕
+                  </button>
+                }
+              </div>
+            }
+            @default {
+              <div class="dots" role="group" [attr.aria-label]="skill.labelUa">
+                @for (lvl of digitLevels(skill); track lvl) {
+                  <button
+                    type="button"
+                    class="dot"
+                    [class.active]="levelFor(skill.code) === lvl"
+                    [disabled]="disabled"
+                    (click)="setLevel(skill.code, lvl)"
+                  >
+                    {{ lvl }}
+                  </button>
+                }
+                @if (levelFor(skill.code) != null) {
+                  <button
+                    type="button"
+                    class="clear"
+                    [disabled]="disabled"
+                    (click)="clearLevel(skill.code)"
+                  >
+                    ✕
+                  </button>
+                }
+              </div>
+            }
+          }
+          @if (removable) {
+            <button
+              type="button"
+              class="clear"
+              [disabled]="disabled"
+              (click)="removeExtra(skill.code)"
+            >
+              Видалити
+            </button>
+          }
+        </li>
+      </ng-template>
     </div>
   `,
   styles: [
@@ -295,6 +327,10 @@ type RatingUiMode = 'percent' | 'digits' | 'slider';
         margin: 0;
         opacity: 0.75;
         font-size: 0.9rem;
+      }
+      .bucket h2 {
+        margin: 0 0 0.75rem;
+        font-size: 1.05rem;
       }
       .label {
         display: grid;
@@ -393,9 +429,17 @@ type RatingUiMode = 'percent' | 'digits' | 'slider';
         min-height: 44px;
         padding: 0.45rem 0.55rem;
         border-radius: 8px;
-        border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-        background: transparent;
-        color: inherit;
+        border: var(--q-input-border, 1px solid var(--pw-border, color-mix(in srgb, currentColor 25%, transparent)));
+        background: var(--q-input-bg, var(--pw-input-bg, var(--pw-surface, #fff)));
+        color: var(--pw-text, #1e293b);
+        color-scheme: inherit;
+      }
+      .picker select option {
+        background: var(--q-input-bg, var(--pw-input-bg, var(--pw-surface, #fff)));
+        color: var(--pw-text, #1e293b);
+      }
+      :host-context(html[data-theme='dark']) .picker select {
+        color-scheme: dark;
       }
       .picker-actions {
         display: flex;
@@ -433,7 +477,11 @@ export class QuestionnaireSkillsMatrixFieldComponent
     (_, i) => SKILL_LEVEL_MIN + i,
   );
 
-  groups: GroupView[] = this.buildGroups(null);
+  groups: GroupView[] = [];
+  profileGroups: GroupView[] = [];
+  extraGroups: GroupView[] = [];
+  profileBucketTitle = 'Навички';
+  extraBucketTitle = 'Додаткові (legacy custom)';
 
   matrix: PositionSkillsMatrixAnswer = emptyPositionSkillsMatrix();
 
@@ -446,6 +494,8 @@ export class QuestionnaireSkillsMatrixFieldComponent
   private pickerSub: Subscription | null = null;
   /** Codes present in availableSkills / registry rows (not free-text extras). */
   private rowCodes = new Set<string>();
+  /** Position requirement codes from frozen context (wins over desired extras). */
+  private requirementCodes = new Set<string>();
   /** Labels / scale from picker for pending extras not yet in context. */
   private readonly localExtraMeta = new Map<string, LocalExtraMeta>();
 
@@ -455,7 +505,7 @@ export class QuestionnaireSkillsMatrixFieldComponent
       changes['desiredExtraCodes'] ||
       changes['contextVersion']
     ) {
-      this.groups = this.buildGroups(this.availableSkills);
+      this.rebuildGroups();
     }
     if (changes['value']) {
       try {
@@ -463,7 +513,7 @@ export class QuestionnaireSkillsMatrixFieldComponent
       } catch {
         this.matrix = emptyPositionSkillsMatrix();
       }
-      this.groups = this.buildGroups(this.availableSkills);
+      this.rebuildGroups();
     }
   }
 
@@ -502,17 +552,32 @@ export class QuestionnaireSkillsMatrixFieldComponent
   }
 
   isExtraSkill(code: string): boolean {
+    if (this.requirementCodes.has(code)) return false;
     if (this.desiredExtraCodes.includes(code)) return true;
     if (this.localExtraMeta.has(code)) return true;
     const fromContext = this.availableSkills?.find((s) => s.code === code);
     return fromContext?.source === 'questionnaire_extra';
   }
 
-  private buildGroups(
+  private rebuildGroups(): void {
+    const built = this.buildBuckets(this.availableSkills, this.desiredExtraCodes);
+    this.profileGroups = built.profile;
+    this.extraGroups = built.extra;
+    this.groups = [...built.profile, ...built.extra];
+    this.profileBucketTitle = built.legacy
+      ? 'Навички'
+      : 'Профільні (з посади)';
+    this.extraBucketTitle = built.legacy
+      ? 'Додаткові (legacy custom)'
+      : 'Додаткові';
+  }
+
+  private buildBuckets(
     available: MatrixAvailableSkill[] | null,
     desiredExtraCodes: string[] = this.desiredExtraCodes,
-  ): GroupView[] {
-    const baseRows =
+  ): { profile: GroupView[]; extra: GroupView[]; legacy: boolean } {
+    const legacy = available === null;
+    const baseRows: MatrixAvailableSkill[] =
       available === null
         ? SKILL_DEFINITIONS.map((s) => ({
             code: s.code,
@@ -521,15 +586,41 @@ export class QuestionnaireSkillsMatrixFieldComponent
           }))
         : available;
     this.rowCodes = new Set(baseRows.map((s) => s.code));
+    this.requirementCodes = new Set(
+      available === null
+        ? []
+        : available
+            .filter((s) => s.source === 'position_requirement')
+            .map((s) => s.code),
+    );
 
-    const pendingExtras: MatrixAvailableSkill[] = [];
-    if (available !== null) {
-      for (const code of desiredExtraCodes) {
-        if (!code || this.rowCodes.has(code)) continue;
-        if (pendingExtras.some((s) => s.code === code)) continue;
+    const profileSkills: MatrixAvailableSkill[] = [];
+    const extraSkills: MatrixAvailableSkill[] = [];
+
+    if (legacy) {
+      profileSkills.push(...baseRows);
+    } else {
+      const classified = classifyManagingMatrixSkills({
+        frozenSkills: baseRows.map((s) => ({
+          code: s.code,
+          source: s.source,
+        })),
+        desiredExtraCodes,
+      });
+      const byCode = new Map(baseRows.map((s) => [s.code, s]));
+      for (const code of classified.profileCodes) {
+        const skill = byCode.get(code);
+        if (skill) profileSkills.push(skill);
+      }
+      for (const code of classified.extraCodes) {
+        const fromFrozen = byCode.get(code);
+        if (fromFrozen) {
+          extraSkills.push(fromFrozen);
+          continue;
+        }
         const cached = this.localExtraMeta.get(code);
         const fromPicker = this.pickerSkills.find((s) => s.code === code);
-        pendingExtras.push({
+        extraSkills.push({
           code,
           labelUa: cached?.labelUa ?? fromPicker?.name ?? code,
           group: cached?.group ?? fromPicker?.group?.code ?? '__extra__',
@@ -542,7 +633,14 @@ export class QuestionnaireSkillsMatrixFieldComponent
       }
     }
 
-    const rows = [...baseRows, ...pendingExtras];
+    return {
+      profile: this.toGroupViews(profileSkills),
+      extra: this.toGroupViews(extraSkills),
+      legacy,
+    };
+  }
+
+  private toGroupViews(rows: MatrixAvailableSkill[]): GroupView[] {
     if (rows.length === 0) return [];
 
     const byGroup = new Map<string, MatrixAvailableSkill[]>();
@@ -556,7 +654,12 @@ export class QuestionnaireSkillsMatrixFieldComponent
     const orderedKeys = [
       ...SKILL_GROUP_CODES.filter((code) => byGroup.has(code)),
       ...[...byGroup.keys()]
-        .filter((code) => !SKILL_GROUP_CODES.includes(code as (typeof SKILL_GROUP_CODES)[number]))
+        .filter(
+          (code) =>
+            !SKILL_GROUP_CODES.includes(
+              code as (typeof SKILL_GROUP_CODES)[number],
+            ),
+        )
         .sort((a, b) => a.localeCompare(b)),
     ];
 
@@ -565,6 +668,14 @@ export class QuestionnaireSkillsMatrixFieldComponent
       label: this.groupLabel(code),
       skills: byGroup.get(code) ?? [],
     }));
+  }
+
+  private buildGroups(
+    available: MatrixAvailableSkill[] | null,
+    desiredExtraCodes: string[] = this.desiredExtraCodes,
+  ): GroupView[] {
+    const buckets = this.buildBuckets(available, desiredExtraCodes);
+    return [...buckets.profile, ...buckets.extra];
   }
 
   private groupLabel(code: string): string {
@@ -631,7 +742,8 @@ export class QuestionnaireSkillsMatrixFieldComponent
     this.localExtraMeta.delete(code);
     const nextDesired = this.desiredExtraCodes.filter((c) => c !== code);
     this.desiredExtraCodesChange.emit(nextDesired);
-    this.groups = this.buildGroups(this.availableSkills, nextDesired);
+    this.desiredExtraCodes = nextDesired;
+    this.rebuildGroups();
   }
 
   openPicker(): void {
@@ -656,6 +768,7 @@ export class QuestionnaireSkillsMatrixFieldComponent
     const code = this.pickerSkillCode;
     if (
       this.rowCodes.has(code) ||
+      this.requirementCodes.has(code) ||
       this.desiredExtraCodes.includes(code) ||
       this.matrix.ratings.some((r) => r.skillCode === code)
     ) {
@@ -675,7 +788,8 @@ export class QuestionnaireSkillsMatrixFieldComponent
     }
     const nextDesired = [...this.desiredExtraCodes, code];
     this.desiredExtraCodesChange.emit(nextDesired);
-    this.groups = this.buildGroups(this.availableSkills, nextDesired);
+    this.desiredExtraCodes = nextDesired;
+    this.rebuildGroups();
     this.closePicker();
   }
 
@@ -725,13 +839,13 @@ export class QuestionnaireSkillsMatrixFieldComponent
       this.matrix = keepEmptyCustom
         ? { ...parsed, custom: next.custom }
         : parsed;
-      this.groups = this.buildGroups(this.availableSkills);
+      this.rebuildGroups();
       this.matrixChange.emit(parsed);
     } catch {
       this.matrix = keepEmptyCustom
         ? { ...pruned, custom: next.custom }
         : pruned;
-      this.groups = this.buildGroups(this.availableSkills);
+      this.rebuildGroups();
       this.matrixChange.emit(pruned);
     }
   }

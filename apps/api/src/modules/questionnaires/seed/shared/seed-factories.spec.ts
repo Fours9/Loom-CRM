@@ -17,8 +17,12 @@ describe('questionnaire seed shared factories', () => {
     );
   });
 
-  it('company_work full matches employee-360 step fields (regression)', () => {
-    expect(buildCompanyWorkFields('full')).toEqual(stepFields('company_work'));
+  it('company_work full factory stays text snapshot fields', () => {
+    const fields = buildCompanyWorkFields('full');
+    expect(fields.some((f) => f.key === 'company_work.company_direction')).toBe(
+      true,
+    );
+    expect(fields.every((f) => f.valueType !== 'organization_ref')).toBe(true);
   });
 
   it('docsManagingPersonal omits preferred_name and includes birth/city', () => {

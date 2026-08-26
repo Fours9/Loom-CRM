@@ -13,6 +13,7 @@ import { RequestStatusBadgeComponent } from '../shared/request-status-badge.comp
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { requestFrameTone } from '../shared/request-status-presentation';
 import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
+import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
 
 @Component({
   selector: 'app-dashboard',
@@ -33,7 +34,15 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
         <p class="error">{{ error }}</p>
       } @else if (employee) {
         <header class="hero">
-          <span class="swatch" [style.background]="employee.calendarColor"></span>
+          <div class="avatar" aria-hidden="true">
+            @if (employee.photoUrl) {
+              <img [src]="employee.photoUrl" alt="" />
+            } @else {
+              <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+                <path fill="currentColor" [attr.d]="personAvatarPath" />
+              </svg>
+            }
+          </div>
           <div class="hero-main">
             <div class="hero-row">
               <h1>{{ employee.fullName }}</h1>
@@ -44,7 +53,7 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
               }
             </div>
             <div class="hero-row hero-meta">
-              <p>#{{ employee.employeeNumber }} · {{ employee.departmentName }} · {{ employee.positionName }}</p>
+              <p>#{{ employee.employeeNumber }} · {{ heroOrgMeta }}</p>
               @if (employee.permissions?.canEditProfile) {
                 <a
                   class="ghost-btn"
@@ -146,6 +155,10 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
 
                 <div class="section-block">
                   <h3>Посада</h3>
+                  <label>
+                    Напрямок
+                    <div class="value">{{ employee.directionName || '—' }}</div>
+                  </label>
                   <div class="row row-2">
                     <label>
                       Відділ
@@ -346,6 +359,23 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
         border-radius: 8px;
         border: 1px solid var(--pw-border);
         flex-shrink: 0;
+      }
+      .avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        border: 1px solid var(--pw-border);
+        background: color-mix(in srgb, var(--pw-muted) 18%, transparent);
+        color: var(--pw-muted);
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
       }
       .grid {
         display: grid;
@@ -760,6 +790,7 @@ export class DashboardComponent implements OnInit {
   private readonly api = inject(ApiService);
   readonly auth = inject(AuthService);
 
+  readonly personAvatarPath = PERSON_AVATAR_PATH;
   readonly createRequestLink = buildCreateAbsenceRequestLink();
   readonly requestTypeLabel = requestTypeLabel;
   readonly requestPeriod = requestPeriod;
@@ -776,6 +807,16 @@ export class DashboardComponent implements OnInit {
 
   get managedNames(): string[] {
     return this.employee?.managedDepartments?.map((d) => d.name || '—') ?? [];
+  }
+
+  get heroOrgMeta(): string {
+    return [
+      this.employee?.directionName,
+      this.employee?.departmentName,
+      this.employee?.positionName,
+    ]
+      .map((v) => (v && String(v).trim()) || '—')
+      .join(' · ');
   }
 
   ngOnInit(): void {

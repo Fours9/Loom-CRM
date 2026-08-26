@@ -3,6 +3,11 @@ import { Employee } from './employee.entity';
 import { User } from '../../platform/identity/user.entity';
 import { UserStatus } from '../../platform/identity/user.enums';
 import { EmployeeAccessService } from '../access/employee-access.service';
+import { canMutateEmployeeOrgAssignment } from './can-mutate-employee-org-assignment.policy';
+import {
+  resolveEmployeeDisplayedDirection,
+  type DisplayedDirectionRef,
+} from './resolve-employee-displayed-direction';
 
 export type AccountStatus = 'active' | 'deactivated';
 
@@ -23,6 +28,8 @@ export type EmployeeListDto = {
   departmentName: string | null;
   positionId: string | null;
   positionName: string | null;
+  directionId: string | null;
+  directionName: string | null;
   calendarColor: string | null;
   role: string;
   isDepartmentManager: boolean;
@@ -49,6 +56,8 @@ export type EmployeeDetailDto = Omit<EmployeeListDto, 'completenessPercent'> & {
 export type EmployeeListProjectionContext = {
   canViewWorkContacts: boolean;
   completenessPercent: number;
+  /** Current EA direction when preloaded (list/detail). */
+  assignmentDirection?: DisplayedDirectionRef | null;
 };
 
 @Injectable()
@@ -74,6 +83,15 @@ export class EmployeeSerializer {
     const showMustChange = this.access.isAdmin(viewer) || isOwner;
     const hasAccount = employee.userId != null;
 
+    const direction = resolveEmployeeDisplayedDirection({
+      assignmentDirection: ctx?.assignmentDirection ?? null,
+      positionDirection: this.directionRef(employee.position?.directionId, employee.position?.direction?.name),
+      departmentDirection: this.directionRef(
+        employee.department?.directionId,
+        employee.department?.direction?.name,
+      ),
+    });
+
     const dto: EmployeeListDto = {
       id: employee.id,
       userId: employee.userId,
@@ -91,6 +109,8 @@ export class EmployeeSerializer {
       departmentName: employee.department?.name ?? null,
       positionId: employee.positionId,
       positionName: employee.position?.name ?? null,
+      directionId: direction.directionId,
+      directionName: direction.directionName,
       calendarColor: employee.calendarColor,
       role: employee.role,
       isDepartmentManager: Boolean(employee.isDepartmentManager),
@@ -123,6 +143,7 @@ export class EmployeeSerializer {
   async toDetailDto(
     employee: Employee,
     viewer: User,
+    ctx?: Pick<EmployeeListProjectionContext, 'assignmentDirection'>,
   ): Promise<EmployeeDetailDto> {
     const base = await this.toListDto(employee, viewer, {
       canViewWorkContacts: await this.access.canViewWorkContacts(
@@ -130,6 +151,7 @@ export class EmployeeSerializer {
         employee,
       ),
       completenessPercent: 0,
+      assignmentDirection: ctx?.assignmentDirection ?? null,
     });
     const { completenessPercent: _drop, ...rest } = base;
     const dto: EmployeeDetailDto = { ...rest };
@@ -166,6 +188,7 @@ export class EmployeeSerializer {
         viewer,
         employee,
       ),
+      canEditOrgAssignment: canMutateEmployeeOrgAssignment(viewer),
       canEditSchedule: await this.access.canEditEmployeeSchedule(
         viewer,
         employee,
@@ -213,5 +236,13 @@ export class EmployeeSerializer {
     }
 
     return permissions;
+  }
+
+  private directionRef(
+    id: string | null | undefined,
+    name: string | null | undefined,
+  ): DisplayedDirectionRef | null {
+    if (!id) return null;
+    return { id, name: name ?? null };
   }
 }

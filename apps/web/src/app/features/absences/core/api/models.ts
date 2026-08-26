@@ -7,12 +7,16 @@ export interface Department {
   description: string | null;
   isHidden: boolean;
   isActive: boolean;
+  directionId?: string | null;
+  directionName?: string | null;
 }
 
 export interface Position {
   id: string;
   name: string;
   departmentId: string | null;
+  directionId?: string | null;
+  directionName?: string | null;
   description: string | null;
   isActive: boolean;
   department?: Department | null;
@@ -37,10 +41,13 @@ export interface EmployeeListItem {
   firstName: string;
   middleName: string | null;
   fullName: string;
+  photoUrl?: string | null;
   departmentId: string;
   departmentName: string | null;
   positionId: string;
   positionName: string | null;
+  directionId?: string | null;
+  directionName?: string | null;
   calendarColor: string;
   role: UserRole;
   isDepartmentManager?: boolean;
@@ -75,6 +82,7 @@ export interface EmployeeProfile extends EmployeeListItem {
   personalEmail?: string | null;
   permissions?: {
     canEditProfile: boolean;
+    canEditOrgAssignment?: boolean;
     canEditSchedule: boolean;
     canResetPassword: boolean;
     canCreateAccount?: boolean;

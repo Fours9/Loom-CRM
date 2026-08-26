@@ -14,7 +14,6 @@ describe('buildProgressSections', () => {
     { key: 'family', label: 'Сімейний стан' },
     { key: 'celebration_dates', label: 'Святкові дати' },
     { key: 'experience', label: 'Професійний досвід' },
-    { key: 'company_work', label: 'Робота в компанії' },
     { key: 'education', label: 'Освіта та навчання' },
     { key: 'strengths', label: 'Сильні сторони та потенціал' },
     { key: 'hobbies', label: 'Хобі' },
@@ -47,7 +46,6 @@ describe('buildProgressSections', () => {
     expect(sections.find((s) => s.id === 'work')!.steps.map((t) => t.key)).toEqual(
       [
         'experience',
-        'company_work',
         'strengths',
         'work_style',
       ],
@@ -98,6 +96,20 @@ describe('buildProgressSections', () => {
       'hobbies',
     ]);
     expect(sections.every((s) => s.steps.length > 0)).toBe(true);
+  });
+
+  it('employee-starter is intro + review only', () => {
+    const sections = buildProgressSections({
+      templateCode: 'employee-starter',
+      schemaSteps: [],
+    });
+    expect(sections.map((s) => s.id)).toEqual(['intro', 'review']);
+    expect(sections[0]!.steps.map((t) => t.key)).toEqual([
+      QUESTIONNAIRE_INTRO_STEP,
+    ]);
+    expect(sections[1]!.steps.map((t) => t.key)).toEqual([
+      QUESTIONNAIRE_REVIEW_STEP,
+    ]);
   });
 
   it('findProgressSection resolves by step key', () => {

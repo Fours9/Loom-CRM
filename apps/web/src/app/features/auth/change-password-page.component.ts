@@ -105,6 +105,14 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
               />
             </div>
           </label>
+          <ul class="reqs" aria-label="Вимоги до нового пароля">
+            <li [class.ok]="reqMinLength()">Мінімум 8 символів</li>
+            <li [class.ok]="reqLetter()">
+              Щонайменше одна латинська літера (A–Z / a–z)
+            </li>
+            <li [class.ok]="reqDigit()">Щонайменше одна цифра (0–9)</li>
+            <li [class.ok]="reqMatch()">Новий пароль і підтвердження збігаються</li>
+          </ul>
           <label>
             Повтор нового пароля
             <div class="password-row">
@@ -121,7 +129,6 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
               />
             </div>
           </label>
-          <p class="hint">Мінімум 8 символів, літера та цифра.</p>
           @if (form.hasError('passwordsMismatch') && form.get('confirmPassword')?.touched) {
             <p class="error">Паролі не збігаються</p>
           }
@@ -196,6 +203,21 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
         margin: 0;
         color: var(--pw-muted);
         font-size: 0.9rem;
+      }
+      .reqs {
+        list-style: none;
+        margin: 0;
+        padding: 0.5rem 0.75rem;
+        display: grid;
+        gap: 0.35rem;
+        border-radius: 8px;
+        border: 1px solid var(--pw-border);
+        background: var(--pw-surface-2, var(--pw-input-bg));
+        font-size: 0.85rem;
+        color: var(--pw-muted);
+      }
+      .reqs li.ok {
+        color: var(--pw-success, #15803d);
       }
       .error {
         margin: 0;
@@ -300,12 +322,33 @@ export class ChangePasswordPageComponent {
     { validators: passwordsMatch },
   );
 
+  reqMinLength(): boolean {
+    const v = this.form.controls.newPassword.value ?? '';
+    return v.length >= 8;
+  }
+
+  reqLetter(): boolean {
+    return /[A-Za-z]/.test(this.form.controls.newPassword.value ?? '');
+  }
+
+  reqDigit(): boolean {
+    return /\d/.test(this.form.controls.newPassword.value ?? '');
+  }
+
+  reqMatch(): boolean {
+    const next = this.form.controls.newPassword.value ?? '';
+    const confirm = this.form.controls.confirmPassword.value ?? '';
+    return confirm.length > 0 && next === confirm;
+  }
+
   submit(): void {
     this.error.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       if (!this.form.hasError('passwordsMismatch')) {
-        this.error.set('Перевірте поля пароля (мін. 8 символів, літера та цифра).');
+        this.error.set(
+          'Пароль: мін. 8 символів, латинська літера та цифра.',
+        );
       }
       return;
     }

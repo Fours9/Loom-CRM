@@ -380,6 +380,10 @@ export class QuestionnaireProposalService {
           labelUa: frozen.labelUa,
           proposedLevel,
           sourceScale,
+          sourceAtSubmission:
+            frozen.source === 'position_requirement'
+              ? 'position_requirement'
+              : 'questionnaire_extra',
         },
       });
     }

@@ -665,6 +665,6 @@ export class PeopleProfilePageComponent implements OnInit {
         this.audit.set(history);
         this.historyAssign.set(assignments);
       },
-    });
+      });
   }
 }

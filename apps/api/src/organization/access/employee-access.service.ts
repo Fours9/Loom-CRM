@@ -158,17 +158,25 @@ export class EmployeeAccessService {
     return this.isAdmin(viewer);
   }
 
+  private static readonly EMPLOYEE_CARD_RELATIONS = [
+    'department',
+    'department.direction',
+    'position',
+    'position.direction',
+    'user',
+  ] as const;
+
   async listVisibleEmployees(actor: User): Promise<Employee[]> {
     if (this.scope(actor) === 'all') {
       return this.employees.find({
-        relations: ['department', 'position', 'user'],
+        relations: [...EmployeeAccessService.EMPLOYEE_CARD_RELATIONS],
         order: { lastName: 'ASC' },
       });
     }
     if (this.scope(actor) === 'self') {
       const self = await this.employees.findOne({
         where: { userId: actor.id },
-        relations: ['department', 'position', 'user'],
+        relations: [...EmployeeAccessService.EMPLOYEE_CARD_RELATIONS],
       });
       return self ? [self] : [];
     }
@@ -176,13 +184,13 @@ export class EmployeeAccessService {
     if (!deptIds.length) {
       const self = await this.employees.findOne({
         where: { userId: actor.id },
-        relations: ['department', 'position', 'user'],
+        relations: [...EmployeeAccessService.EMPLOYEE_CARD_RELATIONS],
       });
       return self ? [self] : [];
     }
     return this.employees.find({
       where: { departmentId: In(deptIds) },
-      relations: ['department', 'position', 'user'],
+      relations: [...EmployeeAccessService.EMPLOYEE_CARD_RELATIONS],
       order: { lastName: 'ASC' },
     });
   }
@@ -190,7 +198,7 @@ export class EmployeeAccessService {
   async getEmployeeOrFail(id: string): Promise<Employee> {
     const emp = await this.employees.findOne({
       where: { id },
-      relations: ['department', 'position', 'user'],
+      relations: [...EmployeeAccessService.EMPLOYEE_CARD_RELATIONS],
     });
     if (!emp) throw new NotFoundException('Employee not found');
     return emp;

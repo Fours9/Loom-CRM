@@ -29,6 +29,7 @@ import {
   canAttachAssignment,
   canCancelAssignment,
   canCloseAssignment,
+  isOwnerEditableStatus,
   QUESTIONNAIRE_ASSIGNMENT_AUDIT,
 } from './assignments/questionnaire-assignment-transitions';
 import {
@@ -75,6 +76,11 @@ import { buildQuestionnaireProfileMirror } from './proposals/questionnaire-profi
 import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
 import { QuestionnaireContextSkillIdBackfillService } from './assignments/questionnaire-context-skill-id-backfill.service';
 import { applyCanonicalOrganizationAnswers } from './questionnaire-organization-selection';
+import { QuestionnaireSubmissionService } from './questionnaire-submission.service';
+import {
+  desiredExtrasFromPersistedContext,
+  syncLocked,
+} from './questionnaire-position-context-sync.core';
 
 @Injectable()
 export class QuestionnaireAssignmentService {
@@ -97,6 +103,7 @@ export class QuestionnaireAssignmentService {
     private readonly users: UsersService,
     private readonly permissions: PermissionService,
     private readonly responseService: QuestionnaireResponseService,
+    private readonly submissionService: QuestionnaireSubmissionService,
     private readonly audit: AuditService,
     private readonly dataSource: DataSource,
   ) {}
@@ -702,9 +709,70 @@ export class QuestionnaireAssignmentService {
 
       const previousStatus = assignment.status;
       const now = new Date();
-      assignment.status = 'closed';
-      await manager.getRepository(QuestionnaireAssignment).save(assignment);
-      await supersedePendingForAssignment(manager, assignment.id, now);
+      const shouldSubmit =
+        isOwnerEditableStatus(previousStatus) &&
+        !!assignment.employeeId;
+
+      let submissionId: string | null = null;
+      let submissionNumber: number | null = null;
+      let submittedViaClose = false;
+
+      if (shouldSubmit) {
+        const lockedResponse = await manager
+          .getRepository(QuestionnaireResponse)
+          .findOne({
+            where: { assignmentId: assignment.id },
+            lock: { mode: 'pessimistic_write' },
+          });
+
+        if (lockedResponse) {
+          // Supersede OLD pending before creating new proposals.
+          await supersedePendingForAssignment(manager, assignment.id, now);
+
+          const templateType = assignment.templateVersion.template.type;
+          if (templateType === 'managing') {
+            await syncLocked(
+              manager,
+              assignment,
+              lockedResponse,
+              {
+                desiredExtraSkillCodes: desiredExtrasFromPersistedContext(
+                  assignment.contextJson,
+                ),
+              },
+              this.positionCatalog,
+            );
+          } else {
+            lockedResponse.revision = lockedResponse.revision + 1;
+            await manager
+              .getRepository(QuestionnaireResponse)
+              .save(lockedResponse);
+          }
+
+          const submission =
+            await this.submissionService.submitWithinTransaction(
+              manager,
+              actor,
+              assignment,
+              lockedResponse,
+            );
+          submissionId = submission.id;
+          submissionNumber = submission.submissionNumber;
+          submittedViaClose = true;
+
+          // Never call supersede after new proposals — leave them pending.
+          assignment.status = 'closed';
+          await manager.getRepository(QuestionnaireAssignment).save(assignment);
+        } else {
+          assignment.status = 'closed';
+          await manager.getRepository(QuestionnaireAssignment).save(assignment);
+          await supersedePendingForAssignment(manager, assignment.id, now);
+        }
+      } else {
+        assignment.status = 'closed';
+        await manager.getRepository(QuestionnaireAssignment).save(assignment);
+        await supersedePendingForAssignment(manager, assignment.id, now);
+      }
 
       await this.audit.record(
         {
@@ -717,6 +785,13 @@ export class QuestionnaireAssignmentService {
             employeeId: assignment.employeeId,
             detachedFromEmployeeId: assignment.detachedFromEmployeeId,
             previousStatus,
+            ...(submittedViaClose
+              ? {
+                  submittedViaClose: true,
+                  submissionId,
+                  submissionNumber,
+                }
+              : {}),
           },
         },
         manager,

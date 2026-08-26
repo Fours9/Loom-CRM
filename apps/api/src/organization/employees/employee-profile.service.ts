@@ -44,6 +44,7 @@ import { EmploymentCatalogService } from '../employment-catalog/employment-catal
 import { CurrentEmploymentAssignmentResolver } from '../employment-catalog/current-employment-assignment.resolver';
 import { BusinessDateClock } from './business-date-clock';
 import { didAssignmentHierarchyDrift } from './assignment-hierarchy-drift.policy';
+import { canMutateEmployeeOrgAssignment } from './can-mutate-employee-org-assignment.policy';
 import {
   getPositionBlockedReason,
   isCompanySelectable,
@@ -425,9 +426,7 @@ export class EmployeeProfileService {
     const admin = this.access.isAdmin(actor);
     return {
       canEditBasic: canEdit,
-      canEditEmployment:
-        canEdit &&
-        (admin || this.hasPerm(actor, Permission.EmployeesChangeAssignment)),
+      canEditEmployment: canEdit && canMutateEmployeeOrgAssignment(actor),
       canViewPersonal:
         admin ||
         owner ||

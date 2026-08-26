@@ -9,7 +9,6 @@
 
 import type { QuestionnaireSchemaJson } from '@loom/contracts-questionnaires';
 import { completionPercentVisible } from '@loom/questionnaire-schema';
-import { buildCompanyWorkFields } from './shared/company-work.fields';
 import { buildProfileMirrorIdentityFields } from './shared/profile-mirror-identity.fields';
 
 export const EMPLOYEE_360_TEMPLATE_CODE = 'employee-360';
@@ -207,11 +206,6 @@ export const EMPLOYEE_360_V1_SCHEMA = {
           requiredPolicy: 'voluntary',
         },
       ],
-    },
-    {
-      key: 'company_work',
-      label: 'Робота в компанії',
-      fields: buildCompanyWorkFields('full'),
     },
     {
       key: 'education',

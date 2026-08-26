@@ -29,6 +29,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -46,8 +47,13 @@ import { contentDisposition } from './employee-pdf-filename';
 import { EmployeeHistoryQueryDto } from './employee-history-query.dto';
 import { EmployeeListQueryDto } from './employee-list-query.dto';
 import { EmployeeAccessService } from '../access/employee-access.service';
-import { EmployeeSkillAssessmentsFacade } from '../skills/employee-skill-assessments.facade';
-import type { EmployeeSkillAssessmentListResponse } from '@loom/contracts-employees';
+import { EmployeeSkillMatrixService } from '../skills/employee-skill-matrix.service';
+import type {
+  CreateEmployeeSkillAssessmentRequest,
+  EmployeeSkillMatrixResponse,
+  UpdateEmployeeSkillAssessmentRequest,
+  UpsertEmployeeSkillAssessmentRequest,
+} from '@loom/contracts-employees';
 
 class CreateEmployeeDto {
   @IsString()
@@ -307,6 +313,30 @@ class StatusTransitionDto {
   @IsOptional() @IsString() reason?: string | null;
 }
 
+class CreateSkillAssessmentDto implements CreateEmployeeSkillAssessmentRequest {
+  @IsUUID()
+  skillId!: string;
+
+  @IsOptional()
+  @IsInt()
+  level?: number | null;
+}
+
+class UpdateSkillAssessmentDto implements UpdateEmployeeSkillAssessmentRequest {
+  @IsInt()
+  @ValidateIf((_, v) => v !== null)
+  level!: number | null;
+}
+
+class UpsertSkillAssessmentDto implements UpsertEmployeeSkillAssessmentRequest {
+  @IsUUID()
+  skillId!: string;
+
+  @IsInt()
+  @ValidateIf((_, v) => v !== null)
+  level!: number | null;
+}
+
 @Controller('employees')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class EmployeesController {
@@ -315,7 +345,7 @@ export class EmployeesController {
     private readonly profile: EmployeeProfileService,
     private readonly exportService: EmployeeProfileExportService,
     private readonly access: EmployeeAccessService,
-    private readonly assessmentsFacade: EmployeeSkillAssessmentsFacade,
+    private readonly skillMatrix: EmployeeSkillMatrixService,
   ) {}
 
   @Get()
@@ -394,34 +424,52 @@ export class EmployeesController {
 
   @Get(':id/skill-assessments')
   @RequirePermissions(Permission.EmployeesView)
-  async listSkillAssessments(
+  listSkillAssessments(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<EmployeeSkillAssessmentListResponse> {
-    const employee = await this.access.getEmployeeOrFail(id);
-    await this.access.requireCanView(user, employee);
-    const rows = await this.assessmentsFacade.listForEmployee(id);
-    return {
-      items: rows.map((row) => ({
-        id: row.id,
-        employeeId: row.employeeId,
-        skillId: row.skillId,
-        assessmentType: row.assessmentType,
-        level: row.level,
-        assessedBy: row.assessedBy,
-        assessedAt: row.assessedAt.toISOString(),
-        skill: row.skill
-          ? {
-              id: row.skill.id,
-              code: row.skill.code,
-              name: row.skill.name,
-              scaleKind: row.skill.scaleKind,
-              scaleMin: row.skill.scaleMin,
-              scaleMax: row.skill.scaleMax,
-            }
-          : null,
-      })),
-    };
+  ): Promise<EmployeeSkillMatrixResponse> {
+    return this.skillMatrix.listMatrix(user, id);
+  }
+
+  @Post(':id/skill-assessments')
+  @RequirePermissions(Permission.EmployeesEdit)
+  createSkillAssessment(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateSkillAssessmentDto,
+  ) {
+    return this.skillMatrix.createExtra(user, id, dto);
+  }
+
+  @Put(':id/skill-assessments')
+  @RequirePermissions(Permission.EmployeesEdit)
+  upsertSkillAssessment(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpsertSkillAssessmentDto,
+  ) {
+    return this.skillMatrix.upsertLevel(user, id, dto);
+  }
+
+  @Patch(':id/skill-assessments/:assessmentId')
+  @RequirePermissions(Permission.EmployeesEdit)
+  updateSkillAssessment(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('assessmentId', ParseUUIDPipe) assessmentId: string,
+    @Body() dto: UpdateSkillAssessmentDto,
+  ) {
+    return this.skillMatrix.updateLevel(user, id, assessmentId, dto);
+  }
+
+  @Delete(':id/skill-assessments/:assessmentId')
+  @RequirePermissions(Permission.EmployeesEdit)
+  deleteSkillAssessment(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('assessmentId', ParseUUIDPipe) assessmentId: string,
+  ) {
+    return this.skillMatrix.deleteExtra(user, id, assessmentId);
   }
 
   @Post(':id/employment-assignments')

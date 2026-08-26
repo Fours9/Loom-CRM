@@ -752,7 +752,11 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
       case 'add_skill': {
         const level =
           c.proposedLevel == null ? 'без оцінки' : String(c.proposedLevel);
-        return `Додати навичку · рівень: ${level}`;
+        const verb =
+          c.sourceAtSubmission === 'position_requirement'
+            ? 'Підтвердити оцінку навички'
+            : 'Додати навичку';
+        return `${verb} · рівень: ${level}`;
       }
       case 'field_update':
         return `${JSON.stringify(c.from ?? null)} → ${JSON.stringify(c.to ?? null)}`;
@@ -793,7 +797,7 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   closeAssignment(id: string): void {
     if (
       !window.confirm(
-        'Закрити анкету без можливості відновлення доступу до редагування? Відкріплення можна скасувати пізніше; закриття — ні.',
+        'Закрити анкету? Якщо є збережена чернетка, її буде подано і створено пропозиції до профілю; після закриття редагування буде недоступне.',
       )
     ) {
       return;

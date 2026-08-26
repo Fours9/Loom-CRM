@@ -24,6 +24,8 @@ import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { PasswordVisibilityToggleComponent } from '../shared/password-visibility-toggle.component';
 import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
 import { optionalOrgAssignmentIds } from './employee-org-assignment';
+import { resolveAbsencesOrgDirectionLabel } from './absences-org-direction-label';
+import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
 
 @Component({
   selector: 'app-employee-detail-page',
@@ -41,7 +43,15 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
       <section class="page">
         <a routerLink="/absences/employees" class="back">← До списку</a>
         <header class="hero">
-          <span class="swatch" [style.background]="employee.calendarColor"></span>
+          <div class="avatar" aria-hidden="true">
+            @if (employee.photoUrl) {
+              <img [src]="employee.photoUrl" alt="" />
+            } @else {
+              <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+                <path fill="currentColor" [attr.d]="personAvatarPath" />
+              </svg>
+            }
+          </div>
           <div class="hero-main">
             <div class="hero-row">
               <h1>{{ employee.fullName }}</h1>
@@ -52,7 +62,7 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
               }
             </div>
             <div class="hero-row hero-meta">
-              <p>#{{ employee.employeeNumber }} · {{ employee.departmentName }} · {{ employee.positionName }}</p>
+              <p>#{{ employee.employeeNumber }} · {{ heroOrgMeta }}</p>
               @if (!editingProfile && employee.permissions?.canEditProfile) {
                 <button type="button" class="ghost-btn" (click)="startEdit()">Редагувати</button>
               }
@@ -200,6 +210,10 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
 
                   <div class="section-block">
                     <h3>Посада</h3>
+                    <label>
+                      Напрямок
+                      <div class="value">{{ employee.directionName || '—' }}</div>
+                    </label>
                     <div class="row row-2">
                       <label>
                         Відділ
@@ -357,24 +371,36 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
                   </div>
                   <div class="section-block">
                     <h3>Посада</h3>
+                    <label>
+                      Напрямок
+                      <div class="value">{{ editDirectionName || '—' }}</div>
+                    </label>
                     <div class="row row-2">
                       <label>
                         Відділ
-                        <select [(ngModel)]="edit.departmentId" (ngModelChange)="onDepartmentChange($event)">
-                          <option value="">Не вказано</option>
-                          @for (d of departments; track d.id) {
-                            <option [value]="d.id">{{ d.name }}</option>
-                          }
-                        </select>
+                        @if (canEditOrgAssignment) {
+                          <select [(ngModel)]="edit.departmentId" (ngModelChange)="onDepartmentChange($event)">
+                            <option value="">Не вказано</option>
+                            @for (d of departments; track d.id) {
+                              <option [value]="d.id">{{ d.name }}</option>
+                            }
+                          </select>
+                        } @else {
+                          <div class="value">{{ employee.departmentName || '—' }}</div>
+                        }
                       </label>
                       <label>
                         Посада
-                        <select [(ngModel)]="edit.positionId">
-                          <option value="">Не вказано</option>
-                          @for (p of positions; track p.id) {
-                            <option [value]="p.id">{{ p.name }}</option>
-                          }
-                        </select>
+                        @if (canEditOrgAssignment) {
+                          <select [(ngModel)]="edit.positionId" (ngModelChange)="onPositionChange($event)">
+                            <option value="">Не вказано</option>
+                            @for (p of positions; track p.id) {
+                              <option [value]="p.id">{{ p.name }}</option>
+                            }
+                          </select>
+                        } @else {
+                          <div class="value">{{ employee.positionName || '—' }}</div>
+                        }
                       </label>
                     </div>
                     @if (isAdmin) {
@@ -893,6 +919,23 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
       .char-count { font-size: 0.8rem; }
       .value.pre { white-space: pre-wrap; }
       .swatch { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--pw-border); }
+      .avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        border: 1px solid var(--pw-border);
+        background: color-mix(in srgb, var(--pw-muted) 18%, transparent);
+        color: var(--pw-muted);
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        flex: 0 0 auto;
+      }
+      .avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
       .grid { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: stretch; }
       @media (min-width: 900px) {
         .grid { grid-template-columns: 1fr 1fr; }
@@ -1280,6 +1323,7 @@ export class EmployeeDetailPageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
+  readonly personAvatarPath = PERSON_AVATAR_PATH;
   readonly createRequestLink = buildCreateAbsenceRequestLink();
   readonly requestTypeLabel = requestTypeLabel;
   readonly requestPeriod = requestPeriod;
@@ -1334,6 +1378,32 @@ export class EmployeeDetailPageComponent implements OnInit {
 
   get isAdmin(): boolean {
     return this.auth.isAdmin();
+  }
+
+  get canEditOrgAssignment(): boolean {
+    return Boolean(this.employee?.permissions?.canEditOrgAssignment);
+  }
+
+  get heroOrgMeta(): string {
+    return [
+      this.employee?.directionName,
+      this.employee?.departmentName,
+      this.employee?.positionName,
+    ]
+      .map((v) => (v && String(v).trim()) || '—')
+      .join(' · ');
+  }
+
+  get editDirectionName(): string | null {
+    if (!this.canEditOrgAssignment) {
+      return this.employee?.directionName ?? null;
+    }
+    return resolveAbsencesOrgDirectionLabel({
+      departmentId: this.edit.departmentId || null,
+      positionId: this.edit.positionId || null,
+      departments: this.departments,
+      positions: this.positions,
+    });
   }
 
   get departmentItems(): MultiSelectItem[] {
@@ -1475,6 +1545,10 @@ export class EmployeeDetailPageComponent implements OnInit {
     this.reloadPositions(departmentId);
   }
 
+  onPositionChange(positionId: string): void {
+    this.edit.positionId = positionId;
+  }
+
   private reloadPositions(departmentId: string, keepPositionId?: string): void {
     const request = departmentId
       ? this.api.getPositions(departmentId)
@@ -1578,19 +1652,21 @@ export class EmployeeDetailPageComponent implements OnInit {
     // Never re-enter edit via ?edit=1 after an explicit save attempt.
     this.editQueryConsumed = true;
     const baseline = this.editBaseline;
-    const org = optionalOrgAssignmentIds({
-      departmentId: this.edit.departmentId,
-      positionId: this.edit.positionId,
-    });
     const body: Record<string, unknown> = {
       lastName: this.edit.lastName,
       firstName: this.edit.firstName,
       middleName: this.edit.middleName || null,
       phoneNumber: this.edit.phoneNumber || null,
       telegram: this.edit.telegram || null,
-      departmentId: org.departmentId,
-      positionId: org.positionId,
     };
+    if (this.canEditOrgAssignment) {
+      const org = optionalOrgAssignmentIds({
+        departmentId: this.edit.departmentId,
+        positionId: this.edit.positionId,
+      });
+      body['departmentId'] = org.departmentId;
+      body['positionId'] = org.positionId;
+    }
     if (this.isAdmin) {
       body['employeeNumber'] = this.edit.employeeNumber;
       body['calendarColor'] = this.edit.calendarColor;

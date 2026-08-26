@@ -16,6 +16,11 @@ import {
   EMPLOYEE_360_V1_SCHEMA,
 } from './employee-360-v1.schema';
 import {
+  EMPLOYEE_STARTER_TEMPLATE_CODE,
+  EMPLOYEE_STARTER_TEMPLATE_TITLE,
+  EMPLOYEE_STARTER_V1_SCHEMA,
+} from './employee-starter-v1.schema';
+import {
   EMPLOYEE_DOCS_TEMPLATE_CODE,
   EMPLOYEE_DOCS_TEMPLATE_TITLE,
   EMPLOYEE_DOCS_V1_SCHEMA,
@@ -61,6 +66,12 @@ export class QuestionnaireSeedService {
       title: EMPLOYEE_360_TEMPLATE_TITLE,
       type: 'full',
       schema: EMPLOYEE_360_V1_SCHEMA,
+    });
+    await this.ensurePublishedTemplate({
+      code: EMPLOYEE_STARTER_TEMPLATE_CODE,
+      title: EMPLOYEE_STARTER_TEMPLATE_TITLE,
+      type: 'full',
+      schema: EMPLOYEE_STARTER_V1_SCHEMA,
     });
     await this.ensurePublishedTemplate({
       code: EMPLOYEE_MANAGING_TEMPLATE_CODE,

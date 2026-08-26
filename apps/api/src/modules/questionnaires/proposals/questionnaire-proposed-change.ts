@@ -94,6 +94,22 @@ export function parseQuestionnaireProposedChange(
         'add_skill.sourceScale.max must be an integer',
       );
     }
+    const rawSource = raw['sourceAtSubmission'];
+    let sourceAtSubmission:
+      | 'position_requirement'
+      | 'questionnaire_extra'
+      | undefined;
+    if (rawSource !== undefined && rawSource !== null) {
+      if (
+        rawSource !== 'position_requirement' &&
+        rawSource !== 'questionnaire_extra'
+      ) {
+        throw new InvalidProposedChangeError(
+          'add_skill.sourceAtSubmission must be position_requirement or questionnaire_extra',
+        );
+      }
+      sourceAtSubmission = rawSource;
+    }
     return {
       kind: 'add_skill',
       section: 'skills',
@@ -103,6 +119,7 @@ export function parseQuestionnaireProposedChange(
       labelUa: raw['labelUa'],
       proposedLevel,
       sourceScale: { kind: scaleKind, min, max },
+      ...(sourceAtSubmission ? { sourceAtSubmission } : {}),
     };
   }
   throw new InvalidProposedChangeError(

@@ -102,6 +102,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
                 answersJson,
                 revision: 2,
               }),
+              save: jest.fn(async (row: unknown) => row),
             };
           }
           if (entity === QuestionnaireSubmission) {
@@ -219,6 +220,23 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
             duties: [],
           },
         })),
+        buildSnapshotForPosition: jest.fn(async () => ({
+          version: 2,
+          positionCatalog: {
+            employeeId: 'emp-1',
+            employmentAssignmentId: null,
+            positionId: null,
+            positionName: null,
+            departmentId: null,
+            departmentName: null,
+            directionId: null,
+            directionName: null,
+            capturedAt: '2026-01-01T00:00:00.000Z',
+            skills: [],
+            goalTemplates: [],
+            duties: [],
+          },
+        })),
       } as never,
       {} as never,
       {
@@ -231,6 +249,12 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       users as never,
       permissions as never,
       { ensureResponse: jest.fn() } as never,
+      {
+        submitWithinTransaction: jest.fn(async () => ({
+          id: 'sub-new',
+          submissionNumber: 2,
+        })),
+      } as never,
       audit as never,
       dataSource,
     );
@@ -241,7 +265,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       employeeId: assignment.employeeId,
     } as never);
 
-    return { service, assignment, deleted, deleteOrder, audit, access, users };
+    return { service, assignment, deleted, deleteOrder, audit, access, users, dataSource };
   }
 
   it.each([
@@ -492,5 +516,177 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
     await expect(
       ctx.service.deleteAssignment(adminActor(), 'a1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  describe('close dual policy', () => {
+    it('close-submit seals revision, supersedes old pending once, leaves new proposals pending', async () => {
+      const events: string[] = [];
+      const response = {
+        id: 'r1',
+        assignmentId: 'a1',
+        answersJson: {},
+        revision: 2,
+      };
+      const oldPending = {
+        id: 'p-old',
+        status: 'pending',
+        reviewedByUserId: null as string | null,
+        reviewedAt: null as Date | null,
+      };
+      const newPending = {
+        id: 'p-new',
+        status: 'pending',
+        reviewedByUserId: null as string | null,
+        reviewedAt: null as Date | null,
+      };
+      let proposalRows = [oldPending];
+
+      const assignment = {
+        id: 'a1',
+        employeeId: 'emp-1',
+        detachedFromEmployeeId: null,
+        status: 'in_progress',
+        contextJson: null,
+        templateVersion: {
+          id: 'tv1',
+          schemaJson: { steps: [] },
+          template: { code: 'employee-360', title: '360', type: 'full' },
+        },
+      } as unknown as QuestionnaireAssignment;
+
+      const makeManager = (): EntityManager =>
+        ({
+          getRepository: (entity: unknown) => {
+            if (entity === QuestionnaireAssignment) {
+              return {
+                createQueryBuilder: () => ({
+                  setLock: () => ({
+                    where: () => ({
+                      getOne: async () => assignment,
+                    }),
+                  }),
+                }),
+                findOne: async () => assignment,
+                save: async (row: QuestionnaireAssignment) => {
+                  Object.assign(assignment, row);
+                  events.push(`assignment:${assignment.status}`);
+                  return assignment;
+                },
+              };
+            }
+            if (entity === QuestionnaireResponse) {
+              return {
+                findOne: async () => response,
+                save: async (row: typeof response) => {
+                  Object.assign(response, row);
+                  events.push(`revision:${response.revision}`);
+                  return response;
+                },
+              };
+            }
+            if (entity === QuestionnaireProfileProposal) {
+              const chain: {
+                innerJoin: jest.Mock;
+                where: jest.Mock;
+                andWhere: jest.Mock;
+                getMany: jest.Mock;
+              } = {
+                innerJoin: jest.fn(() => chain),
+                where: jest.fn(() => chain),
+                andWhere: jest.fn(() => chain),
+                getMany: jest.fn(async () =>
+                  proposalRows.filter((p) => p.status === 'pending'),
+                ),
+              };
+              return {
+                createQueryBuilder: () => chain,
+                save: jest.fn(async (rows: typeof proposalRows) => {
+                  events.push('supersede');
+                  for (const p of rows) {
+                    p.status = 'superseded';
+                  }
+                  return rows;
+                }),
+              };
+            }
+            return {};
+          },
+        }) as unknown as EntityManager;
+
+      const dataSource = {
+        transaction: jest.fn(async (work: (m: EntityManager) => Promise<unknown>) =>
+          work(makeManager()),
+        ),
+      } as unknown as DataSource;
+
+      const submitWithinTransaction = jest.fn(async () => {
+        events.push('submit');
+        proposalRows = [oldPending, newPending];
+        newPending.status = 'pending';
+        assignment.status = 'submitted';
+        return { id: 'sub-new', submissionNumber: 2 };
+      });
+
+      const service = new QuestionnaireAssignmentService(
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        { find: jest.fn(async () => []) } as never,
+        { buildSnapshotForPosition: jest.fn() } as never,
+        {} as never,
+        {
+          repairContextJson: jest.fn(async (raw: unknown) => ({
+            contextJson: raw ?? null,
+            changed: false,
+          })),
+        } as never,
+        {
+          getEmployeeOrFail: jest.fn(async (id: string) => ({ id, userId: 'u' })),
+          requireCanView: jest.fn(),
+          isOwner: jest.fn(() => false),
+          isAdmin: jest.fn(() => true),
+        } as never,
+        {
+          findById: jest.fn(async () => ({
+            id: 'u',
+            status: UserStatus.Active,
+          })),
+        } as never,
+        {
+          has: jest.fn(() => true),
+        } as never,
+        { ensureResponse: jest.fn() } as never,
+        { submitWithinTransaction } as never,
+        {
+          record: jest.fn(async () => undefined),
+        } as never,
+        dataSource,
+      );
+      jest.spyOn(service, 'getDetail').mockResolvedValue({
+        id: 'a1',
+        status: 'closed',
+      } as never);
+
+      await service.close(adminActor(), 'a1');
+
+      expect(assignment.status).toBe('closed');
+      expect(response.revision).toBe(3);
+      expect(submitWithinTransaction).toHaveBeenCalledTimes(1);
+      expect(events.filter((e) => e === 'supersede')).toHaveLength(1);
+      expect(events.indexOf('supersede')).toBeLessThan(events.indexOf('submit'));
+      expect(newPending.status).toBe('pending');
+      expect(oldPending.status).toBe('superseded');
+    });
+
+    it('close from submitted supersedes pending without submitViaClose metadata', async () => {
+      const ctx = buildService({ status: 'submitted' });
+      await ctx.service.close(adminActor(), 'a1');
+      expect(ctx.assignment.status).toBe('closed');
+      const meta = (ctx.audit.record as jest.Mock).mock.calls[0][0].metadata;
+      expect(meta.previousStatus).toBe('submitted');
+      expect(meta.submittedViaClose).toBeUndefined();
+    });
   });
 });

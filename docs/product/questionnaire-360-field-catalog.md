@@ -107,7 +107,7 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | 2 | `family` | Сімейний стан | questionnaire_snapshot | in_mvp (voluntary; stay in snapshot) |
 | 2b | `celebration_dates` | Святкові дати | questionnaire_snapshot | in_mvp (split from family; gifts + ДН) |
 | 3 | `emergency` | Контакт на екстрений випадок | employee_profile | excluded from fill MVP (already Profile Core) |
-| 4 | `company_work` | Робота в компанії | questionnaire_snapshot | in_mvp (fill snapshot; Profile Core assignment remains SoT for org fields later) |
+| 4 | `company_work` | Робота в компанії | questionnaire_snapshot | **Managing only** (full 360 no longer includes this step; org SoT = Profile Core) |
 | 5 | `grade` | Грейд і рівень посади | questionnaire_snapshot | **managing** (no `net_salary`) |
 | 6 | `experience` | Професійний досвід | questionnaire_snapshot | in_mvp (full) |
 | 7 | `skills` | Матриця навичок | skills / questionnaire_snapshot | **managing** (`position_skills_matrix`) |
@@ -128,7 +128,7 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 
 | Template | Blocks / steps |
 | --- | --- |
-| `employee-360` (full) | profile_mirror · contacts · family · celebration_dates · experience · company_work · education · strengths · hobbies · work_style · consents |
+| `employee-360` (full) | profile_mirror · contacts · family · celebration_dates · experience · education · strengths · hobbies · work_style · consents |
 | `employee-managing` | profile_mirror · company_work · grade · skills · career_goals · probation_goals |
 | `employee-docs` | profile_mirror · onboarding · hr_documents |
 
@@ -202,9 +202,9 @@ Documented for completeness; `mvpStatus: excluded`. Existing `employee_emergency
 
 ---
 
-## Fields — block 4 `company_work` (in_mvp snapshot)
+## Fields — block 4 `company_work` (Managing)
 
-Fill step «Робота в компанії». Org assignment SoT remains Profile Core.
+Managing fill step «Робота в компанії». Org assignment SoT remains Profile Core. **Not** in `employee-360` (full).
 
 ### Full 360 — unchanged text snapshot
 

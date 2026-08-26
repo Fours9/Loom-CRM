@@ -430,6 +430,11 @@ export type QuestionnaireProposedChange =
         min: number;
         max: number;
       };
+      /**
+       * Frozen context source at submission (P1 UX).
+       * Missing on legacy rows → treat as questionnaire_extra for copy.
+       */
+      sourceAtSubmission?: 'position_requirement' | 'questionnaire_extra';
     };
 
 export type QuestionnaireProfileProposalItem = {

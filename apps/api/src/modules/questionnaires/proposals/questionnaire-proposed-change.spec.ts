@@ -17,20 +17,24 @@ describe('parseQuestionnaireProposedChange', () => {
     ).toMatchObject({ kind: 'field_update', field: 'city', to: 'Kyiv' });
   });
 
-  it('parses add_skill', () => {
-    expect(
-      parseQuestionnaireProposedChange({
+    it('parses add_skill with sourceAtSubmission', () => {
+      expect(
+        parseQuestionnaireProposedChange({
+          kind: 'add_skill',
+          section: 'skills',
+          field: 'sewing',
+          skillId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          skillCode: 'sewing',
+          labelUa: 'Пошиття',
+          proposedLevel: 3,
+          sourceScale: { kind: 'range', min: 0, max: 5 },
+          sourceAtSubmission: 'position_requirement',
+        }),
+      ).toMatchObject({
         kind: 'add_skill',
-        section: 'skills',
-        field: 'sewing',
-        skillId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-        skillCode: 'sewing',
-        labelUa: 'Пошиття',
-        proposedLevel: null,
-        sourceScale: { kind: 'range', min: 0, max: 5 },
-      }),
-    ).toMatchObject({ kind: 'add_skill', skillCode: 'sewing' });
-  });
+        sourceAtSubmission: 'position_requirement',
+      });
+    });
 
   it('fails closed without kind', () => {
     expect(() =>

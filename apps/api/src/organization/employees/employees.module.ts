@@ -28,6 +28,9 @@ import { OrganizationEmployeeIdentityLookup } from '../identity/organization-emp
 import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
 import { BusinessDateClock } from './business-date-clock';
 import { EmploymentAssignmentLifecycleService } from './employment-assignment-lifecycle.service';
+import { EmployeeSkillMatrixService } from '../skills/employee-skill-matrix.service';
+import { PositionSkillRequirement } from '../position-requirements/position-skill-requirement.entity';
+import { PermissionsModule } from '../../platform/permissions/permissions.module';
 
 @Module({
   imports: [
@@ -42,6 +45,7 @@ import { EmploymentAssignmentLifecycleService } from './employment-assignment-li
       Company,
       Direction,
       AuditLog,
+      PositionSkillRequirement,
     ]),
     DepartmentsModule,
     PositionsModule,
@@ -49,6 +53,7 @@ import { EmploymentAssignmentLifecycleService } from './employment-assignment-li
     EmploymentCatalogModule,
     IdentityModule,
     AuditModule,
+    PermissionsModule,
   ],
   providers: [
     EmployeesService,
@@ -59,6 +64,7 @@ import { EmploymentAssignmentLifecycleService } from './employment-assignment-li
     EmployeeContactsFacade,
     BusinessDateClock,
     EmploymentAssignmentLifecycleService,
+    EmployeeSkillMatrixService,
     PdfRenderer,
     OrganizationEmployeeIdentityLookup,
     {

@@ -14,6 +14,7 @@ import {
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { PasswordVisibilityToggleComponent } from '../shared/password-visibility-toggle.component';
 import { optionalOrgAssignmentIds } from './employee-org-assignment';
+import { resolveAbsencesOrgDirectionLabel } from './absences-org-direction-label';
 
 @Component({
   selector: 'app-employee-create-page',
@@ -196,7 +197,11 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
                 </label>
                 <label>
                   Посада
-                  <select [(ngModel)]="form.positionId" name="positionId">
+                  <select
+                    [(ngModel)]="form.positionId"
+                    name="positionId"
+                    (ngModelChange)="onPositionChange($event)"
+                  >
                     <option value="">Не вказано</option>
                     @for (p of positions; track p.id) {
                       <option [value]="p.id">{{ p.name }}</option>
@@ -204,6 +209,10 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
                   </select>
                 </label>
               </div>
+              <label>
+                Напрямок
+                <div class="value">{{ createDirectionName || '—' }}</div>
+              </label>
 
               @if (showManagedDepartments) {
                 <fieldset>
@@ -388,6 +397,14 @@ import { optionalOrgAssignmentIds } from './employee-org-assignment';
         gap: 0.75rem;
         margin-top: 0.15rem;
       }
+      .value {
+        margin-top: 0.25rem;
+        padding: 0.45rem 0.6rem;
+        border-radius: 8px;
+        border: 1px solid color-mix(in srgb, var(--pw-muted) 40%, transparent);
+        background: var(--pw-surface-2, color-mix(in srgb, var(--pw-muted) 8%, var(--pw-surface)));
+        color: var(--pw-text);
+      }
       .rights-absence-stack {
         display: grid;
         gap: 0.55rem;
@@ -571,6 +588,15 @@ export class EmployeeCreatePageComponent implements OnInit {
     );
   }
 
+  get createDirectionName(): string | null {
+    return resolveAbsencesOrgDirectionLabel({
+      departmentId: this.form.departmentId || null,
+      positionId: this.form.positionId || null,
+      departments: this.departments,
+      positions: this.positions,
+    });
+  }
+
   ngOnInit(): void {
     this.api.getDepartments(true).subscribe((d) => (this.departments = d.filter((x) => x.isActive && !x.isHidden)));
     this.reloadPositions();
@@ -600,6 +626,10 @@ export class EmployeeCreatePageComponent implements OnInit {
     this.form.departmentId = departmentId;
     this.form.positionId = '';
     this.reloadPositions();
+  }
+
+  onPositionChange(_positionId: string): void {
+    // Triggers createDirectionName recompute via form.positionId binding.
   }
 
   normalizeCalendarColor(): void {

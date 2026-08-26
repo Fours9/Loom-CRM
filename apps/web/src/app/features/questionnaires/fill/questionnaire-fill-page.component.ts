@@ -403,7 +403,11 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
       case 'add_skill': {
         const level =
           c.proposedLevel == null ? 'без оцінки' : String(c.proposedLevel);
-        return `Додати навичку · рівень: ${level}`;
+        const verb =
+          c.sourceAtSubmission === 'position_requirement'
+            ? 'Підтвердити оцінку навички'
+            : 'Додати навичку';
+        return `${verb} · рівень: ${level}`;
       }
       case 'field_update':
         return `${JSON.stringify(c.from ?? null)} → ${JSON.stringify(c.to ?? null)}`;

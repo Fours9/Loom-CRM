@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import type { QuestionnaireType } from '../questionnaire.enums';
 import { EMPLOYEE_360_TEMPLATE_CODE } from '../seed/employee-360-v1.schema';
+import { EMPLOYEE_STARTER_TEMPLATE_CODE } from '../seed/employee-starter-v1.schema';
 
 /** Fail-closed stable prefix map (no UA transliteration). */
 export function questionnaireAssignmentCodePrefix(
@@ -10,6 +11,9 @@ export function questionnaireAssignmentCodePrefix(
 ): string {
   if (templateCode === EMPLOYEE_360_TEMPLATE_CODE) {
     return '360';
+  }
+  if (templateCode === EMPLOYEE_STARTER_TEMPLATE_CODE) {
+    return 'STA';
   }
   switch (type) {
     case 'full':
