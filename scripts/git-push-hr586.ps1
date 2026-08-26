@@ -1,78 +1,68 @@
-# Push current master commits to hr586 WITHOUT Fours9-only commits
-# (e.g. docs/dev/git-dual-accounts.local.md).
+# Push shared commits from local master to hr586, skipping Fours9-only commits
+# (dual-remote cheat sheet). Uses `git cherry` so already-mirrored patches
+# (different SHAs after rewrite) are not re-applied.
 #
-# Usage (from repo root):
-#   pwsh -File scripts/git-push-hr586.ps1
-#
-# Local master may contain Fours9-only history; this replays only shared commits
-# onto hr586/master and force-with-lease updates that remote.
+# Usage (repo root):
+#   powershell -NoProfile -File scripts/git-push-hr586.ps1
 
 $ErrorActionPreference = 'Stop'
 Set-Location (Resolve-Path (Join-Path $PSScriptRoot '..'))
 
-$fours9OnlyPaths = @(
-  'docs/dev/git-dual-accounts.local.md'
-)
-
 function Test-Fours9OnlyCommit([string]$sha) {
-  $files = git diff-tree --no-commit-id --name-only -r $sha
-  if (-not $files) { return $false }
-  $list = @($files | Where-Object { $_ -and $_.Trim() })
-  if ($list.Count -eq 0) { return $false }
-  foreach ($f in $list) {
-    if ($fours9OnlyPaths -notcontains $f -and $f -ne '.gitignore') {
-      # Allow .gitignore-only together with cheat sheet as Fours9-only bundle
-      return $false
+  $files = @(git diff-tree --no-commit-id --name-only -r $sha | Where-Object { $_ })
+  if ($files.Count -eq 0) { return $false }
+  $hasCheat = $false
+  foreach ($f in $files) {
+    if ($f -eq 'docs/dev/git-dual-accounts.local.md') {
+      $hasCheat = $true
+      continue
     }
+    if ($f -eq '.gitignore') { continue }
+    return $false
   }
-  # All files are in fours9-only set (and optional .gitignore)
-  $hasCheat = $list | Where-Object { $_ -eq 'docs/dev/git-dual-accounts.local.md' }
-  return [bool]$hasCheat
+  return $hasCheat
 }
 
-git fetch hr586
-git fetch origin
+git fetch hr586 | Out-Null
 
-$start = (git rev-parse hr586/master).Trim()
-$tip = (git rev-parse master).Trim()
+$branch = '_hr586_push_tmp'
+git branch -D $branch 2>$null | Out-Null
 
-$shas = @(git rev-list --reverse "$start..$tip")
-if ($shas.Count -eq 0) {
-  Write-Host "hr586/master already has all shared commits from master."
-  exit 0
-}
-
+# Lines: "+ <sha>" = not on hr586; "- <sha>" = equivalent patch already there
+$cherry = @(git cherry hr586/master master)
 $toPick = @()
-foreach ($sha in $shas) {
-  $sha = $sha.Trim()
+foreach ($line in $cherry) {
+  if ($line -notmatch '^\+\s+([0-9a-f]+)') { continue }
+  $sha = $Matches[1]
   if (Test-Fours9OnlyCommit $sha) {
-    Write-Host "Skip Fours9-only commit $($sha.Substring(0,7)) $(git log -1 --format=%s $sha)"
+    $subj = (git log -1 --format=%s $sha)
+    Write-Host "Skip Fours9-only $($sha.Substring(0,7)) $subj"
     continue
   }
   $toPick += $sha
 }
 
 if ($toPick.Count -eq 0) {
-  Write-Host "Nothing to push to hr586 after filtering Fours9-only commits."
+  Write-Host 'hr586/master already has all shared commits (or only Fours9-only pending).'
   exit 0
 }
 
-$branch = "_hr586_push_tmp"
-git branch -D $branch 2>$null | Out-Null
 git checkout -B $branch hr586/master
-
+$failed = $false
 try {
   foreach ($sha in $toPick) {
+    Write-Host "Cherry-pick $($sha.Substring(0,7)) $(git log -1 --format=%s $sha)"
     git cherry-pick $sha
     if ($LASTEXITCODE -ne 0) {
+      $failed = $true
       throw "cherry-pick failed for $sha"
     }
   }
-  git push --force-with-lease hr586 "HEAD:master"
-  Write-Host "hr586/master updated (skipped Fours9-only commits)."
+  git push --force-with-lease hr586 "${branch}:master"
+  Write-Host 'hr586/master updated.'
 }
 finally {
-  git cherry-pick --abort 2>$null | Out-Null
-  git checkout master
+  if ($failed) { git cherry-pick --abort 2>$null | Out-Null }
+  git checkout master | Out-Null
   git branch -D $branch 2>$null | Out-Null
 }
