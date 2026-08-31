@@ -16,9 +16,9 @@ import { PositionsService } from '../positions/positions.service';
 import { EmployeeAccessService } from '../access/employee-access.service';
 import { Employee } from './employee.entity';
 import { WorkScheduleDay } from './work-schedule-day.entity';
-import { EmployeeManagedDepartment } from './employee-managed-department.entity';
 import { EmployeeContact } from './employee-contact.entity';
 import { EmploymentAssignment } from './employment-assignment.entity';
+import { EmploymentAssignmentManagedDepartment } from './employment-assignment-managed-department.entity';
 import { EmployeeSerializer } from './employee.serializer';
 import { AuditService } from '../../platform/audit/audit.service';
 import {
@@ -28,6 +28,13 @@ import {
 import type { EmployeeListQueryDto } from './employee-list-query.dto';
 import { pickLegacyOrgAssignmentPatch } from './legacy-org-assignment-patch';
 import type { DisplayedDirectionRef } from './resolve-employee-displayed-direction';
+import { IdentityRoleProjection } from './identity-role-projection';
+import {
+  loadPositionManagerTemplate,
+  replaceAssignmentManagedDepartments,
+  resolveManagerMembershipForCreate,
+} from './managed-department-writes';
+import { BusinessDateClock } from './business-date-clock';
 
 export type ScheduleDayInput = {
   weekday: number;
@@ -56,14 +63,15 @@ export type UpdateEmployeeInput = Partial<{
   personalEmail: string | null;
   comment: string | null;
   adminComment: string | null;
-  role: UserRole;
-  isDepartmentManager: boolean;
-  profileVisibilityOverride: string | null;
-  absenceVisibilityOverride: string | null;
-  showAbsenceTypeToPeersOverride: boolean | string | null;
-  managedDepartmentIds: string[];
   schedule: ScheduleDayInput[];
 }>;
+
+export type UpdateAccessSettingsInput = {
+  adminAccess?: boolean;
+  profileVisibilityOverride?: string | null;
+  absenceVisibilityOverride?: string | null;
+  showAbsenceTypeToPeersOverride?: boolean | string | null;
+};
 
 @Injectable()
 export class EmployeesService {
@@ -72,12 +80,12 @@ export class EmployeesService {
     private readonly employees: Repository<Employee>,
     @InjectRepository(WorkScheduleDay)
     private readonly schedules: Repository<WorkScheduleDay>,
-    @InjectRepository(EmployeeManagedDepartment)
-    private readonly managed: Repository<EmployeeManagedDepartment>,
     @InjectRepository(EmployeeContact)
     private readonly contacts: Repository<EmployeeContact>,
     @InjectRepository(EmploymentAssignment)
     private readonly assignments: Repository<EmploymentAssignment>,
+    @InjectRepository(EmploymentAssignmentManagedDepartment)
+    private readonly eaManaged: Repository<EmploymentAssignmentManagedDepartment>,
     private readonly access: EmployeeAccessService,
     private readonly departments: DepartmentsService,
     private readonly positions: PositionsService,
@@ -85,6 +93,8 @@ export class EmployeesService {
     private readonly serializer: EmployeeSerializer,
     private readonly audit: AuditService,
     private readonly dataSource: DataSource,
+    private readonly identityRoleProjection: IdentityRoleProjection,
+    private readonly businessDateClock: BusinessDateClock,
   ) {}
 
   async findAll(actor: User, query: EmployeeListQueryDto = {}) {
@@ -289,17 +299,29 @@ export class EmployeesService {
       where: { employeeId: id },
       order: { weekday: 'ASC' },
     });
-    const managed = await this.managed.find({ where: { employeeId: id } });
-    const managedDepartments = await Promise.all(
-      managed.map(async (m) => {
-        try {
-          const d = await this.departments.getOrFail(m.departmentId);
-          return { id: m.departmentId, name: d.name };
-        } catch {
-          return { id: m.departmentId, name: null as string | null };
-        }
-      }),
-    );
+
+    const activeEa = await this.assignments.findOne({
+      where: { employeeId: id, status: 'active' },
+      order: { startDate: 'DESC', id: 'DESC' },
+    });
+    let managedDepartmentIds: string[] = [];
+    let managedDepartments: { id: string; name: string | null }[] = [];
+    if (activeEa?.isDepartmentManager) {
+      const managed = await this.eaManaged.find({
+        where: { assignmentId: activeEa.id },
+      });
+      managedDepartmentIds = managed.map((m) => m.departmentId);
+      managedDepartments = await Promise.all(
+        managed.map(async (m) => {
+          try {
+            const d = await this.departments.getOrFail(m.departmentId);
+            return { id: m.departmentId, name: d.name };
+          } catch {
+            return { id: m.departmentId, name: null as string | null };
+          }
+        }),
+      );
+    }
 
     const assignmentDirection = await this.resolveAssignmentDirection(employee);
 
@@ -308,8 +330,16 @@ export class EmployeesService {
         assignmentDirection,
       })),
       schedule: schedule.map((day) => this.toScheduleDto(day)),
-      managedDepartmentIds: managed.map((m) => m.departmentId),
+      managedDepartmentIds,
       managedDepartments,
+      isDepartmentManager: Boolean(activeEa?.isDepartmentManager),
+      adminAccess: employee.role === UserRole.Admin,
+      computedRole:
+        employee.role === UserRole.Admin
+          ? activeEa?.isDepartmentManager
+            ? UserRole.DepartmentManager
+            : UserRole.Employee
+          : employee.role,
       profileVisibilityOverride: employee.profileVisibilityOverride,
       absenceVisibilityOverride: employee.absenceVisibilityOverride,
       showAbsenceTypeToPeersOverride: this.peerTypeOverrideFromColumn(
@@ -367,8 +397,6 @@ export class EmployeesService {
       departmentId?: string | null;
       positionId?: string | null;
       employeeNumber?: string;
-      role?: UserRole;
-      isDepartmentManager?: boolean;
       calendarColor?: string | null;
       phoneNumber?: string | null;
       telegram?: string | null;
@@ -379,7 +407,6 @@ export class EmployeesService {
       createAccount?: boolean;
       email?: string;
       temporaryPassword?: string;
-      managedDepartmentIds?: string[];
       profileVisibilityOverride?: string | null;
       absenceVisibilityOverride?: string | null;
       showAbsenceTypeToPeersOverride?: boolean | null;
@@ -389,86 +416,152 @@ export class EmployeesService {
     if (!this.access.isAdmin(actor)) {
       throw new ForbiddenException();
     }
-    if (dto.departmentId) await this.departments.getOrFail(dto.departmentId);
-    if (dto.positionId) await this.positions.getOrFail(dto.positionId);
+    const departmentId = this.optionalUuid(dto.departmentId);
+    const positionId = this.optionalUuid(dto.positionId);
+    if (departmentId) await this.departments.getOrFail(departmentId);
+    if (positionId) await this.positions.getOrFail(positionId);
 
-    const role = dto.role ?? UserRole.Employee;
-    const isDepartmentManager =
-      role === UserRole.DepartmentManager
-        ? true
-        : role === UserRole.Admin
-          ? Boolean(dto.isDepartmentManager)
-          : false;
+    // Derive prefix from Position template before create (no manual role)
+    let prefixRole: UserRole = UserRole.Employee;
+    if (positionId) {
+      const pos = await this.positions.getOrFail(positionId);
+      if (pos.isDepartmentManagerTemplate) {
+        prefixRole = UserRole.DepartmentManager;
+      }
+    }
     const employeeNumber =
       dto.employeeNumber?.trim() ||
-      (await this.previewNextEmployeeNumber(actor, role)).employeeNumber;
+      (await this.previewNextEmployeeNumber(actor, prefixRole)).employeeNumber;
 
-    let userId: string | null = null;
-    if (dto.createAccount) {
-      if (!dto.email || !dto.temporaryPassword) {
-        throw new BadRequestException(
-          'email and temporaryPassword are required when createAccount=true',
-        );
-      }
-      const email = dto.email.toLowerCase().trim();
-      if (await this.users.findByEmail(email)) {
-        throw new ConflictException('Email already in use');
-      }
-      const user = await this.users.createUser({
-        email,
-        passwordHash: await bcrypt.hash(dto.temporaryPassword, 12),
-        role,
-        mustChangePassword: true,
+    const createdId = await this.dataSource.transaction(async (manager) => {
+      const employeeRepo = manager.getRepository(Employee);
+      const assignmentRepo = manager.getRepository(EmploymentAssignment);
+
+      const emp = await employeeRepo.save(
+        employeeRepo.create({
+          firstName: dto.firstName.trim(),
+          lastName: dto.lastName.trim(),
+          middleName: dto.middleName?.trim() || null,
+          departmentId,
+          positionId,
+          employeeNumber,
+          role: UserRole.Employee,
+          userId: null,
+          calendarColor: dto.calendarColor ?? null,
+          phoneNumber: dto.phoneNumber ?? null,
+          telegram: dto.telegram ?? null,
+          workEmail: dto.workEmail ?? null,
+          personalPhoneNumber: dto.personalPhoneNumber ?? null,
+          personalTelegram: dto.personalTelegram ?? null,
+          personalEmail: dto.personalEmail ?? null,
+          isDepartmentManager: false,
+          profileVisibilityOverride: dto.profileVisibilityOverride ?? null,
+          absenceVisibilityOverride: dto.absenceVisibilityOverride ?? null,
+          showAbsenceTypeToPeersOverride: this.peerTypeOverrideToColumn(
+            dto.showAbsenceTypeToPeersOverride,
+          ),
+          isActive: true,
+        }),
+      );
+
+      const { position, managedDepartmentIds: templateDepts } =
+        await loadPositionManagerTemplate(manager, positionId);
+      const membership = resolveManagerMembershipForCreate({
+        position,
+        positionManagedDepartmentIds: templateDepts,
+        assignmentDepartmentId: departmentId,
       });
-      userId = user.id;
-    }
 
-    const emp = await this.employees.save(
-      this.employees.create({
-        firstName: dto.firstName.trim(),
-        lastName: dto.lastName.trim(),
-        middleName: dto.middleName?.trim() || null,
-        departmentId: this.optionalUuid(dto.departmentId),
-        positionId: this.optionalUuid(dto.positionId),
-        employeeNumber,
-        role,
-        userId,
-        calendarColor: dto.calendarColor ?? null,
-        phoneNumber: dto.phoneNumber ?? null,
-        telegram: dto.telegram ?? null,
-        workEmail: dto.workEmail ?? null,
-        personalPhoneNumber: dto.personalPhoneNumber ?? null,
-        personalTelegram: dto.personalTelegram ?? null,
-        personalEmail: dto.personalEmail ?? null,
-        isDepartmentManager,
-        profileVisibilityOverride: dto.profileVisibilityOverride ?? null,
-        absenceVisibilityOverride: dto.absenceVisibilityOverride ?? null,
-        showAbsenceTypeToPeersOverride: this.peerTypeOverrideToColumn(
-          dto.showAbsenceTypeToPeersOverride,
-        ),
-        isActive: true,
-      }),
-    );
+      let companyId: string | null = null;
+      let directionId: string | null = null;
+      if (departmentId) {
+        const dept = await this.departments.getOrFail(departmentId);
+        directionId = dept.directionId ?? null;
+        // company via direction if available — leave null if unknown
+      }
 
-    if (dto.managedDepartmentIds !== undefined) {
-      await this.replaceManagedDepartments(emp.id, dto.managedDepartmentIds);
-    }
+      const today = this.businessDateClock.today();
+      const assignment = await assignmentRepo.save(
+        assignmentRepo.create({
+          employeeId: emp.id,
+          companyId,
+          directionId,
+          departmentId,
+          positionId,
+          status: 'active',
+          startDate: today,
+          isDepartmentManager: membership.isDepartmentManager,
+          createdByUserId: actor.id,
+        }),
+      );
+      await replaceAssignmentManagedDepartments(
+        manager,
+        assignment.id,
+        membership.managedDepartmentIds,
+      );
 
-    if (dto.schedule?.length === 7) {
-      await this.replaceScheduleInternal(emp.id, dto.schedule);
-    } else {
-      await this.replaceScheduleInternal(emp.id, this.defaultSchedule());
-    }
+      emp.currentAssignmentId = assignment.id;
+      emp.departmentId = assignment.departmentId;
+      emp.positionId = assignment.positionId;
+      await employeeRepo.save(emp);
 
-    await this.audit.record({
-      actorId: actor.id,
-      action: 'employee.created',
-      entityType: 'Employee',
-      entityId: emp.id,
-      metadata: { employeeNumber: emp.employeeNumber },
+      await this.identityRoleProjection.apply(manager, emp, {
+        adminAccess: 'preserve',
+      });
+
+      if (dto.createAccount) {
+        if (!dto.email || !dto.temporaryPassword) {
+          throw new BadRequestException(
+            'email and temporaryPassword are required when createAccount=true',
+          );
+        }
+        const email = dto.email.toLowerCase().trim();
+        const existing = await manager.getRepository(User).findOne({
+          where: { email },
+        });
+        if (existing) {
+          throw new ConflictException('Email already in use');
+        }
+        const fresh = await employeeRepo.findOneOrFail({ where: { id: emp.id } });
+        const userRepo = manager.getRepository(User);
+        const user = await userRepo.save(
+          userRepo.create({
+            email,
+            passwordHash: await bcrypt.hash(dto.temporaryPassword, 12),
+            role: fresh.role as UserRole,
+            isDepartmentManager: false,
+            status: UserStatus.Active,
+            mustChangePassword: true,
+            tokenVersion: 0,
+            passwordChangedAt: null,
+            lastLoginAt: null,
+          }),
+        );
+        fresh.userId = user.id;
+        await employeeRepo.save(fresh);
+      }
+
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.created',
+          entityType: 'Employee',
+          entityId: emp.id,
+          metadata: { employeeNumber: emp.employeeNumber },
+        },
+        manager,
+      );
+
+      return emp.id;
     });
 
-    return this.findOne(actor, emp.id);
+    if (dto.schedule?.length === 7) {
+      await this.replaceScheduleInternal(createdId, dto.schedule);
+    } else {
+      await this.replaceScheduleInternal(createdId, this.defaultSchedule());
+    }
+
+    return this.findOne(actor, createdId);
   }
 
   async update(actor: User, id: string, dto: UpdateEmployeeInput) {
@@ -484,6 +577,8 @@ export class EmployeesService {
     if (dto.employeeNumber !== undefined && this.access.isAdmin(actor)) {
       employee.employeeNumber = dto.employeeNumber.trim();
     }
+    // Legacy org patch: display mirror only — Access SoT is active EA.
+    // Prefer EA writer; Absences should be read-only for dept/position.
     const orgPatch = pickLegacyOrgAssignmentPatch(actor, dto);
     if (orgPatch.departmentId !== undefined) {
       const departmentId = this.optionalUuid(orgPatch.departmentId);
@@ -500,11 +595,6 @@ export class EmployeesService {
     if (dto.phoneNumber !== undefined) employee.phoneNumber = dto.phoneNumber;
     if (dto.telegram !== undefined) employee.telegram = dto.telegram;
     if (dto.workEmail !== undefined) employee.workEmail = dto.workEmail;
-    if (dto.role !== undefined && this.access.isAdmin(actor))
-      employee.role = dto.role;
-    if (dto.isDepartmentManager !== undefined && this.access.isAdmin(actor)) {
-      employee.isDepartmentManager = dto.isDepartmentManager;
-    }
     if (
       dto.personalPhoneNumber !== undefined &&
       this.access.canEditPersonalContacts(actor)
@@ -535,32 +625,8 @@ export class EmployeesService {
     ) {
       employee.adminComment = dto.adminComment;
     }
-    if (
-      dto.profileVisibilityOverride !== undefined &&
-      this.access.canEditVisibilityOverrides(actor, employee.role)
-    ) {
-      employee.profileVisibilityOverride = dto.profileVisibilityOverride;
-    }
-    if (
-      dto.absenceVisibilityOverride !== undefined &&
-      this.access.canEditVisibilityOverrides(actor, employee.role)
-    ) {
-      employee.absenceVisibilityOverride = dto.absenceVisibilityOverride;
-    }
-    if (
-      dto.showAbsenceTypeToPeersOverride !== undefined &&
-      this.access.canEditVisibilityOverrides(actor, employee.role)
-    ) {
-      employee.showAbsenceTypeToPeersOverride = this.peerTypeOverrideToColumn(
-        dto.showAbsenceTypeToPeersOverride,
-      );
-    }
 
     await this.employees.save(employee);
-
-    if (dto.managedDepartmentIds !== undefined && this.access.isAdmin(actor)) {
-      await this.replaceManagedDepartments(id, dto.managedDepartmentIds);
-    }
 
     if (dto.schedule?.length === 7) {
       await this.replaceScheduleInternal(id, dto.schedule);
@@ -577,10 +643,120 @@ export class EmployeesService {
     return this.findOne(actor, id);
   }
 
-  async previewNextEmployeeNumber(actor: User, role: UserRole) {
+  async updateAccessSettings(
+    actor: User,
+    id: string,
+    dto: UpdateAccessSettingsInput,
+  ) {
+    if (!this.access.isAdmin(actor)) {
+      throw new ForbiddenException();
+    }
+    await this.access.getEmployeeOrFail(id);
+
+    await this.dataSource.transaction(async (manager) => {
+      const employeeRepo = manager.getRepository(Employee);
+      const emp = await employeeRepo.findOne({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!emp) throw new NotFoundException('Employee not found');
+
+      const before = {
+        role: emp.role,
+        profileVisibilityOverride: emp.profileVisibilityOverride,
+        absenceVisibilityOverride: emp.absenceVisibilityOverride,
+        showAbsenceTypeToPeersOverride: emp.showAbsenceTypeToPeersOverride,
+      };
+
+      if (
+        dto.profileVisibilityOverride !== undefined &&
+        this.access.canEditVisibilityOverrides(actor, emp.role)
+      ) {
+        emp.profileVisibilityOverride = dto.profileVisibilityOverride;
+      }
+      if (
+        dto.absenceVisibilityOverride !== undefined &&
+        this.access.canEditVisibilityOverrides(actor, emp.role)
+      ) {
+        emp.absenceVisibilityOverride = dto.absenceVisibilityOverride;
+      }
+      if (
+        dto.showAbsenceTypeToPeersOverride !== undefined &&
+        this.access.canEditVisibilityOverrides(actor, emp.role)
+      ) {
+        emp.showAbsenceTypeToPeersOverride = this.peerTypeOverrideToColumn(
+          dto.showAbsenceTypeToPeersOverride,
+        );
+      }
+      await employeeRepo.save(emp);
+
+      if (dto.adminAccess !== undefined) {
+        await this.identityRoleProjection.apply(manager, emp, {
+          adminAccess: dto.adminAccess,
+        });
+      }
+
+      const after = await employeeRepo.findOneOrFail({ where: { id } });
+      await this.audit.record(
+        {
+          actorId: actor.id,
+          action: 'employee.access_settings_updated',
+          entityType: 'Employee',
+          entityId: id,
+          metadata: {
+            before,
+            after: {
+              role: after.role,
+              profileVisibilityOverride: after.profileVisibilityOverride,
+              absenceVisibilityOverride: after.absenceVisibilityOverride,
+              showAbsenceTypeToPeersOverride:
+                after.showAbsenceTypeToPeersOverride,
+            },
+          },
+        },
+        manager,
+      );
+    });
+
+    return this.findOne(actor, id);
+  }
+
+  async updateAccountEmail(actor: User, id: string, email: string) {
+    const employee = await this.access.getEmployeeOrFail(id);
+    if (!this.access.canEditAccountEmail(actor, employee)) {
+      throw new ForbiddenException();
+    }
+    if (!employee.userId) throw new BadRequestException('No account');
+    const normalized = email.toLowerCase().trim();
+    if (!normalized) throw new BadRequestException('Email required');
+    const existing = await this.users.findByEmail(normalized);
+    if (existing && existing.id !== employee.userId) {
+      throw new ConflictException('Email already in use');
+    }
+    const user = await this.users.getByIdOrFail(employee.userId);
+    const before = user.email;
+    user.email = normalized;
+    user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+    await this.users.save(user);
+    await this.audit.record({
+      actorId: actor.id,
+      action: 'employee.account_email_updated',
+      entityType: 'Employee',
+      entityId: id,
+      metadata: { before, after: normalized },
+    });
+    return this.findOne(actor, id);
+  }
+
+  async previewNextEmployeeNumber(actor: User, role?: UserRole) {
     if (!this.access.isAdmin(actor)) throw new ForbiddenException();
+    const effective = role ?? UserRole.Employee;
     const prefix =
-      role === UserRole.Admin ? 'A' : role === UserRole.DepartmentManager ? 'M' : 'E';
+      effective === UserRole.Admin
+        ? 'A'
+        : effective === UserRole.DepartmentManager
+          ? 'M'
+          : 'E';
     const rows = await this.employees
       .createQueryBuilder('e')
       .select('e.employee_number', 'employeeNumber')
@@ -594,10 +770,28 @@ export class EmployeesService {
     return { employeeNumber: `${prefix}-${String(max + 1).padStart(3, '0')}` };
   }
 
+  async previewNextEmployeeNumberFromPosition(
+    actor: User,
+    positionId?: string | null,
+  ) {
+    let role: UserRole = UserRole.Employee;
+    if (positionId) {
+      try {
+        const pos = await this.positions.getOrFail(positionId);
+        if (pos.isDepartmentManagerTemplate) {
+          role = UserRole.DepartmentManager;
+        }
+      } catch {
+        /* ignore invalid position for preview */
+      }
+    }
+    return this.previewNextEmployeeNumber(actor, role);
+  }
+
   async attachAccount(
     actor: User,
     id: string,
-    dto: { email: string; temporaryPassword: string; role?: UserRole },
+    dto: { email: string; temporaryPassword: string },
   ) {
     const employee = await this.access.getEmployeeOrFail(id);
     if (!this.access.canCreateEmployeeAccount(actor, employee)) {
@@ -607,16 +801,38 @@ export class EmployeesService {
     if (await this.users.findByEmail(email)) {
       throw new ConflictException('Email already in use');
     }
-    const role = dto.role ?? employee.role;
-    const user = await this.users.createUser({
-      email,
-      passwordHash: await bcrypt.hash(dto.temporaryPassword, 12),
-      role,
-      mustChangePassword: true,
+
+    await this.dataSource.transaction(async (manager) => {
+      const employeeRepo = manager.getRepository(Employee);
+      const emp = await employeeRepo.findOne({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!emp) throw new NotFoundException('Employee not found');
+
+      await this.identityRoleProjection.apply(manager, emp, {
+        adminAccess: 'preserve',
+      });
+      const fresh = await employeeRepo.findOneOrFail({ where: { id } });
+
+      const userRepo = manager.getRepository(User);
+      const user = await userRepo.save(
+        userRepo.create({
+          email,
+          passwordHash: await bcrypt.hash(dto.temporaryPassword, 12),
+          role: fresh.role as UserRole,
+          isDepartmentManager: false,
+          status: UserStatus.Active,
+          mustChangePassword: true,
+          tokenVersion: 0,
+          passwordChangedAt: null,
+          lastLoginAt: null,
+        }),
+      );
+      fresh.userId = user.id;
+      await employeeRepo.save(fresh);
     });
-    employee.userId = user.id;
-    employee.role = role;
-    await this.employees.save(employee);
+
     return this.findOne(actor, id);
   }
 
@@ -699,23 +915,6 @@ export class EmployeesService {
     }
     await this.replaceScheduleInternal(employeeId, days);
     return this.getSchedule(actor, employeeId);
-  }
-
-  private async replaceManagedDepartments(
-    employeeId: string,
-    departmentIds: string[],
-  ): Promise<void> {
-    const unique = [...new Set(departmentIds.filter(Boolean))];
-    for (const departmentId of unique) {
-      await this.departments.getOrFail(departmentId);
-    }
-    await this.managed.delete({ employeeId });
-    if (!unique.length) return;
-    await this.managed.save(
-      unique.map((departmentId) =>
-        this.managed.create({ employeeId, departmentId }),
-      ),
-    );
   }
 
   /** Persist Absences FE boolean override into text column; pass-through strings. */

@@ -2,15 +2,11 @@
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
-import { Department, Position, ScheduleDay, UserRole, CreateEmployeePayload } from '../core/api/models';
+import { Department, Position, ScheduleDay, CreateEmployeePayload } from '../core/api/models';
 import {
   defaultSchedule,
   normalizeSchedulePayload,
 } from '../core/schedule/schedule.util';
-import {
-  MultiSelectItem,
-  MultiSelectListComponent,
-} from '../shared/multi-select-list.component';
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { PasswordVisibilityToggleComponent } from '../shared/password-visibility-toggle.component';
 import { optionalOrgAssignmentIds } from './employee-org-assignment';
@@ -22,7 +18,6 @@ import { resolveAbsencesOrgDirectionLabel } from './absences-org-direction-label
   imports: [
     FormsModule,
     RouterLink,
-    MultiSelectListComponent,
     ScheduleEditorComponent,
     PasswordVisibilityToggleComponent,
   ],
@@ -163,24 +158,6 @@ import { resolveAbsencesOrgDirectionLabel } from './absences-org-direction-label
           <details class="section-block disclose" open>
             <summary>Посада</summary>
             <div class="disclose-body">
-              <div class="row row-1">
-                <label>
-                  Роль
-                  <select [(ngModel)]="form.role" name="role" (ngModelChange)="onRoleChange()">
-                    <option value="employee">Працівник</option>
-                    <option value="department_manager">Менеджер відділу</option>
-                    <option value="admin">Адміністратор</option>
-                  </select>
-                </label>
-              </div>
-
-              @if (form.role === 'admin') {
-                <label class="check-row">
-                  <input type="checkbox" [(ngModel)]="form.isDepartmentManager" name="isDepartmentManager" />
-                  Також менеджер відділу
-                </label>
-              }
-
               <div class="row row-2">
                 <label>
                   Власний відділ
@@ -213,68 +190,8 @@ import { resolveAbsencesOrgDirectionLabel } from './absences-org-direction-label
                 Напрямок
                 <div class="value">{{ createDirectionName || '—' }}</div>
               </label>
-
-              @if (showManagedDepartments) {
-                <fieldset>
-                  <legend>Керовані відділи (окремо від власного)</legend>
-                  <app-multi-select-list
-                    [items]="departmentItems"
-                    [selectedIds]="managedIds"
-                    [showSelectAll]="true"
-                    placeholder="Оберіть керовані відділи"
-                    (selectedIdsChange)="managedIds = $event"
-                  />
-                </fieldset>
-              }
             </div>
           </details>
-
-          @if (form.role === 'employee' || form.role === 'department_manager') {
-            <details class="section-block disclose" open>
-              <summary>Права</summary>
-              <div class="disclose-body">
-                <div class="row row-2">
-                  <label>
-                    Чужі анкети
-                    <select [(ngModel)]="profileOverride" name="profileOverride">
-                      <option value="inherit">Успадковувати глобальні налаштування</option>
-                      <option value="all">Усі працівники</option>
-                      <option value="own_department">Лише свій відділ</option>
-                      <option value="deny">Заборонити</option>
-                    </select>
-                  </label>
-                  <div class="rights-absence-stack">
-                    <label>
-                      Чужі відсутності
-                      <select
-                        [(ngModel)]="absencesOverride"
-                        name="absencesOverride"
-                        (ngModelChange)="onAbsencesOverrideChange()"
-                      >
-                        <option value="inherit">Успадковувати глобальні налаштування</option>
-                        <option value="all">Усі підтверджені відсутності</option>
-                        <option value="own_department">Лише свій відділ</option>
-                        <option value="deny">Заборонити</option>
-                      </select>
-                    </label>
-                    @if (absencesOverride !== 'deny') {
-                      <div class="rights-subsetting">
-                        <p class="nested-caption">Підрежим режиму видимості відсутностей</p>
-                        <label>
-                          Деталі (тип / причина)
-                          <select [(ngModel)]="absenceTypeDetailOverride" name="absenceTypeDetailOverride">
-                            <option value="inherit">Успадковувати глобальні налаштування</option>
-                            <option value="full">Повна інформація</option>
-                            <option value="hide_type">Не вказувати тип (причину)</option>
-                          </select>
-                        </label>
-                      </div>
-                    }
-                  </div>
-                </div>
-              </div>
-            </details>
-          }
         </form>
 
         <aside class="card schedule-card">
@@ -548,10 +465,6 @@ export class EmployeeCreatePageComponent implements OnInit {
 
   departments: Department[] = [];
   positions: Position[] = [];
-  managedIds: string[] = [];
-  profileOverride: 'inherit' | 'all' | 'own_department' | 'deny' = 'inherit';
-  absencesOverride: 'inherit' | 'all' | 'own_department' | 'deny' = 'inherit';
-  absenceTypeDetailOverride: 'inherit' | 'full' | 'hide_type' = 'inherit';
   loading = false;
   error = '';
   showTemporaryPassword = false;
@@ -570,23 +483,10 @@ export class EmployeeCreatePageComponent implements OnInit {
     personalPhoneNumber: '',
     personalTelegram: '',
     temporaryPassword: 'TempPass123!',
-    role: 'employee' as UserRole,
-    isDepartmentManager: false,
     departmentId: '',
     positionId: '',
     calendarColor: '#2A6FDB',
   };
-
-  get departmentItems(): MultiSelectItem[] {
-    return this.departments.map((d) => ({ id: d.id, label: d.name }));
-  }
-
-  get showManagedDepartments(): boolean {
-    return (
-      this.form.role === 'department_manager' ||
-      (this.form.role === 'admin' && this.form.isDepartmentManager)
-    );
-  }
 
   get createDirectionName(): string | null {
     return resolveAbsencesOrgDirectionLabel({
@@ -600,17 +500,6 @@ export class EmployeeCreatePageComponent implements OnInit {
   ngOnInit(): void {
     this.api.getDepartments(true).subscribe((d) => (this.departments = d.filter((x) => x.isActive && !x.isHidden)));
     this.reloadPositions();
-  }
-
-  onRoleChange(): void {
-    if (this.form.role === 'department_manager') {
-      this.form.isDepartmentManager = true;
-    } else if (this.form.role !== 'admin') {
-      this.form.isDepartmentManager = false;
-    }
-    if (!this.showManagedDepartments) {
-      this.managedIds = [];
-    }
   }
 
   onCreateAccountChange(): void {
@@ -660,37 +549,9 @@ export class EmployeeCreatePageComponent implements OnInit {
     this.api.getPositions(undefined, false, true).subscribe((p) => (this.positions = p));
   }
 
-  private toOverride(
-    value: 'inherit' | 'all' | 'own_department' | 'deny',
-  ): 'all' | 'own_department' | 'deny' | null {
-    if (value === 'inherit') return null;
-    return value;
-  }
-
-  private toTypeDetailOverride(
-    value: 'inherit' | 'full' | 'hide_type',
-  ): boolean | null {
-    if (value === 'inherit') return null;
-    return value === 'full';
-  }
-
-  onAbsencesOverrideChange(): void {
-    if (this.absencesOverride === 'deny') {
-      this.absenceTypeDetailOverride = 'inherit';
-    }
-  }
-
   submit(): void {
     this.error = '';
     this.loading = true;
-    const canOverride =
-      this.form.role === 'employee' || this.form.role === 'department_manager';
-    const isDeptMgr =
-      this.form.role === 'department_manager'
-        ? true
-        : this.form.role === 'admin'
-          ? this.form.isDepartmentManager
-          : false;
     const org = optionalOrgAssignmentIds({
       departmentId: this.form.departmentId,
       positionId: this.form.positionId,
@@ -706,22 +567,9 @@ export class EmployeeCreatePageComponent implements OnInit {
       personalEmail: this.form.personalEmail || undefined,
       personalPhoneNumber: this.form.personalPhoneNumber || undefined,
       personalTelegram: this.form.personalTelegram || undefined,
-      role: this.form.role,
-      isDepartmentManager: isDeptMgr,
       departmentId: org.departmentId,
       positionId: org.positionId,
       calendarColor: this.form.calendarColor,
-      managedDepartmentIds: this.showManagedDepartments ? this.managedIds : undefined,
-      profileVisibilityOverride: canOverride
-        ? this.toOverride(this.profileOverride)
-        : null,
-      absenceVisibilityOverride: canOverride
-        ? this.toOverride(this.absencesOverride)
-        : null,
-      showAbsenceTypeToPeersOverride:
-        canOverride && this.absencesOverride !== 'deny'
-          ? this.toTypeDetailOverride(this.absenceTypeDetailOverride)
-          : null,
       schedule: normalizeSchedulePayload(this.schedule),
     };
     if (this.form.createAccount) {

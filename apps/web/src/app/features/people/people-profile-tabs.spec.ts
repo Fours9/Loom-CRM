@@ -1,11 +1,13 @@
 import { Permission } from '@loom/contracts-auth';
 import type { EmployeeProfileCapabilities } from '@loom/contracts-employees';
 import {
+  canShowAccountAdminTab,
+  canShowRoleAccessAdminTab,
   resolvePeopleProfileTab,
   visiblePeopleProfileTabs,
 } from './people-profile-tabs';
 
-const capsViewHistory: EmployeeProfileCapabilities = {
+const capsBase: EmployeeProfileCapabilities = {
   canEditBasic: false,
   canEditEmployment: false,
   canViewPersonal: false,
@@ -14,23 +16,41 @@ const capsViewHistory: EmployeeProfileCapabilities = {
   canEditEmergencyContact: false,
   canChangeStatus: false,
   canExport: false,
-  canViewHistory: true,
+  canViewHistory: false,
   canStartOnboarding: false,
   canAssignQuestionnaire: false,
   canCreateAccount: false,
   canResetPassword: false,
   canManageAccount: false,
   canDeleteEmployee: false,
+  canEditAdminAccess: false,
+  canEditVisibilityOverrides: false,
+  canViewAccountDetails: false,
+  canEditAccountEmail: false,
+};
+
+const capsViewHistory: EmployeeProfileCapabilities = {
+  ...capsBase,
+  canViewHistory: true,
 };
 
 const capsNoHistory: EmployeeProfileCapabilities = {
-  ...capsViewHistory,
-  canViewHistory: false,
+  ...capsBase,
 };
 
 const capsAccountOnly: EmployeeProfileCapabilities = {
-  ...capsNoHistory,
+  ...capsBase,
   canCreateAccount: true,
+};
+
+const capsRoleAccessOnly: EmployeeProfileCapabilities = {
+  ...capsBase,
+  canEditAdminAccess: true,
+};
+
+const capsVisibilityOnly: EmployeeProfileCapabilities = {
+  ...capsBase,
+  canEditVisibilityOverrides: true,
 };
 
 const allPerms: Permission[] = [
@@ -94,6 +114,22 @@ describe('visiblePeopleProfileTabs', () => {
     expect(tabs.some((t) => t.id === 'administration')).toBe(true);
   });
 
+  it('shows administration when canEditAdminAccess is true', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsRoleAccessOnly,
+      permissions: allPerms,
+    });
+    expect(tabs.some((t) => t.id === 'administration')).toBe(true);
+  });
+
+  it('shows administration when canEditVisibilityOverrides is true', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsVisibilityOnly,
+      permissions: allPerms,
+    });
+    expect(tabs.some((t) => t.id === 'administration')).toBe(true);
+  });
+
   it('hides documents without documents.view', () => {
     const tabs = visiblePeopleProfileTabs({
       capabilities: capsViewHistory,
@@ -116,6 +152,39 @@ describe('visiblePeopleProfileTabs', () => {
       permissions: [Permission.AbsencesCalendarView],
     });
     expect(tabs.find((t) => t.id === 'absences')?.label).toBe('Робота');
+  });
+});
+
+describe('canShowAccountAdminTab', () => {
+  it('is true for account lifecycle caps', () => {
+    expect(canShowAccountAdminTab(capsAccountOnly)).toBe(true);
+  });
+
+  it('is true for canViewAccountDetails', () => {
+    expect(
+      canShowAccountAdminTab({
+        ...capsBase,
+        canViewAccountDetails: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('is false without account caps', () => {
+    expect(canShowAccountAdminTab(capsViewHistory)).toBe(false);
+  });
+});
+
+describe('canShowRoleAccessAdminTab', () => {
+  it('is true for canEditAdminAccess', () => {
+    expect(canShowRoleAccessAdminTab(capsRoleAccessOnly)).toBe(true);
+  });
+
+  it('is true for canEditVisibilityOverrides', () => {
+    expect(canShowRoleAccessAdminTab(capsVisibilityOnly)).toBe(true);
+  });
+
+  it('is false without role/access caps', () => {
+    expect(canShowRoleAccessAdminTab(capsViewHistory)).toBe(false);
   });
 });
 

@@ -123,6 +123,8 @@ export class PositionManagementFacade {
   formDirectionId = '';
   formDescription = '';
   formIsActive = true;
+  formIsDepartmentManagerTemplate = false;
+  formManagedDepartmentIds: string[] = [];
 
   newSkillName = '';
   newSkillGroupId: string | null = null;
@@ -317,6 +319,25 @@ export class PositionManagementFacade {
     if (!this.formDepartmentId) return;
     const dept = this.departments().find((d) => d.id === this.formDepartmentId);
     if (dept?.directionId) this.formDirectionId = dept.directionId;
+  }
+
+  managedDepartmentPickerItems(): Array<{ id: string; label: string }> {
+    return this.activeDepartments().map((d) => ({ id: d.id, label: d.name }));
+  }
+
+  onManagerTemplateToggle(enabled: boolean): void {
+    this.formIsDepartmentManagerTemplate = enabled;
+    if (!enabled) {
+      this.formManagedDepartmentIds = [];
+      return;
+    }
+    if (this.formManagedDepartmentIds.length === 0 && this.formDepartmentId) {
+      this.formManagedDepartmentIds = [this.formDepartmentId];
+    }
+  }
+
+  onManagedDepartmentsChange(ids: string[]): void {
+    this.formManagedDepartmentIds = ids;
   }
 
   onFormDirectionChange(): void {
@@ -632,6 +653,8 @@ export class PositionManagementFacade {
     this.formDirectionId = p.directionId || '';
     this.formDescription = p.description || '';
     this.formIsActive = p.isActive;
+    this.formIsDepartmentManagerTemplate = Boolean(p.isDepartmentManagerTemplate);
+    this.formManagedDepartmentIds = [...(p.managedDepartmentIds || [])];
     this.loadPositionCatalog(p.id);
     this.positionDialogOpen.set(true);
     this.error.set('');
@@ -685,6 +708,8 @@ export class PositionManagementFacade {
     this.formDirectionId = '';
     this.formDescription = '';
     this.formIsActive = true;
+    this.formIsDepartmentManagerTemplate = false;
+    this.formManagedDepartmentIds = [];
   }
 
   private resetDraftSession(): void {
@@ -717,11 +742,16 @@ export class PositionManagementFacade {
     }
 
     const departmentId = this.formDepartmentId || null;
+    const managedDepartmentIds = this.formIsDepartmentManagerTemplate
+      ? [...this.formManagedDepartmentIds]
+      : [];
     const body = {
       name: this.formName.trim(),
       departmentId,
       ...(departmentId ? {} : { directionId: this.formDirectionId || null }),
       description: this.formDescription.trim() || null,
+      isDepartmentManagerTemplate: this.formIsDepartmentManagerTemplate,
+      managedDepartmentIds,
     };
 
     const id = this.editingId();

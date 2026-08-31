@@ -15,8 +15,13 @@ import type {
   OrganizationCatalogSnapshot,
 } from '../../core/api/organization-catalog-api.service';
 import {
+  MultiSelectListComponent,
+  type MultiSelectItem,
+} from '../../shared/multi-select-list.component';
+import {
   assignmentDialogSubmitLabel,
   assignmentDialogTitle,
+  defaultManagedDepartmentsOnEnable,
   isArchivalNamedValue,
   type EmploymentAssignmentDialogState,
   type EmploymentAssignmentForm,
@@ -25,7 +30,7 @@ import {
 @Component({
   selector: 'loom-employment-assignment-dialog',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, MultiSelectListComponent],
   template: `
     <div
       class="backdrop"
@@ -163,6 +168,27 @@ import {
               Коментар
               <input [(ngModel)]="form.comment" name="assignmentComment" />
             </label>
+            <label class="check span-2">
+              <input
+                type="checkbox"
+                [ngModel]="form.isDepartmentManager"
+                name="assignmentIsDepartmentManager"
+                (ngModelChange)="onManagerToggle($event)"
+              />
+              Менеджерує відділ
+            </label>
+            @if (form.isDepartmentManager) {
+              <label class="span-2 managed-field">
+                Керовані відділи
+                <app-multi-select-list
+                  [items]="departmentItems"
+                  [selectedIds]="form.managedDepartmentIds"
+                  [showSelectAll]="true"
+                  placeholder="Оберіть керовані відділи"
+                  (selectedIdsChange)="form.managedDepartmentIds = $event"
+                />
+              </label>
+            }
           </div>
         </div>
 
@@ -260,6 +286,23 @@ import {
         font-size: 0.9rem;
         color: var(--pw-muted);
       }
+      label.check {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--pw-text);
+      }
+      label.check input[type='checkbox'] {
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+        padding: 0;
+        flex: 0 0 auto;
+      }
+      .managed-field {
+        --ms-trigger-height: 4.75rem;
+      }
       input,
       select {
         border: 1px solid var(--pw-border);
@@ -332,6 +375,13 @@ export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
     return assignmentDialogSubmitLabel(this.state);
   }
 
+  get departmentItems(): MultiSelectItem[] {
+    return (this.catalog?.departments ?? []).map((d) => ({
+      id: d.id,
+      label: d.name,
+    }));
+  }
+
   get isArchivalWorkFormat(): boolean {
     return isArchivalNamedValue(
       this.form.workFormat,
@@ -343,6 +393,18 @@ export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
     return isArchivalNamedValue(
       this.form.employmentType,
       (this.catalog?.employmentTypes ?? []).map((item) => item.name),
+    );
+  }
+
+  onManagerToggle(enabled: boolean): void {
+    this.form.isDepartmentManager = enabled;
+    if (!enabled) {
+      this.form.managedDepartmentIds = [];
+      return;
+    }
+    this.form.managedDepartmentIds = defaultManagedDepartmentsOnEnable(
+      this.form.managedDepartmentIds,
+      this.form.departmentId,
     );
   }
 

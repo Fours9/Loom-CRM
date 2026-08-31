@@ -60,6 +60,9 @@ import { EmploymentCatalogDescription1730000031000 } from './migrations/17300000
 import { EmploymentAssignmentComment1730000032000 } from './migrations/1730000032000-EmploymentAssignmentComment';
 import { EmployeeSkillAssessments1730000033000 } from './migrations/1730000033000-EmployeeSkillAssessments';
 import { EmployeeDeletionFkRestrict1730000034000 } from './migrations/1730000034000-EmployeeDeletionFkRestrict';
+import { PositionEaManagedDepartments1730000035000 } from './migrations/1730000035000-PositionEaManagedDepartments';
+import { PositionManagedDepartment } from '../../organization/positions/position-managed-department.entity';
+import { EmploymentAssignmentManagedDepartment } from '../../organization/employees/employment-assignment-managed-department.entity';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -76,6 +79,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       Notification,
       Department,
       Position,
+      PositionManagedDepartment,
       Employee,
       WorkScheduleDay,
       EmployeeManagedDepartment,
@@ -83,6 +87,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeEmergencyContact,
       EmployeeImportantDate,
       EmploymentAssignment,
+      EmploymentAssignmentManagedDepartment,
       Company,
       Direction,
       WorkFormat,
@@ -130,6 +135,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmploymentAssignmentComment1730000032000,
       EmployeeSkillAssessments1730000033000,
       EmployeeDeletionFkRestrict1730000034000,
+      PositionEaManagedDepartments1730000035000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

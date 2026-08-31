@@ -45,7 +45,15 @@ Practical semantics:
 - Future-effective transfers persist as `status='planned'`; activation runs through `EmploymentAssignmentLifecycleService` from the startup composition root, not from profile reads.
 - `employees.hired_at` is now the employee-level hire/work-start date. Assignment `startDate` is the effective transfer date and no longer doubles as hire date.
 - Assignment free-text field is **`comment`** (column/API; was `change_reason` / `changeReason`). Historical audit JSON may contain `changeReason`; new writes use `comment`. No backfill. Do not confuse with `employees.comment` or questionnaire assignment service comment.
-- **Org mutate auth (shared):** pure `canMutateEmployeeOrgAssignment` (`employees.change_assignment` / Admin today) gates People `canEditEmployment` **and** Absences legacy `PATCH /employees/:id` department/position (non-permitted actors are stripped, not 403). Absences card still writes denormalized `employees.departmentId`/`positionId` only — it does **not** create EA rows. Display `directionId`/`directionName` on Absences list/detail is derived (current EA → position.direction → department.direction); no `employees.direction_id` column.
+- **Org mutate auth (shared):** pure `canMutateEmployeeOrgAssignment` (`employees.change_assignment` / Admin today) gates People `canEditEmployment`. Absences detail dept/position is **read-only** (Access SoT = active EA). Hire/create writes **initial active EA** + mirror + `IdentityRoleProjection`. Display `directionId`/`directionName` derived from current EA.
+
+### Access variant 2 (visibility + identity role)
+
+- **Position** `isDepartmentManagerTemplate` + `position_managed_departments` — manager template only.
+- **Active EA** `isDepartmentManager` + `employment_assignment_managed_departments` — actual manager membership; sole visibility-scope SoT for **actor and target** (no `employees.departmentId` authorization fallback).
+- `EmployeeAccessService.resolveActorContext` → `{ scope, employeeId, managedDepartmentIds }`; `listVisibleEmployees` = `self ∪ managed` with batch target-EA resolution.
+- `IdentityRoleProjection.apply({ adminAccess: 'preserve' | boolean })` — sole writer of `User.role` (if User) and `Employee.role` mirror; `tokenVersion++` when role changes. RoleAccess uses `PATCH …/access-settings` (`adminAccess` + visibility overrides only). Attach/hire have **no** role input.
+- Legacy `employee_managed_departments` and `User`/`Employee.isDepartmentManager` — stop-read/write for auth; physical DROP later.
 
 ### Documents MVP
 

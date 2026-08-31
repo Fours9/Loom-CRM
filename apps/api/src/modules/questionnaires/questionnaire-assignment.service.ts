@@ -994,11 +994,11 @@ export class QuestionnaireAssignmentService {
     if (this.access.isAdmin(actor)) {
       return { kind: 'all' };
     }
-    if (this.access.scope(actor) === 'managed_departments') {
-      const departmentIds = await this.access.managedDepartmentIds(actor);
+    const ctx = await this.access.resolveActorContext(actor);
+    if (ctx.scope === 'managed_departments') {
       return {
         kind: 'departments_and_self',
-        departmentIds,
+        departmentIds: ctx.managedDepartmentIds,
         userId: actor.id,
         includeNewUnattached: this.canAssign(actor),
       };

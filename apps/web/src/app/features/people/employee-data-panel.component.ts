@@ -32,6 +32,7 @@ import {
   type OrganizationCatalogSnapshot,
 } from '../../core/api/organization-catalog-api.service';
 import { EmploymentAssignmentsApiService } from '../../core/api/employment-assignments-api.service';
+import { SettingsOrgApiService } from '../settings/settings-org-api.service';
 import {
   filterDepartmentsForSelection,
   filterPositionsForSelection,
@@ -44,6 +45,7 @@ import {
 import { EmploymentAssignmentDialogComponent } from './employment-assignment-dialog.component';
 import {
   CLOSED_ASSIGNMENT_DIALOG,
+  applyPositionManagerTemplate,
   closeAssignmentDialog,
   emptyEmploymentAssignmentForm,
   createEmploymentAssignmentForm,
@@ -936,6 +938,7 @@ export class EmployeeDataPanelComponent implements OnChanges {
   private readonly http = inject(HttpClient);
   private readonly orgCatalogApi = inject(OrganizationCatalogApiService);
   private readonly assignmentsApi = inject(EmploymentAssignmentsApiService);
+  private readonly orgApi = inject(SettingsOrgApiService);
 
   @Input({ required: true }) employeeId!: string;
   @Input({ required: true }) profile!: EmployeeProfileResponse;
@@ -1272,6 +1275,32 @@ export class EmployeeDataPanelComponent implements OnChanges {
     this.applyOrgAction({
       type: 'selectPosition',
       positionId: this.assignmentForm.positionId || null,
+    });
+    // Create only: prefill manager flags from position template. Edit keeps user values.
+    if (this.assignmentDialog().kind !== 'create') {
+      return;
+    }
+    this.prefillManagerFromPositionTemplate(this.assignmentForm.positionId);
+  }
+
+  private prefillManagerFromPositionTemplate(positionId: string): void {
+    if (!positionId) {
+      this.assignmentForm.isDepartmentManager = false;
+      this.assignmentForm.managedDepartmentIds = [];
+      return;
+    }
+    this.orgApi.getPositions(true).subscribe({
+      next: (positions) => {
+        if (this.assignmentDialog().kind !== 'create') return;
+        if (this.assignmentForm.positionId !== positionId) return;
+        const position = positions.find((p) => p.id === positionId) ?? null;
+        const next = applyPositionManagerTemplate(this.assignmentForm, position);
+        this.assignmentForm.isDepartmentManager = next.isDepartmentManager;
+        this.assignmentForm.managedDepartmentIds = next.managedDepartmentIds;
+      },
+      error: () => {
+        /* keep current manager fields if template fetch fails */
+      },
     });
   }
 

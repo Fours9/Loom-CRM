@@ -113,7 +113,8 @@ export class EmployeeSerializer {
       directionName: direction.directionName,
       calendarColor: employee.calendarColor,
       role: employee.role,
-      isDepartmentManager: Boolean(employee.isDepartmentManager),
+      // Derived mirror / permission role — not legacy Employee.isDepartmentManager flag
+      isDepartmentManager: employee.role === 'department_manager',
       mustChangePassword: null,
       completenessPercent: ctx?.completenessPercent ?? 0,
       createdAt: employee.createdAt.toISOString(),

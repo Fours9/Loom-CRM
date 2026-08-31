@@ -125,8 +125,6 @@ export interface CreateEmployeePayload {
   createAccount: boolean;
   email?: string;
   temporaryPassword?: string;
-  role: UserRole;
-  isDepartmentManager?: boolean;
   lastName: string;
   firstName: string;
   middleName?: string;
@@ -139,7 +137,6 @@ export interface CreateEmployeePayload {
   comment?: string;
   adminComment?: string;
   calendarColor: string;
-  managedDepartmentIds?: string[];
   profileVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
   absenceVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
   showAbsenceTypeToPeersOverride?: boolean | null;

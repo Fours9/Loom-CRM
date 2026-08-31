@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
+import { DataSource, EntityManager } from 'typeorm';
 import { Position } from './position.entity';
+import { PositionManagedDepartment } from './position-managed-department.entity';
 import { PositionsService } from './positions.service';
 import type { DepartmentsService } from '../departments/departments.service';
 
@@ -11,6 +13,8 @@ function positionRow(overrides: Partial<Position> = {}): Position {
     directionId: null,
     description: null,
     isActive: true,
+    isDepartmentManagerTemplate: false,
+    managedDepartments: [],
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -24,10 +28,19 @@ describe('PositionsService PATCH direction semantics', () => {
   }) {
     const liveRow = seed.row ?? positionRow();
     const departments = seed.departments ?? {};
+    const joinRows: PositionManagedDepartment[] = [
+      ...((liveRow.managedDepartments ?? []) as PositionManagedDepartment[]),
+    ];
 
     const repo = {
-      findOne: jest.fn(async () => liveRow),
-      create: jest.fn((row: Partial<Position>) => row),
+      findOne: jest.fn(async () => ({
+        ...liveRow,
+        managedDepartments: [...joinRows],
+      })),
+      create: jest.fn((row: Partial<Position>) => ({
+        id: liveRow.id,
+        ...row,
+      })),
       save: jest.fn(async (row: Position) => {
         Object.assign(liveRow, row);
         return liveRow;
@@ -35,6 +48,32 @@ describe('PositionsService PATCH direction semantics', () => {
       createQueryBuilder: jest.fn(),
       remove: jest.fn(),
     };
+
+    const managedRepo = {
+      delete: jest.fn(async ({ positionId }: { positionId: string }) => {
+        for (let i = joinRows.length - 1; i >= 0; i -= 1) {
+          if (joinRows[i]?.positionId === positionId) joinRows.splice(i, 1);
+        }
+      }),
+      create: jest.fn((row: Partial<PositionManagedDepartment>) => row),
+      save: jest.fn(async (rows: PositionManagedDepartment[]) => {
+        joinRows.push(...rows);
+        return rows;
+      }),
+    };
+
+    const dataSource = {
+      transaction: jest.fn(async (work: (manager: EntityManager) => Promise<unknown>) => {
+        const manager = {
+          getRepository: (entity: unknown) => {
+            if (entity === Position) return repo;
+            if (entity === PositionManagedDepartment) return managedRepo;
+            throw new Error(`Unexpected repository ${String(entity)}`);
+          },
+        } as unknown as EntityManager;
+        return work(manager);
+      }),
+    } as unknown as DataSource;
 
     const deps = {
       getOrFail: jest.fn(async (id: string) => {
@@ -44,8 +83,8 @@ describe('PositionsService PATCH direction semantics', () => {
       }),
     } as unknown as DepartmentsService;
 
-    const service = new PositionsService(repo as never, deps);
-    return { service, liveRow, repo, deps };
+    const service = new PositionsService(repo as never, deps, dataSource);
+    return { service, liveRow, repo, deps, joinRows, dataSource };
   }
 
   it('create global with no direction defaults to null', async () => {
@@ -81,6 +120,34 @@ describe('PositionsService PATCH direction semantics', () => {
     await expect(
       service.create({ name: 'Dept', departmentId: 'dept-a', directionId: 'dir-y' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('create manager template defaults managed departments to departmentId', async () => {
+    const { service, joinRows } = makeService({
+      row: positionRow(),
+      departments: { 'dept-a': { id: 'dept-a', directionId: 'dir-x' } },
+    });
+    const created = await service.create({
+      name: 'Manager',
+      departmentId: 'dept-a',
+      isDepartmentManagerTemplate: true,
+    });
+    expect(created.isDepartmentManagerTemplate).toBe(true);
+    expect(joinRows.map((r) => r.departmentId)).toEqual(['dept-a']);
+  });
+
+  it('create manager template false clears managed departments', async () => {
+    const { service, joinRows } = makeService({
+      row: positionRow(),
+      departments: { 'dept-a': { id: 'dept-a', directionId: 'dir-x' } },
+    });
+    await service.create({
+      name: 'Regular',
+      departmentId: 'dept-a',
+      isDepartmentManagerTemplate: false,
+      managedDepartmentIds: ['dept-a'],
+    });
+    expect(joinRows).toEqual([]);
   });
 
   it('update global manual direction preserves it on unrelated PATCH', async () => {
@@ -162,5 +229,36 @@ describe('PositionsService PATCH direction semantics', () => {
     });
     expect(updated.departmentId).toBeNull();
     expect(updated.directionId).toBeNull();
+  });
+
+  it('update enabling manager template defaults managed departments', async () => {
+    const { service, liveRow, joinRows } = makeService({
+      row: positionRow({ departmentId: 'dept-a', directionId: 'dir-x' }),
+      departments: { 'dept-a': { id: 'dept-a', directionId: 'dir-x' } },
+    });
+    await service.update(liveRow.id, { isDepartmentManagerTemplate: true });
+    expect(liveRow.isDepartmentManagerTemplate).toBe(true);
+    expect(joinRows.map((r) => r.departmentId)).toEqual(['dept-a']);
+  });
+
+  it('update disabling manager template clears managed departments', async () => {
+    const { service, liveRow, joinRows } = makeService({
+      row: positionRow({
+        departmentId: 'dept-a',
+        directionId: 'dir-x',
+        isDepartmentManagerTemplate: true,
+        managedDepartments: [
+          {
+            id: 'pmd-1',
+            positionId: 'pos-1',
+            departmentId: 'dept-a',
+          } as PositionManagedDepartment,
+        ],
+      }),
+      departments: { 'dept-a': { id: 'dept-a', directionId: 'dir-x' } },
+    });
+    await service.update(liveRow.id, { isDepartmentManagerTemplate: false });
+    expect(liveRow.isDepartmentManagerTemplate).toBe(false);
+    expect(joinRows).toEqual([]);
   });
 });

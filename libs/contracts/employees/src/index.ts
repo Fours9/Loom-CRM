@@ -89,6 +89,14 @@ export type EmployeeProfileCapabilities = {
   canManageAccount: boolean;
   /** Hard-delete Employee operational aggregate — not self (admin). */
   canDeleteEmployee: boolean;
+  /** Toggle admin access + view computed non-admin role (admin). */
+  canEditAdminAccess: boolean;
+  /** Edit visibility overrides (admin). */
+  canEditVisibilityOverrides: boolean;
+  /** View login email on account panel (admin or owner). */
+  canViewAccountDetails: boolean;
+  /** Change login email — admin, not self (admin). */
+  canEditAccountEmail: boolean;
 };
 
 export type ProfileCompletenessSection = {
@@ -125,6 +133,8 @@ export type EmployeeProfileHeader = {
   hasAccount: boolean;
   accountStatus: 'active' | 'deactivated' | null;
   accountCreatedAt: string | null;
+  /** Login email when canViewAccountDetails; otherwise omitted/null. */
+  accountEmail?: string | null;
   workEmail: string | null;
   workPhone: string | null;
   workTelegram: string | null;
@@ -186,6 +196,8 @@ export type EmployeeEmploymentSection = {
   status: string;
   activationBlockedReason: EmploymentActivationBlockedReason | null;
   activationCheckedAt: string | null;
+  isDepartmentManager: boolean;
+  managedDepartmentIds: EntityId[];
   company: NamedReference | null;
   direction: NamedReference | null;
   department: NamedReference | null;
@@ -235,6 +247,15 @@ export type EmployeeEmergencyContactItem = {
   notes: string | null;
 };
 
+export type EmployeeAccessSection = {
+  adminAccess: boolean;
+  /** Derived non-admin role from active EA (read-only in UI). */
+  computedRole: 'employee' | 'department_manager';
+  profileVisibilityOverride: string | null;
+  absenceVisibilityOverride: string | null;
+  showAbsenceTypeToPeersOverride: boolean | null;
+};
+
 export type EmployeeProfileSections = {
   overview: EmployeeOverviewSection;
   employment: EmployeeEmploymentSection | null;
@@ -242,6 +263,8 @@ export type EmployeeProfileSections = {
   personal: EmployeePersonalSection | null;
   emergencyContact: EmployeeEmergencyContactItem[] | null;
   importantDates: ImportantDateItem[] | null;
+  /** Present when canEditAdminAccess or canEditVisibilityOverrides. */
+  access?: EmployeeAccessSection | null;
 };
 
 export type EmployeeProfileResponse = {
@@ -273,6 +296,8 @@ export type EmploymentAssignmentHistoryItem = {
   comment: string | null;
   activationBlockedReason: EmploymentActivationBlockedReason | null;
   activationCheckedAt: string | null;
+  isDepartmentManager: boolean;
+  managedDepartmentIds: EntityId[];
   updatedAt: string;
   department: NamedReference | null;
   position: NamedReference | null;
@@ -297,10 +322,23 @@ export type CreateEmploymentAssignmentRequest = {
   probationStartDate?: string | null;
   probationEndDate?: string | null;
   comment?: string | null;
+  isDepartmentManager?: boolean;
+  managedDepartmentIds?: EntityId[];
 };
 
 export type UpdateEmploymentAssignmentRequest =
   CreateEmploymentAssignmentRequest;
+
+export type UpdateEmployeeAccessSettingsRequest = {
+  adminAccess?: boolean;
+  profileVisibilityOverride?: string | null;
+  absenceVisibilityOverride?: string | null;
+  showAbsenceTypeToPeersOverride?: boolean | null;
+};
+
+export type UpdateEmployeeAccountEmailRequest = {
+  email: string;
+};
 
 export type UpdateEmployeeEmploymentMetaRequest = {
   hiredAt?: string | null;

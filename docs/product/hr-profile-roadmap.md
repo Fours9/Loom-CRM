@@ -36,23 +36,34 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 | Документи | Documents MVP + агрегат вкладень time-event (Absences) | `documents.view` |
 | Анкети | Directory `/questionnaires` + People panel; assign/cancel/reactivate/close/delete; fill wizard | `questionnaires.view` |
 | Показники | Stub (roadmap Phase 5 / 8) | завжди |
-| Адміністрування | Підвкладки **Історія** + **Акаунт**: audit timeline; account lifecycle (create/reset/status/delete login) + hard-delete operational aggregate | `canViewHistory` **або** account/delete caps |
+| Адміністрування | Підвкладки **Історія** + **Акаунт** + **Роль та допуски**: audit; account lifecycle + email; adminAccess + visibility overrides | `canViewHistory` **або** account/delete **або** access caps |
 | Згодом | Stub (майбутні модулі) | завжди |
 
 Недоступні вкладки **ховаються** (не disabled empty-state). Після reload / зміни permissions активна недоступна вкладка скидається на «Дані працівника».
 
 Адміністрування (деталі):
 
-- Top tab visible when history **or** any of `canCreateAccount` / `canResetPassword` / `canManageAccount` / `canDeleteEmployee`.
-- Subtab **Акаунт** when any account/delete cap; header exposes `userId` / `hasAccount` / `accountStatus`.
+- Top tab visible when history **or** any account/delete cap **or** `canEditAdminAccess` / `canEditVisibilityOverrides`.
+- Subtabs: **Історія** → **Акаунт** → **Роль та допуски** (fallback у цьому порядку).
+- **Роль та допуски:** toggle «Адміністратор» (`adminAccess`); computed DM/employee read-only; visibility overrides. `PATCH …/access-settings` → `updateAccessSettings` (не generic `PATCH /employees/:id` з `role`).
+- **Акаунт:** login email view/edit (`canViewAccountDetails` / `canEditAccountEmail`); `PATCH …/account/email`.
 - Hard-delete confirm = `employeeNumber`; navigate `/people`. Not GDPR wipe.
-- Absences card `/absences/employees/:id`: **без** account create/reset/status/delete UI (hire-time create page лишається).
+- Absences card: без role/managed/overrides/account email; dept/position read-only. Hire створює initial active EA; без ручного role/manager.
 
-### Адміністрування → Історія / Акаунт (living)
+### Access variant 2 (living)
+
+- Position → manager **template** only (`isDepartmentManagerTemplate` + join).
+- Active EA → actual manager membership + managed depts; sole **visibility-scope** SoT (actor + target).
+- `IdentityRoleProjection.apply({ adminAccess })` — sole `User.role` / `Employee.role` mirror writer; `tokenVersion++` on role change.
+- `employees.departmentId` / `positionId` — display mirror only, never authorization SoT.
+- Legacy `employee_managed_departments` + `User/Employee.isDepartmentManager` — stop-read/write for auth (physical DROP later).
+
+### Адміністрування → Історія / Акаунт / Роль (living)
 
 - Історія: `GET …/history` → дата · актор · UA summary (`EmployeeProfileHistoryItem`). Missing User → **«Видалений користувач»**.
-- Акаунт: `EmployeeAccountApiService` + panel — attach (`POST …/account`), reset (`POST /auth/reset-password/:userId`, у т.ч. собі), activate/deactivate/delete login (не собі), hard-delete (`DELETE /employees/:id` → application `EmployeeDeletionCoordinator`).
-- Caps: `canCreateAccount`, `canResetPassword`, `canManageAccount` (destructive, не self), `canDeleteEmployee` (не self).
+- Акаунт: `EmployeeAccountApiService` + panel — attach (`POST …/account`, **без** `role`), reset, activate/deactivate/delete login, email change, hard-delete.
+- Роль: `EmployeeRoleAccessApiService` + panel → `PATCH …/access-settings`.
+- Caps: `canCreateAccount`, `canResetPassword`, `canManageAccount`, `canDeleteEmployee`, `canEditAdminAccess`, `canEditVisibilityOverrides`, `canViewAccountDetails`, `canEditAccountEmail`.
 
 - Endpoint: `GET /api/v1/employees/:id/history?limit=` (1–100, default 50; **cursor pagination ще немає**).
 - Response item: `action`, `summary` (статична UA-мапа), `actor: { userId, label } | null` (`null` = «Система»), `createdAt` ISO, redacted `metadata`.
@@ -64,7 +75,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 - Flat contract `@loom/contracts-employees` → `EmployeeListItem` (incl. `completenessPercent`, ISO dates).
 - UI: колонка/badge `%`, фільтр повноти (Усі / до 25 / 50 / 75 / менше 100%), sort ПІБ або повнота — **серверні** query params.
 
-PW-паритетна картка `/absences/employees/:id`: Напрямок read-only (derived); селекти Відділ/Посада лише за `permissions.canEditOrgAssignment` (та сама політика, що People `canEditEmployment` / `employees.change_assignment`); hero — `photoUrl` або single-person SVG (не multi-person `/people`). Account admin (create/reset/status/delete) **перенесено** в People → Адміністрування → **Акаунт**.
+PW-паритетна картка `/absences/employees/:id`: Напрямок / Відділ / Посада **read-only**; role / managed / overrides / account email **прибрано** (People Admin). Hire: initial active EA з org + Position template.
 
 ### Робота -> Посада / Дані працівника -> Дати (living)
 

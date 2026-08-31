@@ -2,9 +2,9 @@
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
-import { Department, EmployeeProfile, Position, AbsenceRequestListItem, ScheduleDay } from '../core/api/models';
+import { EmployeeProfile, AbsenceRequestListItem, ScheduleDay } from '../core/api/models';
 import { AuthService } from '../core/auth/auth.service';
-import { roleDisplayLabel, VISIBILITY_OVERRIDE_UI, ABSENCE_OVERRIDE_UI } from '../core/api/labels';
+import { roleDisplayLabel } from '../core/api/labels';
 import {
   requestEventLabel,
   requestPeriod,
@@ -14,16 +14,10 @@ import {
   cloneSchedule,
   normalizeSchedulePayload,
 } from '../core/schedule/schedule.util';
-import {
-  MultiSelectItem,
-  MultiSelectListComponent,
-} from '../shared/multi-select-list.component';
 import { RequestStatusBadgeComponent } from '../shared/request-status-badge.component';
 import { requestFrameTone } from '../shared/request-status-presentation';
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
-import { optionalOrgAssignmentIds } from './employee-org-assignment';
-import { resolveAbsencesOrgDirectionLabel } from './absences-org-direction-label';
 import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
 
 @Component({
@@ -32,7 +26,6 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
   imports: [
     FormsModule,
     RouterLink,
-    MultiSelectListComponent,
     ScheduleEditorComponent,
     RequestStatusBadgeComponent,
   ],
@@ -130,12 +123,7 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                       Робочий email
                       <div class="value">{{ employee.workEmail || '—' }}</div>
                     </label>
-                    @if (employee.hasAccount && employee.permissions?.canViewAccountDetails) {
-                      <label>
-                        Email акаунта
-                        <div class="value">{{ employee.accountEmail || '—' }}</div>
-                      </label>
-                    } @else if (!employee.hasAccount) {
+                    @if (!employee.hasAccount) {
                       <p class="muted">Обліковий запис не створено</p>
                     }
                     <div class="row row-2">
@@ -192,23 +180,6 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                       Роль
                       <div class="value">{{ roleLabel(employee.role, employee.isDepartmentManager) }}</div>
                     </label>
-                    @if (isAdmin && showManagedDepartmentsSection) {
-                      <details class="nested-panel" open>
-                        <summary>Керовані відділи</summary>
-                        <div class="nested-panel-body">
-                          <p class="muted managed-hint">Не плутати з власним відділом менеджера.</p>
-                          @if (managedDepartmentNames.length) {
-                            <ul class="managed-list">
-                              @for (name of managedDepartmentNames; track name) {
-                                <li>{{ name }}</li>
-                              }
-                            </ul>
-                          } @else {
-                            <p class="muted">Не призначено</p>
-                          }
-                        </div>
-                      </details>
-                    }
                   </div>
                 </div>
               } @else {
@@ -256,16 +227,8 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                           autocomplete="off"
                         />
                       </label>
-                      @if (employee.hasAccount && employee.permissions?.canViewAccountDetails) {
-                        <p class="account-email-ro">
-                          <strong>Email акаунта:</strong> {{ employee.accountEmail || '—' }}
-                        </p>
-                      }
                     } @else {
                       <p><strong>Робочий email:</strong> {{ employee.workEmail || '—' }}</p>
-                      @if (employee.hasAccount && employee.permissions?.canViewAccountDetails) {
-                        <p><strong>Email акаунта:</strong> {{ employee.accountEmail || '—' }}</p>
-                      }
                     }
                     <div class="row row-2">
                       <label>
@@ -337,164 +300,23 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                     <h3>Посада</h3>
                     <label>
                       Напрямок
-                      <div class="value">{{ editDirectionName || '—' }}</div>
+                      <div class="value">{{ employee.directionName || '—' }}</div>
                     </label>
                     <div class="row row-2">
                       <label>
                         Відділ
-                        @if (canEditOrgAssignment) {
-                          <select [(ngModel)]="edit.departmentId" (ngModelChange)="onDepartmentChange($event)">
-                            <option value="">Не вказано</option>
-                            @for (d of departments; track d.id) {
-                              <option [value]="d.id">{{ d.name }}</option>
-                            }
-                          </select>
-                        } @else {
-                          <div class="value">{{ employee.departmentName || '—' }}</div>
-                        }
+                        <div class="value">{{ employee.departmentName || '—' }}</div>
                       </label>
                       <label>
                         Посада
-                        @if (canEditOrgAssignment) {
-                          <select [(ngModel)]="edit.positionId" (ngModelChange)="onPositionChange($event)">
-                            <option value="">Не вказано</option>
-                            @for (p of positions; track p.id) {
-                              <option [value]="p.id">{{ p.name }}</option>
-                            }
-                          </select>
-                        } @else {
-                          <div class="value">{{ employee.positionName || '—' }}</div>
-                        }
+                        <div class="value">{{ employee.positionName || '—' }}</div>
                       </label>
                     </div>
-                    @if (isAdmin) {
-                      <label>
-                        Роль
-                        <select [(ngModel)]="edit.role" (ngModelChange)="onRoleChange($event)">
-                          <option value="employee">Працівник</option>
-                          <option value="department_manager">Менеджер відділу</option>
-                          <option value="admin">Адміністратор</option>
-                        </select>
-                      </label>
-                      @if (edit.role === 'admin') {
-                        <label class="check-row">
-                          Також менеджер відділу
-                          <input
-                            type="checkbox"
-                            [ngModel]="edit.isDepartmentManager"
-                            (ngModelChange)="onAdminManagerToggle($event)"
-                            name="isDepartmentManager"
-                          />
-                        </label>
-                      }
-                      @if (showManagedDepartmentsSection) {
-                        <details class="nested-panel" open>
-                          <summary>Керовані відділи</summary>
-                          <div class="nested-panel-body">
-                            <p class="muted managed-hint">Не плутати з власним відділом менеджера.</p>
-                            <app-multi-select-list
-                              [items]="departmentItems"
-                              [selectedIds]="managedIds"
-                              [showSelectAll]="true"
-                              placeholder="Оберіть керовані відділи"
-                              (selectedIdsChange)="managedIds = $event"
-                            />
-                          </div>
-                        </details>
-                      }
-                    } @else {
-                      <p><strong>Роль:</strong> {{ roleLabel(employee.role, employee.isDepartmentManager) }}</p>
-                    }
+                    <p><strong>Роль:</strong> {{ roleLabel(employee.role, employee.isDepartmentManager) }}</p>
                   </div>
                 </div>
               }
             </article>
-
-            @if (
-              employee.permissions?.canEditProfileVisibilityOverride ||
-              employee.permissions?.canEditAbsenceVisibilityOverride ||
-              employee.permissions?.canEditShowAbsenceTypeToPeersOverride
-            ) {
-              <article class="card">
-                <h2>Індивідуальні права</h2>
-                @if (globalPrivacyPriority) {
-                  <p class="muted">
-                    Зараз увімкнено пріоритет глобальних налаштувань Адміна — ці override не застосовуються.
-                  </p>
-                } @else {
-                  <p class="muted">
-                    Регулює лише peer-видимість чужих даних. Не скасовує admin-, owner- або manager-scope.
-                  </p>
-                }
-
-                @if (editingProfile) {
-                  <label>
-                    Чужі анкети
-                    <select [(ngModel)]="profileOverride" [disabled]="globalPrivacyPriority">
-                      <option value="inherit">Успадковувати глобальні налаштування</option>
-                      <option value="all">Усі працівники</option>
-                      <option value="own_department">Лише свій відділ</option>
-                      <option value="deny">Заборонити</option>
-                    </select>
-                  </label>
-                  <div class="rights-absence-stack">
-                    <label>
-                      Чужі відсутності
-                      <select
-                        [(ngModel)]="absencesOverride"
-                        [disabled]="globalPrivacyPriority"
-                        (ngModelChange)="onAbsencesOverrideChange()"
-                      >
-                        <option value="inherit">Успадковувати глобальні налаштування</option>
-                        <option value="all">Усі підтверджені відсутності</option>
-                        <option value="own_department">Лише свій відділ</option>
-                        <option value="deny">Заборонити</option>
-                      </select>
-                    </label>
-                    @if (absencesOverride !== 'deny') {
-                      <div class="rights-subsetting">
-                        <p class="nested-caption">Підрежим режиму видимості відсутностей</p>
-                        <label>
-                          Деталі (тип / причина)
-                          <select [(ngModel)]="absenceTypeDetailOverride" [disabled]="globalPrivacyPriority">
-                            <option value="inherit">Успадковувати глобальні налаштування</option>
-                            <option value="full">Повна інформація</option>
-                            <option value="hide_type">Не вказувати тип (причину)</option>
-                          </select>
-                        </label>
-                      </div>
-                    }
-                  </div>
-                } @else {
-                  <div class="fields">
-                    <label>
-                      Чужі анкети
-                      <div class="value">{{ profileOverrideLabel }}</div>
-                    </label>
-                    <label>
-                      Чужі відсутності
-                      <div class="value">{{ absencesOverrideLabel }}</div>
-                    </label>
-                    @if (absencesOverride !== 'deny') {
-                      <label>
-                        Деталі (тип / причина)
-                        <div class="value">{{ absenceTypeDetailOverrideLabel }}</div>
-                      </label>
-                    }
-                  </div>
-                  @if (employee.permissions?.canEditProfile) {
-                    <button
-                      type="button"
-                      class="ghost-btn"
-                      (click)="startEdit()"
-                      [disabled]="globalPrivacyPriority"
-                    >
-                      Редагувати права
-                    </button>
-                  }
-                }
-              </article>
-            }
           </div>
 
           <div class="col side-col">
@@ -1210,22 +1032,12 @@ export class EmployeeDetailPageComponent implements OnInit {
   readonly frameTone = requestFrameTone;
 
   employee: EmployeeProfile | null = null;
-  departments: Department[] = [];
-  positions: Position[] = [];
-  managedIds: string[] = [];
-  profileOverride: 'inherit' | 'all' | 'own_department' | 'deny' = 'inherit';
-  absencesOverride: 'inherit' | 'all' | 'own_department' | 'deny' = 'inherit';
-  absenceTypeDetailOverride: 'inherit' | 'full' | 'hide_type' = 'inherit';
-  globalPrivacyPriority = false;
   edit = {
     lastName: '',
     firstName: '',
     middleName: '',
-    departmentId: '',
-    positionId: '',
     employeeNumber: '',
     calendarColor: '#2A6FDB',
-    email: '',
     workEmail: '',
     phoneNumber: '',
     telegram: '',
@@ -1234,8 +1046,6 @@ export class EmployeeDetailPageComponent implements OnInit {
     personalEmail: '',
     comment: '',
     adminComment: '',
-    role: 'employee',
-    isDepartmentManager: false,
   };
   error = '';
   message = '';
@@ -1252,10 +1062,6 @@ export class EmployeeDetailPageComponent implements OnInit {
     return this.auth.isAdmin();
   }
 
-  get canEditOrgAssignment(): boolean {
-    return Boolean(this.employee?.permissions?.canEditOrgAssignment);
-  }
-
   get heroOrgMeta(): string {
     return [
       this.employee?.directionName,
@@ -1266,57 +1072,12 @@ export class EmployeeDetailPageComponent implements OnInit {
       .join(' · ');
   }
 
-  get editDirectionName(): string | null {
-    if (!this.canEditOrgAssignment) {
-      return this.employee?.directionName ?? null;
-    }
-    return resolveAbsencesOrgDirectionLabel({
-      departmentId: this.edit.departmentId || null,
-      positionId: this.edit.positionId || null,
-      departments: this.departments,
-      positions: this.positions,
-    });
-  }
-
-  get departmentItems(): MultiSelectItem[] {
-    return this.departments.map((d) => ({ id: d.id, label: d.name }));
-  }
-
-  get managedDepartmentNames(): string[] {
-    const byId = new Map(this.departments.map((d) => [d.id, d.name]));
-    return this.managedIds.map((id) => byId.get(id) || id);
-  }
-
-  get showManagedDepartmentsSection(): boolean {
-    const role = this.editingProfile ? this.edit.role : this.employee?.role;
-    const flag = this.editingProfile
-      ? this.edit.isDepartmentManager
-      : Boolean(this.employee?.isDepartmentManager);
-    return role === 'department_manager' || (role === 'admin' && flag);
-  }
-
-  get profileOverrideLabel(): string {
-    return VISIBILITY_OVERRIDE_UI[this.profileOverride];
-  }
-
-  get absencesOverrideLabel(): string {
-    return ABSENCE_OVERRIDE_UI[this.absencesOverride];
-  }
-
-  get absenceTypeDetailOverrideLabel(): string {
-    if (this.absenceTypeDetailOverride === 'full') return 'Повна інформація';
-    if (this.absenceTypeDetailOverride === 'hide_type') return 'Не вказувати тип (причину)';
-    return 'Успадковувати глобальні налаштування';
-  }
-
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) {
       void this.router.navigate(['/absences/employees']);
       return;
     }
-    this.api.getDepartments(true).subscribe((d) => (this.departments = d.filter((x) => x.isActive)));
-    this.api.getPrivacy().subscribe((p) => (this.globalPrivacyPriority = !!p.globalPrivacyPriority));
     this.load(id);
   }
 
@@ -1325,13 +1086,6 @@ export class EmployeeDetailPageComponent implements OnInit {
       next: (employee) => {
         this.employee = employee;
         this.fillEditFromEmployee(employee);
-        this.managedIds = [...(employee.managedDepartmentIds || [])];
-        this.profileOverride = this.fromOverride(employee.profileVisibilityOverride ?? null);
-        this.absencesOverride = this.fromOverride(employee.absenceVisibilityOverride ?? null);
-        this.absenceTypeDetailOverride = this.fromTypeDetailOverride(
-          employee.showAbsenceTypeToPeersOverride ?? null,
-        );
-        this.reloadPositions(employee.departmentId, employee.positionId);
         this.api.getEmployeeRequests(employee.id).subscribe({
           next: (res) => (this.requests = res.items.slice(0, 8)),
         });
@@ -1366,11 +1120,8 @@ export class EmployeeDetailPageComponent implements OnInit {
       lastName: employee.lastName,
       firstName: employee.firstName,
       middleName: employee.middleName || '',
-      departmentId: employee.departmentId,
-      positionId: employee.positionId,
       employeeNumber: employee.employeeNumber,
       calendarColor: employee.calendarColor,
-      email: employee.accountEmail || '',
       workEmail: employee.workEmail || '',
       phoneNumber: employee.phoneNumber || '',
       telegram: employee.telegram || '',
@@ -1379,17 +1130,13 @@ export class EmployeeDetailPageComponent implements OnInit {
       personalEmail: employee.personalEmail || '',
       comment: employee.comment || '',
       adminComment: employee.adminComment || '',
-      role: employee.role || 'employee',
-      isDepartmentManager: Boolean(employee.isDepartmentManager),
     };
   }
 
   startEdit(): void {
     if (!this.employee) return;
     this.fillEditFromEmployee(this.employee);
-    this.managedIds = [...(this.employee.managedDepartmentIds || [])];
     this.editSchedule = cloneSchedule(this.employee.schedule);
-    this.reloadPositions(this.employee.departmentId, this.employee.positionId);
     this.editingProfile = true;
     this.error = '';
     this.message = '';
@@ -1398,101 +1145,10 @@ export class EmployeeDetailPageComponent implements OnInit {
   cancelEdit(): void {
     if (this.employee) {
       this.fillEditFromEmployee(this.employee);
-      this.managedIds = [...(this.employee.managedDepartmentIds || [])];
       this.editSchedule = cloneSchedule(this.employee.schedule);
-      this.profileOverride = this.fromOverride(this.employee.profileVisibilityOverride ?? null);
-      this.absencesOverride = this.fromOverride(this.employee.absenceVisibilityOverride ?? null);
-      this.absenceTypeDetailOverride = this.fromTypeDetailOverride(
-        this.employee.showAbsenceTypeToPeersOverride ?? null,
-      );
     }
     this.editingProfile = false;
     this.error = '';
-  }
-
-  onDepartmentChange(departmentId: string): void {
-    this.edit.departmentId = departmentId;
-    this.edit.positionId = '';
-    this.reloadPositions(departmentId);
-  }
-
-  onPositionChange(positionId: string): void {
-    this.edit.positionId = positionId;
-  }
-
-  private reloadPositions(departmentId: string, keepPositionId?: string): void {
-    const request = departmentId
-      ? this.api.getPositions(departmentId)
-      : this.api.getPositions(undefined, false, true);
-
-    request.subscribe((p) => {
-      this.positions = p;
-      const keep = keepPositionId ?? this.edit.positionId;
-      if (keep && !this.positions.some((x) => x.id === keep)) {
-        this.edit.positionId = '';
-      } else if (keep) {
-        this.edit.positionId = keep;
-      }
-    });
-  }
-
-  fromOverride(
-    value: 'all' | 'own_department' | 'deny' | null,
-  ): 'inherit' | 'all' | 'own_department' | 'deny' {
-    if (value === 'all' || value === 'own_department' || value === 'deny') {
-      return value;
-    }
-    return 'inherit';
-  }
-
-  toOverride(
-    value: 'inherit' | 'all' | 'own_department' | 'deny',
-  ): 'all' | 'own_department' | 'deny' | null {
-    if (value === 'inherit') return null;
-    return value;
-  }
-
-  fromTypeDetailOverride(value: boolean | null): 'inherit' | 'full' | 'hide_type' {
-    if (value === true) return 'full';
-    if (value === false) return 'hide_type';
-    return 'inherit';
-  }
-
-  toTypeDetailOverride(value: 'inherit' | 'full' | 'hide_type'): boolean | null {
-    if (value === 'inherit') return null;
-    return value === 'full';
-  }
-
-  onAbsencesOverrideChange(): void {
-    if (this.absencesOverride === 'deny') {
-      this.absenceTypeDetailOverride = 'inherit';
-    }
-  }
-
-  onRoleChange(role: string): void {
-    this.edit.role = role;
-    if (role === 'admin' && this.employee?.role === 'department_manager') {
-      this.edit.isDepartmentManager = true;
-    } else if (role !== 'admin') {
-      this.edit.isDepartmentManager = false;
-    }
-  }
-
-  onAdminManagerToggle(enabled: boolean): void {
-    if (
-      !enabled &&
-      this.edit.isDepartmentManager &&
-      this.managedIds.length > 0
-    ) {
-      const ok = confirm(
-        'Після вимкнення менеджерської ролі закріплені відділи буде видалено.',
-      );
-      if (!ok) {
-        return;
-      }
-      this.managedIds = [];
-    }
-    this.edit.isDepartmentManager = enabled;
   }
 
   normalizeCalendarColor(): void {
@@ -1530,49 +1186,10 @@ export class EmployeeDetailPageComponent implements OnInit {
       phoneNumber: this.edit.phoneNumber || null,
       telegram: this.edit.telegram || null,
     };
-    if (this.canEditOrgAssignment) {
-      const org = optionalOrgAssignmentIds({
-        departmentId: this.edit.departmentId,
-        positionId: this.edit.positionId,
-      });
-      body['departmentId'] = org.departmentId;
-      body['positionId'] = org.positionId;
-    }
     if (this.isAdmin) {
       body['employeeNumber'] = this.edit.employeeNumber;
       body['calendarColor'] = this.edit.calendarColor;
       body['workEmail'] = this.edit.workEmail || null;
-      // Account login email is not part of UpdateEmployeeDto (forbidNonWhitelisted).
-      body['role'] = this.edit.role;
-      body['isDepartmentManager'] =
-        this.edit.role === 'department_manager'
-          ? true
-          : this.edit.role === 'admin'
-            ? this.edit.isDepartmentManager
-            : false;
-      if (this.showManagedDepartmentsSection) {
-        body['managedDepartmentIds'] = this.managedIds;
-      } else if (
-        this.employee.role === 'department_manager' ||
-        this.employee.isDepartmentManager
-      ) {
-        body['managedDepartmentIds'] = [];
-      }
-    }
-
-    if (!this.globalPrivacyPriority) {
-      if (this.employee.permissions?.canEditProfileVisibilityOverride) {
-        body['profileVisibilityOverride'] = this.toOverride(this.profileOverride);
-      }
-      if (this.employee.permissions?.canEditAbsenceVisibilityOverride) {
-        body['absenceVisibilityOverride'] = this.toOverride(this.absencesOverride);
-      }
-      if (this.employee.permissions?.canEditShowAbsenceTypeToPeersOverride) {
-        body['showAbsenceTypeToPeersOverride'] =
-          this.absencesOverride === 'deny'
-            ? null
-            : this.toTypeDetailOverride(this.absenceTypeDetailOverride);
-      }
     }
 
     // Dirty-only for sensitive fields — never send admin-only keys without permission.
@@ -1611,13 +1228,6 @@ export class EmployeeDetailPageComponent implements OnInit {
       this.employee = employee;
       this.editingProfile = false;
       this.fillEditFromEmployee(employee);
-      this.managedIds = [...(employee.managedDepartmentIds || [])];
-      this.profileOverride = this.fromOverride(employee.profileVisibilityOverride ?? null);
-      this.absencesOverride = this.fromOverride(employee.absenceVisibilityOverride ?? null);
-      this.absenceTypeDetailOverride = this.fromTypeDetailOverride(
-        employee.showAbsenceTypeToPeersOverride ?? null,
-      );
-      this.reloadPositions(employee.departmentId, employee.positionId);
     };
 
     const fail = (err: { error?: { message?: string | string[] } }) => {

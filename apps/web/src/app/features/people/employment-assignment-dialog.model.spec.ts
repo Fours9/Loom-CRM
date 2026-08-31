@@ -81,6 +81,8 @@ describe('employment-assignment-dialog.model', () => {
       comment: 'move',
       activationBlockedReason: null,
       activationCheckedAt: null,
+      isDepartmentManager: true,
+      managedDepartmentIds: ['dep1'],
       updatedAt: '2026-01-02T00:00:00.000Z',
       department: null,
       position: null,
@@ -89,8 +91,28 @@ describe('employment-assignment-dialog.model', () => {
     });
     expect(form.directionId).toBe('d1');
     expect(form.workLocation).toBe('Kyiv');
+    expect(form.isDepartmentManager).toBe(true);
+    expect(form.managedDepartmentIds).toEqual(['dep1']);
     form.workLocation = 'changed';
     expect(form.endDate).toBe('2026-02-01');
+  });
+
+  it('includes manager fields in write payload', () => {
+    const form = {
+      ...emptyEmploymentAssignmentForm(),
+      isDepartmentManager: true,
+      managedDepartmentIds: ['dep1'],
+    };
+    expect(toEmploymentAssignmentWrite(form, 'create')).toMatchObject({
+      isDepartmentManager: true,
+      managedDepartmentIds: ['dep1'],
+    });
+    expect(
+      toEmploymentAssignmentWrite(
+        { ...form, isDepartmentManager: false, managedDepartmentIds: ['dep1'] },
+        'create',
+      ).managedDepartmentIds,
+    ).toEqual([]);
   });
 
   it('marks catalog names missing from the active list as archival', () => {

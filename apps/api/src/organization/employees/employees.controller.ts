@@ -92,14 +92,6 @@ class CreateEmployeeDto {
   employeeNumber?: string;
 
   @IsOptional()
-  @IsEnum(UserRole)
-  role?: UserRole;
-
-  @IsOptional()
-  @IsBoolean()
-  isDepartmentManager?: boolean;
-
-  @IsOptional()
   @IsString()
   calendarColor?: string | null;
 
@@ -140,11 +132,6 @@ class CreateEmployeeDto {
   temporaryPassword?: string;
 
   @IsOptional()
-  @IsArray()
-  @IsUUID('4', { each: true })
-  managedDepartmentIds?: string[];
-
-  @IsOptional()
   @IsString()
   profileVisibilityOverride?: string | null;
 
@@ -180,15 +167,17 @@ class UpdateEmployeeDto {
   @IsOptional() @IsString() personalEmail?: string | null;
   @IsOptional() @IsString() comment?: string | null;
   @IsOptional() @IsString() adminComment?: string | null;
-  @IsOptional() @IsEnum(UserRole) role?: UserRole;
-  @IsOptional() @IsBoolean() isDepartmentManager?: boolean;
+}
+
+class UpdateAccessSettingsDto {
+  @IsOptional() @IsBoolean() adminAccess?: boolean;
   @IsOptional() @IsString() profileVisibilityOverride?: string | null;
   @IsOptional() @IsString() absenceVisibilityOverride?: string | null;
   @IsOptional() @IsBoolean() showAbsenceTypeToPeersOverride?: boolean | null;
-  @IsOptional()
-  @IsArray()
-  @IsUUID('4', { each: true })
-  managedDepartmentIds?: string[];
+}
+
+class UpdateAccountEmailDto {
+  @IsEmail() email!: string;
 }
 
 class ReplaceScheduleDto {
@@ -201,7 +190,6 @@ class ReplaceScheduleDto {
 class AttachAccountDto {
   @IsEmail() email!: string;
   @IsString() @MinLength(8) temporaryPassword!: string;
-  @IsOptional() @IsEnum(UserRole) role?: UserRole;
 }
 
 class AccountStatusDto {
@@ -331,6 +319,11 @@ class CreateAssignmentDto {
   @IsOptional() @IsString() probationStartDate?: string | null;
   @IsOptional() @IsString() probationEndDate?: string | null;
   @IsOptional() @IsString() comment?: string | null;
+  @IsOptional() @IsBoolean() isDepartmentManager?: boolean;
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDepartmentIds?: string[];
 }
 
 class UpdateAssignmentDto {
@@ -350,6 +343,11 @@ class UpdateAssignmentDto {
   @IsOptional() @IsString() probationStartDate?: string | null;
   @IsOptional() @IsString() probationEndDate?: string | null;
   @IsOptional() @IsString() comment?: string | null;
+  @IsOptional() @IsBoolean() isDepartmentManager?: boolean;
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDepartmentIds?: string[];
 }
 
 class StatusTransitionDto {
@@ -411,11 +409,11 @@ export class EmployeesController {
   @RequirePermissions(Permission.EmployeesCreate)
   previewNextNumber(
     @CurrentUser() user: User,
-    @Query('role') role?: UserRole,
+    @Query('positionId') positionId?: string,
   ) {
-    return this.employees.previewNextEmployeeNumber(
+    return this.employees.previewNextEmployeeNumberFromPosition(
       user,
-      role ?? UserRole.Employee,
+      positionId,
     );
   }
 
@@ -664,6 +662,26 @@ export class EmployeesController {
     @Body() dto: UpdateEmployeeDto,
   ) {
     return this.employees.update(user, id, dto);
+  }
+
+  @Patch(':id/access-settings')
+  @RequirePermissions(Permission.EmployeesEdit)
+  updateAccessSettings(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAccessSettingsDto,
+  ) {
+    return this.employees.updateAccessSettings(user, id, dto);
+  }
+
+  @Patch(':id/account/email')
+  @RequirePermissions(Permission.EmployeesEdit)
+  updateAccountEmail(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAccountEmailDto,
+  ) {
+    return this.employees.updateAccountEmail(user, id, dto.email);
   }
 
   @Post(':id/account')

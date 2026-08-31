@@ -19,7 +19,6 @@ import {
   Position,
   PrivacySettings,
   ScheduleDay,
-  UserRole,
   UserStatus,
 } from './models';
 
@@ -134,9 +133,11 @@ export class ApiService {
     return this.http.delete<EmployeeProfile>(`/api/v1/employees/${id}/account`);
   }
 
-  getNextEmployeeNumber(role: UserRole): Observable<{ employeeNumber: string }> {
+  getNextEmployeeNumber(positionId?: string | null): Observable<{ employeeNumber: string }> {
+    const params: Record<string, string> = {};
+    if (positionId) params['positionId'] = positionId;
     return this.http.get<{ employeeNumber: string }>('/api/v1/employees/next-number', {
-      params: { role },
+      params,
     });
   }
 

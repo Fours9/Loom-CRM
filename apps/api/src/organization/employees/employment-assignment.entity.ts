@@ -5,6 +5,7 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -13,6 +14,7 @@ import { Department } from '../departments/department.entity';
 import { Position } from '../positions/position.entity';
 import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
+import { EmploymentAssignmentManagedDepartment } from './employment-assignment-managed-department.entity';
 
 export type EmploymentAssignmentStatus = 'active' | 'ended' | 'planned';
 
@@ -95,6 +97,16 @@ export class EmploymentAssignment {
 
   @Column({ type: 'varchar', length: 32, default: 'active' })
   status!: EmploymentAssignmentStatus;
+
+  /** Actual manager membership for Access (variant 2). */
+  @Column({ name: 'is_department_manager', type: 'boolean', default: false })
+  isDepartmentManager!: boolean;
+
+  @OneToMany(
+    () => EmploymentAssignmentManagedDepartment,
+    (row) => row.assignment,
+  )
+  managedDepartments?: EmploymentAssignmentManagedDepartment[];
 
   @Column({ name: 'comment', type: 'text', nullable: true })
   comment!: string | null;

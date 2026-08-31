@@ -39,6 +39,15 @@ export class EmployeeAccountApiService {
     return this.http.delete(`/api/v1/employees/${employeeId}/account`);
   }
 
+  updateAccountEmail(
+    employeeId: string,
+    email: string,
+  ): Observable<unknown> {
+    return this.http.patch(`/api/v1/employees/${employeeId}/account/email`, {
+      email,
+    });
+  }
+
   /** Hard-delete Employee operational aggregate (204). */
   deleteEmployee(employeeId: string): Observable<void> {
     return this.http.delete<void>(`/api/v1/employees/${employeeId}`);

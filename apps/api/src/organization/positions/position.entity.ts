@@ -14,6 +14,7 @@ import { Direction } from '../companies/direction.entity';
 import { PositionSkillRequirement } from '../position-requirements/position-skill-requirement.entity';
 import { PositionDuty } from '../position-requirements/position-duty.entity';
 import { PositionGoalTemplate } from '../position-requirements/position-goal-template.entity';
+import { PositionManagedDepartment } from './position-managed-department.entity';
 
 @Entity({ name: 'positions' })
 export class Position {
@@ -50,6 +51,13 @@ export class Position {
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
+
+  /** Template: new EA copies this unless create form overrides. */
+  @Column({ name: 'is_department_manager_template', type: 'boolean', default: false })
+  isDepartmentManagerTemplate!: boolean;
+
+  @OneToMany(() => PositionManagedDepartment, (row) => row.position)
+  managedDepartments?: PositionManagedDepartment[];
 
   @OneToMany(() => PositionSkillRequirement, (row) => row.position)
   skillRequirements?: PositionSkillRequirement[];

@@ -15,6 +15,7 @@ import { EmployeeContact } from './employee-contact.entity';
 import { EmployeeEmergencyContact } from './employee-emergency-contact.entity';
 import { EmployeeImportantDate } from './employee-important-date.entity';
 import { EmploymentAssignment } from './employment-assignment.entity';
+import { EmploymentAssignmentManagedDepartment } from './employment-assignment-managed-department.entity';
 import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
 import { EmployeesService } from './employees.service';
@@ -32,6 +33,8 @@ import { EmployeeSkillMatrixService } from '../skills/employee-skill-matrix.serv
 import { PositionSkillRequirement } from '../position-requirements/position-skill-requirement.entity';
 import { PermissionsModule } from '../../platform/permissions/permissions.module';
 import { OrganizationEmployeeErasureFacade } from './organization-employee-erasure.facade';
+import { IdentityRoleProjection } from './identity-role-projection';
+import { PositionManagedDepartment } from '../positions/position-managed-department.entity';
 
 @Module({
   imports: [
@@ -39,6 +42,8 @@ import { OrganizationEmployeeErasureFacade } from './organization-employee-erasu
       Employee,
       WorkScheduleDay,
       EmployeeManagedDepartment,
+      EmploymentAssignmentManagedDepartment,
+      PositionManagedDepartment,
       EmployeeContact,
       EmployeeEmergencyContact,
       EmployeeImportantDate,
@@ -67,6 +72,7 @@ import { OrganizationEmployeeErasureFacade } from './organization-employee-erasu
     EmploymentAssignmentLifecycleService,
     EmployeeSkillMatrixService,
     OrganizationEmployeeErasureFacade,
+    IdentityRoleProjection,
     PdfRenderer,
     OrganizationEmployeeIdentityLookup,
     {
@@ -85,6 +91,7 @@ import { OrganizationEmployeeErasureFacade } from './organization-employee-erasu
     EmploymentAssignmentLifecycleService,
     EmploymentCatalogModule,
     OrganizationEmployeeErasureFacade,
+    IdentityRoleProjection,
   ],
 })
 export class EmployeesModule {}

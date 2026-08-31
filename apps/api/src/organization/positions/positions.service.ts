@@ -4,10 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Position } from './position.entity';
 import { DepartmentsService } from '../departments/departments.service';
 import { resolvePositionDirectionId } from './resolve-position-direction';
+import { replacePositionManagedDepartments } from '../employees/managed-department-writes';
 
 export type PositionListQuery = {
   all?: boolean;
@@ -16,10 +17,50 @@ export type PositionListQuery = {
   globalsOnly?: boolean;
 };
 
-export type PositionListItem = Position & {
+export type PositionView = Position & {
+  managedDepartmentIds: string[];
+};
+
+export type PositionListItem = PositionView & {
   departmentName: string | null;
   directionName: string | null;
 };
+
+function resolveManagedDepartmentIds(input: {
+  isDepartmentManagerTemplate: boolean;
+  managedDepartmentIds?: string[];
+  departmentId: string | null;
+  previousManagedDepartmentIds: string[];
+  templateExplicitlyEnabled: boolean;
+}): string[] {
+  if (!input.isDepartmentManagerTemplate) {
+    return [];
+  }
+
+  let ids: string[];
+  if (input.managedDepartmentIds !== undefined) {
+    ids = [...new Set(input.managedDepartmentIds.filter(Boolean))];
+  } else if (input.templateExplicitlyEnabled) {
+    ids = [];
+  } else {
+    ids = [...input.previousManagedDepartmentIds];
+  }
+
+  if (ids.length === 0 && input.departmentId) {
+    return [input.departmentId];
+  }
+  return ids;
+}
+
+function toPositionView(row: Position): PositionView {
+  const managedDepartmentIds = (row.managedDepartments ?? []).map(
+    (m) => m.departmentId,
+  );
+  return {
+    ...row,
+    managedDepartmentIds,
+  };
+}
 
 @Injectable()
 export class PositionsService {
@@ -27,6 +68,7 @@ export class PositionsService {
     @InjectRepository(Position)
     private readonly positions: Repository<Position>,
     private readonly departments: DepartmentsService,
+    private readonly dataSource: DataSource,
   ) {}
 
   private async resolveDirectionId(input: {
@@ -56,6 +98,7 @@ export class PositionsService {
       .leftJoinAndSelect('p.department', 'department')
       .leftJoinAndSelect('p.direction', 'direction')
       .leftJoinAndSelect('department.direction', 'deptDirection')
+      .leftJoinAndSelect('p.managedDepartments', 'managedDepartments')
       .orderBy('p.name', 'ASC');
 
     if (!query.all) {
@@ -75,23 +118,31 @@ export class PositionsService {
     }
 
     const rows = await qb.getMany();
-    return rows.map((row) => ({
-      ...row,
-      departmentName: row.department?.name ?? null,
-      directionName:
-        row.direction?.name ??
-        row.department?.direction?.name ??
-        null,
-    }));
+    return rows.map((row) => {
+      const view = toPositionView(row);
+      return {
+        ...view,
+        departmentName: row.department?.name ?? null,
+        directionName:
+          row.direction?.name ??
+          row.department?.direction?.name ??
+          null,
+      };
+    });
   }
 
-  async getOrFail(id: string): Promise<Position> {
+  async getOrFail(id: string): Promise<PositionView> {
     const row = await this.positions.findOne({
       where: { id },
-      relations: ['department', 'department.direction', 'direction'],
+      relations: [
+        'department',
+        'department.direction',
+        'direction',
+        'managedDepartments',
+      ],
     });
     if (!row) throw new NotFoundException('Position not found');
-    return row;
+    return toPositionView(row);
   }
 
   async create(input: {
@@ -99,21 +150,46 @@ export class PositionsService {
     departmentId?: string | null;
     directionId?: string | null;
     description?: string | null;
-  }): Promise<Position> {
+    isDepartmentManagerTemplate?: boolean;
+    managedDepartmentIds?: string[];
+  }): Promise<PositionView> {
     const departmentId = input.departmentId ?? null;
     const directionId = await this.resolveDirectionId({
       departmentId,
       explicitDirectionId: input.directionId,
     });
-    return this.positions.save(
-      this.positions.create({
-        name: input.name,
-        departmentId,
-        directionId,
-        description: input.description ?? null,
-        isActive: true,
-      }),
+    const isDepartmentManagerTemplate = Boolean(
+      input.isDepartmentManagerTemplate,
     );
+    const managedDepartmentIds = resolveManagedDepartmentIds({
+      isDepartmentManagerTemplate,
+      managedDepartmentIds: input.managedDepartmentIds ?? [],
+      departmentId,
+      previousManagedDepartmentIds: [],
+      templateExplicitlyEnabled: isDepartmentManagerTemplate,
+    });
+
+    const id = await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Position);
+      const saved = await repo.save(
+        repo.create({
+          name: input.name,
+          departmentId,
+          directionId,
+          description: input.description ?? null,
+          isActive: true,
+          isDepartmentManagerTemplate,
+        }),
+      );
+      await replacePositionManagedDepartments(
+        manager,
+        saved.id,
+        managedDepartmentIds,
+      );
+      return saved.id;
+    });
+
+    return this.getOrFail(id);
   }
 
   async update(
@@ -121,10 +197,17 @@ export class PositionsService {
     input: Partial<
       Pick<
         Position,
-        'name' | 'departmentId' | 'directionId' | 'description' | 'isActive'
+        | 'name'
+        | 'departmentId'
+        | 'directionId'
+        | 'description'
+        | 'isActive'
+        | 'isDepartmentManagerTemplate'
       >
-    >,
-  ): Promise<Position> {
+    > & {
+      managedDepartmentIds?: string[];
+    },
+  ): Promise<PositionView> {
     const row = await this.getOrFail(id);
     const departmentId =
       input.departmentId !== undefined ? input.departmentId : row.departmentId;
@@ -141,12 +224,40 @@ export class PositionsService {
       explicitDirectionId,
     });
 
-    if (input.name !== undefined) row.name = input.name;
-    if (input.description !== undefined) row.description = input.description;
-    if (input.isActive !== undefined) row.isActive = input.isActive;
-    row.departmentId = departmentId;
-    row.directionId = directionId;
-    return this.positions.save(row);
+    const templateTouched = input.isDepartmentManagerTemplate !== undefined;
+    const isDepartmentManagerTemplate = templateTouched
+      ? Boolean(input.isDepartmentManagerTemplate)
+      : row.isDepartmentManagerTemplate;
+    const managedDepartmentIds = resolveManagedDepartmentIds({
+      isDepartmentManagerTemplate,
+      managedDepartmentIds: input.managedDepartmentIds,
+      departmentId,
+      previousManagedDepartmentIds: row.managedDepartmentIds,
+      templateExplicitlyEnabled:
+        templateTouched && Boolean(input.isDepartmentManagerTemplate),
+    });
+
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Position);
+      const entity = await repo.findOne({ where: { id } });
+      if (!entity) throw new NotFoundException('Position not found');
+
+      if (input.name !== undefined) entity.name = input.name;
+      if (input.description !== undefined) entity.description = input.description;
+      if (input.isActive !== undefined) entity.isActive = input.isActive;
+      entity.departmentId = departmentId;
+      entity.directionId = directionId;
+      entity.isDepartmentManagerTemplate = isDepartmentManagerTemplate;
+      await repo.save(entity);
+
+      await replacePositionManagedDepartments(
+        manager,
+        id,
+        managedDepartmentIds,
+      );
+    });
+
+    return this.getOrFail(id);
   }
 
   async softDelete(id: string): Promise<void> {

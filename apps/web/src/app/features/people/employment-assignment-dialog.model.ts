@@ -56,6 +56,8 @@ export type EmploymentAssignmentForm = {
   probationStartDate: string;
   probationEndDate: string;
   comment: string;
+  isDepartmentManager: boolean;
+  managedDepartmentIds: string[];
 };
 
 export function emptyEmploymentAssignmentForm(): EmploymentAssignmentForm {
@@ -71,6 +73,8 @@ export function emptyEmploymentAssignmentForm(): EmploymentAssignmentForm {
     probationStartDate: '',
     probationEndDate: '',
     comment: '',
+    isDepartmentManager: false,
+    managedDepartmentIds: [],
   };
 }
 
@@ -109,7 +113,48 @@ export function employmentAssignmentFormFromHistory(
     probationStartDate: row.probationStartDate || '',
     probationEndDate: row.probationEndDate || '',
     comment: row.comment || '',
+    isDepartmentManager: Boolean(row.isDepartmentManager),
+    managedDepartmentIds: [...(row.managedDepartmentIds || [])],
   };
+}
+
+/** Prefill manager fields from a position template (create flow only). */
+export function applyPositionManagerTemplate(
+  form: EmploymentAssignmentForm,
+  position: {
+    isDepartmentManagerTemplate?: boolean;
+    managedDepartmentIds?: string[] | null;
+    departmentId?: string | null;
+  } | null,
+): EmploymentAssignmentForm {
+  if (!position || !position.isDepartmentManagerTemplate) {
+    return {
+      ...form,
+      isDepartmentManager: false,
+      managedDepartmentIds: [],
+    };
+  }
+  const fromTemplate = [...(position.managedDepartmentIds || [])].filter(Boolean);
+  const fallbackDept =
+    form.departmentId || position.departmentId || '';
+  return {
+    ...form,
+    isDepartmentManager: true,
+    managedDepartmentIds:
+      fromTemplate.length > 0
+        ? fromTemplate
+        : fallbackDept
+          ? [fallbackDept]
+          : [],
+  };
+}
+
+export function defaultManagedDepartmentsOnEnable(
+  managedDepartmentIds: string[],
+  departmentId: string,
+): string[] {
+  if (managedDepartmentIds.length > 0) return [...managedDepartmentIds];
+  return departmentId ? [departmentId] : [];
 }
 
 export function toEmploymentAssignmentWrite(
@@ -127,6 +172,10 @@ export function toEmploymentAssignmentWrite(
     probationStartDate: form.probationStartDate || null,
     probationEndDate: form.probationEndDate || null,
     comment: form.comment || null,
+    isDepartmentManager: form.isDepartmentManager,
+    managedDepartmentIds: form.isDepartmentManager
+      ? [...form.managedDepartmentIds]
+      : [],
   };
   if (mode === 'edit') {
     return { ...body, endDate: form.endDate || null };

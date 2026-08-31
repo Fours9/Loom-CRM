@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UsersService } from '../../platform/identity/users.service';
-import { UserStatus } from '../../platform/identity/user.enums';
+import { UserRole, UserStatus } from '../../platform/identity/user.enums';
 import { AuditService } from '../../platform/audit/audit.service';
 import { permissionsForRole } from '../../platform/permissions/role-permissions';
 import { Permission } from '../../platform/permissions/permission.names';
@@ -53,6 +53,12 @@ import {
   isDirectionSelectable,
   isPositionSelectable,
 } from './organization-selectability.policy';
+import {
+  loadPositionManagerTemplate,
+  replaceAssignmentManagedDepartments,
+  resolveManagerMembershipForCreate,
+} from './managed-department-writes';
+import { IdentityRoleProjection } from './identity-role-projection';
 
 type AssignmentWriteDto = {
   directionId?: string | null;
@@ -71,6 +77,8 @@ type AssignmentWriteDto = {
   probationStartDate?: string | null;
   probationEndDate?: string | null;
   comment?: string | null;
+  isDepartmentManager?: boolean;
+  managedDepartmentIds?: string[];
 };
 
 type AssignmentOrgState = {
@@ -130,6 +138,10 @@ export type ProfileCapabilities = {
   canResetPassword: boolean;
   canManageAccount: boolean;
   canDeleteEmployee: boolean;
+  canEditAdminAccess: boolean;
+  canEditVisibilityOverrides: boolean;
+  canViewAccountDetails: boolean;
+  canEditAccountEmail: boolean;
 };
 
 @Injectable()
@@ -162,6 +174,7 @@ export class EmployeeProfileService {
     private readonly employmentCatalogs: EmploymentCatalogService,
     private readonly currentEmployment: CurrentEmploymentAssignmentResolver,
     private readonly businessDateClock: BusinessDateClock,
+    private readonly identityRoleProjection: IdentityRoleProjection,
   ) {}
 
   private hasPerm(user: User, perm: Permission): boolean {
@@ -460,6 +473,13 @@ export class EmployeeProfileService {
       canResetPassword: this.access.canResetEmployeePassword(actor, target),
       canManageAccount: this.access.canDestructivelyManageAccount(actor, target),
       canDeleteEmployee: this.access.canDeleteEmployee(actor, target),
+      canEditAdminAccess: this.access.canEditAdminAccess(actor),
+      canEditVisibilityOverrides: this.access.canEditVisibilityOverrides(
+        actor,
+        target.role,
+      ),
+      canViewAccountDetails: this.access.canViewAccountDetails(actor, target),
+      canEditAccountEmail: this.access.canEditAccountEmail(actor, target),
     };
   }
 
@@ -497,7 +517,13 @@ export class EmployeeProfileService {
     const assignment = resolvedAssignment
       ? await this.assignments.findOne({
           where: { id: resolvedAssignment.id },
-          relations: ['department', 'position', 'company', 'direction'],
+          relations: [
+            'department',
+            'position',
+            'company',
+            'direction',
+            'managedDepartments',
+          ],
         })
       : null;
 
@@ -582,6 +608,9 @@ export class EmployeeProfileService {
         accountCreatedAt: employee.user?.createdAt
           ? employee.user.createdAt.toISOString()
           : null,
+        ...(caps.canViewAccountDetails
+          ? { accountEmail: employee.user?.email ?? null }
+          : {}),
         workEmail: employee.workEmail,
         workPhone: employee.phoneNumber,
         workTelegram: employee.telegram,
@@ -617,6 +646,10 @@ export class EmployeeProfileService {
               probationStartDate: assignment.probationStartDate,
               probationEndDate: assignment.probationEndDate,
               status: assignment.status,
+              isDepartmentManager: Boolean(assignment.isDepartmentManager),
+              managedDepartmentIds: (assignment.managedDepartments ?? []).map(
+                (row) => row.departmentId,
+              ),
               activationBlockedReason: assignment.activationBlockedReason,
               activationCheckedAt: assignment.activationCheckedAt
                 ? assignment.activationCheckedAt.toISOString()
@@ -704,6 +737,25 @@ export class EmployeeProfileService {
               priority: d.priority,
             }))
           : null,
+        ...(caps.canEditAdminAccess || caps.canEditVisibilityOverrides
+          ? {
+              access: {
+                adminAccess: employee.role === UserRole.Admin,
+                computedRole:
+                  employee.role === UserRole.Admin
+                    ? assignment?.isDepartmentManager
+                      ? UserRole.DepartmentManager
+                      : UserRole.Employee
+                    : employee.role,
+                profileVisibilityOverride: employee.profileVisibilityOverride,
+                absenceVisibilityOverride: employee.absenceVisibilityOverride,
+                showAbsenceTypeToPeersOverride:
+                  this.peerTypeOverrideFromColumn(
+                    employee.showAbsenceTypeToPeersOverride,
+                  ),
+              },
+            }
+          : {}),
       },
       capabilities: caps,
       completeness,
@@ -1272,6 +1324,9 @@ export class EmployeeProfileService {
     await assignmentRepo.save(lockedPlanned);
     this.syncEmployeeCurrentAssignment(employee, lockedPlanned);
     await manager.getRepository(Employee).save(employee);
+    await this.identityRoleProjection.apply(manager, employee, {
+      adminAccess: 'preserve',
+    });
     await this.audit.record(
       {
         actorId,
@@ -1323,6 +1378,16 @@ export class EmployeeProfileService {
               directionId: normalized.directionId ?? null,
             },
             existing: null,
+          });
+
+          const { position, managedDepartmentIds: positionManagedDepartmentIds } =
+            await loadPositionManagerTemplate(manager, resolved.positionId);
+          const membership = resolveManagerMembershipForCreate({
+            position,
+            positionManagedDepartmentIds,
+            explicitIsDepartmentManager: normalized.isDepartmentManager,
+            explicitManagedDepartmentIds: normalized.managedDepartmentIds,
+            assignmentDepartmentId: resolved.departmentId,
           });
 
           const workFormat = await this.assertAssignmentCatalogValue(
@@ -1380,15 +1445,24 @@ export class EmployeeProfileService {
             probationEndDate: normalized.probationEndDate ?? null,
             comment: normalized.comment ?? null,
             status,
+            isDepartmentManager: membership.isDepartmentManager,
             activationBlockedReason: null,
             activationCheckedAt: null,
             createdByUserId: actor.id,
           });
           await assignmentRepo.save(assignment);
+          await replaceAssignmentManagedDepartments(
+            manager,
+            assignment.id,
+            membership.managedDepartmentIds,
+          );
 
           if (status === 'active') {
             this.syncEmployeeCurrentAssignment(emp, assignment);
             await employeeRepo.save(emp);
+            await this.identityRoleProjection.apply(manager, emp, {
+              adminAccess: 'preserve',
+            });
           }
 
           await this.audit.record(
@@ -1555,6 +1629,49 @@ export class EmployeeProfileService {
             row.comment = normalized.comment;
           }
 
+          const hasExplicitManager = normalized.isDepartmentManager !== undefined;
+          const hasExplicitManagedDepts =
+            normalized.managedDepartmentIds !== undefined;
+          if (hasExplicitManager || hasExplicitManagedDepts) {
+            const wasManager = row.isDepartmentManager;
+            if (hasExplicitManager) {
+              row.isDepartmentManager = Boolean(normalized.isDepartmentManager);
+            }
+
+            const explicitlyTogglingOn =
+              hasExplicitManager &&
+              normalized.isDepartmentManager === true &&
+              !wasManager;
+
+            if (!row.isDepartmentManager) {
+              await replaceAssignmentManagedDepartments(manager, row.id, []);
+            } else if (hasExplicitManagedDepts) {
+              let managedDepartmentIds = [
+                ...new Set(
+                  (normalized.managedDepartmentIds ?? []).filter(Boolean),
+                ),
+              ];
+              if (
+                managedDepartmentIds.length === 0 &&
+                row.departmentId &&
+                explicitlyTogglingOn
+              ) {
+                managedDepartmentIds = [row.departmentId];
+              }
+              await replaceAssignmentManagedDepartments(
+                manager,
+                row.id,
+                managedDepartmentIds,
+              );
+            } else if (explicitlyTogglingOn) {
+              await replaceAssignmentManagedDepartments(
+                manager,
+                row.id,
+                row.departmentId ? [row.departmentId] : [],
+              );
+            }
+          }
+
           if (row.status === 'ended') {
             if (normalized.endDate !== undefined) {
               row.endDate = normalized.endDate;
@@ -1583,6 +1700,9 @@ export class EmployeeProfileService {
           } else if (row.status === 'active') {
             this.syncEmployeeCurrentAssignment(emp, row);
             await employeeRepo.save(emp);
+            await this.identityRoleProjection.apply(manager, emp, {
+              adminAccess: 'preserve',
+            });
           }
 
           await this.audit.record(
@@ -1669,7 +1789,13 @@ export class EmployeeProfileService {
     }
     const rows = await this.assignments.find({
       where: { employeeId: id },
-      relations: ['department', 'position', 'company', 'direction'],
+      relations: [
+        'department',
+        'position',
+        'company',
+        'direction',
+        'managedDepartments',
+      ],
       order: { startDate: 'DESC', createdAt: 'DESC' },
     });
     return rows.map((a) => ({
@@ -1692,6 +1818,10 @@ export class EmployeeProfileService {
       probationStartDate: a.probationStartDate,
       probationEndDate: a.probationEndDate,
       comment: a.comment,
+      isDepartmentManager: Boolean(a.isDepartmentManager),
+      managedDepartmentIds: (a.managedDepartments ?? []).map(
+        (row) => row.departmentId,
+      ),
       activationBlockedReason: a.activationBlockedReason,
       activationCheckedAt: a.activationCheckedAt
         ? a.activationCheckedAt.toISOString()
@@ -1945,6 +2075,15 @@ export class EmployeeProfileService {
       employeeNumber: e.employeeNumber,
       photoUrl: e.photoUrl,
     };
+  }
+
+  private peerTypeOverrideFromColumn(
+    value: string | null | undefined,
+  ): boolean | null {
+    if (value == null || value === '') return null;
+    if (value === 'true' || value === '1') return true;
+    if (value === 'false' || value === '0') return false;
+    return null;
   }
 
   private redactMetadata(

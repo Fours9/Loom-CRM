@@ -47,6 +47,8 @@ export type OrgPosition = {
   directionId: string | null;
   description: string | null;
   isActive: boolean;
+  isDepartmentManagerTemplate?: boolean;
+  managedDepartmentIds?: string[];
   departmentName?: string | null;
   directionName?: string | null;
   department?: OrgDepartment | null;
@@ -174,6 +176,8 @@ export class SettingsOrgApiService {
     departmentId?: string | null;
     directionId?: string | null;
     description?: string | null;
+    isDepartmentManagerTemplate?: boolean;
+    managedDepartmentIds?: string[];
   }): Observable<OrgPosition> {
     return this.http.post<OrgPosition>('/api/v1/positions', body);
   }
@@ -186,6 +190,8 @@ export class SettingsOrgApiService {
       directionId: string | null;
       description: string | null;
       isActive: boolean;
+      isDepartmentManagerTemplate: boolean;
+      managedDepartmentIds: string[];
     }>,
   ): Observable<OrgPosition> {
     return this.http.patch<OrgPosition>(`/api/v1/positions/${id}`, body);

@@ -44,8 +44,10 @@ import {
 } from './employee-data-panel.component';
 import { EmployeeSkillsMatrixPanelComponent } from './employee-skills-matrix-panel.component';
 import { EmployeeAccountPanelComponent } from './employee-account-panel.component';
+import { EmployeeRoleAccessPanelComponent } from './employee-role-access-panel.component';
 import {
   canShowAccountAdminTab,
+  canShowRoleAccessAdminTab,
   resolvePeopleProfileTab,
   visiblePeopleProfileTabs,
   type PeopleProfileTabId,
@@ -54,7 +56,7 @@ import {
 type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
 type AbsenceTabId = 'position' | 'requests' | 'calendar' | 'schedule';
-type AdminTabId = 'history' | 'account';
+type AdminTabId = 'history' | 'account' | 'roleAccess';
 type MetricsTabId = 'skills';
 
 @Component({
@@ -72,6 +74,7 @@ type MetricsTabId = 'skills';
     EmployeeDataPanelComponent,
     EmployeeSkillsMatrixPanelComponent,
     EmployeeAccountPanelComponent,
+    EmployeeRoleAccessPanelComponent,
   ],
   template: `
     @if (loading()) {
@@ -312,6 +315,19 @@ type MetricsTabId = 'skills';
                     Акаунт
                   </button>
                 }
+                @if (showRoleAccessAdminTab()) {
+                  <button
+                    type="button"
+                    class="tab"
+                    role="tab"
+                    [attr.aria-selected]="adminTab() === 'roleAccess'"
+                    [class.active]="adminTab() === 'roleAccess'"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="setAdminTab('roleAccess')"
+                  >
+                    Роль та допуски
+                  </button>
+                }
               </nav>
 
               @if (adminTab() === 'history' && profile()!.capabilities.canViewHistory) {
@@ -324,6 +340,14 @@ type MetricsTabId = 'skills';
                   [caps]="profile()!.capabilities"
                   (changed)="reloadProfile()"
                   (deleted)="onEmployeeHardDeleted()"
+                />
+              }
+              @if (adminTab() === 'roleAccess' && showRoleAccessAdminTab()) {
+                <loom-employee-role-access-panel
+                  [employeeId]="employeeId"
+                  [access]="profile()!.sections.access"
+                  [caps]="profile()!.capabilities"
+                  (changed)="reloadProfile()"
                 />
               }
             }
@@ -543,6 +567,10 @@ export class PeopleProfilePageComponent implements OnInit {
     canShowAccountAdminTab(this.profile()?.capabilities),
   );
 
+  readonly showRoleAccessAdminTab = computed(() =>
+    canShowRoleAccessAdminTab(this.profile()?.capabilities),
+  );
+
   readonly canViewAbsencesSchedule = computed(() =>
     (this.session.user()?.permissions ?? []).includes(
       Permission.AbsencesCalendarView,
@@ -567,13 +595,21 @@ export class PeopleProfilePageComponent implements OnInit {
 
     effect(() => {
       const caps = this.profile()?.capabilities;
-      const accountOk = canShowAccountAdminTab(caps);
       const historyOk = Boolean(caps?.canViewHistory);
+      const accountOk = canShowAccountAdminTab(caps);
+      const roleAccessOk = canShowRoleAccessAdminTab(caps);
       const current = this.adminTab();
-      if (current === 'account' && !accountOk) {
+      const allowed =
+        (current === 'history' && historyOk) ||
+        (current === 'account' && accountOk) ||
+        (current === 'roleAccess' && roleAccessOk);
+      if (allowed) return;
+      if (historyOk) {
         this.adminTab.set('history');
-      } else if (current === 'history' && !historyOk && accountOk) {
+      } else if (accountOk) {
         this.adminTab.set('account');
+      } else if (roleAccessOk) {
+        this.adminTab.set('roleAccess');
       }
     });
   }

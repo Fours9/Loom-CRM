@@ -14,6 +14,8 @@ export type PositionDraftApi = {
     departmentId?: string | null;
     directionId?: string | null;
     description?: string | null;
+    isDepartmentManagerTemplate?: boolean;
+    managedDepartmentIds?: string[];
   }): Observable<OrgPosition>;
   createPositionSkillRequirement(
     positionId: string,

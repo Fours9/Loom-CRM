@@ -140,6 +140,29 @@ import { PositionManagementFacade } from './position-management.facade';
             ></textarea>
           </label>
           @if (vm.canManagePositions()) {
+            <label class="check">
+              <input
+                type="checkbox"
+                [ngModel]="vm.formIsDepartmentManagerTemplate"
+                name="formIsDepartmentManagerTemplate"
+                [disabled]="vm.saveLocked()"
+                (ngModelChange)="vm.onManagerTemplateToggle($event)"
+              />
+              Менеджерує відділ
+            </label>
+            @if (vm.formIsDepartmentManagerTemplate) {
+              <label class="skills-field">
+                Керовані відділи
+                <app-multi-select-list
+                  [items]="vm.managedDepartmentPickerItems()"
+                  [selectedIds]="vm.formManagedDepartmentIds"
+                  [disabled]="vm.saveLocked()"
+                  [showSelectAll]="true"
+                  placeholder="Оберіть керовані відділи"
+                  (selectedIdsChange)="vm.onManagedDepartmentsChange($event)"
+                />
+              </label>
+            }
             <label class="skills-field">
               Навички
               <app-multi-select-list

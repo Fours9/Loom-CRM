@@ -1,4 +1,11 @@
-import { Component, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type {
   EmployeeProfileCapabilities,
@@ -18,6 +25,29 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
       }
       @if (error()) {
         <p class="error">{{ error() }}</p>
+      }
+
+      @if (caps().canViewAccountDetails && header().hasAccount) {
+        <section class="status-block">
+          <h3>Email акаунта</h3>
+          @if (caps().canEditAccountEmail) {
+            <label>
+              Email
+              <input
+                type="email"
+                name="accountEmail"
+                [(ngModel)]="accountEmail"
+                maxlength="254"
+                autocomplete="off"
+              />
+            </label>
+            <button type="button" (click)="saveAccountEmail()" [disabled]="busy()">
+              Зберегти email
+            </button>
+          } @else {
+            <p class="muted">{{ header().accountEmail || '—' }}</p>
+          }
+        </section>
       }
 
       @if (caps().canCreateAccount) {
@@ -278,6 +308,13 @@ export class EmployeeAccountPanelComponent {
   attachPassword = 'TempPass123!';
   tempPassword = 'TempPass123!';
   confirmEmployeeNumber = '';
+  accountEmail = '';
+
+  constructor() {
+    effect(() => {
+      this.accountEmail = this.header().accountEmail ?? '';
+    });
+  }
 
   accountStatusLabel(): string {
     const h = this.header();
@@ -291,6 +328,19 @@ export class EmployeeAccountPanelComponent {
     return (
       this.confirmEmployeeNumber.trim() === this.header().employeeNumber.trim()
     );
+  }
+
+  saveAccountEmail(): void {
+    this.clearFeedback();
+    this.busy.set(true);
+    this.api.updateAccountEmail(this.employeeId(), this.accountEmail.trim()).subscribe({
+      next: () => {
+        this.message.set('Email оновлено');
+        this.busy.set(false);
+        this.changed.emit();
+      },
+      error: (err) => this.fail(err, 'Не вдалося оновити email'),
+    });
   }
 
   attachAccount(): void {

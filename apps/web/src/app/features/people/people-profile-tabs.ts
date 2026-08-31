@@ -62,7 +62,11 @@ export function visiblePeopleProfileTabs(input: {
             caps?.canCreateAccount ||
             caps?.canResetPassword ||
             caps?.canManageAccount ||
-            caps?.canDeleteEmployee,
+            caps?.canDeleteEmployee ||
+            caps?.canViewAccountDetails ||
+            caps?.canEditAccountEmail ||
+            caps?.canEditAdminAccess ||
+            caps?.canEditVisibilityOverrides,
         );
       default:
         return false;
@@ -78,7 +82,18 @@ export function canShowAccountAdminTab(
     caps?.canCreateAccount ||
       caps?.canResetPassword ||
       caps?.canManageAccount ||
-      caps?.canDeleteEmployee,
+      caps?.canDeleteEmployee ||
+      caps?.canViewAccountDetails ||
+      caps?.canEditAccountEmail,
+  );
+}
+
+/** Admin «Роль та допуски» when admin access or visibility overrides are editable. */
+export function canShowRoleAccessAdminTab(
+  caps: EmployeeProfileCapabilities | null | undefined,
+): boolean {
+  return Boolean(
+    caps?.canEditAdminAccess || caps?.canEditVisibilityOverrides,
   );
 }
 

@@ -9,7 +9,14 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+} from 'class-validator';
 import { Permission } from '../../platform/permissions/permission.names';
 import { JwtAuthGuard } from '../../platform/auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../platform/permissions/permissions.guard';
@@ -32,6 +39,15 @@ class CreatePositionDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isDepartmentManagerTemplate?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDepartmentIds?: string[];
 }
 
 class UpdatePositionDto {
@@ -55,6 +71,15 @@ class UpdatePositionDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDepartmentManagerTemplate?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDepartmentIds?: string[];
 }
 
 @Controller('positions')
