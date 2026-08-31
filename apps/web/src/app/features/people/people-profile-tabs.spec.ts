@@ -17,11 +17,20 @@ const capsViewHistory: EmployeeProfileCapabilities = {
   canViewHistory: true,
   canStartOnboarding: false,
   canAssignQuestionnaire: false,
+  canCreateAccount: false,
+  canResetPassword: false,
+  canManageAccount: false,
+  canDeleteEmployee: false,
 };
 
 const capsNoHistory: EmployeeProfileCapabilities = {
   ...capsViewHistory,
   canViewHistory: false,
+};
+
+const capsAccountOnly: EmployeeProfileCapabilities = {
+  ...capsNoHistory,
+  canCreateAccount: true,
 };
 
 const allPerms: Permission[] = [
@@ -75,6 +84,14 @@ describe('visiblePeopleProfileTabs', () => {
     expect(tabs.find((t) => t.id === 'administration')?.label).toBe(
       'Адміністрування',
     );
+  });
+
+  it('shows administration when only account caps are true', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsAccountOnly,
+      permissions: allPerms,
+    });
+    expect(tabs.some((t) => t.id === 'administration')).toBe(true);
   });
 
   it('hides documents without documents.view', () => {

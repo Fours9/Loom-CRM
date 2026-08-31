@@ -55,6 +55,17 @@ import type {
   UpsertEmployeeSkillAssessmentRequest,
 } from '@loom/contracts-employees';
 
+class ScheduleDayDto {
+  @IsInt() @Min(1) @Max(7) weekday!: number;
+  @IsOptional() @IsBoolean() isWorkingDay?: boolean;
+  @IsOptional() @IsBoolean() isDayOff?: boolean;
+  @IsOptional() @IsString() startTime?: string | null;
+  @IsOptional() @IsString() endTime?: string | null;
+  @IsOptional() @IsString() breakStart?: string | null;
+  @IsOptional() @IsString() breakEnd?: string | null;
+  @IsOptional() @IsString() note?: string | null;
+}
+
 class CreateEmployeeDto {
   @IsString()
   @MinLength(1)
@@ -85,6 +96,10 @@ class CreateEmployeeDto {
   role?: UserRole;
 
   @IsOptional()
+  @IsBoolean()
+  isDepartmentManager?: boolean;
+
+  @IsOptional()
   @IsString()
   calendarColor?: string | null;
 
@@ -101,6 +116,18 @@ class CreateEmployeeDto {
   workEmail?: string | null;
 
   @IsOptional()
+  @IsString()
+  personalPhoneNumber?: string | null;
+
+  @IsOptional()
+  @IsString()
+  personalTelegram?: string | null;
+
+  @IsOptional()
+  @IsString()
+  personalEmail?: string | null;
+
+  @IsOptional()
   @IsBoolean()
   createAccount?: boolean;
 
@@ -111,6 +138,30 @@ class CreateEmployeeDto {
   @IsOptional()
   @IsString()
   temporaryPassword?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDepartmentIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  profileVisibilityOverride?: string | null;
+
+  @IsOptional()
+  @IsString()
+  absenceVisibilityOverride?: string | null;
+
+  /** FE sends boolean; persisted as text on employee (Absences parity). */
+  @IsOptional()
+  @IsBoolean()
+  showAbsenceTypeToPeersOverride?: boolean | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ScheduleDayDto)
+  schedule?: ScheduleDayDto[];
 }
 
 class UpdateEmployeeDto {
@@ -133,18 +184,11 @@ class UpdateEmployeeDto {
   @IsOptional() @IsBoolean() isDepartmentManager?: boolean;
   @IsOptional() @IsString() profileVisibilityOverride?: string | null;
   @IsOptional() @IsString() absenceVisibilityOverride?: string | null;
-  @IsOptional() @IsString() showAbsenceTypeToPeersOverride?: string | null;
-}
-
-class ScheduleDayDto {
-  @IsInt() @Min(1) @Max(7) weekday!: number;
-  @IsOptional() @IsBoolean() isWorkingDay?: boolean;
-  @IsOptional() @IsBoolean() isDayOff?: boolean;
-  @IsOptional() @IsString() startTime?: string | null;
-  @IsOptional() @IsString() endTime?: string | null;
-  @IsOptional() @IsString() breakStart?: string | null;
-  @IsOptional() @IsString() breakEnd?: string | null;
-  @IsOptional() @IsString() note?: string | null;
+  @IsOptional() @IsBoolean() showAbsenceTypeToPeersOverride?: boolean | null;
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDepartmentIds?: string[];
 }
 
 class ReplaceScheduleDto {

@@ -61,7 +61,8 @@
 **Перший вхід і скидання пароля**
 
 - Новий акаунт з тимчасовим паролем: після логіну UI відкриває `/change-password` (`mustChangePassword` з `/auth/login` / `/auth/me`). Успіх повертає новий JWT у тій самій відповіді.
-- Адмінське скидання (картка працівника Absences, `POST /auth/reset-password/:userId`) інвалідовує сесію через `tokenVersion`. Наступний запит API дає 401; interceptor робить logout і веде на `/login`. Окремого `if (це я)` на сторінці немає.
+- Адмінське скидання: People → Адміністрування → **Акаунт** (`POST /auth/reset-password/:userId`); інвалідовує сесію через `tokenVersion`. Наступний запит API дає 401; interceptor робить logout і веде на `/login`. Скидання собі дозволене; деактивація / видалення власного логіну / hard-delete власної анкети — заборонені.
+- Hard-delete анкети (`DELETE /api/v1/employees/:id`) — незворотне видалення **operational aggregate** (не GDPR wipe усіх згадок про людину). Audit `employee.deleted` з `employeeNumber` навмисний. Surviving actor UUID → UI **«Видалений користувач»**.
 
 У [`compose.yaml`](../../compose.yaml) частина змінних зараз задана inline у `environment:` — для продакшену замініть placeholder `JWT_SECRET` і узгодьте credentials з Postgres.
 

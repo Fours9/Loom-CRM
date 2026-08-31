@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import {
   catchError,
@@ -43,7 +43,9 @@ import {
   EmployeeDataPanelComponent,
 } from './employee-data-panel.component';
 import { EmployeeSkillsMatrixPanelComponent } from './employee-skills-matrix-panel.component';
+import { EmployeeAccountPanelComponent } from './employee-account-panel.component';
 import {
+  canShowAccountAdminTab,
   resolvePeopleProfileTab,
   visiblePeopleProfileTabs,
   type PeopleProfileTabId,
@@ -52,7 +54,7 @@ import {
 type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
 type AbsenceTabId = 'position' | 'requests' | 'calendar' | 'schedule';
-type AdminTabId = 'history';
+type AdminTabId = 'history' | 'account';
 type MetricsTabId = 'skills';
 
 @Component({
@@ -69,6 +71,7 @@ type MetricsTabId = 'skills';
     EmployeeHistoryPanelComponent,
     EmployeeDataPanelComponent,
     EmployeeSkillsMatrixPanelComponent,
+    EmployeeAccountPanelComponent,
   ],
   template: `
     @if (loading()) {
@@ -283,21 +286,45 @@ type MetricsTabId = 'skills';
                 role="tablist"
                 aria-label="Адміністрування працівника"
               >
-                <button
-                  type="button"
-                  class="tab"
-                  role="tab"
-                  [attr.aria-selected]="adminTab() === 'history'"
-                  [class.active]="adminTab() === 'history'"
-                  (mousedown)="$event.preventDefault()"
-                  (click)="setAdminTab('history')"
-                >
-                  Історія
-                </button>
+                @if (profile()!.capabilities.canViewHistory) {
+                  <button
+                    type="button"
+                    class="tab"
+                    role="tab"
+                    [attr.aria-selected]="adminTab() === 'history'"
+                    [class.active]="adminTab() === 'history'"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="setAdminTab('history')"
+                  >
+                    Історія
+                  </button>
+                }
+                @if (showAccountAdminTab()) {
+                  <button
+                    type="button"
+                    class="tab"
+                    role="tab"
+                    [attr.aria-selected]="adminTab() === 'account'"
+                    [class.active]="adminTab() === 'account'"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="setAdminTab('account')"
+                  >
+                    Акаунт
+                  </button>
+                }
               </nav>
 
-              @if (adminTab() === 'history') {
+              @if (adminTab() === 'history' && profile()!.capabilities.canViewHistory) {
                 <loom-employee-history-panel [items]="audit()" />
+              }
+              @if (adminTab() === 'account' && showAccountAdminTab()) {
+                <loom-employee-account-panel
+                  [employeeId]="employeeId"
+                  [header]="profile()!.header"
+                  [caps]="profile()!.capabilities"
+                  (changed)="reloadProfile()"
+                  (deleted)="onEmployeeHardDeleted()"
+                />
               }
             }
             @default {
@@ -485,6 +512,7 @@ type MetricsTabId = 'skills';
 })
 export class PeopleProfilePageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
   private readonly destroyRef = inject(DestroyRef);
   private readonly session = inject(SessionStore);
@@ -511,6 +539,10 @@ export class PeopleProfilePageComponent implements OnInit {
     }),
   );
 
+  readonly showAccountAdminTab = computed(() =>
+    canShowAccountAdminTab(this.profile()?.capabilities),
+  );
+
   readonly canViewAbsencesSchedule = computed(() =>
     (this.session.user()?.permissions ?? []).includes(
       Permission.AbsencesCalendarView,
@@ -530,6 +562,18 @@ export class PeopleProfilePageComponent implements OnInit {
     effect(() => {
       if (!this.canViewAbsencesSchedule() && this.absenceTab() !== 'position') {
         this.absenceTab.set('position');
+      }
+    });
+
+    effect(() => {
+      const caps = this.profile()?.capabilities;
+      const accountOk = canShowAccountAdminTab(caps);
+      const historyOk = Boolean(caps?.canViewHistory);
+      const current = this.adminTab();
+      if (current === 'account' && !accountOk) {
+        this.adminTab.set('history');
+      } else if (current === 'history' && !historyOk && accountOk) {
+        this.adminTab.set('account');
       }
     });
   }
@@ -589,6 +633,28 @@ export class PeopleProfilePageComponent implements OnInit {
   onDataProfileChange(next: EmployeeProfileResponse): void {
     this.profile.set(next);
     this.error.set(null);
+  }
+
+  reloadProfile(): void {
+    if (!this.employeeId) return;
+    this.http
+      .get<EmployeeProfileResponse>(`/api/v1/employees/${this.employeeId}/profile`)
+      .pipe(
+        catchError(() => {
+          this.error.set('Не вдалося оновити профіль');
+          return EMPTY;
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((profile) => {
+        this.profile.set(profile);
+        this.error.set(null);
+        this.loadSecondaryData(this.employeeId, profile);
+      });
+  }
+
+  onEmployeeHardDeleted(): void {
+    void this.router.navigate(['/people']);
   }
 
   initials(name: string): string {

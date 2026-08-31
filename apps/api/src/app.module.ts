@@ -18,6 +18,7 @@ import { AbsencesModule } from './modules/absences/absences.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { QuestionnairesModule } from './modules/questionnaires/questionnaires.module';
 import { ApplicationStartupModule } from './application-startup/application-startup.module';
+import { EmployeeDeletionModule } from './application/employee-deletion/employee-deletion.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ApplicationStartupModule } from './application-startup/application-star
     AbsencesModule,
     DocumentsModule,
     QuestionnairesModule,
+    EmployeeDeletionModule,
     ApplicationBootstrapModule,
     ApplicationStartupModule,
     HealthModule,

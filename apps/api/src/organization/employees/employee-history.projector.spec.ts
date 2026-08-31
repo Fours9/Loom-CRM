@@ -50,7 +50,7 @@ describe('resolveHistoryActorLabel', () => {
         usersById,
         employeesByUserId,
       }),
-    ).toEqual({ userId: 'gone', label: 'Невідомий користувач' });
+    ).toEqual({ userId: 'gone', label: 'Видалений користувач' });
   });
 
   it('prefers employee full name', () => {

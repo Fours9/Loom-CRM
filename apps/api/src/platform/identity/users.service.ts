@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { User } from './user.entity';
 import { UserRole, UserStatus } from './user.enums';
 
@@ -74,8 +74,9 @@ export class UsersService {
     return this.users.save(user);
   }
 
-  async deleteById(id: string): Promise<void> {
-    await this.users.delete({ id });
+  async deleteById(id: string, manager?: EntityManager): Promise<void> {
+    const repo = manager ? manager.getRepository(User) : this.users;
+    await repo.delete({ id });
   }
 
   toPublic(user: User): PublicUser {

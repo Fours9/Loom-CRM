@@ -31,6 +31,7 @@ import { EmploymentAssignmentLifecycleService } from './employment-assignment-li
 import { EmployeeSkillMatrixService } from '../skills/employee-skill-matrix.service';
 import { PositionSkillRequirement } from '../position-requirements/position-skill-requirement.entity';
 import { PermissionsModule } from '../../platform/permissions/permissions.module';
+import { OrganizationEmployeeErasureFacade } from './organization-employee-erasure.facade';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { PermissionsModule } from '../../platform/permissions/permissions.module
     BusinessDateClock,
     EmploymentAssignmentLifecycleService,
     EmployeeSkillMatrixService,
+    OrganizationEmployeeErasureFacade,
     PdfRenderer,
     OrganizationEmployeeIdentityLookup,
     {
@@ -82,6 +84,7 @@ import { PermissionsModule } from '../../platform/permissions/permissions.module
     BusinessDateClock,
     EmploymentAssignmentLifecycleService,
     EmploymentCatalogModule,
+    OrganizationEmployeeErasureFacade,
   ],
 })
 export class EmployeesModule {}

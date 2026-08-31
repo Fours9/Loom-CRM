@@ -59,6 +59,7 @@ import { EmployeeDocumentFiles1730000030000 } from './migrations/1730000030000-E
 import { EmploymentCatalogDescription1730000031000 } from './migrations/1730000031000-EmploymentCatalogDescription';
 import { EmploymentAssignmentComment1730000032000 } from './migrations/1730000032000-EmploymentAssignmentComment';
 import { EmployeeSkillAssessments1730000033000 } from './migrations/1730000033000-EmployeeSkillAssessments';
+import { EmployeeDeletionFkRestrict1730000034000 } from './migrations/1730000034000-EmployeeDeletionFkRestrict';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -128,6 +129,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmploymentCatalogDescription1730000031000,
       EmploymentAssignmentComment1730000032000,
       EmployeeSkillAssessments1730000033000,
+      EmployeeDeletionFkRestrict1730000034000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

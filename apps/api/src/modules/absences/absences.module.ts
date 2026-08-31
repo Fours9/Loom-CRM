@@ -9,6 +9,7 @@ import { AbsenceAttachment } from './absence-attachment.entity';
 import { AbsenceRequestsService } from './absence-requests.service';
 import { AbsenceCalendarService } from './calendar/absence-calendar.service';
 import { AbsencesController } from './absences.controller';
+import { AbsencesErasureFacade } from './absences-erasure.facade';
 
 @Module({
   imports: [
@@ -21,8 +22,8 @@ import { AbsencesController } from './absences.controller';
     AuditModule,
     NotificationsModule,
   ],
-  providers: [AbsenceRequestsService, AbsenceCalendarService],
+  providers: [AbsenceRequestsService, AbsenceCalendarService, AbsencesErasureFacade],
   controllers: [AbsencesController],
-  exports: [AbsenceRequestsService, AbsenceCalendarService],
+  exports: [AbsenceRequestsService, AbsenceCalendarService, AbsencesErasureFacade],
 })
 export class AbsencesModule {}

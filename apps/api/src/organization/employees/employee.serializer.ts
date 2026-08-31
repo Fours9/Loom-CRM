@@ -193,14 +193,16 @@ export class EmployeeSerializer {
         viewer,
         employee,
       ),
-      canResetPassword:
-        this.access.canResetEmployeePassword(viewer) &&
-        employee.userId != null,
-      canCreateAccount: this.access.canCreateEmployeeAccount(viewer, employee),
-      canManageAccount: this.access.canManageExistingEmployeeAccount(
+      canResetPassword: this.access.canResetEmployeePassword(
         viewer,
         employee,
       ),
+      canCreateAccount: this.access.canCreateEmployeeAccount(viewer, employee),
+      canManageAccount: this.access.canDestructivelyManageAccount(
+        viewer,
+        employee,
+      ),
+      canDeleteEmployee: this.access.canDeleteEmployee(viewer, employee),
       canViewAccountDetails: this.access.canViewAccountDetails(
         viewer,
         employee,

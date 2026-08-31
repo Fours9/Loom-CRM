@@ -1,4 +1,4 @@
-﻿import { Component, HostListener, OnInit, inject } from '@angular/core';
+﻿import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
@@ -21,7 +21,6 @@ import {
 import { RequestStatusBadgeComponent } from '../shared/request-status-badge.component';
 import { requestFrameTone } from '../shared/request-status-presentation';
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
-import { PasswordVisibilityToggleComponent } from '../shared/password-visibility-toggle.component';
 import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
 import { optionalOrgAssignmentIds } from './employee-org-assignment';
 import { resolveAbsencesOrgDirectionLabel } from './absences-org-direction-label';
@@ -36,7 +35,6 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
     MultiSelectListComponent,
     ScheduleEditorComponent,
     RequestStatusBadgeComponent,
-    PasswordVisibilityToggleComponent,
   ],
   template: `
     @if (employee) {
@@ -70,40 +68,6 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                 <div class="edit-actions">
                   <button type="button" (click)="save()">Зберегти</button>
                   <button type="button" class="secondary" (click)="cancelEdit()">Скасувати</button>
-                  @if (employee.permissions?.canManageAccount && employee.hasAccount) {
-                    <div class="more-menu-wrap">
-                      <button
-                        type="button"
-                        class="ghost-btn more-btn"
-                        aria-label="Додаткові дії"
-                        [attr.aria-expanded]="moreMenuOpen"
-                        (click)="toggleMoreMenu($event)"
-                      >
-                        ⋯
-                      </button>
-                      @if (moreMenuOpen) {
-                        <div class="more-menu" role="menu">
-                          @if (employee.accountStatus === 'active') {
-                            <button type="button" role="menuitem" (click)="deactivateFromMenu()">
-                              Деактивувати акаунт
-                            </button>
-                          } @else if (employee.accountStatus === 'deactivated') {
-                            <button type="button" role="menuitem" (click)="activateFromMenu()">
-                              Активувати акаунт
-                            </button>
-                          }
-                          <button
-                            type="button"
-                            role="menuitem"
-                            class="danger-item"
-                            (click)="deleteAccountFromMenu()"
-                          >
-                            Видалити акаунт
-                          </button>
-                        </div>
-                      }
-                    </div>
-                  }
                 </div>
               }
             </div>
@@ -527,91 +491,6 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                     >
                       Редагувати права
                     </button>
-                  }
-                }
-              </article>
-            }
-
-            @if (
-              editingProfile &&
-              (employee.permissions?.canResetPassword ||
-                employee.permissions?.canCreateAccount ||
-                employee.permissions?.canManageAccount)
-            ) {
-              <article class="card">
-                @if (employee.permissions?.canCreateAccount) {
-                  <details class="disclose account-action-disclose">
-                    <summary>Створити акаунт</summary>
-                    <div class="disclose-body">
-                      <p class="muted">Анкета без входу. Задайте логін і тимчасовий пароль.</p>
-                      <label>
-                        Email акаунта
-                        <input
-                          type="email"
-                          name="attachAccountEmail"
-                          [(ngModel)]="attachEmail"
-                          maxlength="254"
-                          autocomplete="off"
-                        />
-                      </label>
-                      <label>
-                        Тимчасовий пароль
-                        <div class="password-row">
-                          <input
-                            [type]="showAttachPassword ? 'text' : 'password'"
-                            name="attachAccountPassword"
-                            [(ngModel)]="attachPassword"
-                            autocomplete="new-password"
-                          />
-                          <app-password-visibility-toggle
-                            [visible]="showAttachPassword"
-                            showLabel="Показати"
-                            hideLabel="Сховати"
-                            (toggled)="showAttachPassword = !showAttachPassword"
-                          />
-                        </div>
-                      </label>
-                      <button type="button" (click)="attachAccount()">Створити акаунт</button>
-                    </div>
-                  </details>
-                }
-                @if (employee.permissions?.canResetPassword && employee.userId) {
-                  <details class="disclose account-action-disclose">
-                    <summary>Скидання пароля</summary>
-                    <div class="disclose-body">
-                      <p class="muted">Чинний пароль не зберігається у відкритому вигляді. Задайте тимчасовий.</p>
-                      <label>
-                        Тимчасовий пароль
-                        <div class="password-row">
-                          <input
-                            [type]="showTempPassword ? 'text' : 'password'"
-                            name="resetTempPassword"
-                            [(ngModel)]="tempPassword"
-                            autocomplete="new-password"
-                          />
-                          <app-password-visibility-toggle
-                            [visible]="showTempPassword"
-                            showLabel="Показати"
-                            hideLabel="Сховати"
-                            (toggled)="showTempPassword = !showTempPassword"
-                          />
-                        </div>
-                      </label>
-                      <button type="button" (click)="resetPassword()">Скинути пароль</button>
-                      @if (shownTempPassword) {
-                        <p class="ok">Тимчасовий пароль (показується один раз): <strong>{{ shownTempPassword }}</strong></p>
-                      }
-                    </div>
-                  </details>
-                }
-                @if (employee.permissions?.canManageAccount) {
-                  @if (!employee.permissions?.canResetPassword && !employee.permissions?.canCreateAccount) {
-                    <h2>Статус акаунта</h2>
-                  }
-                  @if (employee.accountStatus === 'active') {
-                    <button type="button" class="danger" (click)="deactivate()">Деактивувати</button>
-                  } @else if (employee.accountStatus === 'deactivated') {
-                    <button type="button" (click)="activate()">Активувати</button>
                   }
                 }
               </article>
@@ -1338,13 +1217,6 @@ export class EmployeeDetailPageComponent implements OnInit {
   absencesOverride: 'inherit' | 'all' | 'own_department' | 'deny' = 'inherit';
   absenceTypeDetailOverride: 'inherit' | 'full' | 'hide_type' = 'inherit';
   globalPrivacyPriority = false;
-  tempPassword = 'TempPass123!';
-  shownTempPassword = '';
-  showTempPassword = false;
-  attachEmail = '';
-  attachPassword = 'TempPass123!';
-  showAttachPassword = false;
-  moreMenuOpen = false;
   edit = {
     lastName: '',
     firstName: '',
@@ -1535,7 +1407,6 @@ export class EmployeeDetailPageComponent implements OnInit {
       );
     }
     this.editingProfile = false;
-    this.shownTempPassword = '';
     this.error = '';
   }
 
@@ -1739,7 +1610,6 @@ export class EmployeeDetailPageComponent implements OnInit {
     const exitEditMode = (employee: EmployeeProfile) => {
       this.employee = employee;
       this.editingProfile = false;
-      this.moreMenuOpen = false;
       this.fillEditFromEmployee(employee);
       this.managedIds = [...(employee.managedDepartmentIds || [])];
       this.profileOverride = this.fromOverride(employee.profileVisibilityOverride ?? null);
@@ -1790,119 +1660,6 @@ export class EmployeeDetailPageComponent implements OnInit {
     if (this.employee?.id && this.employee.id === this.auth.user()?.employeeId) {
       this.auth.me().subscribe();
     }
-  }
-
-  resetPassword(): void {
-    if (!this.employee?.userId) return;
-    this.shownTempPassword = '';
-    this.api.resetPassword(this.employee.userId, this.tempPassword).subscribe({
-      next: () => {
-        this.shownTempPassword = this.tempPassword;
-        this.message = 'Пароль скинуто';
-      },
-      error: (err) => {
-        const msg = err?.error?.message;
-        this.error = Array.isArray(msg) ? msg.join(', ') : msg || 'Не вдалося скинути пароль';
-      },
-    });
-  }
-
-  attachAccount(): void {
-    if (!this.employee) return;
-    this.error = '';
-    this.message = '';
-    this.api
-      .attachEmployeeAccount(this.employee.id, {
-        email: this.attachEmail,
-        temporaryPassword: this.attachPassword,
-      })
-      .subscribe({
-        next: (employee) => {
-          const shown = this.attachPassword;
-          this.employee = employee;
-          this.fillEditFromEmployee(employee);
-          this.attachEmail = '';
-          this.attachPassword = 'TempPass123!';
-          this.shownTempPassword = shown;
-          this.message = 'Акаунт створено';
-        },
-        error: (err) => {
-          const msg = err?.error?.message;
-          this.error = Array.isArray(msg) ? msg.join(', ') : msg || 'Не вдалося створити акаунт';
-        },
-      });
-  }
-
-  deactivate(): void {
-    if (!this.employee) return;
-    this.api.updateEmployeeAccountStatus(this.employee.id, 'deactivated').subscribe({
-      next: (employee) => {
-        this.employee = employee;
-        this.fillEditFromEmployee(employee);
-        this.message = 'Акаунт деактивовано';
-      },
-      error: (err) => {
-        const msg = err?.error?.message;
-        this.error = Array.isArray(msg) ? msg.join(', ') : msg || 'Не вдалося деактивувати';
-      },
-    });
-  }
-
-  activate(): void {
-    if (!this.employee) return;
-    this.api.updateEmployeeAccountStatus(this.employee.id, 'active').subscribe({
-      next: (employee) => {
-        this.employee = employee;
-        this.fillEditFromEmployee(employee);
-        this.message = 'Акаунт активовано';
-      },
-      error: (err) => {
-        const msg = err?.error?.message;
-        this.error = Array.isArray(msg) ? msg.join(', ') : msg || 'Не вдалося активувати';
-      },
-    });
-  }
-
-  @HostListener('document:click')
-  closeMoreMenu(): void {
-    this.moreMenuOpen = false;
-  }
-
-  toggleMoreMenu(event: Event): void {
-    event.stopPropagation();
-    this.moreMenuOpen = !this.moreMenuOpen;
-  }
-
-  deactivateFromMenu(): void {
-    this.moreMenuOpen = false;
-    this.deactivate();
-  }
-
-  activateFromMenu(): void {
-    this.moreMenuOpen = false;
-    this.activate();
-  }
-
-  deleteAccountFromMenu(): void {
-    this.moreMenuOpen = false;
-    if (!this.employee) return;
-    const ok = confirm(
-      'Видалити обліковий запис? Працівник більше не зможе входити в систему. Анкета залишиться.',
-    );
-    if (!ok) return;
-    this.error = '';
-    this.message = '';
-    this.api.deleteEmployeeAccount(this.employee.id).subscribe({
-      next: (employee) => {
-        this.employee = employee;
-        this.fillEditFromEmployee(employee);
-        this.message = 'Обліковий запис видалено';
-      },
-      error: (err) => {
-        const msg = err?.error?.message;
-        this.error = Array.isArray(msg) ? msg.join(', ') : msg || 'Не вдалося видалити акаунт';
-      },
-    });
   }
 
   accountStatusLabel(employee: EmployeeProfile): string {

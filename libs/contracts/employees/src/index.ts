@@ -81,6 +81,14 @@ export type EmployeeProfileCapabilities = {
   canViewHistory: boolean;
   canStartOnboarding: boolean;
   canAssignQuestionnaire: boolean;
+  /** Create login when employee has no userId (admin). */
+  canCreateAccount: boolean;
+  /** Reset password including self when target has account (admin). */
+  canResetPassword: boolean;
+  /** Activate / deactivate / delete login — not self (admin). */
+  canManageAccount: boolean;
+  /** Hard-delete Employee operational aggregate — not self (admin). */
+  canDeleteEmployee: boolean;
 };
 
 export type ProfileCompletenessSection = {
@@ -113,6 +121,9 @@ export type EmployeeProfileHeader = {
   direction: { id: EntityId; name: string } | null;
   manager: { id: EntityId; displayName: string } | null;
   hiredAt: string | null;
+  userId: EntityId | null;
+  hasAccount: boolean;
+  accountStatus: 'active' | 'deactivated' | null;
   accountCreatedAt: string | null;
   workEmail: string | null;
   workPhone: string | null;

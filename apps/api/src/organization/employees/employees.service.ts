@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserRole, UserStatus } from '../../platform/identity/user.enums';
 import { UsersService } from '../../platform/identity/users.service';
@@ -60,7 +60,8 @@ export type UpdateEmployeeInput = Partial<{
   isDepartmentManager: boolean;
   profileVisibilityOverride: string | null;
   absenceVisibilityOverride: string | null;
-  showAbsenceTypeToPeersOverride: string | null;
+  showAbsenceTypeToPeersOverride: boolean | string | null;
+  managedDepartmentIds: string[];
   schedule: ScheduleDayInput[];
 }>;
 
@@ -83,6 +84,7 @@ export class EmployeesService {
     private readonly users: UsersService,
     private readonly serializer: EmployeeSerializer,
     private readonly audit: AuditService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(actor: User, query: EmployeeListQueryDto = {}) {
@@ -310,7 +312,9 @@ export class EmployeesService {
       managedDepartments,
       profileVisibilityOverride: employee.profileVisibilityOverride,
       absenceVisibilityOverride: employee.absenceVisibilityOverride,
-      showAbsenceTypeToPeersOverride: employee.showAbsenceTypeToPeersOverride,
+      showAbsenceTypeToPeersOverride: this.peerTypeOverrideFromColumn(
+        employee.showAbsenceTypeToPeersOverride,
+      ),
       requestsPlaceholder: [] as unknown[],
       permissions: await this.serializer.buildDetailPermissions(
         actor,
@@ -364,13 +368,21 @@ export class EmployeesService {
       positionId?: string | null;
       employeeNumber?: string;
       role?: UserRole;
+      isDepartmentManager?: boolean;
       calendarColor?: string | null;
       phoneNumber?: string | null;
       telegram?: string | null;
       workEmail?: string | null;
+      personalPhoneNumber?: string | null;
+      personalTelegram?: string | null;
+      personalEmail?: string | null;
       createAccount?: boolean;
       email?: string;
       temporaryPassword?: string;
+      managedDepartmentIds?: string[];
+      profileVisibilityOverride?: string | null;
+      absenceVisibilityOverride?: string | null;
+      showAbsenceTypeToPeersOverride?: boolean | null;
       schedule?: ScheduleDayInput[];
     },
   ) {
@@ -381,6 +393,12 @@ export class EmployeesService {
     if (dto.positionId) await this.positions.getOrFail(dto.positionId);
 
     const role = dto.role ?? UserRole.Employee;
+    const isDepartmentManager =
+      role === UserRole.DepartmentManager
+        ? true
+        : role === UserRole.Admin
+          ? Boolean(dto.isDepartmentManager)
+          : false;
     const employeeNumber =
       dto.employeeNumber?.trim() ||
       (await this.previewNextEmployeeNumber(actor, role)).employeeNumber;
@@ -419,9 +437,22 @@ export class EmployeesService {
         phoneNumber: dto.phoneNumber ?? null,
         telegram: dto.telegram ?? null,
         workEmail: dto.workEmail ?? null,
+        personalPhoneNumber: dto.personalPhoneNumber ?? null,
+        personalTelegram: dto.personalTelegram ?? null,
+        personalEmail: dto.personalEmail ?? null,
+        isDepartmentManager,
+        profileVisibilityOverride: dto.profileVisibilityOverride ?? null,
+        absenceVisibilityOverride: dto.absenceVisibilityOverride ?? null,
+        showAbsenceTypeToPeersOverride: this.peerTypeOverrideToColumn(
+          dto.showAbsenceTypeToPeersOverride,
+        ),
         isActive: true,
       }),
     );
+
+    if (dto.managedDepartmentIds !== undefined) {
+      await this.replaceManagedDepartments(emp.id, dto.managedDepartmentIds);
+    }
 
     if (dto.schedule?.length === 7) {
       await this.replaceScheduleInternal(emp.id, dto.schedule);
@@ -520,11 +551,16 @@ export class EmployeesService {
       dto.showAbsenceTypeToPeersOverride !== undefined &&
       this.access.canEditVisibilityOverrides(actor, employee.role)
     ) {
-      employee.showAbsenceTypeToPeersOverride =
-        dto.showAbsenceTypeToPeersOverride;
+      employee.showAbsenceTypeToPeersOverride = this.peerTypeOverrideToColumn(
+        dto.showAbsenceTypeToPeersOverride,
+      );
     }
 
     await this.employees.save(employee);
+
+    if (dto.managedDepartmentIds !== undefined && this.access.isAdmin(actor)) {
+      await this.replaceManagedDepartments(id, dto.managedDepartmentIds);
+    }
 
     if (dto.schedule?.length === 7) {
       await this.replaceScheduleInternal(id, dto.schedule);
@@ -590,7 +626,7 @@ export class EmployeesService {
     status: 'active' | 'deactivated',
   ) {
     const employee = await this.access.getEmployeeOrFail(id);
-    if (!this.access.canManageExistingEmployeeAccount(actor, employee)) {
+    if (!this.access.canDestructivelyManageAccount(actor, employee)) {
       throw new ForbiddenException();
     }
     if (!employee.userId) throw new BadRequestException('No account');
@@ -604,14 +640,15 @@ export class EmployeesService {
 
   async deleteAccount(actor: User, id: string) {
     const employee = await this.access.getEmployeeOrFail(id);
-    if (!this.access.canManageExistingEmployeeAccount(actor, employee)) {
+    if (!this.access.canDestructivelyManageAccount(actor, employee)) {
       throw new ForbiddenException();
     }
     if (!employee.userId) throw new BadRequestException('No account');
     const userId = employee.userId;
-    employee.userId = null;
-    await this.employees.save(employee);
-    await this.users.deleteById(userId);
+    await this.dataSource.transaction(async (manager) => {
+      await manager.getRepository(Employee).update({ id }, { userId: null });
+      await this.users.deleteById(userId, manager);
+    });
     return this.findOne(actor, id);
   }
 
@@ -662,6 +699,44 @@ export class EmployeesService {
     }
     await this.replaceScheduleInternal(employeeId, days);
     return this.getSchedule(actor, employeeId);
+  }
+
+  private async replaceManagedDepartments(
+    employeeId: string,
+    departmentIds: string[],
+  ): Promise<void> {
+    const unique = [...new Set(departmentIds.filter(Boolean))];
+    for (const departmentId of unique) {
+      await this.departments.getOrFail(departmentId);
+    }
+    await this.managed.delete({ employeeId });
+    if (!unique.length) return;
+    await this.managed.save(
+      unique.map((departmentId) =>
+        this.managed.create({ employeeId, departmentId }),
+      ),
+    );
+  }
+
+  /** Persist Absences FE boolean override into text column; pass-through strings. */
+  private peerTypeOverrideToColumn(
+    value: boolean | string | null | undefined,
+  ): string | null {
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (trimmed === 'true' || trimmed === 'false') return trimmed;
+    return trimmed;
+  }
+
+  private peerTypeOverrideFromColumn(
+    value: string | null | undefined,
+  ): boolean | null {
+    if (value == null || value === '') return null;
+    if (value === 'true' || value === '1') return true;
+    if (value === 'false' || value === '0') return false;
+    return null;
   }
 
   private async replaceScheduleInternal(

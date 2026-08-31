@@ -6,6 +6,7 @@ import { EmployeeDocument } from './employee-document.entity';
 import { EmployeeDocumentFile } from './employee-document-file.entity';
 import { DocumentsService } from './documents.service';
 import { DocumentsController } from './documents.controller';
+import { DocumentsErasureFacade } from './documents-erasure.facade';
 
 @Module({
   imports: [
@@ -13,8 +14,8 @@ import { DocumentsController } from './documents.controller';
     OrganizationModule,
     AuditModule,
   ],
-  providers: [DocumentsService],
+  providers: [DocumentsService, DocumentsErasureFacade],
   controllers: [DocumentsController],
-  exports: [DocumentsService],
+  exports: [DocumentsService, DocumentsErasureFacade],
 })
 export class DocumentsModule {}

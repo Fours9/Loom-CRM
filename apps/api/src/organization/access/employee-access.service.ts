@@ -138,8 +138,25 @@ export class EmployeeAccessService {
     return this.isAdmin(viewer) && target.userId != null;
   }
 
-  canResetEmployeePassword(viewer: User): boolean {
-    return this.isAdmin(viewer);
+  /** Admin + target has account. Includes self (reset own password allowed). */
+  canResetEmployeePassword(viewer: User, target: Employee): boolean {
+    return this.isAdmin(viewer) && target.userId != null;
+  }
+
+  /**
+   * Activate / deactivate / delete login account — not on self.
+   * Reset password uses {@link canResetEmployeePassword} instead.
+   */
+  canDestructivelyManageAccount(actor: User, target: Employee): boolean {
+    return (
+      this.canManageExistingEmployeeAccount(actor, target) &&
+      target.userId !== actor.id
+    );
+  }
+
+  /** Hard-delete Employee operational aggregate — admin, not self. */
+  canDeleteEmployee(actor: User, target: Employee): boolean {
+    return this.isAdmin(actor) && target.userId !== actor.id;
   }
 
   async canExportProfilePdf(

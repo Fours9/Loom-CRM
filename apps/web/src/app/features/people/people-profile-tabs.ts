@@ -57,12 +57,29 @@ export function visiblePeopleProfileTabs(input: {
       case 'questionnaires':
         return hasPermission(perms, P.QuestionnairesView);
       case 'administration':
-        // Currently only hosts the audit timeline; gate with canViewHistory.
-        return Boolean(caps?.canViewHistory);
+        return Boolean(
+          caps?.canViewHistory ||
+            caps?.canCreateAccount ||
+            caps?.canResetPassword ||
+            caps?.canManageAccount ||
+            caps?.canDeleteEmployee,
+        );
       default:
         return false;
     }
   });
+}
+
+/** Admin «Акаунт» when any account / hard-delete capability is present. */
+export function canShowAccountAdminTab(
+  caps: EmployeeProfileCapabilities | null | undefined,
+): boolean {
+  return Boolean(
+    caps?.canCreateAccount ||
+      caps?.canResetPassword ||
+      caps?.canManageAccount ||
+      caps?.canDeleteEmployee,
+  );
 }
 
 /** Never activate a non-visible tab; fallback to data. */

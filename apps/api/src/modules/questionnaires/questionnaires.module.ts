@@ -25,6 +25,7 @@ import { QuestionnairePositionContextSyncService } from './questionnaire-positio
 import { QuestionnaireContextSkillIdBackfillService } from './assignments/questionnaire-context-skill-id-backfill.service';
 import { QuestionnaireSeedService } from './seed/questionnaire-seed.service';
 import { QuestionnairesController } from './questionnaires.controller';
+import { QuestionnairesErasureFacade } from './questionnaires-erasure.facade';
 
 @Module({
   imports: [
@@ -57,12 +58,14 @@ import { QuestionnairesController } from './questionnaires.controller';
     QuestionnairePositionContextSyncService,
     QuestionnaireContextSkillIdBackfillService,
     QuestionnaireSeedService,
+    QuestionnairesErasureFacade,
   ],
   controllers: [QuestionnairesController],
   exports: [
     QuestionnaireAssignmentService,
     QuestionnaireProposalService,
     QuestionnaireSeedService,
+    QuestionnairesErasureFacade,
   ],
 })
 export class QuestionnairesModule {}

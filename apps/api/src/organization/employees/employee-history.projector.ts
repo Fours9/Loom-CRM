@@ -51,7 +51,7 @@ export function resolveHistoryActorLabel(input: {
 
   const user = input.usersById.get(userId);
   if (!user) {
-    return { userId, label: 'Невідомий користувач' };
+    return { userId, label: 'Видалений користувач' };
   }
 
   const employee = input.employeesByUserId.get(userId);

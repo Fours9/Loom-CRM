@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UsersService } from '../../platform/identity/users.service';
+import { UserStatus } from '../../platform/identity/user.enums';
 import { AuditService } from '../../platform/audit/audit.service';
 import { permissionsForRole } from '../../platform/permissions/role-permissions';
 import { Permission } from '../../platform/permissions/permission.names';
@@ -125,6 +126,10 @@ export type ProfileCapabilities = {
   canViewHistory: boolean;
   canStartOnboarding: boolean;
   canAssignQuestionnaire: boolean;
+  canCreateAccount: boolean;
+  canResetPassword: boolean;
+  canManageAccount: boolean;
+  canDeleteEmployee: boolean;
 };
 
 @Injectable()
@@ -451,6 +456,10 @@ export class EmployeeProfileService {
       canStartOnboarding: false,
       canAssignQuestionnaire:
         this.hasPerm(actor, Permission.QuestionnairesAssign) && canView,
+      canCreateAccount: this.access.canCreateEmployeeAccount(actor, target),
+      canResetPassword: this.access.canResetEmployeePassword(actor, target),
+      canManageAccount: this.access.canDestructivelyManageAccount(actor, target),
+      canDeleteEmployee: this.access.canDeleteEmployee(actor, target),
     };
   }
 
@@ -563,6 +572,13 @@ export class EmployeeProfileService {
             }
           : null,
         hiredAt: employee.hiredAt,
+        userId: employee.userId ?? null,
+        hasAccount: employee.userId != null,
+        accountStatus: employee.user
+          ? employee.user.status === UserStatus.Deactivated
+            ? 'deactivated'
+            : 'active'
+          : null,
         accountCreatedAt: employee.user?.createdAt
           ? employee.user.createdAt.toISOString()
           : null,
