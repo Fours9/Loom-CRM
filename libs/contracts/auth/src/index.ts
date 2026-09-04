@@ -21,6 +21,8 @@ export const Permission = {
   AbsencesCalendarView: 'absences.calendar.view',
   DocumentsView: 'documents.view',
   DocumentsManage: 'documents.manage',
+  /** Cross-domain classification; ≠ documents.view / documents.manage (ADR 0012). */
+  ConfidentialView: 'confidential.view',
   QuestionnairesView: 'questionnaires.view',
   QuestionnairesAssign: 'questionnaires.assign',
   QuestionnairesManageLifecycle: 'questionnaires.manage_lifecycle',
@@ -39,11 +41,29 @@ export type Permission = (typeof Permission)[keyof typeof Permission];
 
 export type UserRole = 'employee' | 'department_manager' | 'admin';
 
+/** System account-role codes (ADR 0011). Custom roles use their own code. */
+export type AccountRoleCode =
+  | 'employee'
+  | 'department_manager'
+  | 'director'
+  | 'admin';
+
+export type CurrentUserAccountRole = {
+  id: EntityId;
+  code: AccountRoleCode | string;
+  name: string;
+  isAdminEquivalent: boolean;
+};
+
 export type CurrentUserResponse = {
   id: EntityId;
   email: string;
+  /** Compatibility mirror of the account role; authZ SoT is permissions + surfaces. */
   role: UserRole;
   permissions: Permission[];
+  /** UI surface ids granted by the account role. Absent until the rollout lands. */
+  surfaces?: string[];
+  accountRole?: CurrentUserAccountRole;
   employeeId: EntityId | null;
   mustChangePassword: boolean;
 };

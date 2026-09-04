@@ -15,6 +15,7 @@ import { PositionSkillRequirement } from '../position-requirements/position-skil
 import { PositionDuty } from '../position-requirements/position-duty.entity';
 import { PositionGoalTemplate } from '../position-requirements/position-goal-template.entity';
 import { PositionManagedDepartment } from './position-managed-department.entity';
+import { ManagementKind } from '../employment-catalog/management-kind';
 
 @Entity({ name: 'positions' })
 export class Position {
@@ -52,7 +53,16 @@ export class Position {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
 
-  /** Template: new EA copies this unless create form overrides. */
+  /** Org leadership template: new EA copies this unless create form overrides. */
+  @Column({
+    name: 'management_kind_template',
+    type: 'varchar',
+    length: 32,
+    default: ManagementKind.None,
+  })
+  managementKindTemplate!: ManagementKind;
+
+  /** @deprecated Display mirror of managementKindTemplate !== 'none'. */
   @Column({ name: 'is_department_manager_template', type: 'boolean', default: false })
   isDepartmentManagerTemplate!: boolean;
 

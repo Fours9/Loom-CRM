@@ -106,6 +106,15 @@ pnpm migration:run
 - Web: http://localhost:4200  
 - Логін: акаунти зі знімка (часто `hr@tier.ua`); без restore — seed `admin@loom.local` / `Admin123!` (**лише localhost**, не для публічного URL)
 
+Якщо UI «живий», а даних немає — спочатку перевірте, хто слухає порти (жива вкладка SPA ≠ увімкнений сервер):
+
+```powershell
+Get-NetTCPConnection -LocalPort 4200,3000 -State Listen -ErrorAction SilentlyContinue |
+  Select-Object LocalPort, OwningProcess
+```
+
+Детальніше: [operations — SPA shell vs вимкнений сервер](operations.md#spa-shell-vs-вимкнений-сервер).
+
 `start.bat` після міграцій **не** викликає restore автоматично. Після clone / порожньої БД зробіть `db-restore.ps1` явно.
 
 ### 3. Демо через тунель (як у PW)

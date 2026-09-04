@@ -163,6 +163,30 @@ docker compose logs -f postgres
 | Потрібен спільний демо-стан між ПК | Оновіть знімок на джерелі (`db-snapshot.ps1` + commit), на приймачі — `db-restore.ps1` |
 | Після оновлення UI «старий» | Браузерний кеш / не перезібраний `web` — `docker compose up -d --build web` |
 | Випадкові зміни в `ProjectWeekend/` | Copy-source read-only — відкотити; `pnpm check:copy-source` |
+| UI клікається, даних немає («бек ніби вимкнений») | Часто **жива вкладка SPA** або процес ще на `:4200`, а API на `:3000` мертвий — не витік БД. Див. § [SPA vs сервер](#spa-shell-vs-вимкнений-сервер) |
+
+---
+
+## SPA shell vs вимкнений сервер
+
+Angular після завантаження роутить у браузері **без** бекенду; порожні списки ≠ «сервер віддає дані офлайн».
+
+**Перевірка портів (PowerShell):**
+
+```powershell
+Get-NetTCPConnection -LocalPort 4200,3000 -State Listen -ErrorAction SilentlyContinue |
+  Select-Object LocalPort, OwningProcess
+```
+
+Або: `netstat -ano | findstr ":4200 :3000"`.
+
+| Спостереження | Висновок |
+| --- | --- |
+| Hard refresh `http://localhost:4200` → Connection refused | Web-процес реально зупинений |
+| `:4200` Listen, `:3000` ні | SPA може клікатись; API down → UI lock «Сервер недоступний» |
+| Вкладка вже відкрита, процеси вбиті | In-memory SPA до refresh; це не live server |
+
+Жива вкладка ≠ сервер увімкнений.
 
 ---
 

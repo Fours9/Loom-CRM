@@ -29,6 +29,7 @@ const ADMIN: Permission[] = [
   Permission.EmployeesChangeStatus,
   Permission.EmployeesViewHistory,
   Permission.DocumentsManage,
+  Permission.ConfidentialView,
   Permission.QuestionnairesManageLifecycle,
   Permission.QuestionnairesDelete,
   Permission.QuestionnairesCompleteAny,
@@ -48,6 +49,34 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
   [UserRole.Admin]: ADMIN,
 };
 
+const PRESET_PERMISSIONS: Record<string, readonly Permission[]> = {
+  employee: EMPLOYEE,
+  department_manager: DEPARTMENT_MANAGER,
+  admin: ADMIN,
+};
+
+/** @deprecated Account role presets are the authZ source of truth (ADR 0011). */
 export function permissionsForRole(role: UserRole): Permission[] {
   return [...ROLE_PERMISSIONS[role]];
+}
+
+/** Base permissions of an account-role preset. Unknown preset → throw (fail closed). */
+export function permissionsForPreset(preset: string): Permission[] {
+  const permissions = PRESET_PERMISSIONS[preset];
+  if (!permissions) {
+    throw new Error(`Unknown account role permission preset: ${preset}`);
+  }
+  return [...permissions];
+}
+
+/** Full admin-equivalent permission set. */
+export function allAdminPermissions(): Permission[] {
+  return [...ADMIN];
+}
+
+export function isPermission(value: unknown): value is Permission {
+  return (
+    typeof value === 'string' &&
+    (Object.values(Permission) as string[]).includes(value)
+  );
 }

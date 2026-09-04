@@ -247,10 +247,22 @@ export type EmployeeEmergencyContactItem = {
   notes: string | null;
 };
 
+/** Assigned vs canonicalized account role (leadership bridge may downgrade/upgrade). */
+export type EmployeeAccountRoleRef = {
+  id: EntityId;
+  code: string;
+  name: string;
+  isAdminEquivalent: boolean;
+};
+
 export type EmployeeAccessSection = {
+  /** @deprecated derived from an admin-equivalent account role. */
   adminAccess: boolean;
   /** Derived non-admin role from active EA (read-only in UI). */
   computedRole: 'employee' | 'department_manager';
+  accountRoleId?: EntityId | null;
+  requestedAccountRole?: EmployeeAccountRoleRef | null;
+  effectiveAccountRole?: EmployeeAccountRoleRef | null;
   profileVisibilityOverride: string | null;
   absenceVisibilityOverride: string | null;
   showAbsenceTypeToPeersOverride: boolean | null;
@@ -274,6 +286,9 @@ export type EmployeeProfileResponse = {
   completeness: ProfileCompleteness;
 };
 
+/** Org leadership carried by a Position template / active EA (ADR 0011). */
+export type EmploymentManagementKind = 'none' | 'departments' | 'direction';
+
 export type EmploymentAssignmentHistoryItem = {
   id: EntityId;
   status: string;
@@ -296,7 +311,9 @@ export type EmploymentAssignmentHistoryItem = {
   comment: string | null;
   activationBlockedReason: EmploymentActivationBlockedReason | null;
   activationCheckedAt: string | null;
+  /** @deprecated use managementKind. */
   isDepartmentManager: boolean;
+  managementKind?: EmploymentManagementKind;
   managedDepartmentIds: EntityId[];
   updatedAt: string;
   department: NamedReference | null;
@@ -322,7 +339,9 @@ export type CreateEmploymentAssignmentRequest = {
   probationStartDate?: string | null;
   probationEndDate?: string | null;
   comment?: string | null;
+  /** @deprecated use managementKind. */
   isDepartmentManager?: boolean;
+  managementKind?: EmploymentManagementKind;
   managedDepartmentIds?: EntityId[];
 };
 
@@ -330,7 +349,9 @@ export type UpdateEmploymentAssignmentRequest =
   CreateEmploymentAssignmentRequest;
 
 export type UpdateEmployeeAccessSettingsRequest = {
+  /** @deprecated no standalone admin toggle — assign an admin-equivalent account role. */
   adminAccess?: boolean;
+  accountRoleId?: EntityId;
   profileVisibilityOverride?: string | null;
   absenceVisibilityOverride?: string | null;
   showAbsenceTypeToPeersOverride?: boolean | null;

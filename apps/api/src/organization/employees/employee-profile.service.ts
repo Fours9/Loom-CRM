@@ -77,6 +77,7 @@ type AssignmentWriteDto = {
   probationStartDate?: string | null;
   probationEndDate?: string | null;
   comment?: string | null;
+  managementKind?: 'none' | 'departments' | 'direction';
   isDepartmentManager?: boolean;
   managedDepartmentIds?: string[];
 };
@@ -647,6 +648,7 @@ export class EmployeeProfileService {
               probationEndDate: assignment.probationEndDate,
               status: assignment.status,
               isDepartmentManager: Boolean(assignment.isDepartmentManager),
+              managementKind: assignment.managementKind ?? (assignment.isDepartmentManager ? 'departments' : 'none'),
               managedDepartmentIds: (assignment.managedDepartments ?? []).map(
                 (row) => row.departmentId,
               ),
@@ -741,9 +743,16 @@ export class EmployeeProfileService {
           ? {
               access: {
                 adminAccess: employee.role === UserRole.Admin,
+                accountRoleId: employee.userId
+                  ? (
+                      await this.users.findById(employee.userId)
+                    )?.accountRoleId ?? null
+                  : null,
                 computedRole:
                   employee.role === UserRole.Admin
-                    ? assignment?.isDepartmentManager
+                    ? assignment?.isDepartmentManager ||
+                      assignment?.managementKind === 'departments' ||
+                      assignment?.managementKind === 'direction'
                       ? UserRole.DepartmentManager
                       : UserRole.Employee
                     : employee.role,
@@ -1324,9 +1333,7 @@ export class EmployeeProfileService {
     await assignmentRepo.save(lockedPlanned);
     this.syncEmployeeCurrentAssignment(employee, lockedPlanned);
     await manager.getRepository(Employee).save(employee);
-    await this.identityRoleProjection.apply(manager, employee, {
-      adminAccess: 'preserve',
-    });
+    await this.identityRoleProjection.apply(manager, employee);
     await this.audit.record(
       {
         actorId,
@@ -1385,6 +1392,7 @@ export class EmployeeProfileService {
           const membership = resolveManagerMembershipForCreate({
             position,
             positionManagedDepartmentIds,
+            explicitManagementKind: normalized.managementKind,
             explicitIsDepartmentManager: normalized.isDepartmentManager,
             explicitManagedDepartmentIds: normalized.managedDepartmentIds,
             assignmentDepartmentId: resolved.departmentId,
@@ -1445,6 +1453,7 @@ export class EmployeeProfileService {
             probationEndDate: normalized.probationEndDate ?? null,
             comment: normalized.comment ?? null,
             status,
+            managementKind: membership.managementKind,
             isDepartmentManager: membership.isDepartmentManager,
             activationBlockedReason: null,
             activationCheckedAt: null,
@@ -1460,9 +1469,7 @@ export class EmployeeProfileService {
           if (status === 'active') {
             this.syncEmployeeCurrentAssignment(emp, assignment);
             await employeeRepo.save(emp);
-            await this.identityRoleProjection.apply(manager, emp, {
-              adminAccess: 'preserve',
-            });
+            await this.identityRoleProjection.apply(manager, emp);
           }
 
           await this.audit.record(
@@ -1629,21 +1636,32 @@ export class EmployeeProfileService {
             row.comment = normalized.comment;
           }
 
+          const hasExplicitKind = normalized.managementKind !== undefined;
           const hasExplicitManager = normalized.isDepartmentManager !== undefined;
           const hasExplicitManagedDepts =
             normalized.managedDepartmentIds !== undefined;
-          if (hasExplicitManager || hasExplicitManagedDepts) {
+          if (hasExplicitKind || hasExplicitManager || hasExplicitManagedDepts) {
             const wasManager = row.isDepartmentManager;
-            if (hasExplicitManager) {
+            if (hasExplicitKind) {
+              row.managementKind = normalized.managementKind!;
+              row.isDepartmentManager =
+                normalized.managementKind !== 'none';
+            } else if (hasExplicitManager) {
               row.isDepartmentManager = Boolean(normalized.isDepartmentManager);
+              row.managementKind = row.isDepartmentManager
+                ? 'departments'
+                : 'none';
             }
 
             const explicitlyTogglingOn =
-              hasExplicitManager &&
-              normalized.isDepartmentManager === true &&
-              !wasManager;
+              (hasExplicitKind &&
+                normalized.managementKind === 'departments' &&
+                !wasManager) ||
+              (hasExplicitManager &&
+                normalized.isDepartmentManager === true &&
+                !wasManager);
 
-            if (!row.isDepartmentManager) {
+            if (row.managementKind !== 'departments') {
               await replaceAssignmentManagedDepartments(manager, row.id, []);
             } else if (hasExplicitManagedDepts) {
               let managedDepartmentIds = [
@@ -1700,9 +1718,7 @@ export class EmployeeProfileService {
           } else if (row.status === 'active') {
             this.syncEmployeeCurrentAssignment(emp, row);
             await employeeRepo.save(emp);
-            await this.identityRoleProjection.apply(manager, emp, {
-              adminAccess: 'preserve',
-            });
+            await this.identityRoleProjection.apply(manager, emp);
           }
 
           await this.audit.record(

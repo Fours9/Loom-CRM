@@ -18,6 +18,8 @@ import type { AbsenceType } from '@loom/contracts-absences';
 import { DocumentsApiService } from '../documents/public-api';
 import { EmployeeAbsenceDocumentsService } from '../absences/public-api';
 import { EmployeeDocumentUploadDialogComponent } from './employee-document-upload-dialog.component';
+import { SessionStore } from '../../core/auth/session.store';
+import { Permission } from '@loom/contracts-auth';
 
 type DocumentType = 'time_event' | EmployeeDocumentType;
 
@@ -35,6 +37,7 @@ type DocumentListRow = {
   employeeId: string;
   documentType: DocumentType;
   title: string;
+  isConfidential: boolean;
   createdAt: string;
   relatedStartDate: string | null;
   relatedEndDate: string | null;
@@ -141,6 +144,9 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
                   <div class="doc-title">
                     <strong>{{ row.title }}</strong>
                     <span class="badge">{{ typeLabel(row.documentType) }}</span>
+                    @if (row.isConfidential) {
+                      <span class="badge confidential">Конфіденційно</span>
+                    }
                     @if (row.source === 'time_event') {
                       <a
                         class="icon-btn"
@@ -229,6 +235,7 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
       <loom-employee-document-upload-dialog
         [busy]="uploadBusy()"
         [error]="uploadError()"
+        [canMarkConfidential]="canMarkConfidential()"
         (closed)="closeUploadDialog()"
         (submitted)="submitUpload($event)"
       />
@@ -263,6 +270,10 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         display: inline-block; padding: 0.1rem 0.45rem;
         border-radius: 999px; font-size: 0.75rem;
         background: color-mix(in srgb, var(--pw-accent) 15%, transparent);
+      }
+      .badge.confidential {
+        background: color-mix(in srgb, #b42318 18%, transparent);
+        color: #912018;
       }
       .files { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
       .files li {
@@ -302,6 +313,7 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
 export class EmployeeDocumentsPanelComponent implements OnChanges {
   private readonly documentsApi = inject(DocumentsApiService);
   private readonly absenceDocsApi = inject(EmployeeAbsenceDocumentsService);
+  private readonly session = inject(SessionStore);
 
   @Input({ required: true }) employeeId!: string;
 
@@ -317,6 +329,13 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
   readonly uploadSuccess = signal(false);
   readonly uploadError = signal<string | null>(null);
   readonly deleteBusyId = signal<string | null>(null);
+
+  canMarkConfidential(): boolean {
+    return (
+      this.session.isAdminEquivalent() ||
+      this.session.hasPermission(Permission.ConfidentialView)
+    );
+  }
 
   private allRows: DocumentListRow[] = [];
 
@@ -372,6 +391,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
           employeeId: item.employeeId,
           documentType: item.documentType,
           title: item.title,
+          isConfidential: item.isConfidential === true,
           createdAt: item.createdAt,
           relatedStartDate: null,
           relatedEndDate: null,
@@ -384,6 +404,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
           employeeId: item.employeeId,
           documentType: 'time_event',
           title: formatTimeEventTitle(item.eventType, item.relatedStartDate, item.relatedEndDate),
+          isConfidential: false,
           createdAt: item.createdAt,
           relatedStartDate: item.relatedStartDate,
           relatedEndDate: item.relatedEndDate,
@@ -414,6 +435,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
           employeeId: item.employeeId,
           documentType: item.documentType,
           title: item.title,
+          isConfidential: item.isConfidential === true,
           createdAt: item.createdAt,
           relatedStartDate: null,
           relatedEndDate: null,
@@ -469,6 +491,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
   submitUpload(input: {
     title: string;
     documentType: EmployeeDocumentType;
+    isConfidential: boolean;
     files: File[];
   }): void {
     if (!input.files.length || !input.title.trim()) {
@@ -483,6 +506,7 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
       .uploadEmployeeDocument(this.employeeId, {
         title: input.title.trim(),
         documentType: input.documentType,
+        isConfidential: input.isConfidential,
         files: input.files,
       })
       .subscribe({

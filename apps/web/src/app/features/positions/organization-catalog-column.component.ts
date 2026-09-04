@@ -202,7 +202,7 @@ import { PositionManagementFacade } from './position-management.facade';
           }
         </button>
         <div class="panel-body">
-          @if (vm.canManagePositions()) {
+          @if (vm.canManagePositions() && vm.canCreateGlobalPosition()) {
             <button type="button" (click)="vm.startCreatePosition()">Додати посаду</button>
           }
           <ul>

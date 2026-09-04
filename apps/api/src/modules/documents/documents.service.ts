@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,21 +10,28 @@ import { v4 as uuidv4 } from 'uuid';
 import { User } from '../../platform/identity/user.entity';
 import { AuditService } from '../../platform/audit/audit.service';
 import { Permission } from '../../platform/permissions/permission.names';
-import { PermissionService } from '../../platform/permissions/permission.service';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
+import {
+  hasPermission,
+  type AuthorizationContext,
+} from '../../platform/access-control/authorization-context';
+import { ConfidentialAccessPolicy } from '../../platform/access-control/confidential-access.policy';
 import { Employee } from '../../organization/employees/employee.entity';
-import { EmployeeAccessService } from '../../organization/access/employee-access.service';
+import {
+  EmployeeAccessService,
+  type TargetAccessFacts,
+} from '../../organization/access/employee-access.service';
 import { EmployeeDocument } from './employee-document.entity';
 import { EmployeeDocumentFile } from './employee-document-file.entity';
-import {
-  MANAGER_VISIBLE_DOCUMENT_TYPES,
-  type EmployeeDocumentType,
-} from './document-types';
+import type { EmployeeDocumentType } from './document-types';
 import {
   DOCUMENT_ALLOWED_MIME_TYPES,
   DOCUMENT_MAX_FILE_SIZE,
   DOCUMENT_MAX_FILES_PER_SUBMISSION,
 } from './document-limits';
 import { normalizeUploadedFileName } from '../../platform/http/normalize-uploaded-file-name';
+import { DocumentTypeAccessPolicy } from './document-type-access.policy';
+import { DocumentResourceAccessPolicy } from './document-resource-access.policy';
 
 export type EmployeeDocumentFileDto = {
   id: string;
@@ -39,6 +47,7 @@ export type EmployeeDocumentListItemDto = {
   employeeId: string;
   documentType: EmployeeDocumentType;
   title: string;
+  isConfidential: boolean;
   createdAt: string;
   relatedStartDate: null;
   relatedEndDate: null;
@@ -51,6 +60,13 @@ export type EmployeeDocumentListResponseDto = {
   capabilities: { canUpload: boolean };
 };
 
+type ResolvedEmployeeDocContext = {
+  employee: Employee;
+  authz: AuthorizationContext;
+  target: TargetAccessFacts;
+  hasDocumentsManage: boolean;
+};
+
 @Injectable()
 export class DocumentsService {
   constructor(
@@ -59,7 +75,7 @@ export class DocumentsService {
     @InjectRepository(EmployeeDocumentFile)
     private readonly files: Repository<EmployeeDocumentFile>,
     private readonly access: EmployeeAccessService,
-    private readonly permissions: PermissionService,
+    private readonly authorization: AuthorizationContextService,
     private readonly audit: AuditService,
     private readonly dataSource: DataSource,
   ) {}
@@ -68,22 +84,31 @@ export class DocumentsService {
     actor: User,
     employeeId: string,
   ): Promise<EmployeeDocumentListResponseDto> {
-    const employee = await this.access.getEmployeeOrFail(employeeId);
-    await this.access.requireCanView(actor, employee);
-
-    const canManage = this.permissions.has(
-      actor.role,
-      Permission.DocumentsManage,
-    );
+    const ctx = await this.resolveEmployeeDocContext(actor, employeeId);
+    if (!ctx.target.isInScope) {
+      throw new ForbiddenException('Cannot view employee');
+    }
 
     const rows = await this.documents.find({
-      where: { employeeId: employee.id },
+      where: { employeeId: ctx.employee.id },
       order: { createdAt: 'DESC', id: 'DESC' },
     });
 
-    const visible = rows.filter((row) =>
-      this.canViewDocumentType(actor, employee, row.documentType),
-    );
+    const visible: EmployeeDocument[] = [];
+    const canDeleteById = new Map<string, boolean>();
+    for (const row of rows) {
+      const decision =
+        DocumentResourceAccessPolicy.evaluateExistingDocumentAccess(
+          this.toExistingAccessInput(ctx, row),
+        );
+      if (!decision.canRead) continue;
+      visible.push(row);
+      canDeleteById.set(
+        row.id,
+        ctx.hasDocumentsManage && decision.canMutate,
+      );
+    }
+
     const fileRows =
       visible.length === 0
         ? []
@@ -101,20 +126,26 @@ export class DocumentsService {
 
     const items = visible
       .map((row) =>
-        this.toListItem(row, byDocument.get(row.id) ?? [], canManage),
+        this.toListItem(row, byDocument.get(row.id) ?? [], {
+          canDelete: canDeleteById.get(row.id) === true,
+        }),
       )
       .filter((item) => item.files.length > 0);
 
     return {
       items,
-      capabilities: { canUpload: canManage },
+      capabilities: { canUpload: ctx.hasDocumentsManage },
     };
   }
 
   async upload(
     actor: User,
     employeeId: string,
-    input: { title: string; documentType: EmployeeDocumentType },
+    input: {
+      title: string;
+      documentType: EmployeeDocumentType;
+      isConfidential?: boolean;
+    },
     uploaded: Express.Multer.File[],
   ): Promise<EmployeeDocumentListItemDto> {
     const files = uploaded ?? [];
@@ -143,8 +174,28 @@ export class DocumentsService {
       }
     }
 
-    const employee = await this.access.getEmployeeOrFail(employeeId);
-    await this.access.requireCanView(actor, employee);
+    const ctx = await this.resolveEmployeeDocContext(actor, employeeId);
+    if (!ctx.target.isInScope) {
+      throw new ForbiddenException('Cannot view employee');
+    }
+    if (!ctx.hasDocumentsManage) {
+      throw new ForbiddenException('Missing permission: documents.manage');
+    }
+
+    const typeInput = {
+      isOwner: ctx.target.isOwner,
+      isAdminEquivalent: ctx.authz.isAdminEquivalent,
+      canViewTargetViaManagedScope: ctx.target.isViaManagedScope,
+      documentType: input.documentType,
+    };
+    if (!DocumentTypeAccessPolicy.canWriteType(typeInput)) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const isConfidential = input.isConfidential ?? false;
+    if (isConfidential && !ConfidentialAccessPolicy.canMark(ctx.authz)) {
+      throw new ForbiddenException('Cannot mark document as confidential');
+    }
 
     const title = input.title.trim();
     if (!title) {
@@ -159,9 +210,10 @@ export class DocumentsService {
       const document = await docs.save(
         docs.create({
           id: documentId,
-          employeeId: employee.id,
+          employeeId: ctx.employee.id,
           documentType: input.documentType,
           title,
+          isConfidential,
           createdByUserId: actor.id,
         }),
       );
@@ -192,9 +244,10 @@ export class DocumentsService {
           entityType: 'employee_document',
           entityId: document.id,
           metadata: {
-            employeeId: employee.id,
+            employeeId: ctx.employee.id,
             documentId: document.id,
             documentType: document.documentType,
+            isConfidential: document.isConfidential,
             fileCount: savedFiles.length,
             sizeBytes: savedFiles.reduce((sum, f) => sum + f.sizeBytes, 0),
           },
@@ -205,7 +258,14 @@ export class DocumentsService {
       return { document, files: savedFiles };
     });
 
-    return this.toListItem(saved.document, saved.files, true);
+    const decision =
+      DocumentResourceAccessPolicy.evaluateExistingDocumentAccess(
+        this.toExistingAccessInput(ctx, saved.document),
+      );
+
+    return this.toListItem(saved.document, saved.files, {
+      canDelete: ctx.hasDocumentsManage && decision.canMutate,
+    });
   }
 
   async downloadFile(actor: User, documentId: string, fileId: string) {
@@ -216,16 +276,13 @@ export class DocumentsService {
       throw new NotFoundException('Document not found');
     }
 
-    const employee = await this.access.getEmployeeOrFail(document.employeeId);
-    try {
-      await this.access.requireCanView(actor, employee);
-    } catch {
-      throw new NotFoundException('Document not found');
-    }
-
-    if (!this.canViewDocumentType(actor, employee, document.documentType)) {
-      throw new NotFoundException('Document not found');
-    }
+    const ctx = await this.resolveEmployeeDocContext(
+      actor,
+      document.employeeId,
+    );
+    DocumentResourceAccessPolicy.requireExistingDocumentReadAccess(
+      this.toExistingAccessInput(ctx, document),
+    );
 
     const file = await this.files
       .createQueryBuilder('file')
@@ -253,18 +310,22 @@ export class DocumentsService {
       throw new NotFoundException('Document not found');
     }
 
-    const employee = await this.access.getEmployeeOrFail(document.employeeId);
-    try {
-      await this.access.requireCanView(actor, employee);
-    } catch {
+    const ctx = await this.resolveEmployeeDocContext(
+      actor,
+      document.employeeId,
+    );
+    if (!ctx.hasDocumentsManage) {
       throw new NotFoundException('Document not found');
     }
+    DocumentResourceAccessPolicy.requireExistingDocumentMutationAccess(
+      this.toExistingAccessInput(ctx, document),
+    );
 
     await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(EmployeeDocument);
       const result = await repo.softDelete({
         id: documentId,
-        employeeId: employee.id,
+        employeeId: ctx.employee.id,
       });
       if (result.affected !== 1) {
         throw new NotFoundException('Document not found');
@@ -277,9 +338,10 @@ export class DocumentsService {
           entityType: 'employee_document',
           entityId: documentId,
           metadata: {
-            employeeId: employee.id,
+            employeeId: ctx.employee.id,
             documentId,
             documentType: document.documentType,
+            isConfidential: document.isConfidential,
           },
         },
         manager,
@@ -289,23 +351,46 @@ export class DocumentsService {
     return { ok: true };
   }
 
-  private canViewDocumentType(
+  private async resolveEmployeeDocContext(
     actor: User,
-    employee: Employee,
-    type: EmployeeDocumentType,
-  ): boolean {
-    if (this.access.isAdmin(actor)) return true;
-    if (this.access.isOwner(actor, employee)) return true;
-    if (this.access.isManager(actor)) {
-      return MANAGER_VISIBLE_DOCUMENT_TYPES.has(type);
-    }
-    return false;
+    employeeId: string,
+  ): Promise<ResolvedEmployeeDocContext> {
+    const employee = await this.access.getEmployeeOrFail(employeeId);
+    const [authz, actorAccess] = await Promise.all([
+      this.authorization.resolve(actor.id),
+      this.access.resolveActorContext(actor),
+    ]);
+    const target = await this.access.resolveTargetAccess(
+      actor,
+      employee,
+      actorAccess,
+    );
+    const hasDocumentsManage = hasPermission(
+      authz,
+      Permission.DocumentsManage,
+    );
+
+    return { employee, authz, target, hasDocumentsManage };
+  }
+
+  private toExistingAccessInput(
+    ctx: ResolvedEmployeeDocContext,
+    document: EmployeeDocument,
+  ) {
+    return {
+      authz: ctx.authz,
+      isOwner: ctx.target.isOwner,
+      employeeInScope: ctx.target.isInScope,
+      canViewTargetViaManagedScope: ctx.target.isViaManagedScope,
+      documentType: document.documentType,
+      isConfidential: Boolean(document.isConfidential),
+    };
   }
 
   private toListItem(
     row: EmployeeDocument,
     files: EmployeeDocumentFile[],
-    canDelete: boolean,
+    permissions: { canDelete: boolean },
   ): EmployeeDocumentListItemDto {
     const createdAt =
       row.createdAt instanceof Date
@@ -317,6 +402,7 @@ export class DocumentsService {
       employeeId: row.employeeId,
       documentType: row.documentType,
       title: row.title,
+      isConfidential: Boolean(row.isConfidential),
       createdAt,
       relatedStartDate: null,
       relatedEndDate: null,
@@ -330,7 +416,7 @@ export class DocumentsService {
             ? file.createdAt.toISOString()
             : String(file.createdAt),
       })),
-      permissions: { canDelete },
+      permissions,
     };
   }
 }

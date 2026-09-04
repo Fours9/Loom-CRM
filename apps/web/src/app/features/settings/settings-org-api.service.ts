@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { Observable, catchError, throwError } from 'rxjs';
+import type { ManagementKind } from '../../shared/organization/labels';
 
 export type OrgDirection = {
   id: string;
@@ -47,7 +48,9 @@ export type OrgPosition = {
   directionId: string | null;
   description: string | null;
   isActive: boolean;
+  /** @deprecated use managementKindTemplate. */
   isDepartmentManagerTemplate?: boolean;
+  managementKindTemplate?: ManagementKind;
   managedDepartmentIds?: string[];
   departmentName?: string | null;
   directionName?: string | null;
@@ -166,9 +169,26 @@ export class SettingsOrgApiService {
     return this.http.delete(`/api/v1/directions/${id}`);
   }
 
+  /** Catalog read — every authenticated user, no management scope. */
   getPositions(all = false): Observable<OrgPosition[]> {
     const params = all ? new HttpParams().set('all', '1') : undefined;
     return this.http.get<OrgPosition[]>('/api/v1/positions', { params });
+  }
+
+  /**
+   * Scoped management list (`positions.manage` + PositionManagementScopePolicy).
+   * Falls back to the catalog while the endpoint is still rolling out.
+   */
+  getManagedPositions(all = false): Observable<OrgPosition[]> {
+    const params = all ? new HttpParams().set('all', '1') : undefined;
+    return this.http.get<OrgPosition[]>('/api/v1/positions/manage', { params }).pipe(
+      catchError((err: unknown) => {
+        if (err instanceof HttpErrorResponse && err.status === 404) {
+          return this.getPositions(all);
+        }
+        return throwError(() => err);
+      }),
+    );
   }
 
   createPosition(body: {
@@ -177,6 +197,7 @@ export class SettingsOrgApiService {
     directionId?: string | null;
     description?: string | null;
     isDepartmentManagerTemplate?: boolean;
+    managementKindTemplate?: ManagementKind;
     managedDepartmentIds?: string[];
   }): Observable<OrgPosition> {
     return this.http.post<OrgPosition>('/api/v1/positions', body);
@@ -191,6 +212,7 @@ export class SettingsOrgApiService {
       description: string | null;
       isActive: boolean;
       isDepartmentManagerTemplate: boolean;
+      managementKindTemplate: ManagementKind;
       managedDepartmentIds: string[];
     }>,
   ): Observable<OrgPosition> {

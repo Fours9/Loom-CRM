@@ -6,6 +6,7 @@ import type { User } from '../identity/user.entity';
 import type { UsersService } from '../identity/users.service';
 import type { AuditService } from '../audit/audit.service';
 import type { PermissionService } from '../permissions/permission.service';
+import type { AuthorizationContextService } from '../access-control/authorization-context.service';
 import type { JwtService } from '@nestjs/jwt';
 import type { EmployeeIdentityLookup } from './auth.service';
 import type { JwtPayload } from './jwt-payload.interface';
@@ -47,12 +48,30 @@ describe('AuthService session mapper and changePassword', () => {
       findEmployeeIdByUserId: jest.fn(async () => 'emp-1'),
     } as unknown as EmployeeIdentityLookup;
 
+    const authorization = {
+      resolve: jest.fn(async (userId: string) => ({
+        userId,
+        accountRole: {
+          id: 'role-employee',
+          code: 'employee',
+          name: 'Працівник',
+          permissionPreset: 'employee' as const,
+          isAdminEquivalent: false,
+          isSystem: true,
+        },
+        permissions: ['employees.view'],
+        surfaces: ['nav.home'],
+        isAdminEquivalent: false,
+      })),
+    } as unknown as AuthorizationContextService;
+
     const auth = new AuthService(
       users,
       jwt,
       permissions,
       audit,
       employeeLookup,
+      authorization,
     );
 
     return { auth, user, users, jwt, audit };

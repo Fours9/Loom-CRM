@@ -27,6 +27,7 @@ export type EmployeeDocumentListItem = {
   employeeId: EntityId;
   documentType: EmployeeDocumentType;
   title: string;
+  isConfidential: boolean;
   createdAt: string;
   relatedStartDate: null;
   relatedEndDate: null;

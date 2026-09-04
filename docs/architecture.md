@@ -47,17 +47,19 @@ Practical semantics:
 - Assignment free-text field is **`comment`** (column/API; was `change_reason` / `changeReason`). Historical audit JSON may contain `changeReason`; new writes use `comment`. No backfill. Do not confuse with `employees.comment` or questionnaire assignment service comment.
 - **Org mutate auth (shared):** pure `canMutateEmployeeOrgAssignment` (`employees.change_assignment` / Admin today) gates People `canEditEmployment`. Absences detail dept/position is **read-only** (Access SoT = active EA). Hire/create writes **initial active EA** + mirror + `IdentityRoleProjection`. Display `directionId`/`directionName` derived from current EA.
 
-### Access variant 2 (visibility + identity role)
+### Access variant 2 + ADR 0011 (visibility + account roles)
 
-- **Position** `isDepartmentManagerTemplate` + `position_managed_departments` — manager template only.
-- **Active EA** `isDepartmentManager` + `employment_assignment_managed_departments` — actual manager membership; sole visibility-scope SoT for **actor and target** (no `employees.departmentId` authorization fallback).
-- `EmployeeAccessService.resolveActorContext` → `{ scope, employeeId, managedDepartmentIds }`; `listVisibleEmployees` = `self ∪ managed` with batch target-EA resolution.
-- `IdentityRoleProjection.apply({ adminAccess: 'preserve' | boolean })` — sole writer of `User.role` (if User) and `Employee.role` mirror; `tokenVersion++` when role changes. RoleAccess uses `PATCH …/access-settings` (`adminAccess` + visibility overrides only). Attach/hire have **no** role input.
-- Legacy `employee_managed_departments` and `User`/`Employee.isDepartmentManager` — stop-read/write for auth; physical DROP later.
+- **Org leadership:** Position `managementKindTemplate` / EA `managementKind` (`none` | `departments` | `direction`). Direction expands to all departments of the EA direction for Access scope. Legacy booleans are display mirrors only.
+- **Account roles (Platform AccessControl):** `account_roles` + `app_surfaces` + `users.account_role_id` (NOT NULL). `AuthorizationContextService.resolve` is the authZ SoT for Guard / `/me` / Access adminEquivalent. `users.role` is a compatibility mirror.
+- **No `adminAccess` toggle** — full admin = system role `admin` or custom `is_admin_equivalent`. RoleAccess assigns `accountRoleId`; system employee/DM are canonicalized from active EA in the same TX.
+- Settings **«Доступи»** (`/settings/access-roles`) — adminEquivalent-only CRUD. Surface AND permission for UI. `GET /positions` = catalog; `GET /positions/manage` = scoped management.
+- Living surfaces catalog: [access-surfaces.md](product/access-surfaces.md). Decision: [ADR 0011](adr/0011-org-leadership-vs-account-role.md).
 
 ### Documents MVP
 
-Documents module owns `employee_documents` (submission) + `employee_document_files` (attachments; interim `content_base64` until Platform Files). Upload: `POST …/documents/employees/:employeeId` with `files` (multi, max 20; limits in `document-limits.ts`). Download: `GET …/documents/:documentId/files/:fileId/download`. List orders documents `createdAt DESC, id DESC` and files `createdAt ASC, id ASC`. Sensitive document types (`questionnaire`, `identity`, `medical`, `consent`) are projected server-side: owner + admin only; department managers see only employment/education/certificate/other when viewing others. Upload/delete: `documents.manage` (Admin). View: `documents.view` (all roles) + `EmployeeAccessService` scope.
+Documents module owns `employee_documents` (submission) + `employee_document_files` (attachments; interim `content_base64` until Platform Files). Upload: `POST …/documents/employees/:employeeId` with `files` (multi, max 20; limits in `document-limits.ts`); optional multipart `isConfidential` (omitted → false). Download: `GET …/documents/:documentId/files/:fileId/download`. List orders documents `createdAt DESC, id DESC` and files `createdAt ASC, id ASC`.
+
+**AuthZ (ADR 0012):** `DocumentTypeAccessPolicy` (owner / adminEquivalent / managed-scope manager-visible types) + `DocumentResourceAccessPolicy` (type ∧ confidential) + Platform `ConfidentialAccessPolicy` (`confidential.view`; canView ≠ canMark). Sensitive types (`questionnaire`, `identity`, `medical`, `consent`) remain type-gated; confidential is additive and never widens type write/read. Upload/delete require `documents.manage` + scope + type write; mark requires `canMark`. SoftDelete uses the same resource mutation gate as download (404 concealment). Resolve AuthZ + `resolveTargetAccess` once per op. Decision: [ADR 0012](adr/0012-confidential-classification.md).
 
 ### Identity roles (runtime)
 

@@ -83,7 +83,8 @@ function isGuestRequested(route: ActivatedRouteSnapshot): boolean {
   );
 }
 
-function whenSessionReady<T>(
+/** Defer a guard decision until the session left `initializing`. */
+export function whenSessionReady<T>(
   session: SessionStore,
   resolve: () => T,
 ): T | Observable<T> {

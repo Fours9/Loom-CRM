@@ -18,6 +18,7 @@ import { EmploymentAssignment } from './employment-assignment.entity';
 import { EmploymentAssignmentManagedDepartment } from './employment-assignment-managed-department.entity';
 import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
+import { Department } from '../departments/department.entity';
 import { EmployeesService } from './employees.service';
 import { EmployeeProfileService } from './employee-profile.service';
 import { EmployeesController } from './employees.controller';
@@ -50,6 +51,7 @@ import { PositionManagedDepartment } from '../positions/position-managed-departm
       EmploymentAssignment,
       Company,
       Direction,
+      Department,
       AuditLog,
       PositionSkillRequirement,
     ]),

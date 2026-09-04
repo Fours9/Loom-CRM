@@ -2,10 +2,14 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { UserRole, UserStatus } from './user.enums';
+import { AccountRole } from '../access-control/account-role.entity';
 
 @Entity({ name: 'users' })
 export class User {
@@ -18,8 +22,17 @@ export class User {
   @Column({ name: 'password_hash', type: 'varchar', length: 255 })
   passwordHash!: string;
 
+  /** Compatibility mirror of account role preset / adminEquivalent. AuthZ SoT is account_role_id. */
   @Column({ type: 'varchar', length: 64 })
   role!: UserRole;
+
+  @Index()
+  @Column({ name: 'account_role_id', type: 'uuid' })
+  accountRoleId!: string;
+
+  @ManyToOne(() => AccountRole, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'account_role_id' })
+  accountRole?: AccountRole;
 
   @Column({ name: 'is_department_manager', type: 'boolean', default: false })
   isDepartmentManager!: boolean;

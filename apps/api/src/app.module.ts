@@ -8,6 +8,7 @@ import { HealthModule } from './platform/health/health.module';
 import { ApplicationBootstrapModule } from './platform/bootstrap/application-bootstrap.module';
 import { ApplicationSettingsModule } from './platform/settings/application-settings.module';
 import { IdentityModule } from './platform/identity/identity.module';
+import { AccessControlModule } from './platform/access-control/access-control.module';
 import { PermissionsModule } from './platform/permissions/permissions.module';
 import { AuditModule } from './platform/audit/audit.module';
 import { NotificationsModule } from './platform/notifications/notifications.module';
@@ -33,6 +34,7 @@ import { EmployeeDeletionModule } from './application/employee-deletion/employee
     DatabaseModule,
     ApplicationSettingsModule,
     IdentityModule,
+    AccessControlModule,
     PermissionsModule,
     AuditModule,
     NotificationsModule,

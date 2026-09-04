@@ -560,6 +560,8 @@ export class PeopleProfilePageComponent implements OnInit {
     visiblePeopleProfileTabs({
       capabilities: this.profile()?.capabilities,
       permissions: this.session.user()?.permissions ?? [],
+      surfaces: this.session.surfaces(),
+      isAdminEquivalent: this.session.isAdminEquivalent(),
     }),
   );
 

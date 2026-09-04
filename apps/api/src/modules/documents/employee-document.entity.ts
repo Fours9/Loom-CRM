@@ -24,6 +24,9 @@ export class EmployeeDocument {
   @Column({ type: 'varchar', length: 255 })
   title!: string;
 
+  @Column({ name: 'is_confidential', type: 'boolean', default: false })
+  isConfidential!: boolean;
+
   @Column({ name: 'created_by_user_id', type: 'uuid', nullable: true })
   createdByUserId!: string | null;
 

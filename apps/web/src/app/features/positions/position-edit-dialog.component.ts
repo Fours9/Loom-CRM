@@ -103,9 +103,11 @@ import { PositionManagementFacade } from './position-management.facade';
                 [(ngModel)]="vm.formDirectionId"
                 name="formDirectionId"
                 (ngModelChange)="vm.onFormDirectionChange()"
-                [disabled]="vm.saveLocked()"
+                [disabled]="vm.saveLocked() || !vm.canEditPositionDirection()"
               >
-                <option [ngValue]="''">Без напрямку</option>
+                @if (vm.canCreateGlobalPosition()) {
+                  <option [ngValue]="''">Без напрямку</option>
+                }
                 @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
                   <option [ngValue]="dir.id">{{ dir.name }}</option>
                 }
@@ -129,6 +131,9 @@ import { PositionManagementFacade } from './position-management.facade';
           @if (vm.formDirectionId) {
             <p class="hint">Відділи показуються лише для вибраного напрямку.</p>
           }
+          @if (!vm.canEditPositionDirection()) {
+            <p class="hint">Напрямок закріплений вашою областю керування.</p>
+          }
           <label>
             Опис
             <textarea
@@ -140,17 +145,20 @@ import { PositionManagementFacade } from './position-management.facade';
             ></textarea>
           </label>
           @if (vm.canManagePositions()) {
-            <label class="check">
-              <input
-                type="checkbox"
-                [ngModel]="vm.formIsDepartmentManagerTemplate"
-                name="formIsDepartmentManagerTemplate"
+            <label>
+              Керівництво
+              <select
+                [ngModel]="vm.formManagementKindTemplate"
+                name="formManagementKindTemplate"
                 [disabled]="vm.saveLocked()"
-                (ngModelChange)="vm.onManagerTemplateToggle($event)"
-              />
-              Менеджерує відділ
+                (ngModelChange)="vm.onManagementKindTemplateChange($event)"
+              >
+                @for (opt of vm.managementKindOptions; track opt.value) {
+                  <option [ngValue]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
             </label>
-            @if (vm.formIsDepartmentManagerTemplate) {
+            @if (vm.managementKindUsesDepartments()) {
               <label class="skills-field">
                 Керовані відділи
                 <app-multi-select-list

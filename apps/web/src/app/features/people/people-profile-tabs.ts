@@ -1,6 +1,12 @@
 import type { Permission } from '@loom/contracts-auth';
 import { Permission as P } from '@loom/contracts-auth';
 import type { EmployeeProfileCapabilities } from '@loom/contracts-employees';
+import {
+  Surface,
+  canAccessSurface,
+  hasSurfaceCatalog,
+  type SurfaceId,
+} from '../../core/access/can-access-surface';
 
 export type PeopleProfileTabId =
   | 'data'
@@ -26,6 +32,16 @@ const ALL_TABS: readonly PeopleProfileTab[] = [
   { id: 'later', label: 'Згодом' },
 ];
 
+const TAB_SURFACE: Readonly<Record<PeopleProfileTabId, SurfaceId>> = {
+  data: Surface.PeopleTabData,
+  absences: Surface.PeopleTabWork,
+  documents: Surface.PeopleTabDocuments,
+  questionnaires: Surface.PeopleTabQuestionnaires,
+  metrics: Surface.PeopleTabMetrics,
+  administration: Surface.PeopleTabAdministration,
+  later: Surface.PeopleTabLater,
+};
+
 function hasPermission(
   permissions: readonly Permission[],
   permission: Permission,
@@ -33,18 +49,49 @@ function hasPermission(
   return permissions.includes(permission);
 }
 
+function hasAnyAdministrationCapability(
+  caps: EmployeeProfileCapabilities | null | undefined,
+): boolean {
+  return Boolean(
+    caps?.canViewHistory ||
+      caps?.canCreateAccount ||
+      caps?.canResetPassword ||
+      caps?.canManageAccount ||
+      caps?.canDeleteEmployee ||
+      caps?.canViewAccountDetails ||
+      caps?.canEditAccountEmail ||
+      caps?.canEditAdminAccess ||
+      caps?.canEditVisibilityOverrides,
+  );
+}
+
 /**
- * Visible People profile tabs from capabilities + session permissions.
+ * Visible People profile tabs from capabilities + session permissions + surfaces.
  * Hide unavailable tabs (do not render disabled).
+ *
+ * Surfaces win when the session carries a catalog: `metrics` and `administration`
+ * become surface-only, `documents` / `questionnaires` stay surface AND permission.
+ * Without surfaces (pre-rollout) the legacy permission/capability gating applies.
  */
 export function visiblePeopleProfileTabs(input: {
   capabilities: EmployeeProfileCapabilities | null | undefined;
   permissions: readonly Permission[];
+  surfaces?: readonly string[];
+  isAdminEquivalent?: boolean;
 }): readonly PeopleProfileTab[] {
   const caps = input.capabilities;
   const perms = input.permissions;
+  const session = {
+    permissions: perms,
+    surfaces: input.surfaces ?? [],
+    isAdminEquivalent: input.isAdminEquivalent,
+  };
+  const useSurfaces = hasSurfaceCatalog(session);
 
   return ALL_TABS.filter((tab) => {
+    if (useSurfaces) {
+      return canAccessSurface(session, TAB_SURFACE[tab.id]);
+    }
     switch (tab.id) {
       case 'data':
       case 'absences':
@@ -57,17 +104,7 @@ export function visiblePeopleProfileTabs(input: {
       case 'questionnaires':
         return hasPermission(perms, P.QuestionnairesView);
       case 'administration':
-        return Boolean(
-          caps?.canViewHistory ||
-            caps?.canCreateAccount ||
-            caps?.canResetPassword ||
-            caps?.canManageAccount ||
-            caps?.canDeleteEmployee ||
-            caps?.canViewAccountDetails ||
-            caps?.canEditAccountEmail ||
-            caps?.canEditAdminAccess ||
-            caps?.canEditVisibilityOverrides,
-        );
+        return hasAnyAdministrationCapability(caps);
       default:
         return false;
     }
@@ -88,7 +125,7 @@ export function canShowAccountAdminTab(
   );
 }
 
-/** Admin «Роль та допуски» when admin access or visibility overrides are editable. */
+/** Admin «Роль та допуски» when the account role or visibility overrides are editable. */
 export function canShowRoleAccessAdminTab(
   caps: EmployeeProfileCapabilities | null | undefined,
 ): boolean {

@@ -170,7 +170,7 @@ class UpdateEmployeeDto {
 }
 
 class UpdateAccessSettingsDto {
-  @IsOptional() @IsBoolean() adminAccess?: boolean;
+  @IsOptional() @IsUUID() accountRoleId?: string;
   @IsOptional() @IsString() profileVisibilityOverride?: string | null;
   @IsOptional() @IsString() absenceVisibilityOverride?: string | null;
   @IsOptional() @IsBoolean() showAbsenceTypeToPeersOverride?: boolean | null;

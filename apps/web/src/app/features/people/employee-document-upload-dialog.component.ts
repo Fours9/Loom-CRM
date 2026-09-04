@@ -85,6 +85,17 @@ const MAX_FILES = 20;
                 }
               </select>
             </label>
+            @if (canMarkConfidential) {
+              <label class="check span-2">
+                <input
+                  type="checkbox"
+                  name="uploadConfidential"
+                  [(ngModel)]="isConfidential"
+                  [disabled]="busy"
+                />
+                Конфіденційно
+              </label>
+            }
             <label>
               Файли
               <input
@@ -244,6 +255,21 @@ const MAX_FILES = 20;
         font-size: 0.9rem;
         color: var(--pw-muted);
       }
+      label.check {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--pw-text);
+      }
+      .check input[type='checkbox'] {
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+        padding: 0;
+        border: none;
+        flex: 0 0 auto;
+      }
       input,
       select {
         border: 1px solid var(--pw-border);
@@ -366,15 +392,19 @@ export class EmployeeDocumentUploadDialogComponent implements OnInit, OnDestroy 
 
   @Input() busy = false;
   @Input() error: string | null = null;
+  /** Session can mark confidential (adminEq or confidential.view). */
+  @Input() canMarkConfidential = false;
 
   title = '';
   documentType: EmployeeDocumentType = 'employment';
+  isConfidential = false;
   readonly localError = signal<string | null>(null);
 
   readonly closed = output<void>();
   readonly submitted = output<{
     title: string;
     documentType: EmployeeDocumentType;
+    isConfidential: boolean;
     files: File[];
   }>();
 
@@ -479,6 +509,7 @@ export class EmployeeDocumentUploadDialogComponent implements OnInit, OnDestroy 
     this.submitted.emit({
       title: this.title.trim(),
       documentType: this.documentType,
+      isConfidential: this.canMarkConfidential ? this.isConfidential : false,
       files: this.pending().map((p) => p.file),
     });
   }

@@ -1,4 +1,9 @@
 import type { EmploymentAssignmentHistoryItem } from '@loom/contracts-employees';
+import {
+  managementKindUsesDepartments,
+  toManagementKind,
+  type ManagementKind,
+} from '../../shared/organization/labels';
 
 export type EmploymentAssignmentDialogState =
   | { kind: 'closed' }
@@ -56,7 +61,7 @@ export type EmploymentAssignmentForm = {
   probationStartDate: string;
   probationEndDate: string;
   comment: string;
-  isDepartmentManager: boolean;
+  managementKind: ManagementKind;
   managedDepartmentIds: string[];
 };
 
@@ -73,7 +78,7 @@ export function emptyEmploymentAssignmentForm(): EmploymentAssignmentForm {
     probationStartDate: '',
     probationEndDate: '',
     comment: '',
-    isDepartmentManager: false,
+    managementKind: 'none',
     managedDepartmentIds: [],
   };
 }
@@ -113,33 +118,43 @@ export function employmentAssignmentFormFromHistory(
     probationStartDate: row.probationStartDate || '',
     probationEndDate: row.probationEndDate || '',
     comment: row.comment || '',
-    isDepartmentManager: Boolean(row.isDepartmentManager),
+    managementKind: toManagementKind(
+      row.managementKind,
+      row.isDepartmentManager,
+    ),
     managedDepartmentIds: [...(row.managedDepartmentIds || [])],
   };
 }
 
-/** Prefill manager fields from a position template (create flow only). */
+/** Prefill leadership fields from a position template (create flow only). */
 export function applyPositionManagerTemplate(
   form: EmploymentAssignmentForm,
   position: {
     isDepartmentManagerTemplate?: boolean;
+    managementKindTemplate?: ManagementKind;
     managedDepartmentIds?: string[] | null;
     departmentId?: string | null;
   } | null,
 ): EmploymentAssignmentForm {
-  if (!position || !position.isDepartmentManagerTemplate) {
+  const managementKind = position
+    ? toManagementKind(
+        position.managementKindTemplate,
+        position.isDepartmentManagerTemplate,
+      )
+    : 'none';
+
+  if (!managementKindUsesDepartments(managementKind)) {
     return {
       ...form,
-      isDepartmentManager: false,
+      managementKind,
       managedDepartmentIds: [],
     };
   }
-  const fromTemplate = [...(position.managedDepartmentIds || [])].filter(Boolean);
-  const fallbackDept =
-    form.departmentId || position.departmentId || '';
+  const fromTemplate = [...(position?.managedDepartmentIds || [])].filter(Boolean);
+  const fallbackDept = form.departmentId || position?.departmentId || '';
   return {
     ...form,
-    isDepartmentManager: true,
+    managementKind,
     managedDepartmentIds:
       fromTemplate.length > 0
         ? fromTemplate
@@ -172,8 +187,10 @@ export function toEmploymentAssignmentWrite(
     probationStartDate: form.probationStartDate || null,
     probationEndDate: form.probationEndDate || null,
     comment: form.comment || null,
-    isDepartmentManager: form.isDepartmentManager,
-    managedDepartmentIds: form.isDepartmentManager
+    managementKind: form.managementKind,
+    // Legacy mirror while the backend migration lands.
+    isDepartmentManager: form.managementKind !== 'none',
+    managedDepartmentIds: managementKindUsesDepartments(form.managementKind)
       ? [...form.managedDepartmentIds]
       : [],
   };

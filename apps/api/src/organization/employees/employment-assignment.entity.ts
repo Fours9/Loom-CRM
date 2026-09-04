@@ -15,6 +15,7 @@ import { Position } from '../positions/position.entity';
 import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
 import { EmploymentAssignmentManagedDepartment } from './employment-assignment-managed-department.entity';
+import { ManagementKind } from '../employment-catalog/management-kind';
 
 export type EmploymentAssignmentStatus = 'active' | 'ended' | 'planned';
 
@@ -98,7 +99,16 @@ export class EmploymentAssignment {
   @Column({ type: 'varchar', length: 32, default: 'active' })
   status!: EmploymentAssignmentStatus;
 
-  /** Actual manager membership for Access (variant 2). */
+  /** Actual org leadership for Access scope (ADR 0011). */
+  @Column({
+    name: 'management_kind',
+    type: 'varchar',
+    length: 32,
+    default: ManagementKind.None,
+  })
+  managementKind!: ManagementKind;
+
+  /** @deprecated Display mirror of managementKind !== 'none'. */
   @Column({ name: 'is_department_manager', type: 'boolean', default: false })
   isDepartmentManager!: boolean;
 

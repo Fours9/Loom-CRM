@@ -1285,7 +1285,7 @@ export class EmployeeDataPanelComponent implements OnChanges {
 
   private prefillManagerFromPositionTemplate(positionId: string): void {
     if (!positionId) {
-      this.assignmentForm.isDepartmentManager = false;
+      this.assignmentForm.managementKind = 'none';
       this.assignmentForm.managedDepartmentIds = [];
       return;
     }
@@ -1295,7 +1295,7 @@ export class EmployeeDataPanelComponent implements OnChanges {
         if (this.assignmentForm.positionId !== positionId) return;
         const position = positions.find((p) => p.id === positionId) ?? null;
         const next = applyPositionManagerTemplate(this.assignmentForm, position);
-        this.assignmentForm.isDepartmentManager = next.isDepartmentManager;
+        this.assignmentForm.managementKind = next.managementKind;
         this.assignmentForm.managedDepartmentIds = next.managedDepartmentIds;
       },
       error: () => {

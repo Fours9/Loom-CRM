@@ -19,6 +19,11 @@ import {
   type MultiSelectItem,
 } from '../../shared/multi-select-list.component';
 import {
+  MANAGEMENT_KIND_OPTIONS,
+  managementKindUsesDepartments,
+  type ManagementKind,
+} from '../../shared/organization/labels';
+import {
   assignmentDialogSubmitLabel,
   assignmentDialogTitle,
   defaultManagedDepartmentsOnEnable,
@@ -168,16 +173,19 @@ import {
               Коментар
               <input [(ngModel)]="form.comment" name="assignmentComment" />
             </label>
-            <label class="check span-2">
-              <input
-                type="checkbox"
-                [ngModel]="form.isDepartmentManager"
-                name="assignmentIsDepartmentManager"
-                (ngModelChange)="onManagerToggle($event)"
-              />
-              Менеджерує відділ
+            <label class="span-2">
+              Керівництво
+              <select
+                [ngModel]="form.managementKind"
+                name="assignmentManagementKind"
+                (ngModelChange)="onManagementKindChange($event)"
+              >
+                @for (opt of managementKindOptions; track opt.value) {
+                  <option [ngValue]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
             </label>
-            @if (form.isDepartmentManager) {
+            @if (usesManagedDepartments) {
               <label class="span-2 managed-field">
                 Керовані відділи
                 <app-multi-select-list
@@ -396,9 +404,15 @@ export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
     );
   }
 
-  onManagerToggle(enabled: boolean): void {
-    this.form.isDepartmentManager = enabled;
-    if (!enabled) {
+  readonly managementKindOptions = MANAGEMENT_KIND_OPTIONS;
+
+  get usesManagedDepartments(): boolean {
+    return managementKindUsesDepartments(this.form.managementKind);
+  }
+
+  onManagementKindChange(kind: ManagementKind): void {
+    this.form.managementKind = kind;
+    if (!managementKindUsesDepartments(kind)) {
       this.form.managedDepartmentIds = [];
       return;
     }

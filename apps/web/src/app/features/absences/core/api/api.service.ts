@@ -145,6 +145,18 @@ export class ApiService {
     return this.http.patch<EmployeeProfile>(`/api/v1/employees/${id}`, body);
   }
 
+  /** Peer-visibility overrides live on their own endpoint, not on the profile PATCH. */
+  updateEmployeeAccessSettings(
+    id: string,
+    body: {
+      profileVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
+      absenceVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
+      showAbsenceTypeToPeersOverride?: boolean | null;
+    },
+  ): Observable<unknown> {
+    return this.http.patch(`/api/v1/employees/${id}/access-settings`, body);
+  }
+
   downloadEmployeePdf(id: string): Observable<Blob> {
     return this.http.get(`/api/v1/employees/${id}/export.pdf`, {
       responseType: 'blob',

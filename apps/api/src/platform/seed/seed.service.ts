@@ -1,8 +1,12 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { UsersService } from '../identity/users.service';
 import { UserRole } from '../identity/user.enums';
 import { ApplicationSettingsService } from '../settings/application-settings.service';
+import { resolveSystemAccountRoleId } from '../access-control/resolve-system-account-role-id';
+import { SystemAccountRoleCode } from '../access-control/system-account-role-codes';
 
 @Injectable()
 export class SeedService implements OnModuleInit {
@@ -11,6 +15,8 @@ export class SeedService implements OnModuleInit {
   constructor(
     private readonly users: UsersService,
     private readonly settings: ApplicationSettingsService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -28,10 +34,15 @@ export class SeedService implements OnModuleInit {
     ).toLowerCase();
     const password = process.env.SEED_ADMIN_PASSWORD || 'Admin123!';
     const passwordHash = await bcrypt.hash(password, 12);
+    const accountRoleId = await resolveSystemAccountRoleId(
+      this.dataSource.manager,
+      SystemAccountRoleCode.Admin,
+    );
     await this.users.createUser({
       email,
       passwordHash,
       role: UserRole.Admin,
+      accountRoleId,
       mustChangePassword: false,
     });
     this.logger.log(`Seeded admin user ${email}`);

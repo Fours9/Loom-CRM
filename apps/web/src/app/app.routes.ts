@@ -9,6 +9,8 @@ import {
   guestGuard,
   mustChangePasswordGuard,
 } from './core/auth/auth.guards';
+import { Surface } from './core/access/can-access-surface';
+import { surfaceGuard } from './core/access/surface.guard';
 
 export const routes: Routes = [
   {
@@ -34,6 +36,7 @@ export const routes: Routes = [
       },
       {
         path: 'positions',
+        canActivate: [surfaceGuard(Surface.RoutePositions)],
         loadChildren: () =>
           import('./features/positions/positions.routes').then(
             (m) => m.POSITIONS_ROUTES,

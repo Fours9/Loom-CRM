@@ -35,6 +35,18 @@ import {
   resolveManagerMembershipForCreate,
 } from './managed-department-writes';
 import { BusinessDateClock } from './business-date-clock';
+import { resolveSystemAccountRoleId } from '../../platform/access-control/resolve-system-account-role-id';
+import { AccountRole } from '../../platform/access-control/account-role.entity';
+import { LastAdminPolicy } from '../../platform/access-control/last-admin.policy';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
+import {
+  SystemAccountRoleCode,
+  BRIDGE_MANAGED_ROLE_CODES,
+} from '../../platform/access-control/system-account-role-codes';
+import {
+  compatibilityUserRoleFromAccountRole,
+} from './identity-role-projection';
+import { ManagementKind } from '../employment-catalog/management-kind';
 
 export type ScheduleDayInput = {
   weekday: number;
@@ -67,7 +79,7 @@ export type UpdateEmployeeInput = Partial<{
 }>;
 
 export type UpdateAccessSettingsInput = {
-  adminAccess?: boolean;
+  accountRoleId?: string;
   profileVisibilityOverride?: string | null;
   absenceVisibilityOverride?: string | null;
   showAbsenceTypeToPeersOverride?: boolean | string | null;
@@ -95,6 +107,8 @@ export class EmployeesService {
     private readonly dataSource: DataSource,
     private readonly identityRoleProjection: IdentityRoleProjection,
     private readonly businessDateClock: BusinessDateClock,
+    private readonly lastAdmin: LastAdminPolicy,
+    private readonly authorization: AuthorizationContextService,
   ) {}
 
   async findAll(actor: User, query: EmployeeListQueryDto = {}) {
@@ -334,6 +348,7 @@ export class EmployeesService {
       managedDepartments,
       isDepartmentManager: Boolean(activeEa?.isDepartmentManager),
       adminAccess: employee.role === UserRole.Admin,
+      accountRoleId: null as string | null,
       computedRole:
         employee.role === UserRole.Admin
           ? activeEa?.isDepartmentManager
@@ -425,7 +440,11 @@ export class EmployeesService {
     let prefixRole: UserRole = UserRole.Employee;
     if (positionId) {
       const pos = await this.positions.getOrFail(positionId);
-      if (pos.isDepartmentManagerTemplate) {
+      if (
+        pos.managementKindTemplate === ManagementKind.Departments ||
+        pos.managementKindTemplate === ManagementKind.Direction ||
+        pos.isDepartmentManagerTemplate
+      ) {
         prefixRole = UserRole.DepartmentManager;
       }
     }
@@ -490,6 +509,7 @@ export class EmployeesService {
           positionId,
           status: 'active',
           startDate: today,
+          managementKind: membership.managementKind,
           isDepartmentManager: membership.isDepartmentManager,
           createdByUserId: actor.id,
         }),
@@ -505,9 +525,7 @@ export class EmployeesService {
       emp.positionId = assignment.positionId;
       await employeeRepo.save(emp);
 
-      await this.identityRoleProjection.apply(manager, emp, {
-        adminAccess: 'preserve',
-      });
+      await this.identityRoleProjection.apply(manager, emp);
 
       if (dto.createAccount) {
         if (!dto.email || !dto.temporaryPassword) {
@@ -523,12 +541,23 @@ export class EmployeesService {
           throw new ConflictException('Email already in use');
         }
         const fresh = await employeeRepo.findOneOrFail({ where: { id: emp.id } });
+        const accountRoleId = await resolveSystemAccountRoleId(
+          manager,
+          membership.managementKind !== ManagementKind.None
+            ? SystemAccountRoleCode.DepartmentManager
+            : SystemAccountRoleCode.Employee,
+        );
+        const mirrorRole =
+          membership.managementKind !== ManagementKind.None
+            ? UserRole.DepartmentManager
+            : UserRole.Employee;
         const userRepo = manager.getRepository(User);
         const user = await userRepo.save(
           userRepo.create({
             email,
             passwordHash: await bcrypt.hash(dto.temporaryPassword, 12),
-            role: fresh.role as UserRole,
+            role: mirrorRole,
+            accountRoleId,
             isDepartmentManager: false,
             status: UserStatus.Active,
             mustChangePassword: true,
@@ -538,6 +567,7 @@ export class EmployeesService {
           }),
         );
         fresh.userId = user.id;
+        fresh.role = mirrorRole;
         await employeeRepo.save(fresh);
       }
 
@@ -648,21 +678,34 @@ export class EmployeesService {
     id: string,
     dto: UpdateAccessSettingsInput,
   ) {
-    if (!this.access.isAdmin(actor)) {
+    const actorCtx = await this.authorization.resolve(actor.id);
+    if (!actorCtx.isAdminEquivalent) {
       throw new ForbiddenException();
     }
     await this.access.getEmployeeOrFail(id);
 
-    await this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const employeeRepo = manager.getRepository(Employee);
+      const userRepo = manager.getRepository(User);
+      const roleRepo = manager.getRepository(AccountRole);
+
       const emp = await employeeRepo.findOne({
         where: { id },
         lock: { mode: 'pessimistic_write' },
       });
       if (!emp) throw new NotFoundException('Employee not found');
 
+      let user: User | null = null;
+      if (emp.userId) {
+        user = await userRepo.findOne({
+          where: { id: emp.userId },
+          lock: { mode: 'pessimistic_write' },
+        });
+      }
+
       const before = {
         role: emp.role,
+        accountRoleId: user?.accountRoleId ?? null,
         profileVisibilityOverride: emp.profileVisibilityOverride,
         absenceVisibilityOverride: emp.absenceVisibilityOverride,
         showAbsenceTypeToPeersOverride: emp.showAbsenceTypeToPeersOverride,
@@ -690,10 +733,65 @@ export class EmployeesService {
       }
       await employeeRepo.save(emp);
 
-      if (dto.adminAccess !== undefined) {
-        await this.identityRoleProjection.apply(manager, emp, {
-          adminAccess: dto.adminAccess,
+      let requestedAccountRole: AccountRole | null = null;
+      let effectiveAccountRole: AccountRole | null = null;
+
+      if (dto.accountRoleId !== undefined) {
+        if (!user) {
+          throw new BadRequestException('Employee has no account');
+        }
+        requestedAccountRole = await roleRepo.findOne({
+          where: { id: dto.accountRoleId },
         });
+        if (!requestedAccountRole) {
+          throw new BadRequestException('Account role not found');
+        }
+
+        await this.lastAdmin.assertUserDemotionAllowed(
+          manager,
+          user.id,
+          requestedAccountRole.isAdminEquivalent,
+        );
+
+        user.accountRoleId = requestedAccountRole.id;
+        user.role = compatibilityUserRoleFromAccountRole(requestedAccountRole);
+        emp.role = user.role;
+        await userRepo.save(user);
+        await employeeRepo.save(emp);
+
+        const bridgeable =
+          requestedAccountRole.isSystem &&
+          !!requestedAccountRole.code &&
+          (BRIDGE_MANAGED_ROLE_CODES as readonly string[]).includes(
+            requestedAccountRole.code,
+          );
+
+        if (bridgeable) {
+          await this.identityRoleProjection.apply(manager, emp, {
+            bumpTokenVersion: false,
+          });
+        }
+
+        const freshUser = await userRepo.findOneOrFail({
+          where: { id: user.id },
+        });
+        effectiveAccountRole = await roleRepo.findOneOrFail({
+          where: { id: freshUser.accountRoleId },
+        });
+
+        const mirror = compatibilityUserRoleFromAccountRole(
+          effectiveAccountRole,
+        );
+        let roleChanged =
+          before.accountRoleId !== freshUser.accountRoleId ||
+          before.role !== mirror;
+        freshUser.role = mirror;
+        emp.role = mirror;
+        if (roleChanged) {
+          freshUser.tokenVersion = (freshUser.tokenVersion ?? 0) + 1;
+        }
+        await userRepo.save(freshUser);
+        await employeeRepo.save(emp);
       }
 
       const after = await employeeRepo.findOneOrFail({ where: { id } });
@@ -707,6 +805,11 @@ export class EmployeesService {
             before,
             after: {
               role: after.role,
+              accountRoleId: (await userRepo.findOne({
+                where: { id: emp.userId ?? undefined },
+              }))?.accountRoleId,
+              requestedAccountRoleId: requestedAccountRole?.id ?? null,
+              effectiveAccountRoleId: effectiveAccountRole?.id ?? null,
               profileVisibilityOverride: after.profileVisibilityOverride,
               absenceVisibilityOverride: after.absenceVisibilityOverride,
               showAbsenceTypeToPeersOverride:
@@ -716,9 +819,31 @@ export class EmployeesService {
         },
         manager,
       );
+
+      return {
+        requestedAccountRole,
+        effectiveAccountRole,
+      };
     });
 
-    return this.findOne(actor, id);
+    const employee = await this.findOne(actor, id);
+    return {
+      ...employee,
+      requestedAccountRole: result.requestedAccountRole
+        ? {
+            id: result.requestedAccountRole.id,
+            code: result.requestedAccountRole.code,
+            name: result.requestedAccountRole.name,
+          }
+        : undefined,
+      effectiveAccountRole: result.effectiveAccountRole
+        ? {
+            id: result.effectiveAccountRole.id,
+            code: result.effectiveAccountRole.code,
+            name: result.effectiveAccountRole.name,
+          }
+        : undefined,
+    };
   }
 
   async updateAccountEmail(actor: User, id: string, email: string) {
@@ -810,10 +935,17 @@ export class EmployeesService {
       });
       if (!emp) throw new NotFoundException('Employee not found');
 
-      await this.identityRoleProjection.apply(manager, emp, {
-        adminAccess: 'preserve',
-      });
+      await this.identityRoleProjection.apply(manager, emp);
       const fresh = await employeeRepo.findOneOrFail({ where: { id } });
+
+      const desiredCode =
+        fresh.role === UserRole.DepartmentManager
+          ? SystemAccountRoleCode.DepartmentManager
+          : SystemAccountRoleCode.Employee;
+      const accountRoleId = await resolveSystemAccountRoleId(
+        manager,
+        desiredCode,
+      );
 
       const userRepo = manager.getRepository(User);
       const user = await userRepo.save(
@@ -821,6 +953,7 @@ export class EmployeesService {
           email,
           passwordHash: await bcrypt.hash(dto.temporaryPassword, 12),
           role: fresh.role as UserRole,
+          accountRoleId,
           isDepartmentManager: false,
           status: UserStatus.Active,
           mustChangePassword: true,

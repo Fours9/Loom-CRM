@@ -33,7 +33,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 | --- | --- | --- |
 | Дані працівника | Основні · Контакти · Дати (редагування за capabilities) | завжди |
 | Робота | **Посада** (planned/blocked assignment history) + **Графік роботи** + Заявки + Календар (Absences `public-api`: schedule panel через `getEmployee` + `PUT .../schedule`; UI = `ScheduleEditor`. Empty API schedule ≠ default Пн–Пт — дефолт лише в draft при редагуванні. Compat TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)). Підвкладки графіка — за `absences.calendar.view` | завжди (Посада); графік — `absences.calendar.view` |
-| Документи | Documents MVP + агрегат вкладень time-event (Absences) | `documents.view` |
+| Документи | Documents MVP + confidential (`is_confidential` / `confidential.view`) + агрегат time-event | `documents.view` |
 | Анкети | Directory `/questionnaires` + People panel; assign/cancel/reactivate/close/delete; fill wizard | `questionnaires.view` |
 | Показники | Stub (roadmap Phase 5 / 8) | завжди |
 | Адміністрування | Підвкладки **Історія** + **Акаунт** + **Роль та допуски**: audit; account lifecycle + email; adminAccess + visibility overrides | `canViewHistory` **або** account/delete **або** access caps |
@@ -45,18 +45,24 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 
 - Top tab visible when history **or** any account/delete cap **or** `canEditAdminAccess` / `canEditVisibilityOverrides`.
 - Subtabs: **Історія** → **Акаунт** → **Роль та допуски** (fallback у цьому порядку).
-- **Роль та допуски:** toggle «Адміністратор» (`adminAccess`); computed DM/employee read-only; visibility overrides. `PATCH …/access-settings` → `updateAccessSettings` (не generic `PATCH /employees/:id` з `role`).
+- **Роль та допуски:** dropdown account role (`accountRoleId`); requested vs effective; visibility overrides. `PATCH …/access-settings` (не generic `PATCH /employees/:id` з `role`). Без adminAccess toggle.
 - **Акаунт:** login email view/edit (`canViewAccountDetails` / `canEditAccountEmail`); `PATCH …/account/email`.
 - Hard-delete confirm = `employeeNumber`; navigate `/people`. Not GDPR wipe.
 - Absences card: без role/managed/overrides/account email; dept/position read-only. Hire створює initial active EA; без ручного role/manager.
 
 ### Access variant 2 (living)
 
-- Position → manager **template** only (`isDepartmentManagerTemplate` + join).
-- Active EA → actual manager membership + managed depts; sole **visibility-scope** SoT (actor + target).
-- `IdentityRoleProjection.apply({ adminAccess })` — sole `User.role` / `Employee.role` mirror writer; `tokenVersion++` on role change.
-- `employees.departmentId` / `positionId` — display mirror only, never authorization SoT.
-- Legacy `employee_managed_departments` + `User/Employee.isDepartmentManager` — stop-read/write for auth (physical DROP later).
+- Position / EA `managementKind` (`none` | `departments` | `direction`); UA: Не керує / Керує відділами / Керує напрямком.
+- Account role: `users.account_role_id` + Platform AccessControl; RoleAccess assign (без adminAccess). System: Працівник / Менеджер / Директор / Адміністратор.
+- Absences detail: «Індивідуальні права» → `PATCH access-settings` (dual surface з People).
+- Settings «Доступи»; surfaces matrix; `GET /positions/manage` scoped.
+- See [access-surfaces.md](./access-surfaces.md), [ADR 0011](../adr/0011-org-leadership-vs-account-role.md).
+
+### Access variant 2 (legacy notes)
+
+- Active EA → visibility-scope SoT (actor + target).
+- `employees.departmentId` / `positionId` — display mirror only.
+- Legacy `employee_managed_departments` + boolean manager flags — stop-read/write for auth (physical DROP later).
 
 ### Адміністрування → Історія / Акаунт / Роль (living)
 
@@ -177,9 +183,9 @@ assignment.status === 'changes_requested'
 
 ## Phase 7 — Documents (деталь)
 
-**Є:** `employee_documents` + `employee_document_files` (одне подання → кілька файлів, як absence attachments); permissions `documents.view` / `documents.manage`; People-вкладка Документи; upload через модалку (multi-file в одному поданні, FE cumulative max 20), list/download (`…/files/:fileId/download`)/preview/soft-delete подання; агрегат absence attachments; type-aware projection (manager не бачить чужі questionnaire/identity/medical/consent).
+**Є:** `employee_documents` + `employee_document_files` (одне подання → кілька файлів); permissions `documents.view` / `documents.manage` / `confidential.view`; People-вкладка Документи; upload через модалку (+ «Конфіденційно» для canMark), list/download/preview/soft-delete; агрегат absence attachments; type policy (managed-scope) + confidential stack ([ADR 0012](../adr/0012-confidential-classification.md)).
 
-**Немає:** Platform Files (зараз interim `content_base64`); verification workflow; consent versions; окремий consents module.
+**Немає:** Platform Files (зараз interim `content_base64`); verification workflow; consent versions; PATCH classification; окремий consents module.
 
 ## Notifications inbox (living)
 

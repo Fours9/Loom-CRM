@@ -1,4 +1,4 @@
-/** Ukrainian labels for org role + peer-visibility overrides (People / Absences). */
+/** Ukrainian labels for org leadership, account roles + peer-visibility overrides. */
 
 export const COMPUTED_ROLE_LABELS: Record<
   'employee' | 'department_manager',
@@ -7,6 +7,62 @@ export const COMPUTED_ROLE_LABELS: Record<
   employee: 'Працівник',
   department_manager: 'Менеджер відділу',
 };
+
+/** Org leadership on a Position template / active EA — not an account role. */
+export type ManagementKind = 'none' | 'departments' | 'direction';
+
+export const MANAGEMENT_KIND_LABELS: Record<ManagementKind, string> = {
+  none: 'Не керує',
+  departments: 'Керує відділами',
+  direction: 'Керує напрямком',
+};
+
+export const MANAGEMENT_KIND_OPTIONS: ReadonlyArray<{
+  value: ManagementKind;
+  label: string;
+}> = (Object.keys(MANAGEMENT_KIND_LABELS) as ManagementKind[]).map((value) => ({
+  value,
+  label: MANAGEMENT_KIND_LABELS[value],
+}));
+
+/** Account access role code — system roles; custom roles carry their own name. */
+export type AccountRoleCode =
+  | 'employee'
+  | 'department_manager'
+  | 'director'
+  | 'admin';
+
+export const ACCOUNT_ROLE_LABELS: Record<AccountRoleCode, string> = {
+  employee: 'Працівник',
+  department_manager: 'Менеджер',
+  director: 'Директор',
+  admin: 'Адміністратор',
+};
+
+export function accountRoleLabel(
+  code: string | null | undefined,
+  fallbackName?: string | null,
+): string {
+  if (code && code in ACCOUNT_ROLE_LABELS) {
+    return ACCOUNT_ROLE_LABELS[code as AccountRoleCode];
+  }
+  return fallbackName || code || '—';
+}
+
+export function toManagementKind(
+  value: string | null | undefined,
+  legacyIsDepartmentManager?: boolean | null,
+): ManagementKind {
+  if (value === 'departments' || value === 'direction' || value === 'none') {
+    return value;
+  }
+  return legacyIsDepartmentManager ? 'departments' : 'none';
+}
+
+/** Only `departments` carries an explicit department multi-select. */
+export function managementKindUsesDepartments(kind: ManagementKind): boolean {
+  return kind === 'departments';
+}
 
 export const VISIBILITY_OVERRIDE_UI = {
   inherit: 'Успадковувати глобальні налаштування',

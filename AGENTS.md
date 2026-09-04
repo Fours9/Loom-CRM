@@ -50,6 +50,8 @@ Use the exact `packageManager` from root `package.json` (`pnpm@10.15.0`) via Cor
 - Demo tunnel tooling (exists): `start-tunnel.bat` → `scripts/start-tunnel.ps1` (ngrok reserved domain). Do **not** invent other tunnel providers (Cloudflare, etc.) without an architecture decision. DB sync uses `db-snapshot` / `db-restore` (Postgres SQL dump, not SQLite files).
 - Do not write product docs into `ProjectWeekend/docs`.
 - Keep ADRs in `docs/adr/`; architecture overview in `docs/architecture.md`.
+- Access / account roles: [ADR 0011](docs/adr/0011-org-leadership-vs-account-role.md), [access-surfaces.md](docs/product/access-surfaces.md). Platform AccessControl owns roles/surfaces/`AuthorizationContextService`; Organization must not invent a second authZ SoT.
+- Confidential classification: [ADR 0012](docs/adr/0012-confidential-classification.md) — `confidential.view` + Documents `is_confidential`; type policy via managed scope; no `permissionsForRole` / `User.role` authZ branches in Documents confidential/type policies.
 
 ## Secrets and generated noise
 

@@ -7,16 +7,29 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserRole } from '../../platform/identity/user.enums';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
 import { Employee } from '../employees/employee.entity';
 import { EmploymentAssignment } from '../employees/employment-assignment.entity';
 import { EmploymentAssignmentManagedDepartment } from '../employees/employment-assignment-managed-department.entity';
+import { Department } from '../departments/department.entity';
 import { CurrentEmploymentAssignmentResolver } from '../employment-catalog/current-employment-assignment.resolver';
+import {
+  ManagementKind,
+  managementKindImpliesManager,
+} from '../employment-catalog/management-kind';
 import { AccessScope } from './access-scope';
 
 export type ActorAccessContext = {
   scope: AccessScope;
   employeeId: string | null;
   managedDepartmentIds: string[];
+};
+
+export type TargetAccessFacts = {
+  isOwner: boolean;
+  isInScope: boolean;
+  /** Visible via managed_departments / direction expand — not owner/all alone. */
+  isViaManagedScope: boolean;
 };
 
 @Injectable()
@@ -28,9 +41,16 @@ export class EmployeeAccessService {
     private readonly assignments: Repository<EmploymentAssignment>,
     @InjectRepository(EmploymentAssignmentManagedDepartment)
     private readonly eaManaged: Repository<EmploymentAssignmentManagedDepartment>,
+    @InjectRepository(Department)
+    private readonly departments: Repository<Department>,
     private readonly currentAssignment: CurrentEmploymentAssignmentResolver,
+    private readonly authorization: AuthorizationContextService,
   ) {}
 
+  /**
+   * Prefer AuthorizationContext.isAdminEquivalent. Mirror users.role===admin
+   * remains valid when assign TX keeps compatibility mirror in sync.
+   */
   isAdminRole(viewer: User): boolean {
     return viewer.role === UserRole.Admin;
   }
@@ -43,6 +63,10 @@ export class EmployeeAccessService {
   /** @deprecated Use isAdminRole — kept as alias for call-site migration. */
   isAdmin(viewer: User): boolean {
     return this.isAdminRole(viewer);
+  }
+
+  async isAdminEquivalentAsync(viewer: User): Promise<boolean> {
+    return (await this.authorization.resolve(viewer.id)).isAdminEquivalent;
   }
 
   isOwner(viewer: User, target: Employee): boolean {
@@ -58,7 +82,8 @@ export class EmployeeAccessService {
   }
 
   async resolveActorContext(actor: User): Promise<ActorAccessContext> {
-    if (this.isAdminRole(actor)) {
+    const authz = await this.authorization.resolve(actor.id);
+    if (authz.isAdminEquivalent) {
       const self = await this.employees.findOne({ where: { userId: actor.id } });
       return {
         scope: 'all',
@@ -73,22 +98,52 @@ export class EmployeeAccessService {
     }
 
     const activeEa = await this.currentAssignment.resolve(self);
-    if (activeEa?.isDepartmentManager) {
-      const managedDepartmentIds = await this.managedDepartmentIdsForAssignment(
-        activeEa.id,
-      );
+    const kind =
+      (activeEa?.managementKind as ManagementKind | undefined) ??
+      (activeEa?.isDepartmentManager
+        ? ManagementKind.Departments
+        : ManagementKind.None);
+
+    if (!activeEa || !managementKindImpliesManager(kind)) {
       return {
-        scope: 'managed_departments',
+        scope: 'self',
         employeeId: self.id,
-        managedDepartmentIds,
+        managedDepartmentIds: [],
       };
     }
 
+    let managedDepartmentIds: string[] = [];
+    if (kind === ManagementKind.Departments) {
+      managedDepartmentIds = await this.managedDepartmentIdsForAssignment(
+        activeEa.id,
+      );
+    } else if (kind === ManagementKind.Direction) {
+      managedDepartmentIds = await this.expandDirectionDepartmentIds(activeEa);
+    }
+
     return {
-      scope: 'self',
+      scope: 'managed_departments',
       employeeId: self.id,
-      managedDepartmentIds: [],
+      managedDepartmentIds,
     };
+  }
+
+  private async expandDirectionDepartmentIds(
+    activeEa: EmploymentAssignment,
+  ): Promise<string[]> {
+    let directionId = activeEa.directionId;
+    if (!directionId && activeEa.departmentId) {
+      const dept = await this.departments.findOne({
+        where: { id: activeEa.departmentId },
+      });
+      directionId = dept?.directionId ?? null;
+    }
+    if (!directionId) return [];
+    const rows = await this.departments.find({
+      where: { directionId },
+      select: ['id'],
+    });
+    return rows.map((d) => d.id);
   }
 
   async resolveManagedScope(actor: User): Promise<string[]> {
@@ -112,16 +167,43 @@ export class EmployeeAccessService {
     actor: User,
     target: Employee,
   ): Promise<boolean> {
-    const ctx = await this.resolveActorContext(actor);
-    if (ctx.scope === 'all') return true;
-    if (this.isOwner(actor, target)) return true;
+    const facts = await this.resolveTargetAccess(actor, target);
+    return facts.isInScope;
+  }
+
+  /**
+   * Canonical target facts for document type/resource policies (ADR 0012).
+   * Department resolution stays here — callers must not reconstruct managed scope.
+   */
+  async resolveTargetAccess(
+    actor: User,
+    target: Employee,
+    actorContext?: ActorAccessContext,
+  ): Promise<TargetAccessFacts> {
+    const ctx = actorContext ?? (await this.resolveActorContext(actor));
+    const isOwner = this.isOwner(actor, target);
+
+    if (ctx.scope === 'all') {
+      return { isOwner, isInScope: true, isViaManagedScope: false };
+    }
+
+    if (isOwner) {
+      return { isOwner: true, isInScope: true, isViaManagedScope: false };
+    }
+
     if (ctx.scope === 'managed_departments') {
       const targetDeptId = await this.targetDepartmentId(target);
-      return Boolean(
+      const isViaManagedScope = Boolean(
         targetDeptId && ctx.managedDepartmentIds.includes(targetDeptId),
       );
+      return {
+        isOwner: false,
+        isInScope: isViaManagedScope,
+        isViaManagedScope,
+      };
     }
-    return false;
+
+    return { isOwner: false, isInScope: false, isViaManagedScope: false };
   }
 
   async canEditEmployeeProfile(

@@ -61,8 +61,15 @@ import { EmploymentAssignmentComment1730000032000 } from './migrations/173000003
 import { EmployeeSkillAssessments1730000033000 } from './migrations/1730000033000-EmployeeSkillAssessments';
 import { EmployeeDeletionFkRestrict1730000034000 } from './migrations/1730000034000-EmployeeDeletionFkRestrict';
 import { PositionEaManagedDepartments1730000035000 } from './migrations/1730000035000-PositionEaManagedDepartments';
+import { EmploymentManagementKind1730000036000 } from './migrations/1730000036000-EmploymentManagementKind';
+import { AccountRolesAndSurfaces1730000037000 } from './migrations/1730000037000-AccountRolesAndSurfaces';
+import { EmployeeDocumentConfidential1730000038000 } from './migrations/1730000038000-EmployeeDocumentConfidential';
 import { PositionManagedDepartment } from '../../organization/positions/position-managed-department.entity';
 import { EmploymentAssignmentManagedDepartment } from '../../organization/employees/employment-assignment-managed-department.entity';
+import { AppSurface } from '../access-control/app-surface.entity';
+import { AccountRole } from '../access-control/account-role.entity';
+import { AccountRoleSurface } from '../access-control/account-role-surface.entity';
+import { AccountRolePermission } from '../access-control/account-role-permission.entity';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -75,6 +82,10 @@ export function getDataSourceOptions(): DataSourceOptions {
       ApplicationSetting,
       BootstrapState,
       User,
+      AppSurface,
+      AccountRole,
+      AccountRoleSurface,
+      AccountRolePermission,
       AuditLog,
       Notification,
       Department,
@@ -136,6 +147,9 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeSkillAssessments1730000033000,
       EmployeeDeletionFkRestrict1730000034000,
       PositionEaManagedDepartments1730000035000,
+      EmploymentManagementKind1730000036000,
+      AccountRolesAndSurfaces1730000037000,
+      EmployeeDocumentConfidential1730000038000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

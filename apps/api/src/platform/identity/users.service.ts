@@ -49,17 +49,23 @@ export class UsersService {
     return this.users.count();
   }
 
+  /** Every User INSERT requires an account role — no NULL bootstrap (ADR 0011 §7). */
   async createUser(input: {
     email: string;
     passwordHash: string;
     role: UserRole;
+    accountRoleId: string;
     isDepartmentManager?: boolean;
     mustChangePassword?: boolean;
   }): Promise<User> {
+    if (!input.accountRoleId) {
+      throw new Error('createUser requires accountRoleId');
+    }
     const user = this.users.create({
       email: input.email.toLowerCase(),
       passwordHash: input.passwordHash,
       role: input.role,
+      accountRoleId: input.accountRoleId,
       isDepartmentManager: input.isDepartmentManager ?? false,
       status: UserStatus.Active,
       mustChangePassword: input.mustChangePassword ?? true,

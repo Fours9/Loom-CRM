@@ -91,28 +91,43 @@ describe('employment-assignment-dialog.model', () => {
     });
     expect(form.directionId).toBe('d1');
     expect(form.workLocation).toBe('Kyiv');
-    expect(form.isDepartmentManager).toBe(true);
+    expect(form.managementKind).toBe('departments');
     expect(form.managedDepartmentIds).toEqual(['dep1']);
     form.workLocation = 'changed';
     expect(form.endDate).toBe('2026-02-01');
   });
 
-  it('includes manager fields in write payload', () => {
+  it('includes leadership fields in write payload', () => {
     const form = {
       ...emptyEmploymentAssignmentForm(),
-      isDepartmentManager: true,
+      managementKind: 'departments' as const,
       managedDepartmentIds: ['dep1'],
     };
     expect(toEmploymentAssignmentWrite(form, 'create')).toMatchObject({
+      managementKind: 'departments',
       isDepartmentManager: true,
       managedDepartmentIds: ['dep1'],
     });
     expect(
       toEmploymentAssignmentWrite(
-        { ...form, isDepartmentManager: false, managedDepartmentIds: ['dep1'] },
+        { ...form, managementKind: 'none', managedDepartmentIds: ['dep1'] },
         'create',
       ).managedDepartmentIds,
     ).toEqual([]);
+  });
+
+  it('drops managed departments for direction leadership', () => {
+    const write = toEmploymentAssignmentWrite(
+      {
+        ...emptyEmploymentAssignmentForm(),
+        managementKind: 'direction',
+        managedDepartmentIds: ['dep1'],
+      },
+      'create',
+    );
+    expect(write.managementKind).toBe('direction');
+    expect(write.isDepartmentManager).toBe(true);
+    expect(write.managedDepartmentIds).toEqual([]);
   });
 
   it('marks catalog names missing from the active list as archival', () => {

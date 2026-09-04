@@ -19,6 +19,17 @@ import { requestFrameTone } from '../shared/request-status-presentation';
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
 import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
+import {
+  ABSENCE_OVERRIDE_UI,
+  ABSENCE_TYPE_DETAIL_OVERRIDE_UI,
+  VISIBILITY_OVERRIDE_UI,
+  fromAbsenceTypeDetailOverride,
+  fromVisibilityOverride,
+  toAbsenceTypeDetailOverride,
+  toVisibilityOverride,
+  type AbsenceTypeDetailOverrideUi,
+  type VisibilityOverrideUi,
+} from '../../../shared/organization/labels';
 
 @Component({
   selector: 'app-employee-detail-page',
@@ -317,6 +328,95 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                 </div>
               }
             </article>
+
+            @if (showAccessOverridesCard) {
+              <article class="card">
+                <h2>Індивідуальні права</h2>
+                @if (globalPrivacyPriority) {
+                  <p class="muted">
+                    Зараз увімкнено пріоритет глобальних налаштувань Адміна — ці override не застосовуються.
+                  </p>
+                } @else {
+                  <p class="muted">
+                    Регулює лише peer-видимість чужих даних. Не скасовує admin-, owner- або manager-scope.
+                  </p>
+                }
+
+                @if (editingProfile) {
+                  <label>
+                    Чужі анкети
+                    <select
+                      name="profileOverride"
+                      [(ngModel)]="profileOverride"
+                      [disabled]="globalPrivacyPriority"
+                    >
+                      @for (opt of profileOverrideOptions; track opt.value) {
+                        <option [value]="opt.value">{{ opt.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <div class="rights-absence-stack">
+                    <label>
+                      Чужі відсутності
+                      <select
+                        name="absencesOverride"
+                        [(ngModel)]="absencesOverride"
+                        [disabled]="globalPrivacyPriority"
+                        (ngModelChange)="onAbsencesOverrideChange()"
+                      >
+                        @for (opt of absenceOverrideOptions; track opt.value) {
+                          <option [value]="opt.value">{{ opt.label }}</option>
+                        }
+                      </select>
+                    </label>
+                    @if (absencesOverride !== 'deny') {
+                      <div class="rights-subsetting">
+                        <p class="nested-caption">Підрежим режиму видимості відсутностей</p>
+                        <label>
+                          Деталі (тип / причина)
+                          <select
+                            name="absenceTypeDetailOverride"
+                            [(ngModel)]="absenceTypeDetailOverride"
+                            [disabled]="globalPrivacyPriority"
+                          >
+                            @for (opt of absenceTypeDetailOptions; track opt.value) {
+                              <option [value]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                        </label>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="fields">
+                    <label>
+                      Чужі анкети
+                      <div class="value">{{ profileOverrideLabel }}</div>
+                    </label>
+                    <label>
+                      Чужі відсутності
+                      <div class="value">{{ absencesOverrideLabel }}</div>
+                    </label>
+                    @if (absencesOverride !== 'deny') {
+                      <label>
+                        Деталі (тип / причина)
+                        <div class="value">{{ absenceTypeDetailOverrideLabel }}</div>
+                      </label>
+                    }
+                  </div>
+                  @if (employee.permissions?.canEditProfile) {
+                    <button
+                      type="button"
+                      class="ghost-btn"
+                      (click)="startEdit()"
+                      [disabled]="globalPrivacyPriority"
+                    >
+                      Редагувати права
+                    </button>
+                  }
+                }
+              </article>
+            }
           </div>
 
           <div class="col side-col">
@@ -1031,6 +1131,21 @@ export class EmployeeDetailPageComponent implements OnInit {
   readonly requestEventLabel = requestEventLabel;
   readonly frameTone = requestFrameTone;
 
+  readonly profileOverrideOptions = (
+    Object.keys(VISIBILITY_OVERRIDE_UI) as VisibilityOverrideUi[]
+  ).map((value) => ({ value, label: VISIBILITY_OVERRIDE_UI[value] }));
+
+  readonly absenceOverrideOptions = (
+    Object.keys(ABSENCE_OVERRIDE_UI) as VisibilityOverrideUi[]
+  ).map((value) => ({ value, label: ABSENCE_OVERRIDE_UI[value] }));
+
+  readonly absenceTypeDetailOptions = (
+    Object.keys(ABSENCE_TYPE_DETAIL_OVERRIDE_UI) as AbsenceTypeDetailOverrideUi[]
+  ).map((value) => ({
+    value,
+    label: ABSENCE_TYPE_DETAIL_OVERRIDE_UI[value],
+  }));
+
   employee: EmployeeProfile | null = null;
   edit = {
     lastName: '',
@@ -1049,6 +1164,10 @@ export class EmployeeDetailPageComponent implements OnInit {
   };
   error = '';
   message = '';
+  profileOverride: VisibilityOverrideUi = 'inherit';
+  absencesOverride: VisibilityOverrideUi = 'inherit';
+  absenceTypeDetailOverride: AbsenceTypeDetailOverrideUi = 'inherit';
+  globalPrivacyPriority = false;
   requests: AbsenceRequestListItem[] = [];
   editingProfile = false;
   editSchedule: ScheduleDay[] = [];
@@ -1060,6 +1179,30 @@ export class EmployeeDetailPageComponent implements OnInit {
 
   get isAdmin(): boolean {
     return this.auth.isAdmin();
+  }
+
+  get showAccessOverridesCard(): boolean {
+    const permissions = this.employee?.permissions;
+    return Boolean(
+      permissions?.canViewProfileVisibilityOverride ||
+        permissions?.canEditProfileVisibilityOverride ||
+        permissions?.canViewAbsenceVisibilityOverride ||
+        permissions?.canEditAbsenceVisibilityOverride ||
+        permissions?.canViewShowAbsenceTypeToPeersOverride ||
+        permissions?.canEditShowAbsenceTypeToPeersOverride,
+    );
+  }
+
+  get profileOverrideLabel(): string {
+    return VISIBILITY_OVERRIDE_UI[this.profileOverride];
+  }
+
+  get absencesOverrideLabel(): string {
+    return ABSENCE_OVERRIDE_UI[this.absencesOverride];
+  }
+
+  get absenceTypeDetailOverrideLabel(): string {
+    return ABSENCE_TYPE_DETAIL_OVERRIDE_UI[this.absenceTypeDetailOverride];
   }
 
   get heroOrgMeta(): string {
@@ -1078,6 +1221,9 @@ export class EmployeeDetailPageComponent implements OnInit {
       void this.router.navigate(['/absences/employees']);
       return;
     }
+    this.api
+      .getPrivacy()
+      .subscribe((p) => (this.globalPrivacyPriority = !!p.globalPrivacyPriority));
     this.load(id);
   }
 
@@ -1086,6 +1232,7 @@ export class EmployeeDetailPageComponent implements OnInit {
       next: (employee) => {
         this.employee = employee;
         this.fillEditFromEmployee(employee);
+        this.fillOverridesFromEmployee(employee);
         this.api.getEmployeeRequests(employee.id).subscribe({
           next: (res) => (this.requests = res.items.slice(0, 8)),
         });
@@ -1133,9 +1280,22 @@ export class EmployeeDetailPageComponent implements OnInit {
     };
   }
 
+  private fillOverridesFromEmployee(employee: EmployeeProfile): void {
+    this.profileOverride = fromVisibilityOverride(
+      employee.profileVisibilityOverride ?? null,
+    );
+    this.absencesOverride = fromVisibilityOverride(
+      employee.absenceVisibilityOverride ?? null,
+    );
+    this.absenceTypeDetailOverride = fromAbsenceTypeDetailOverride(
+      employee.showAbsenceTypeToPeersOverride ?? null,
+    );
+  }
+
   startEdit(): void {
     if (!this.employee) return;
     this.fillEditFromEmployee(this.employee);
+    this.fillOverridesFromEmployee(this.employee);
     this.editSchedule = cloneSchedule(this.employee.schedule);
     this.editingProfile = true;
     this.error = '';
@@ -1145,10 +1305,17 @@ export class EmployeeDetailPageComponent implements OnInit {
   cancelEdit(): void {
     if (this.employee) {
       this.fillEditFromEmployee(this.employee);
+      this.fillOverridesFromEmployee(this.employee);
       this.editSchedule = cloneSchedule(this.employee.schedule);
     }
     this.editingProfile = false;
     this.error = '';
+  }
+
+  onAbsencesOverrideChange(): void {
+    if (this.absencesOverride === 'deny') {
+      this.absenceTypeDetailOverride = 'inherit';
+    }
   }
 
   normalizeCalendarColor(): void {
@@ -1223,11 +1390,16 @@ export class EmployeeDetailPageComponent implements OnInit {
     const employeeId = this.employee.id;
     const shouldSaveSchedule = Boolean(this.employee.permissions?.canEditSchedule);
     const schedulePayload = normalizeSchedulePayload(this.editSchedule);
+    const accessBody = this.buildAccessSettingsBody();
 
     const exitEditMode = (employee: EmployeeProfile) => {
       this.employee = employee;
       this.editingProfile = false;
       this.fillEditFromEmployee(employee);
+      // Overrides are saved separately; keep the edited values until that reply lands.
+      if (!accessBody) {
+        this.fillOverridesFromEmployee(employee);
+      }
     };
 
     const fail = (err: { error?: { message?: string | string[] } }) => {
@@ -1244,6 +1416,10 @@ export class EmployeeDetailPageComponent implements OnInit {
         this.api.getEmployeeRequests(employeeId).subscribe({
           next: (res) => (this.requests = res.items.slice(0, 8)),
         });
+
+        if (accessBody) {
+          this.saveAccessSettings(employeeId, accessBody);
+        }
 
         if (!shouldSaveSchedule) {
           return;
@@ -1263,6 +1439,82 @@ export class EmployeeDetailPageComponent implements OnInit {
         });
       },
       error: fail,
+    });
+  }
+
+  /**
+   * Peer-visibility overrides have their own endpoint — collect the permitted keys
+   * that actually changed, or null when there is nothing to send.
+   */
+  private buildAccessSettingsBody(): {
+    profileVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
+    absenceVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
+    showAbsenceTypeToPeersOverride?: boolean | null;
+  } | null {
+    const employee = this.employee;
+    if (!employee || this.globalPrivacyPriority) return null;
+
+    const permissions = employee.permissions;
+    const body: {
+      profileVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
+      absenceVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
+      showAbsenceTypeToPeersOverride?: boolean | null;
+    } = {};
+
+    const nextProfile = toVisibilityOverride(this.profileOverride);
+    if (
+      permissions?.canEditProfileVisibilityOverride &&
+      nextProfile !== (employee.profileVisibilityOverride ?? null)
+    ) {
+      body.profileVisibilityOverride = nextProfile;
+    }
+
+    const nextAbsences = toVisibilityOverride(this.absencesOverride);
+    if (
+      permissions?.canEditAbsenceVisibilityOverride &&
+      nextAbsences !== (employee.absenceVisibilityOverride ?? null)
+    ) {
+      body.absenceVisibilityOverride = nextAbsences;
+    }
+
+    const nextTypeDetail =
+      this.absencesOverride === 'deny'
+        ? null
+        : toAbsenceTypeDetailOverride(this.absenceTypeDetailOverride);
+    if (
+      permissions?.canEditShowAbsenceTypeToPeersOverride &&
+      nextTypeDetail !== (employee.showAbsenceTypeToPeersOverride ?? null)
+    ) {
+      body.showAbsenceTypeToPeersOverride = nextTypeDetail;
+    }
+
+    return Object.keys(body).length ? body : null;
+  }
+
+  private saveAccessSettings(
+    employeeId: string,
+    body: {
+      profileVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
+      absenceVisibilityOverride?: 'all' | 'own_department' | 'deny' | null;
+      showAbsenceTypeToPeersOverride?: boolean | null;
+    },
+  ): void {
+    this.api.updateEmployeeAccessSettings(employeeId, body).subscribe({
+      next: () => {
+        this.api.getEmployee(employeeId).subscribe({
+          next: (employee) => {
+            this.employee = employee;
+            this.fillEditFromEmployee(employee);
+            this.fillOverridesFromEmployee(employee);
+          },
+        });
+      },
+      error: (err: { error?: { message?: string | string[] } }) => {
+        const msg = err?.error?.message;
+        this.error = Array.isArray(msg)
+          ? msg.join(', ')
+          : msg || 'Профіль збережено, але індивідуальні права не вдалося оновити';
+      },
     });
   }
 

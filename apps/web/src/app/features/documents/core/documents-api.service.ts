@@ -22,12 +22,18 @@ export class DocumentsApiService {
     input: {
       title: string;
       documentType: EmployeeDocumentType;
+      isConfidential?: boolean;
       files: File[];
     },
   ): Observable<UploadEmployeeDocumentResponse> {
     const form = new FormData();
     form.append('title', input.title);
     form.append('documentType', input.documentType);
+    if (input.isConfidential === true) {
+      form.append('isConfidential', 'true');
+    } else if (input.isConfidential === false) {
+      form.append('isConfidential', 'false');
+    }
     for (const file of input.files) {
       form.append('files', file, file.name);
     }

@@ -2,6 +2,7 @@ import { Component, effect, inject, input, output, signal } from '@angular/core'
 import { FormsModule } from '@angular/forms';
 import type {
   EmployeeAccessSection,
+  EmployeeAccountRoleRef,
   EmployeeProfileCapabilities,
   UpdateEmployeeAccessSettingsRequest,
 } from '@loom/contracts-employees';
@@ -10,6 +11,7 @@ import {
   ABSENCE_TYPE_DETAIL_OVERRIDE_UI,
   COMPUTED_ROLE_LABELS,
   VISIBILITY_OVERRIDE_UI,
+  accountRoleLabel,
   fromAbsenceTypeDetailOverride,
   fromVisibilityOverride,
   toAbsenceTypeDetailOverride,
@@ -17,7 +19,10 @@ import {
   type AbsenceTypeDetailOverrideUi,
   type VisibilityOverrideUi,
 } from '../../shared/organization/labels';
-import { EmployeeRoleAccessApiService } from './employee-role-access-api.service';
+import {
+  EmployeeRoleAccessApiService,
+  type AccountRoleOption,
+} from './employee-role-access-api.service';
 
 @Component({
   selector: 'loom-employee-role-access-panel',
@@ -34,18 +39,51 @@ import { EmployeeRoleAccessApiService } from './employee-role-access-api.service
 
       @if (caps().canEditAdminAccess) {
         <section class="card">
-          <h3>Роль</h3>
-          <label class="check-row">
-            <input
-              type="checkbox"
-              name="adminAccess"
-              [(ngModel)]="adminAccess"
-              [disabled]="busy()"
-            />
-            Адміністратор
+          <h3>Роль акаунта</h3>
+          <p class="muted hint">
+            Визначає права в API та перелік екранів. Керівництво у структурі задається
+            посадою, а не роллю акаунта.
+          </p>
+
+          @if (rolesError()) {
+            <p class="error">{{ rolesError() }}</p>
+          }
+
+          <label>
+            Роль
+            <select
+              name="accountRoleId"
+              [(ngModel)]="accountRoleId"
+              [disabled]="busy() || rolesLoading() || !roles().length"
+            >
+              <option value="">Не призначено</option>
+              @for (role of roles(); track role.id) {
+                <option [value]="role.id">{{ role.name }}</option>
+              }
+            </select>
           </label>
-          <div class="computed-role">
-            <span class="label">Ефективна роль</span>
+
+          @if (requestedRole(); as requested) {
+            <div class="role-resolution">
+              <span class="label">Призначена роль</span>
+              <strong>{{ roleRefLabel(requested) }}</strong>
+            </div>
+          }
+          @if (effectiveRole(); as effective) {
+            <div class="role-resolution">
+              <span class="label">Ефективна роль</span>
+              <strong>{{ roleRefLabel(effective) }}</strong>
+              @if (roleDiffers()) {
+                <p class="muted hint">
+                  Відрізняється від призначеної — застосовано керівництво з активного
+                  призначення.
+                </p>
+              }
+            </div>
+          }
+
+          <div class="role-resolution">
+            <span class="label">Роль зі структури</span>
             <strong>{{ computedRoleLabel() }}</strong>
             <p class="muted hint">Визначається активною посадою</p>
           </div>
@@ -134,15 +172,6 @@ import { EmployeeRoleAccessApiService } from './employee-role-access-api.service
         gap: 0.35rem;
         font-size: 0.9rem;
       }
-      .check-row {
-        display: flex;
-        align-items: center;
-        gap: 0.55rem;
-        grid-template-columns: none;
-      }
-      .check-row input {
-        width: auto;
-      }
       select {
         padding: 0.55rem 0.7rem;
         border: 1px solid var(--pw-border);
@@ -150,11 +179,11 @@ import { EmployeeRoleAccessApiService } from './employee-role-access-api.service
         background: var(--pw-surface-2, var(--pw-surface));
         color: var(--pw-text);
       }
-      .computed-role {
+      .role-resolution {
         display: grid;
         gap: 0.2rem;
       }
-      .computed-role .label {
+      .role-resolution .label {
         color: var(--pw-muted);
         font-size: 0.85rem;
       }
@@ -202,10 +231,17 @@ export class EmployeeRoleAccessPanelComponent {
   readonly message = signal('');
   readonly error = signal('');
 
-  adminAccess = false;
+  readonly roles = signal<AccountRoleOption[]>([]);
+  readonly rolesLoading = signal(false);
+  readonly rolesError = signal('');
+
+  /** '' = no account role assigned. */
+  accountRoleId = '';
   profileOverride: VisibilityOverrideUi = 'inherit';
   absencesOverride: VisibilityOverrideUi = 'inherit';
   absenceTypeDetailOverride: AbsenceTypeDetailOverrideUi = 'inherit';
+
+  private baselineAccountRoleId = '';
 
   readonly profileOverrideOptions = (
     Object.keys(VISIBILITY_OVERRIDE_UI) as VisibilityOverrideUi[]
@@ -228,7 +264,10 @@ export class EmployeeRoleAccessPanelComponent {
     effect(() => {
       const section = this.access();
       if (!section) return;
-      this.adminAccess = section.adminAccess;
+      const assigned =
+        section.accountRoleId ?? section.requestedAccountRole?.id ?? '';
+      this.accountRoleId = assigned;
+      this.baselineAccountRoleId = assigned;
       this.profileOverride = fromVisibilityOverride(
         section.profileVisibilityOverride,
       );
@@ -239,6 +278,30 @@ export class EmployeeRoleAccessPanelComponent {
         section.showAbsenceTypeToPeersOverride,
       );
     });
+
+    effect(() => {
+      if (!this.caps().canEditAdminAccess || this.roles().length) return;
+      this.loadRoles();
+    });
+  }
+
+  requestedRole(): EmployeeAccountRoleRef | null {
+    return this.access()?.requestedAccountRole ?? null;
+  }
+
+  effectiveRole(): EmployeeAccountRoleRef | null {
+    return this.access()?.effectiveAccountRole ?? null;
+  }
+
+  /** Leadership bridge may resolve to a different role than the assigned one. */
+  roleDiffers(): boolean {
+    const requested = this.requestedRole();
+    const effective = this.effectiveRole();
+    return Boolean(requested && effective && requested.id !== effective.id);
+  }
+
+  roleRefLabel(role: EmployeeAccountRoleRef): string {
+    return accountRoleLabel(role.code, role.name);
   }
 
   computedRoleLabel(): string {
@@ -257,8 +320,13 @@ export class EmployeeRoleAccessPanelComponent {
     const caps = this.caps();
     const body: UpdateEmployeeAccessSettingsRequest = {};
 
-    if (caps.canEditAdminAccess) {
-      body.adminAccess = this.adminAccess;
+    // Send the role only when it actually changed — never an empty assignment.
+    if (
+      caps.canEditAdminAccess &&
+      this.accountRoleId &&
+      this.accountRoleId !== this.baselineAccountRoleId
+    ) {
+      body.accountRoleId = this.accountRoleId;
     }
     if (caps.canEditVisibilityOverrides) {
       body.profileVisibilityOverride = toVisibilityOverride(
@@ -278,9 +346,25 @@ export class EmployeeRoleAccessPanelComponent {
       next: () => {
         this.message.set('Збережено');
         this.busy.set(false);
+        this.baselineAccountRoleId = this.accountRoleId;
         this.changed.emit();
       },
       error: (err) => this.fail(err, 'Не вдалося зберегти права доступу'),
+    });
+  }
+
+  private loadRoles(): void {
+    this.rolesLoading.set(true);
+    this.rolesError.set('');
+    this.api.listAccountRoles().subscribe({
+      next: (roles) => {
+        this.roles.set(roles);
+        this.rolesLoading.set(false);
+      },
+      error: () => {
+        this.rolesLoading.set(false);
+        this.rolesError.set('Не вдалося завантажити перелік ролей');
+      },
     });
   }
 

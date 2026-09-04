@@ -8,6 +8,7 @@ import { DataSource, Repository } from 'typeorm';
 import { Position } from './position.entity';
 import { DepartmentsService } from '../departments/departments.service';
 import { resolvePositionDirectionId } from './resolve-position-direction';
+import { ManagementKind, managementKindImpliesManager, isManagementKind } from '../employment-catalog/management-kind';
 import { replacePositionManagedDepartments } from '../employees/managed-department-writes';
 
 export type PositionListQuery = {
@@ -27,20 +28,20 @@ export type PositionListItem = PositionView & {
 };
 
 function resolveManagedDepartmentIds(input: {
-  isDepartmentManagerTemplate: boolean;
+  managementKind: ManagementKind;
   managedDepartmentIds?: string[];
   departmentId: string | null;
   previousManagedDepartmentIds: string[];
-  templateExplicitlyEnabled: boolean;
+  kindExplicitlyEnabled: boolean;
 }): string[] {
-  if (!input.isDepartmentManagerTemplate) {
+  if (input.managementKind !== ManagementKind.Departments) {
     return [];
   }
 
   let ids: string[];
   if (input.managedDepartmentIds !== undefined) {
     ids = [...new Set(input.managedDepartmentIds.filter(Boolean))];
-  } else if (input.templateExplicitlyEnabled) {
+  } else if (input.kindExplicitlyEnabled) {
     ids = [];
   } else {
     ids = [...input.previousManagedDepartmentIds];
@@ -60,6 +61,25 @@ function toPositionView(row: Position): PositionView {
     ...row,
     managedDepartmentIds,
   };
+}
+
+function resolveKindFromInput(input: {
+  managementKindTemplate?: string;
+  isDepartmentManagerTemplate?: boolean;
+  fallback?: ManagementKind;
+}): ManagementKind {
+  if (
+    input.managementKindTemplate !== undefined &&
+    isManagementKind(input.managementKindTemplate)
+  ) {
+    return input.managementKindTemplate;
+  }
+  if (input.isDepartmentManagerTemplate !== undefined) {
+    return input.isDepartmentManagerTemplate
+      ? ManagementKind.Departments
+      : ManagementKind.None;
+  }
+  return input.fallback ?? ManagementKind.None;
 }
 
 @Injectable()
@@ -131,6 +151,24 @@ export class PositionsService {
     });
   }
 
+  /** Scoped management list — not the org catalog. */
+  async findManageable(query: {
+    all?: boolean;
+    directionId: string | null;
+    isAdminEquivalent: boolean;
+  }): Promise<PositionListItem[]> {
+    if (query.isAdminEquivalent) {
+      return this.findAll({ all: query.all });
+    }
+    if (!query.directionId) {
+      return [];
+    }
+    return this.findAll({
+      all: query.all,
+      directionId: query.directionId,
+    });
+  }
+
   async getOrFail(id: string): Promise<PositionView> {
     const row = await this.positions.findOne({
       where: { id },
@@ -150,6 +188,7 @@ export class PositionsService {
     departmentId?: string | null;
     directionId?: string | null;
     description?: string | null;
+    managementKindTemplate?: ManagementKind | string;
     isDepartmentManagerTemplate?: boolean;
     managedDepartmentIds?: string[];
   }): Promise<PositionView> {
@@ -158,15 +197,16 @@ export class PositionsService {
       departmentId,
       explicitDirectionId: input.directionId,
     });
-    const isDepartmentManagerTemplate = Boolean(
-      input.isDepartmentManagerTemplate,
-    );
+    const managementKindTemplate = resolveKindFromInput(input);
+    const isDepartmentManagerTemplate =
+      managementKindImpliesManager(managementKindTemplate);
     const managedDepartmentIds = resolveManagedDepartmentIds({
-      isDepartmentManagerTemplate,
+      managementKind: managementKindTemplate,
       managedDepartmentIds: input.managedDepartmentIds ?? [],
       departmentId,
       previousManagedDepartmentIds: [],
-      templateExplicitlyEnabled: isDepartmentManagerTemplate,
+      kindExplicitlyEnabled:
+        managementKindTemplate === ManagementKind.Departments,
     });
 
     const id = await this.dataSource.transaction(async (manager) => {
@@ -178,6 +218,7 @@ export class PositionsService {
           directionId,
           description: input.description ?? null,
           isActive: true,
+          managementKindTemplate,
           isDepartmentManagerTemplate,
         }),
       );
@@ -203,9 +244,12 @@ export class PositionsService {
         | 'description'
         | 'isActive'
         | 'isDepartmentManagerTemplate'
+        | 'managementKindTemplate'
       >
     > & {
       managedDepartmentIds?: string[];
+      managementKindTemplate?: ManagementKind | string;
+      isDepartmentManagerTemplate?: boolean;
     },
   ): Promise<PositionView> {
     const row = await this.getOrFail(id);
@@ -219,22 +263,30 @@ export class PositionsService {
           : undefined;
     const directionId = await this.resolveDirectionId({
       departmentId,
-      // Department changes must inherit; global positions preserve manual direction
-      // unless the caller explicitly sent directionId.
       explicitDirectionId,
     });
 
-    const templateTouched = input.isDepartmentManagerTemplate !== undefined;
-    const isDepartmentManagerTemplate = templateTouched
-      ? Boolean(input.isDepartmentManagerTemplate)
-      : row.isDepartmentManagerTemplate;
+    const kindTouched =
+      input.managementKindTemplate !== undefined ||
+      input.isDepartmentManagerTemplate !== undefined;
+    const managementKindTemplate = kindTouched
+      ? resolveKindFromInput({
+          ...input,
+          fallback: row.managementKindTemplate ?? ManagementKind.None,
+        })
+      : (row.managementKindTemplate ??
+        (row.isDepartmentManagerTemplate
+          ? ManagementKind.Departments
+          : ManagementKind.None));
+    const isDepartmentManagerTemplate =
+      managementKindImpliesManager(managementKindTemplate);
     const managedDepartmentIds = resolveManagedDepartmentIds({
-      isDepartmentManagerTemplate,
+      managementKind: managementKindTemplate,
       managedDepartmentIds: input.managedDepartmentIds,
       departmentId,
       previousManagedDepartmentIds: row.managedDepartmentIds,
-      templateExplicitlyEnabled:
-        templateTouched && Boolean(input.isDepartmentManagerTemplate),
+      kindExplicitlyEnabled:
+        kindTouched && managementKindTemplate === ManagementKind.Departments,
     });
 
     await this.dataSource.transaction(async (manager) => {
@@ -247,6 +299,7 @@ export class PositionsService {
       if (input.isActive !== undefined) entity.isActive = input.isActive;
       entity.departmentId = departmentId;
       entity.directionId = directionId;
+      entity.managementKindTemplate = managementKindTemplate;
       entity.isDepartmentManagerTemplate = isDepartmentManagerTemplate;
       await repo.save(entity);
 

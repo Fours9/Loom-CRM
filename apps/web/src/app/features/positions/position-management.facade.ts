@@ -4,6 +4,12 @@ import { firstValueFrom } from 'rxjs';
 import { Permission } from '@loom/contracts-auth';
 import { SessionStore } from '../../core/auth/session.store';
 import {
+  MANAGEMENT_KIND_OPTIONS,
+  managementKindUsesDepartments,
+  toManagementKind,
+  type ManagementKind,
+} from '../../shared/organization/labels';
+import {
   GoalKind,
   OrgDepartment,
   OrgDirection,
@@ -123,8 +129,10 @@ export class PositionManagementFacade {
   formDirectionId = '';
   formDescription = '';
   formIsActive = true;
-  formIsDepartmentManagerTemplate = false;
+  formManagementKindTemplate: ManagementKind = 'none';
   formManagedDepartmentIds: string[] = [];
+
+  readonly managementKindOptions = MANAGEMENT_KIND_OPTIONS;
 
   newSkillName = '';
   newSkillGroupId: string | null = null;
@@ -170,6 +178,16 @@ export class PositionManagementFacade {
     () =>
       this.session.user()?.role === 'admin' ||
       this.session.hasPermission(Permission.PositionsManage),
+  );
+
+  /** Direction is part of the management scope — only adminEquivalent may retarget it. */
+  readonly canEditPositionDirection = computed(() =>
+    this.session.isAdminEquivalent(),
+  );
+
+  /** Positions outside a direction are a global catalog concern (adminEquivalent only). */
+  readonly canCreateGlobalPosition = computed(() =>
+    this.session.isAdminEquivalent(),
   );
 
   readonly activeDepartments = computed(() =>
@@ -325,9 +343,14 @@ export class PositionManagementFacade {
     return this.activeDepartments().map((d) => ({ id: d.id, label: d.name }));
   }
 
-  onManagerTemplateToggle(enabled: boolean): void {
-    this.formIsDepartmentManagerTemplate = enabled;
-    if (!enabled) {
+  /** Managed departments belong to `departments` leadership only. */
+  managementKindUsesDepartments(): boolean {
+    return managementKindUsesDepartments(this.formManagementKindTemplate);
+  }
+
+  onManagementKindTemplateChange(kind: ManagementKind): void {
+    this.formManagementKindTemplate = kind;
+    if (!managementKindUsesDepartments(kind)) {
       this.formManagedDepartmentIds = [];
       return;
     }
@@ -373,7 +396,7 @@ export class PositionManagementFacade {
       next: (d) => this.directions.set(d),
       error: () => this.error.set('Не вдалося завантажити напрямки'),
     });
-    this.api.getPositions(true).subscribe({
+    this.api.getManagedPositions(true).subscribe({
       next: (p) => this.positions.set(p),
       error: () => this.error.set('Не вдалося завантажити посади'),
     });
@@ -653,7 +676,10 @@ export class PositionManagementFacade {
     this.formDirectionId = p.directionId || '';
     this.formDescription = p.description || '';
     this.formIsActive = p.isActive;
-    this.formIsDepartmentManagerTemplate = Boolean(p.isDepartmentManagerTemplate);
+    this.formManagementKindTemplate = toManagementKind(
+      p.managementKindTemplate,
+      p.isDepartmentManagerTemplate,
+    );
     this.formManagedDepartmentIds = [...(p.managedDepartmentIds || [])];
     this.loadPositionCatalog(p.id);
     this.positionDialogOpen.set(true);
@@ -708,7 +734,7 @@ export class PositionManagementFacade {
     this.formDirectionId = '';
     this.formDescription = '';
     this.formIsActive = true;
-    this.formIsDepartmentManagerTemplate = false;
+    this.formManagementKindTemplate = 'none';
     this.formManagedDepartmentIds = [];
   }
 
@@ -742,7 +768,8 @@ export class PositionManagementFacade {
     }
 
     const departmentId = this.formDepartmentId || null;
-    const managedDepartmentIds = this.formIsDepartmentManagerTemplate
+    const managementKindTemplate = this.formManagementKindTemplate;
+    const managedDepartmentIds = managementKindUsesDepartments(managementKindTemplate)
       ? [...this.formManagedDepartmentIds]
       : [];
     const body = {
@@ -750,7 +777,9 @@ export class PositionManagementFacade {
       departmentId,
       ...(departmentId ? {} : { directionId: this.formDirectionId || null }),
       description: this.formDescription.trim() || null,
-      isDepartmentManagerTemplate: this.formIsDepartmentManagerTemplate,
+      managementKindTemplate,
+      // Legacy mirror while the backend migration lands.
+      isDepartmentManagerTemplate: managementKindTemplate !== 'none',
       managedDepartmentIds,
     };
 

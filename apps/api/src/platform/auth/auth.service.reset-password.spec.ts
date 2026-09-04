@@ -5,6 +5,7 @@ import type { User } from '../identity/user.entity';
 import type { UsersService } from '../identity/users.service';
 import type { AuditService } from '../audit/audit.service';
 import type { PermissionService } from '../permissions/permission.service';
+import type { AuthorizationContextService } from '../access-control/authorization-context.service';
 import type { JwtService } from '@nestjs/jwt';
 import type { EmployeeIdentityLookup } from './auth.service';
 
@@ -47,6 +48,7 @@ describe('AuthService.resetPassword', () => {
       {} as PermissionService,
       audit,
       {} as EmployeeIdentityLookup,
+      {} as AuthorizationContextService,
     );
 
     const actor = {

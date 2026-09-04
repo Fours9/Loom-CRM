@@ -1,72 +1,74 @@
-import { UserRole } from '../../platform/identity/user.enums';
+import { Injectable } from '@nestjs/common';
 import { IdentityRoleProjection } from './identity-role-projection';
-import type { EmploymentAssignment } from './employment-assignment.entity';
+import { UserRole } from '../../platform/identity/user.enums';
+import { ManagementKind } from '../employment-catalog/management-kind';
+import { SystemAccountRoleCode } from '../../platform/access-control/system-account-role-codes';
+import { AccountRole } from '../../platform/access-control/account-role.entity';
+import { EmploymentAssignment } from './employment-assignment.entity';
 
-describe('IdentityRoleProjection.deriveRole', () => {
-  const projection = Object.create(
-    IdentityRoleProjection.prototype,
-  ) as IdentityRoleProjection;
+describe('IdentityRoleProjection bridge helpers', () => {
+  const projection = new IdentityRoleProjection(
+    null as unknown as ConstructorParameters<typeof IdentityRoleProjection>[0],
+  );
 
-  const ea = (manager: boolean): EmploymentAssignment =>
-    ({ isDepartmentManager: manager } as EmploymentAssignment);
-
-  it('adminAccess true → admin', () => {
+  it('bridgeable only for system employee/DM', () => {
+    expect(projection.isBridgeableAccountRole(null)).toBe(true);
     expect(
-      projection.deriveRole({
-        adminAccess: true,
-        currentRole: UserRole.Employee,
-        activeEa: ea(true),
-      }),
-    ).toBe(UserRole.Admin);
+      projection.isBridgeableAccountRole({
+        code: 'employee',
+        isSystem: true,
+        isAdminEquivalent: false,
+      } as AccountRole),
+    ).toBe(true);
+    expect(
+      projection.isBridgeableAccountRole({
+        code: 'director',
+        isSystem: true,
+        isAdminEquivalent: false,
+      } as AccountRole),
+    ).toBe(false);
+    expect(
+      projection.isBridgeableAccountRole({
+        code: 'admin',
+        isSystem: true,
+        isAdminEquivalent: true,
+      } as AccountRole),
+    ).toBe(false);
+    expect(
+      projection.isBridgeableAccountRole({
+        code: null,
+        isSystem: false,
+        isAdminEquivalent: false,
+      } as AccountRole),
+    ).toBe(false);
   });
 
-  it('preserve + current admin → admin', () => {
+  it('desiredBridgeCode uses managementKind', () => {
+    expect(projection.desiredBridgeCode(null)).toBe(
+      SystemAccountRoleCode.Employee,
+    );
     expect(
-      projection.deriveRole({
-        adminAccess: 'preserve',
-        currentRole: UserRole.Admin,
-        activeEa: ea(false),
-      }),
-    ).toBe(UserRole.Admin);
+      projection.desiredBridgeCode({
+        managementKind: ManagementKind.Direction,
+        isDepartmentManager: true,
+      } as EmploymentAssignment),
+    ).toBe(SystemAccountRoleCode.DepartmentManager);
+    expect(
+      projection.desiredBridgeCode({
+        managementKind: ManagementKind.None,
+        isDepartmentManager: false,
+      } as EmploymentAssignment),
+    ).toBe(SystemAccountRoleCode.Employee);
   });
 
-  it('adminAccess false + EA manager → department_manager', () => {
+  it('mirrorRoleForSystemCode', () => {
     expect(
-      projection.deriveRole({
-        adminAccess: false,
-        currentRole: UserRole.Admin,
-        activeEa: ea(true),
-      }),
-    ).toBe(UserRole.DepartmentManager);
-  });
-
-  it('preserve non-admin + EA manager → department_manager', () => {
-    expect(
-      projection.deriveRole({
-        adminAccess: 'preserve',
-        currentRole: UserRole.Employee,
-        activeEa: ea(true),
-      }),
-    ).toBe(UserRole.DepartmentManager);
-  });
-
-  it('no EA manager → employee', () => {
-    expect(
-      projection.deriveRole({
-        adminAccess: 'preserve',
-        currentRole: UserRole.DepartmentManager,
-        activeEa: ea(false),
-      }),
+      projection.mirrorRoleForSystemCode(SystemAccountRoleCode.Employee),
     ).toBe(UserRole.Employee);
-  });
-
-  it('null EA → employee', () => {
     expect(
-      projection.deriveRole({
-        adminAccess: false,
-        currentRole: UserRole.DepartmentManager,
-        activeEa: null,
-      }),
-    ).toBe(UserRole.Employee);
+      projection.mirrorRoleForSystemCode(
+        SystemAccountRoleCode.DepartmentManager,
+      ),
+    ).toBe(UserRole.DepartmentManager);
   });
 });

@@ -1,4 +1,5 @@
 import { firstValueFrom, type Observable } from 'rxjs';
+import type { ManagementKind } from '../../shared/organization/labels';
 import type { OrgPosition, OrgPositionSkillRequirement } from '../settings/settings-org-api.service';
 import {
   classifyPositionCreateError,
@@ -15,6 +16,7 @@ export type PositionDraftApi = {
     directionId?: string | null;
     description?: string | null;
     isDepartmentManagerTemplate?: boolean;
+    managementKindTemplate?: ManagementKind;
     managedDepartmentIds?: string[];
   }): Observable<OrgPosition>;
   createPositionSkillRequirement(
@@ -144,6 +146,9 @@ export async function createPositionThenApplyDrafts(input: {
     departmentId?: string | null;
     directionId?: string | null;
     description?: string | null;
+    isDepartmentManagerTemplate?: boolean;
+    managementKindTemplate?: ManagementKind;
+    managedDepartmentIds?: string[];
   };
   setMode: (mode: PositionDialogMode) => void;
 }): Promise<CreateFlowResult> {

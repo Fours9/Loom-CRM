@@ -19,6 +19,8 @@ export const Permission = {
   AbsencesCalendarView: 'absences.calendar.view',
   DocumentsView: 'documents.view',
   DocumentsManage: 'documents.manage',
+  /** Cross-domain classification; ≠ documents.view / documents.manage (ADR 0012). */
+  ConfidentialView: 'confidential.view',
   QuestionnairesView: 'questionnaires.view',
   QuestionnairesAssign: 'questionnaires.assign',
   QuestionnairesManageLifecycle: 'questionnaires.manage_lifecycle',

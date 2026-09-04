@@ -2,6 +2,11 @@ import { EntityManager } from 'typeorm';
 import { EmploymentAssignmentManagedDepartment } from './employment-assignment-managed-department.entity';
 import { PositionManagedDepartment } from '../positions/position-managed-department.entity';
 import { Position } from '../positions/position.entity';
+import {
+  ManagementKind,
+  managementKindImpliesManager,
+  isManagementKind,
+} from '../employment-catalog/management-kind';
 
 /** Replace EA managed department join rows in the same TX. */
 export async function replaceAssignmentManagedDepartments(
@@ -37,50 +42,71 @@ export async function replacePositionManagedDepartments(
 }
 
 export type ManagerMembershipState = {
+  managementKind: ManagementKind;
+  /** Legacy mirror: kind !== none */
   isDepartmentManager: boolean;
   managedDepartmentIds: string[];
 };
 
 /**
- * Resolve manager membership for EA create:
+ * Resolve leadership for EA create:
  * Position template = default; explicit values override when provided.
  */
 export function resolveManagerMembershipForCreate(input: {
   position: Position | null;
   positionManagedDepartmentIds: string[];
+  explicitManagementKind?: ManagementKind;
+  /** @deprecated prefer explicitManagementKind */
   explicitIsDepartmentManager?: boolean;
   explicitManagedDepartmentIds?: string[];
-  /** Department of the assignment — used for UI default when enabling manager with empty list. */
   assignmentDepartmentId: string | null;
 }): ManagerMembershipState {
-  const hasExplicitManager = input.explicitIsDepartmentManager !== undefined;
-  const hasExplicitDepts = input.explicitManagedDepartmentIds !== undefined;
+  let managementKind: ManagementKind;
+  if (input.explicitManagementKind !== undefined) {
+    managementKind = input.explicitManagementKind;
+  } else if (input.explicitIsDepartmentManager !== undefined) {
+    managementKind = input.explicitIsDepartmentManager
+      ? ManagementKind.Departments
+      : ManagementKind.None;
+  } else if (input.position?.managementKindTemplate) {
+    managementKind = isManagementKind(input.position.managementKindTemplate)
+      ? input.position.managementKindTemplate
+      : input.position.isDepartmentManagerTemplate
+        ? ManagementKind.Departments
+        : ManagementKind.None;
+  } else {
+    managementKind = input.position?.isDepartmentManagerTemplate
+      ? ManagementKind.Departments
+      : ManagementKind.None;
+  }
 
-  let isDepartmentManager = hasExplicitManager
-    ? Boolean(input.explicitIsDepartmentManager)
-    : Boolean(input.position?.isDepartmentManagerTemplate);
+  const isDepartmentManager = managementKindImpliesManager(managementKind);
 
   let managedDepartmentIds: string[];
-  if (hasExplicitDepts) {
-    managedDepartmentIds = [...new Set(input.explicitManagedDepartmentIds!.filter(Boolean))];
-  } else if (isDepartmentManager && input.position) {
+  if (managementKind !== ManagementKind.Departments) {
+    managedDepartmentIds = [];
+  } else if (input.explicitManagedDepartmentIds !== undefined) {
+    managedDepartmentIds = [
+      ...new Set(input.explicitManagedDepartmentIds.filter(Boolean)),
+    ];
+  } else if (input.position) {
     managedDepartmentIds = [...input.positionManagedDepartmentIds];
   } else {
     managedDepartmentIds = [];
   }
 
-  if (!isDepartmentManager) {
-    managedDepartmentIds = [];
-  } else if (
+  if (
+    managementKind === ManagementKind.Departments &&
     managedDepartmentIds.length === 0 &&
     input.assignmentDepartmentId &&
-    (hasExplicitManager || hasExplicitDepts)
+    (input.explicitManagementKind !== undefined ||
+      input.explicitIsDepartmentManager !== undefined ||
+      input.explicitManagedDepartmentIds !== undefined)
   ) {
-    // New UI action: enable manager with empty list → default [departmentId]
     managedDepartmentIds = [input.assignmentDepartmentId];
   }
 
-  return { isDepartmentManager, managedDepartmentIds };
+  return { managementKind, isDepartmentManager, managedDepartmentIds };
 }
 
 export async function loadPositionManagerTemplate(

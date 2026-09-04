@@ -12,6 +12,7 @@ import type {
 import { UsersService } from '../identity/users.service';
 import { UserStatus } from '../identity/user.enums';
 import { PermissionService } from '../permissions/permission.service';
+import { AuthorizationContextService } from '../access-control/authorization-context.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtPayload } from './jwt-payload.interface';
 import { User } from '../identity/user.entity';
@@ -30,6 +31,7 @@ export class AuthService {
     private readonly permissions: PermissionService,
     private readonly audit: AuditService,
     private readonly employeeLookup: EmployeeIdentityLookup,
+    private readonly authorization: AuthorizationContextService,
   ) {}
 
   async login(email: string, password: string): Promise<LoginResponse> {
@@ -92,7 +94,8 @@ export class AuthService {
     userId: string,
     temporaryPassword: string,
   ): Promise<{ message: string }> {
-    if (actor.role !== UserRole.Admin) {
+    const actorCtx = await this.authorization.resolve(actor.id);
+    if (!actorCtx.isAdminEquivalent) {
       throw new ForbiddenException('Only admin can reset passwords');
     }
 
@@ -124,7 +127,7 @@ export class AuthService {
     const accessToken = await this.signToken(user, employeeId);
     return {
       accessToken,
-      user: this.toCurrentUser(user, employeeId),
+      user: await this.toCurrentUser(user, employeeId),
     };
   }
 
@@ -143,17 +146,23 @@ export class AuthService {
     return this.jwt.signAsync(payload);
   }
 
-  private toCurrentUser(
+  private async toCurrentUser(
     user: User,
     employeeId: string | null,
-  ): CurrentUserResponse {
+  ): Promise<CurrentUserResponse> {
+    const context = await this.authorization.resolve(user.id);
     return {
       id: user.id,
       email: user.email,
       role: user.role,
-      permissions: this.permissions.listForRole(
-        user.role,
-      ) as CurrentUserResponse['permissions'],
+      permissions: context.permissions as CurrentUserResponse['permissions'],
+      surfaces: context.surfaces,
+      accountRole: {
+        id: context.accountRole.id,
+        code: context.accountRole.code ?? context.accountRole.id,
+        name: context.accountRole.name,
+        isAdminEquivalent: context.accountRole.isAdminEquivalent,
+      },
       employeeId,
       mustChangePassword: !!user.mustChangePassword,
     };
