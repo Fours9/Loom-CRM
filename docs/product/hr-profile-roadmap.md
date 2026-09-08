@@ -23,7 +23,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 - **Extended** (добровільний): photo, personalCore, personalContacts, emergency, importantDates. Не знижує core; UI без «обов’язково».
 - **Особисті контакти (PR-P):** write SoT = `employee_contacts` (`personal_phone` / `personal_email` / `personal_telegram`, кілька рядків + `isPrimary`). Legacy колонки `employees.personal_*` — one-way mirror primary для Absences/completeness; read fallback якщо rows відсутні. API: `PUT /api/v1/employees/:id/personal-contacts`. People UI — add/remove у вкладці Контакти.
 - Score рахується **role-independent** з повних даних; у response `extended: null` для Manager на чужому профілі (owner + Admin бачать breakdown).
-- **Список `/people`:** той самий pure calculator (`employee-profile-completeness.ts`); у list DTO поле `completenessPercent` = **core only**. Query: `sortBy=completeness`, `maxCompleteness` (score ≤ N). Enrichment batch (work contacts + assignments); без `getProfile()` / per-row scope queries. Assignment parity з profile: `currentAssignmentId` має пріоритет; active-by-employee лише якщо `currentAssignmentId` відсутній.
+- **Список API `GET /employees`:** у list DTO `completenessPercent` = **core only** (той самий calculator). Query `sortBy=completeness` / `maxCompleteness` лишаються для API/legacy; **UI `/people` їх не показує**. Org projection: `batchDisplayedOrgProjection` → canonical `selectCurrentEmploymentAssignment` (pointer лише якщо `employeeId` + `status=active`) → `resolveEmployeeDisplayedDirection` (EA → position.direction → department.direction) для filter/sort/DTO. Completeness рахується лише для org-відфільтрованих rows.
 
 ## Phase 1 — що в UI зараз
 
@@ -78,8 +78,12 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 
 ### Список `/people` (living)
 
-- Flat contract `@loom/contracts-employees` → `EmployeeListItem` (incl. `completenessPercent`, ISO dates).
-- UI: колонка/badge `%`, фільтр повноти (Усі / до 25 / 50 / 75 / менше 100%), sort ПІБ або повнота — **серверні** query params.
+- Absences-like directory UX (shared `apps/web/src/app/shared/employees/`): пошук `q`, multi `directionIds` / `departmentIds` / `positionIds`, колонки ПІБ · номер · напрямок · відділ · посада · роль · статус; без color swatch; без completeness filter/column на UI.
+- Cascade: `normalizeDirectoryFilters(requested, catalog)` → один `filtersChange` → один list request; positions: dept-selected → by `departmentId`, else direction-selected → by `directionId` (включно `departmentId=null`).
+- Роль у колонці / `sortBy=role` = `AccountRole.name` коли є акаунт; без акаунта — legacy UA label. `hasAccount` + missing `accountRole` relation → API fail-closed (500), never silent legacy.
+- Create: мінімальна форма, видима лише з `employees.create` (`Permission.EmployeesCreate`); не isAdmin; Absences create modal **не** портовано.
+- Detail → `/people/:id`. List loads через `PeopleEmployeesApiService` + `switchMap`.
+- Contract: `EmployeeListItem` + `accountRole`; API query: `positionIds`/`directionIds` (OR з singular), `sortBy=direction`, uk-UA `localeCompare` + tie-break fullName→employeeNumber.
 
 PW-паритетна картка `/absences/employees/:id`: Напрямок / Відділ / Посада **read-only**; role / managed / overrides / account email **прибрано** (People Admin). Hire: initial active EA з org + Position template.
 
@@ -178,7 +182,7 @@ assignment.status === 'changes_requested'
 
 - ~~Збагачена історія (actor + UA summary)~~ — **зроблено** (див. вище; cursor pagination поза scope).
 - ~~Ховати вкладки без доступу~~ — **зроблено**.
-- ~~Completeness filter/sort на `/people`~~ — **зроблено**.
+- ~~Completeness filter/sort на `/people`~~ — було; **прибрано з UI** (API query лишається). Directory UX = Absences-like + напрямок — **зроблено**.
 - Photo upload у профілі (потрібен Platform Files).
 
 ## Phase 7 — Documents (деталь)

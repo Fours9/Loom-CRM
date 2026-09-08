@@ -51,6 +51,13 @@ export interface EmployeeListItem {
   calendarColor: string;
   role: UserRole;
   isDepartmentManager?: boolean;
+  /** AccountRole projection when hasAccount (Organization list/detail). */
+  accountRole?: {
+    id: string;
+    code: string | null;
+    name: string;
+    isAdminEquivalent: boolean;
+  } | null;
   /** @deprecated use accountStatus / hasAccount */
   status?: UserStatus | null;
   accountStatus?: UserStatus;

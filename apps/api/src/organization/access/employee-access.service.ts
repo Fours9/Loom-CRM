@@ -330,6 +330,7 @@ export class EmployeeAccessService {
     'position',
     'position.direction',
     'user',
+    'user.accountRole',
   ] as const;
 
   /**

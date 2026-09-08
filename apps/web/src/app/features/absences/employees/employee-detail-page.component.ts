@@ -189,7 +189,7 @@ import {
                     </div>
                     <label>
                       Роль
-                      <div class="value">{{ roleLabel(employee.role, employee.isDepartmentManager) }}</div>
+                      <div class="value">{{ displayedRoleLabel(employee) }}</div>
                     </label>
                   </div>
                 </div>
@@ -323,7 +323,7 @@ import {
                         <div class="value">{{ employee.positionName || '—' }}</div>
                       </label>
                     </div>
-                    <p><strong>Роль:</strong> {{ roleLabel(employee.role, employee.isDepartmentManager) }}</p>
+                    <p><strong>Роль:</strong> {{ displayedRoleLabel(employee) }}</p>
                   </div>
                 </div>
               }
@@ -1531,8 +1531,12 @@ export class EmployeeDetailPageComponent implements OnInit {
       : 'Акаунт: активний';
   }
 
-  roleLabel(role: string | null, isDepartmentManager?: boolean | null): string {
-    return roleDisplayLabel(role, isDepartmentManager);
+  displayedRoleLabel(employee: EmployeeProfile): string {
+    const fromProfile = employee.accountRole?.name?.trim();
+    if (employee.hasAccount && fromProfile) {
+      return fromProfile;
+    }
+    return roleDisplayLabel(employee.role, employee.isDepartmentManager);
   }
 
   downloadPdf(): void {

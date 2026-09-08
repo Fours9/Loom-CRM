@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsIn,
   IsInt,
   IsOptional,
@@ -14,13 +15,14 @@ const SORT_BY = [
   'employeeNumber',
   'department',
   'position',
+  'direction',
   'status',
   'role',
   'completeness',
 ] as const;
 
 /**
- * Normalize departmentIds from comma-separated string or repeated query params.
+ * Normalize id lists from comma-separated string or repeated query params.
  */
 function parseIdList(value: unknown): string[] | undefined {
   if (value == null || value === '') return undefined;
@@ -46,11 +48,25 @@ export class EmployeeListQueryDto {
 
   @IsOptional()
   @Transform(({ value }) => parseIdList(value))
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
   departmentIds?: string[];
 
   @IsOptional()
   @IsUUID()
   positionId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
+  positionIds?: string[];
+
+  @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
+  directionIds?: string[];
 
   @IsOptional()
   @IsIn(['active', 'deactivated', 'no_account'])

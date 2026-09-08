@@ -79,6 +79,7 @@ export class AuthService {
       lastLoginAt: null,
       createdAt: '',
       employeeId: u.employeeId,
+      accountRole: u.accountRole,
     };
   }
 }

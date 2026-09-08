@@ -27,7 +27,10 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
         <article class="card">
           <h2>Анкета не створена</h2>
           <p class="muted">
-            Для акаунта {{ auth.user()?.email }} ({{ roleLabel(auth.user()?.role ?? null, auth.user()?.isDepartmentManager) }}) ще немає анкети працівника.
+            Для акаунта {{ auth.user()?.email }} ({{
+              auth.user()?.accountRole?.name ||
+                roleDisplayLabel(auth.user()?.role ?? null, auth.user()?.isDepartmentManager)
+            }}) ще немає анкети працівника.
           </p>
         </article>
       } @else if (error) {
@@ -105,18 +108,13 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                   </label>
                 </div>
 
-                  <div class="section-block">
+                <div class="section-block">
                   <h3>Контакти</h3>
                   <label>
                     Робочий email
                     <div class="value">{{ employee.workEmail || '—' }}</div>
                   </label>
-                  @if (employee.hasAccount && employee.permissions?.canViewAccountDetails) {
-                    <label>
-                      Email акаунта
-                      <div class="value">{{ employee.accountEmail || '—' }}</div>
-                    </label>
-                  } @else if (!employee.hasAccount) {
+                  @if (!employee.hasAccount) {
                     <p class="muted">Обліковий запис не створено</p>
                   }
                   <div class="row row-2">
@@ -171,26 +169,11 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                   </div>
                   <label>
                     Роль
-                    <div class="value">{{ roleLabel(employee.role, employee.isDepartmentManager) }}</div>
+                    <div class="value">{{ displayedRoleLabel(employee) }}</div>
                   </label>
                 </div>
               </div>
             </article>
-
-            @if (employee.role === 'department_manager' || employee.isDepartmentManager) {
-              <article class="card">
-                <h2>Керовані відділи</h2>
-                @if (managedNames.length) {
-                  <ul class="list">
-                    @for (name of managedNames; track name) {
-                      <li>{{ name }}</li>
-                    }
-                  </ul>
-                } @else {
-                  <p class="muted">Керовані відділи ще не призначені.</p>
-                }
-              </article>
-            }
           </div>
 
           <div class="col side-col">
@@ -667,6 +650,8 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
       .section-block > label,
       .disclose-body > label,
       .nested-panel-body > label,
+      .fields .row > label,
+      .nested-panel-body .row > label,
       .row > label {
         display: flex;
         flex-direction: column;
@@ -700,23 +685,6 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
       }
       .error {
         color: var(--pw-danger);
-      }
-      .list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: 0.4rem;
-      }
-      .list li {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        align-items: center;
-      }
-      .list a {
-        color: var(--pw-accent);
-        text-decoration: none;
       }
       .req-list {
         list-style: none;
@@ -796,6 +764,7 @@ export class DashboardComponent implements OnInit {
   readonly requestPeriod = requestPeriod;
   readonly requestEventLabel = requestEventLabel;
   readonly frameTone = requestFrameTone;
+  readonly roleDisplayLabel = roleDisplayLabel;
 
   employee: EmployeeProfile | null = null;
   employeeId: string | null = null;
@@ -804,10 +773,6 @@ export class DashboardComponent implements OnInit {
   error = '';
   sidePanel: 'schedule' | 'comment' | 'requests' = 'schedule';
   pdfLoading = false;
-
-  get managedNames(): string[] {
-    return this.employee?.managedDepartments?.map((d) => d.name || '—') ?? [];
-  }
 
   get heroOrgMeta(): string {
     return [
@@ -840,8 +805,17 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  roleLabel(role: string | null, isDepartmentManager?: boolean | null): string {
-    return roleDisplayLabel(role, isDepartmentManager);
+  /** Prefer AccountRole.name from profile; session fallback for self; else legacy. */
+  displayedRoleLabel(employee: EmployeeProfile): string {
+    const fromProfile = employee.accountRole?.name?.trim();
+    if (employee.hasAccount && fromProfile) {
+      return fromProfile;
+    }
+    const fromSession = this.auth.user()?.accountRole?.name?.trim();
+    if (employee.hasAccount && fromSession) {
+      return fromSession;
+    }
+    return roleDisplayLabel(employee.role, employee.isDepartmentManager);
   }
 
   accountStatusLabel(employee: {

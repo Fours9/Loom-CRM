@@ -27,7 +27,17 @@ import {
 } from './employee-profile-completeness';
 import type { EmployeeListQueryDto } from './employee-list-query.dto';
 import { pickLegacyOrgAssignmentPatch } from './legacy-org-assignment-patch';
-import type { DisplayedDirectionRef } from './resolve-employee-displayed-direction';
+import {
+  resolveEmployeeDisplayedDirection,
+  type DisplayedDirectionRef,
+} from './resolve-employee-displayed-direction';
+import { selectCurrentEmploymentAssignment } from '../employment-catalog/current-employment-assignment.resolver';
+import {
+  compareEmployeeDirectoryLabels,
+  resolveEmployeeListRoleLabel,
+  resolveEmployeeListStatusLabel,
+  unionIdLists,
+} from './employee-list-labels';
 import { IdentityRoleProjection } from './identity-role-projection';
 import {
   loadPositionManagerTemplate,
@@ -47,6 +57,14 @@ import {
   compatibilityUserRoleFromAccountRole,
 } from './identity-role-projection';
 import { ManagementKind } from '../employment-catalog/management-kind';
+
+type DisplayedOrgProjection = {
+  displayedDirection: {
+    directionId: string | null;
+    directionName: string | null;
+  };
+  selectedAssignment: EmploymentAssignment | null;
+};
 
 export type ScheduleDayInput = {
   weekday: number;
@@ -113,23 +131,30 @@ export class EmployeesService {
 
   async findAll(actor: User, query: EmployeeListQueryDto = {}) {
     let rows = await this.access.listVisibleEmployees(actor);
+    const orgByEmployee = await this.batchDisplayedOrgProjection(rows);
 
-    const deptIds = [
-      ...new Set(
-        [
-          ...(query.departmentIds ?? []),
-          ...(query.departmentId ? [query.departmentId] : []),
-        ].filter(Boolean),
-      ),
-    ];
+    const deptIds = unionIdLists(query.departmentId, query.departmentIds);
     if (deptIds.length) {
       rows = rows.filter(
         (e) => e.departmentId && deptIds.includes(e.departmentId),
       );
     }
-    if (query.positionId) {
-      rows = rows.filter((e) => e.positionId === query.positionId);
+
+    const positionIds = unionIdLists(query.positionId, query.positionIds);
+    if (positionIds.length) {
+      rows = rows.filter(
+        (e) => e.positionId && positionIds.includes(e.positionId),
+      );
     }
+
+    const directionIds = [...new Set(query.directionIds ?? [])];
+    if (directionIds.length) {
+      rows = rows.filter((e) => {
+        const dirId = orgByEmployee.get(e.id)?.displayedDirection.directionId;
+        return Boolean(dirId && directionIds.includes(dirId));
+      });
+    }
+
     if (query.q?.trim()) {
       const q = query.q.trim().toLowerCase();
       rows = rows.filter((e) => {
@@ -157,33 +182,50 @@ export class EmployeesService {
       rows = rows.filter((e) => !e.userId);
     }
 
-    const { scoreById, assignmentDirectionByEmployee } =
-      await this.batchCoreCompleteness(rows);
+    const scoreById = await this.batchCompleteness(rows, orgByEmployee);
 
     if (query.maxCompleteness != null) {
       const max = query.maxCompleteness;
       rows = rows.filter((e) => (scoreById.get(e.id) ?? 0) <= max);
     }
 
-    const dir = query.sortDir?.toLowerCase() === 'desc' ? -1 : 1;
+    const dir: 1 | -1 = query.sortDir?.toLowerCase() === 'desc' ? -1 : 1;
     const key = (query.sortBy ?? 'fullName').toLowerCase();
     if (key === 'completeness') {
       rows.sort((a, b) => {
         const scoreDiff =
           (scoreById.get(a.id) ?? 0) - (scoreById.get(b.id) ?? 0);
         if (scoreDiff !== 0) return scoreDiff * dir;
-        const nameDiff = this.serializer
-          .fullName(a)
-          .localeCompare(this.serializer.fullName(b), 'uk-UA');
-        if (nameDiff !== 0) return nameDiff;
-        return a.employeeNumber.localeCompare(b.employeeNumber);
+        return compareEmployeeDirectoryLabels(
+          {
+            primary: this.serializer.fullName(a),
+            fullName: this.serializer.fullName(a),
+            employeeNumber: a.employeeNumber,
+          },
+          {
+            primary: this.serializer.fullName(b),
+            fullName: this.serializer.fullName(b),
+            employeeNumber: b.employeeNumber,
+          },
+          1,
+        );
       });
     } else {
-      rows.sort((a, b) => {
-        const av = this.sortValue(a, key);
-        const bv = this.sortValue(b, key);
-        return av < bv ? -dir : av > bv ? dir : 0;
-      });
+      rows.sort((a, b) =>
+        compareEmployeeDirectoryLabels(
+          {
+            primary: this.sortLabel(a, key, orgByEmployee),
+            fullName: this.serializer.fullName(a),
+            employeeNumber: a.employeeNumber,
+          },
+          {
+            primary: this.sortLabel(b, key, orgByEmployee),
+            fullName: this.serializer.fullName(b),
+            employeeNumber: b.employeeNumber,
+          },
+          dir,
+        ),
+      );
     }
 
     // After listVisibleEmployees, every row is in-scope → work contacts OK without per-row DB.
@@ -192,61 +234,130 @@ export class EmployeesService {
         this.serializer.toListDto(e, actor, {
           canViewWorkContacts: true,
           completenessPercent: scoreById.get(e.id) ?? 0,
-          assignmentDirection: assignmentDirectionByEmployee.get(e.id) ?? null,
+          displayedDirection:
+            orgByEmployee.get(e.id)?.displayedDirection ?? {
+              directionId: null,
+              directionName: null,
+            },
         }),
       ),
     );
   }
 
   /**
-   * Core completeness only (parity with profile assignment resolution).
-   * currentAssignmentId wins; active-by-employee only when currentAssignmentId is absent.
+   * Canonical current EA + displayedDirection (EA → position.direction → department.direction).
+   * Same map drives directionIds filter, sortBy=direction, and list DTO.
    */
-  private async batchCoreCompleteness(rows: Employee[]): Promise<{
-    scoreById: Map<string, number>;
-    assignmentDirectionByEmployee: Map<string, DisplayedDirectionRef | null>;
-  }> {
-    const scoreById = new Map<string, number>();
-    const assignmentDirectionByEmployee = new Map<
-      string,
-      DisplayedDirectionRef | null
-    >();
-    if (rows.length === 0) {
-      return { scoreById, assignmentDirectionByEmployee };
-    }
+  private async batchDisplayedOrgProjection(
+    rows: Employee[],
+  ): Promise<Map<string, DisplayedOrgProjection>> {
+    const out = new Map<string, DisplayedOrgProjection>();
+    if (rows.length === 0) return out;
 
     const employeeIds = rows.map((e) => e.id);
     const currentIds = rows
       .map((e) => e.currentAssignmentId)
       .filter((id): id is string => Boolean(id));
-    const withoutCurrent = rows
-      .filter((e) => !e.currentAssignmentId)
-      .map((e) => e.id);
 
-    const [workContacts, currentAssignments, activeAssignments] =
-      await Promise.all([
-        this.contacts.find({
-          where: {
-            employeeId: In(employeeIds),
-            type: In(['work_phone', 'work_email']),
-          },
-        }),
-        currentIds.length
-          ? this.assignments.find({
-              where: { id: In(currentIds) },
-              relations: ['direction'],
-            })
-          : Promise.resolve([] as EmploymentAssignment[]),
-        withoutCurrent.length
-          ? this.assignments.find({
-              where: {
-                employeeId: In(withoutCurrent),
-                status: 'active',
-              },
-              relations: ['direction'],
-            })
-          : Promise.resolve([] as EmploymentAssignment[]),
-      ]);
+    const [pointedAssignments, activeAssignments] = await Promise.all([
+      currentIds.length
+        ? this.assignments.find({
+            where: { id: In(currentIds) },
+            relations: ['direction'],
+          })
+        : Promise.resolve([] as EmploymentAssignment[]),
+      this.assignments.find({
+        where: {
+          employeeId: In(employeeIds),
+          status: 'active',
+        },
+        relations: ['direction'],
+      }),
+    ]);
+
+    const byEmployee = new Map<string, EmploymentAssignment[]>();
+    for (const a of [...pointedAssignments, ...activeAssignments]) {
+      const list = byEmployee.get(a.employeeId) ?? [];
+      if (!list.some((x) => x.id === a.id)) list.push(a);
+      byEmployee.set(a.employeeId, list);
+    }
+    // Stale pointer may reference another employee's row — keep it in candidate pool
+    // keyed under that foreign employeeId; selection for this employee still ignores it.
+    for (const a of pointedAssignments) {
+      const list = byEmployee.get(a.employeeId) ?? [];
+      if (!list.some((x) => x.id === a.id)) {
+        list.push(a);
+        byEmployee.set(a.employeeId, list);
+      }
+    }
+
+    for (const e of rows) {
+      const candidates = [
+        ...(byEmployee.get(e.id) ?? []),
+        // Include pointed row even if it belongs to another employee (selection rejects it).
+        ...(e.currentAssignmentId
+          ? pointedAssignments.filter((a) => a.id === e.currentAssignmentId)
+          : []),
+      ];
+      const unique = new Map(candidates.map((c) => [c.id, c]));
+      const selectedMeta = selectCurrentEmploymentAssignment(
+        [...unique.values()].map((c) => ({
+          id: c.id,
+          employeeId: c.employeeId,
+          status: c.status,
+          startDate: c.startDate,
+        })),
+        e.id,
+        e.currentAssignmentId,
+      );
+      const selectedAssignment = selectedMeta
+        ? (unique.get(selectedMeta.id) ?? null)
+        : null;
+
+      const displayedDirection = resolveEmployeeDisplayedDirection({
+        assignmentDirection: selectedAssignment?.directionId
+          ? {
+              id: selectedAssignment.directionId,
+              name: selectedAssignment.direction?.name ?? null,
+            }
+          : null,
+        positionDirection: e.position?.directionId
+          ? {
+              id: e.position.directionId,
+              name: e.position.direction?.name ?? null,
+            }
+          : null,
+        departmentDirection: e.department?.directionId
+          ? {
+              id: e.department.directionId,
+              name: e.department.direction?.name ?? null,
+            }
+          : null,
+      });
+
+      out.set(e.id, { displayedDirection, selectedAssignment });
+    }
+
+    return out;
+  }
+
+  /**
+   * Core completeness for surviving rows only (contacts + canonical selected EA).
+   */
+  private async batchCompleteness(
+    rows: Employee[],
+    orgByEmployee: Map<string, DisplayedOrgProjection>,
+  ): Promise<Map<string, number>> {
+    const scoreById = new Map<string, number>();
+    if (rows.length === 0) return scoreById;
+
+    const employeeIds = rows.map((e) => e.id);
+    const workContacts = await this.contacts.find({
+      where: {
+        employeeId: In(employeeIds),
+        type: In(['work_phone', 'work_email']),
+      },
+    });
 
     const contactsByEmployee = new Map<string, EmployeeContact[]>();
     for (const c of workContacts) {
@@ -255,33 +366,8 @@ export class EmployeesService {
       contactsByEmployee.set(c.employeeId, list);
     }
 
-    const assignmentByEmployee = new Map<string, EmploymentAssignment | null>();
-    const currentById = new Map(currentAssignments.map((a) => [a.id, a]));
     for (const e of rows) {
-      if (e.currentAssignmentId) {
-        assignmentByEmployee.set(
-          e.id,
-          currentById.get(e.currentAssignmentId) ?? null,
-        );
-      }
-    }
-    for (const a of activeAssignments) {
-      if (!assignmentByEmployee.has(a.employeeId)) {
-        assignmentByEmployee.set(a.employeeId, a);
-      }
-    }
-
-    for (const e of rows) {
-      const assignment = assignmentByEmployee.get(e.id) ?? null;
-      assignmentDirectionByEmployee.set(
-        e.id,
-        assignment?.directionId
-          ? {
-              id: assignment.directionId,
-              name: assignment.direction?.name ?? null,
-            }
-          : null,
-      );
+      const assignment = orgByEmployee.get(e.id)?.selectedAssignment ?? null;
       const scored = computeProfileCompleteness(
         buildProfileCompletenessFacts({
           employee: e,
@@ -301,7 +387,7 @@ export class EmployeesService {
       scoreById.set(e.id, scored.core.percent);
     }
 
-    return { scoreById, assignmentDirectionByEmployee };
+    return scoreById;
   }
 
   async findOne(actor: User, id: string) {
@@ -1125,23 +1211,57 @@ export class EmployeesService {
     };
   }
 
-  private sortValue(e: Employee, key: string): string {
+  private sortLabel(
+    e: Employee,
+    key: string,
+    orgByEmployee: Map<string, DisplayedOrgProjection>,
+  ): string {
     switch (key) {
       case 'employeenumber':
       case 'number':
-        return e.employeeNumber.toLowerCase();
+        return e.employeeNumber;
       case 'department':
       case 'departmentname':
-        return (e.department?.name ?? '').toLowerCase();
+        return e.department?.name ?? '';
       case 'position':
       case 'positionname':
-        return (e.position?.name ?? '').toLowerCase();
-      case 'role':
-        return e.role;
+        return e.position?.name ?? '';
+      case 'direction':
+      case 'directionname':
+        return orgByEmployee.get(e.id)?.displayedDirection.directionName ?? '';
+      case 'role': {
+        const hasAccount = e.userId != null;
+        const accountRole = e.user?.accountRole
+          ? {
+              id: e.user.accountRole.id,
+              code: e.user.accountRole.code,
+              name: e.user.accountRole.name,
+              isAdminEquivalent: Boolean(e.user.accountRole.isAdminEquivalent),
+            }
+          : null;
+        if (hasAccount && !accountRole) {
+          // Serializer will fail closed; keep sort deterministic.
+          return '';
+        }
+        return resolveEmployeeListRoleLabel({
+          hasAccount,
+          legacyRole: e.role,
+          isDepartmentManager: e.role === 'department_manager',
+          accountRole,
+        });
+      }
       case 'status':
-        return e.user?.status ?? 'no_account';
+        return resolveEmployeeListStatusLabel({
+          hasAccount: e.userId != null,
+          accountStatus:
+            e.user?.status === UserStatus.Deactivated
+              ? 'deactivated'
+              : e.userId
+                ? 'active'
+                : null,
+        });
       default:
-        return this.serializer.fullName(e).toLowerCase();
+        return this.serializer.fullName(e);
     }
   }
 

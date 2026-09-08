@@ -48,8 +48,16 @@ export type EmployeeListItem = {
   directionName: string | null;
 
   calendarColor: string | null;
+  /** Legacy compatibility mirror (Employee.role). Prefer accountRole for display. */
   role: 'employee' | 'department_manager' | 'admin';
   isDepartmentManager: boolean;
+  /** AccountRole projection when hasAccount; null when no login. */
+  accountRole: {
+    id: EntityId;
+    code: string | null;
+    name: string;
+    isAdminEquivalent: boolean;
+  } | null;
 
   accountStatus?: 'active' | 'deactivated';
   accountEmail?: string;

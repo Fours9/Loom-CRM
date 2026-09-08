@@ -99,6 +99,10 @@ Single Nest `OnModuleInit` in `apps/api/src/application-startup/` orchestrates `
 
 Role-independent dual score (`core` / `extended`) via pure calculator (`employee-profile-completeness.ts`); `header.completenessPercent` and list `completenessPercent` = core only; `extended` is `null` for managers viewing others. List enrichment is batched (no per-row scope queries). See [hr-profile-roadmap.md](product/hr-profile-roadmap.md).
 
+### Employee list org projection
+
+`EmployeesService.findAll`: `listVisibleEmployees` → `batchDisplayedOrgProjection` (canonical `selectCurrentEmploymentAssignment` + `resolveEmployeeDisplayedDirection`) → org/q/status filters → `batchCompleteness` on survivors → uk-UA label sort → `toListDto` with `displayedDirection` + `accountRole`. Direction filter/sort/DTO share one projection. Account with missing `user.accountRole` fails closed.
+
 ## Code location (Variant A)
 
 Backend modules live under `apps/api/src/{platform,organization,modules}` — not separate npm packages until a second backend app needs them.

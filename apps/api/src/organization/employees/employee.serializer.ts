@@ -11,6 +11,13 @@ import {
 
 export type AccountStatus = 'active' | 'deactivated';
 
+export type EmployeeListAccountRoleDto = {
+  id: string;
+  code: string | null;
+  name: string;
+  isAdminEquivalent: boolean;
+};
+
 export type EmployeeListDto = {
   id: string;
   userId: string | null;
@@ -33,6 +40,7 @@ export type EmployeeListDto = {
   calendarColor: string | null;
   role: string;
   isDepartmentManager: boolean;
+  accountRole: EmployeeListAccountRoleDto | null;
   accountStatus?: AccountStatus;
   accountEmail?: string;
   mustChangePassword: boolean | null;
@@ -56,7 +64,14 @@ export type EmployeeDetailDto = Omit<EmployeeListDto, 'completenessPercent'> & {
 export type EmployeeListProjectionContext = {
   canViewWorkContacts: boolean;
   completenessPercent: number;
-  /** Current EA direction when preloaded (list/detail). */
+  /**
+   * Fully resolved display direction (list). When set, skips EA→position→dept stack.
+   */
+  displayedDirection?: {
+    directionId: string | null;
+    directionName: string | null;
+  } | null;
+  /** Current EA direction when preloaded (detail / legacy). */
   assignmentDirection?: DisplayedDirectionRef | null;
 };
 
@@ -83,14 +98,20 @@ export class EmployeeSerializer {
     const showMustChange = this.access.isAdmin(viewer) || isOwner;
     const hasAccount = employee.userId != null;
 
-    const direction = resolveEmployeeDisplayedDirection({
-      assignmentDirection: ctx?.assignmentDirection ?? null,
-      positionDirection: this.directionRef(employee.position?.directionId, employee.position?.direction?.name),
-      departmentDirection: this.directionRef(
-        employee.department?.directionId,
-        employee.department?.direction?.name,
-      ),
-    });
+    const direction =
+      ctx?.displayedDirection != null
+        ? ctx.displayedDirection
+        : resolveEmployeeDisplayedDirection({
+            assignmentDirection: ctx?.assignmentDirection ?? null,
+            positionDirection: this.directionRef(
+              employee.position?.directionId,
+              employee.position?.direction?.name,
+            ),
+            departmentDirection: this.directionRef(
+              employee.department?.directionId,
+              employee.department?.direction?.name,
+            ),
+          });
 
     const dto: EmployeeListDto = {
       id: employee.id,
@@ -115,6 +136,7 @@ export class EmployeeSerializer {
       role: employee.role,
       // Derived mirror / permission role — not legacy Employee.isDepartmentManager flag
       isDepartmentManager: employee.role === 'department_manager',
+      accountRole: null,
       mustChangePassword: null,
       completenessPercent: ctx?.completenessPercent ?? 0,
       createdAt: employee.createdAt.toISOString(),
@@ -128,6 +150,17 @@ export class EmployeeSerializer {
           'Employee has userId but User relation was not loaded',
         );
       }
+      if (!user.accountRole) {
+        throw new InternalServerErrorException(
+          'Employee has account but AccountRole relation was not loaded',
+        );
+      }
+      dto.accountRole = {
+        id: user.accountRole.id,
+        code: user.accountRole.code,
+        name: user.accountRole.name,
+        isAdminEquivalent: Boolean(user.accountRole.isAdminEquivalent),
+      };
       dto.accountStatus =
         user.status === UserStatus.Deactivated ? 'deactivated' : 'active';
       if (canViewAccount) {

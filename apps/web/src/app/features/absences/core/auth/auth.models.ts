@@ -11,4 +11,10 @@ export interface AuthUser {
   lastLoginAt: string | null;
   createdAt: string;
   employeeId: string | null;
+  accountRole?: {
+    id: string;
+    code: string;
+    name: string;
+    isAdminEquivalent: boolean;
+  };
 }
