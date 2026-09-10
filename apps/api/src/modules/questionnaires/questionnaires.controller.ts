@@ -29,7 +29,6 @@ import {
   QuestionnaireDirectoryQueryDto,
   QuestionnaireEmployeeListQueryDto,
   QuestionnaireSnapshotSummaryQueryDto,
-  RequestQuestionnaireChangesDto,
   ResolveQuestionnaireChangesDto,
   ReviewQuestionnaireSubmissionDto,
   SyncQuestionnairePositionContextDto,
@@ -178,16 +177,6 @@ export class QuestionnairesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.submissions.startRevision(actor, id);
-  }
-
-  @Post('assignments/:id/request-changes')
-  @RequirePermissions(Permission.QuestionnairesReview)
-  requestChanges(
-    @CurrentUser() actor: User,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: RequestQuestionnaireChangesDto,
-  ) {
-    return this.submissions.requestChanges(actor, id, dto);
   }
 
   @Post('assignments/:id/resolve-changes')

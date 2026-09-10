@@ -11,6 +11,7 @@ import {
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom, Subscription } from 'rxjs';
 import type { QuestionnaireProfileProposalItem } from '@loom/contracts-questionnaires';
+import { isQuestionnairePostSubmitStatus } from '@loom/contracts-questionnaires';
 import { QuestionnaireProfileMirrorService } from '../core/questionnaire-profile-mirror.service';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import {
@@ -331,7 +332,8 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     if (
       !detail ||
       !detail.employeeId ||
-      (status !== 'submitted' && status !== 'reviewed') ||
+      !status ||
+      !isQuestionnairePostSubmitStatus(status) ||
       this.store.loadState() !== 'ready'
     ) {
       this.assignmentProposals.set([]);
@@ -342,7 +344,7 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
 
   showProposalsSection(): boolean {
     const status = this.store.assignmentStatus();
-    return status === 'submitted' || status === 'reviewed';
+    return !!status && isQuestionnairePostSubmitStatus(status);
   }
 
   goToSection(sectionId: string): void {
@@ -573,7 +575,7 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
       const caps = detail?.capabilities;
       const needsRevisionStart =
         detail &&
-        (detail.status === 'submitted' || detail.status === 'reviewed') &&
+        isQuestionnairePostSubmitStatus(detail.status) &&
         (caps?.canReopenSelf || caps?.canStartRevision);
 
       if (needsRevisionStart) {
@@ -597,19 +599,21 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
   }
 
   async requestChanges(reviewComment: string): Promise<void> {
-    const id = this.store.assignment()?.id;
-    if (!id || this.actionBusy()) return;
+    const detail = this.store.assignment();
+    const submissionId = detail?.submissions?.[0]?.id;
+    if (!detail || !submissionId || this.actionBusy()) return;
     this.actionBusy.set(true);
     this.actionError.set(null);
     try {
       await firstValueFrom(
-        this.api.requestChanges(id, {
+        this.api.reviewSubmission(submissionId, {
+          reviewStatus: 'changes_requested',
           reviewComment,
         }),
       );
       this.chrome?.markRequestChangesSuccess();
       this.autosave.resetForAssignmentSwitch();
-      await this.store.load(id, this.store.activeStepKey());
+      await this.store.load(detail.id, this.store.activeStepKey());
       this.syncStepQuery(this.store.activeStepKey());
     } catch (err: unknown) {
       const message =

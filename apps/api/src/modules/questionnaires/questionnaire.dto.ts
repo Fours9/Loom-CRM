@@ -68,14 +68,6 @@ function trimString({ value }: { value: unknown }): unknown {
   return typeof value === 'string' ? value.trim() : value;
 }
 
-export class RequestQuestionnaireChangesDto {
-  @Transform(trimString)
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(2000)
-  reviewComment!: string;
-}
-
 export class ReviewQuestionnaireSubmissionDto {
   @IsIn(['approved', 'changes_requested'])
   reviewStatus!: 'approved' | 'changes_requested';

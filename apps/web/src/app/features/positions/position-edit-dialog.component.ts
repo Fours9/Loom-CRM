@@ -1,9 +1,10 @@
-import { Component, HostListener, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   MultiSelectListComponent,
   type MultiSelectItem,
 } from '../../shared/multi-select-list.component';
+import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 import { PositionManagementFacade } from './position-management.facade';
 
 @Component({
@@ -343,10 +344,19 @@ import { PositionManagementFacade } from './position-management.facade';
     `,
   ],
 })
-export class PositionEditDialogComponent {
+export class PositionEditDialogComponent implements OnInit, OnDestroy {
   readonly vm = inject(PositionManagementFacade);
+  private readonly scrollLock = inject(OverlayScrollLockService);
   readonly headingId = 'position-edit-dialog-title';
   private backdropPress = false;
+
+  ngOnInit(): void {
+    this.scrollLock.acquire();
+  }
+
+  ngOnDestroy(): void {
+    this.scrollLock.release();
+  }
 
   heading(): string {
     if (this.vm.dialogMode() === 'create' || this.vm.dialogMode() === 'creating-position') {

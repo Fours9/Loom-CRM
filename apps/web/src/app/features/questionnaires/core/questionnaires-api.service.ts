@@ -162,16 +162,6 @@ export class QuestionnairesApiService {
     );
   }
 
-  requestChanges(
-    assignmentId: string,
-    body: { reviewComment: string },
-  ): Observable<QuestionnaireSubmissionSummary> {
-    return this.http.post<QuestionnaireSubmissionSummary>(
-      `/api/v1/questionnaires/assignments/${assignmentId}/request-changes`,
-      body,
-    );
-  }
-
   resolveChanges(
     assignmentId: string,
     body:

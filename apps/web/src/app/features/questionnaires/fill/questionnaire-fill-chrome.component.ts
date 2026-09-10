@@ -1,10 +1,12 @@
 import {
   Component,
+  HostListener,
   ViewChild,
   computed,
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
 import { ThemeService } from '../../../core/theme/theme.service';
 import { canBrowseQuestionnaireStep } from '../navigation/questionnaire-step-browse';
@@ -118,14 +120,33 @@ import {
           </button>
         }
         @if (store.canShowDeleteButton()) {
-          <button
-            type="button"
-            class="btn danger"
-            [disabled]="actionBusy() || revision.manualSaveBusy()"
-            (click)="deleteAssignment.emit()"
-          >
-            {{ actionBusy() ? 'Видалення…' : 'Видалити анкету' }}
-          </button>
+          <div class="more-menu-wrap">
+            <button
+              type="button"
+              class="btn ghost more-btn"
+              title="Додаткові дії"
+              aria-label="Додаткові дії"
+              [attr.aria-expanded]="moreMenuOpen()"
+              [attr.aria-haspopup]="'menu'"
+              [disabled]="actionBusy() || revision.manualSaveBusy()"
+              (click)="toggleMoreMenu($event)"
+            >
+              <span class="more-icon" aria-hidden="true">⋮</span>
+            </button>
+            @if (moreMenuOpen()) {
+              <div class="more-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="danger-item"
+                  [disabled]="actionBusy() || revision.manualSaveBusy()"
+                  (click)="onDeleteFromMenu()"
+                >
+                  {{ actionBusy() ? 'Видалення…' : 'Видалити анкету' }}
+                </button>
+              </div>
+            }
+          </div>
         }
       </div>
     </header>
@@ -195,6 +216,52 @@ import {
         gap: 0.5rem;
         justify-content: flex-end;
         align-items: center;
+      }
+      .more-menu-wrap {
+        position: relative;
+      }
+      .more-btn {
+        min-width: 2.25rem;
+        padding-inline: 0.45rem;
+      }
+      .more-icon {
+        font-size: 1.25rem;
+        line-height: 1;
+        font-weight: 700;
+      }
+      .more-menu {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 0.25rem);
+        z-index: 20;
+        min-width: 11rem;
+        padding: 0.35rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--pw-border, #d0d7e2);
+        background: var(--pw-surface, #fff);
+        box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+      }
+      .more-menu button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 0;
+        background: transparent;
+        padding: 0.45rem 0.6rem;
+        border-radius: 0.35rem;
+        cursor: pointer;
+        color: inherit;
+        font: inherit;
+      }
+      .more-menu button:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--pw-border, #d0d7e2) 45%, transparent);
+      }
+      .more-menu button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .more-menu .danger-item {
+        color: #b91c1c;
       }
       .theme-toggle {
         display: inline-flex;
@@ -385,6 +452,7 @@ export class QuestionnaireFillChromeComponent {
   readonly theme = inject(ThemeService);
 
   readonly actionBusy = input(false);
+  readonly moreMenuOpen = signal(false);
 
   readonly back = output<void>();
   readonly edit = output<void>();
@@ -400,6 +468,21 @@ export class QuestionnaireFillChromeComponent {
 
   @ViewChild('requestPopover')
   private requestPopover?: QuestionnaireRequestChangesPopoverComponent;
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.moreMenuOpen.set(false);
+  }
+
+  toggleMoreMenu(event: Event): void {
+    event.stopPropagation();
+    this.moreMenuOpen.update((open) => !open);
+  }
+
+  onDeleteFromMenu(): void {
+    this.moreMenuOpen.set(false);
+    this.deleteAssignment.emit();
+  }
 
   onRequestChangesSubmit(comment: string): void {
     this.requestChanges.emit(comment);

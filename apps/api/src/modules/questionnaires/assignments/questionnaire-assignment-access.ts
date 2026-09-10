@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import {
   EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES,
+  isQuestionnairePostSubmitStatus,
   type QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 import type { User } from '../../../platform/identity/user.entity';
@@ -14,7 +15,7 @@ import {
   canAttachAssignment,
   canCancelAssignment,
   canCloseAssignment,
-  canStartRevisionFromStatus,
+  canStartRevisionFromState,
   isOwnerEditableStatus,
 } from './questionnaire-assignment-transitions';
 import {
@@ -176,7 +177,7 @@ export function computeDetailCapabilities(input: {
     };
   }
 
-  if (status === 'closed' || status === 'cancelled') {
+  if (status === 'cancelled') {
     return {
       ...EMPTY_CAPS,
       canDelete,
@@ -200,21 +201,23 @@ export function computeDetailCapabilities(input: {
   const canEditDraft = ownerEdit || onBehalfEdit;
   const canSubmit = canEditDraft;
 
-  const canReopenSelf =
-    isOwner && canCompleteSelf && canStartRevisionFromStatus(status);
+  const revisionEligible = canStartRevisionFromState({
+    status,
+    latestSubmission: latestSubmission ?? null,
+  });
 
-  const canStartRevision = onBehalf && canStartRevisionFromStatus(status);
+  const canReopenSelf =
+    isOwner && canCompleteSelf && revisionEligible;
+
+  const canStartRevision = onBehalf && revisionEligible;
 
   const canRequestChanges =
-    canReviewPerm &&
-    canStartRevisionFromStatus(status) &&
-    !canEditDraft;
+    canReviewPerm && revisionEligible && !canEditDraft;
 
   const canReview =
     canReviewPerm &&
-    (status === 'submitted' ||
-      status === 'changes_requested' ||
-      status === 'reviewed');
+    isQuestionnairePostSubmitStatus(String(status)) &&
+    latestSubmission?.reviewStatus === 'pending';
 
   const canResolveChangeRequest =
     canEditDraft &&
@@ -277,7 +280,7 @@ export function computeListLifecycleCapabilities(input: {
       canOpen: true,
       canAssign,
       canAttach: false,
-      canCancel: false,
+      canCancel: canManage && canCancelAssignment(status),
       canClose: false,
       canDelete,
       canStartFill: false,

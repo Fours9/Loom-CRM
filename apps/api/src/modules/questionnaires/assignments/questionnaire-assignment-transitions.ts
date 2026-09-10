@@ -1,3 +1,7 @@
+import {
+  isQuestionnairePostSubmitStatus,
+  type QuestionnaireAssignmentStatus as ContractStatus,
+} from '@loom/contracts-questionnaires';
 import type { QuestionnaireAssignmentStatus } from '../questionnaire.enums';
 
 const CANCELLABLE_STATUSES = new Set<QuestionnaireAssignmentStatus>([
@@ -6,6 +10,8 @@ const CANCELLABLE_STATUSES = new Set<QuestionnaireAssignmentStatus>([
   'submitted',
   'changes_requested',
   'reviewed',
+  /** Post-submit lock-in (submit→closed); same detach as legacy submitted. */
+  'closed',
 ]);
 
 const CLOSABLE_STATUSES = new Set<QuestionnaireAssignmentStatus>([
@@ -21,11 +27,6 @@ const OWNER_EDITABLE_STATUSES = new Set<QuestionnaireAssignmentStatus>([
   'assigned',
   'in_progress',
   'changes_requested',
-]);
-
-const REVISION_START_STATUSES = new Set<QuestionnaireAssignmentStatus>([
-  'submitted',
-  'reviewed',
 ]);
 
 export function canCancelAssignment(
@@ -62,10 +63,18 @@ export function isOwnerEditableStatus(
   return OWNER_EDITABLE_STATUSES.has(status as QuestionnaireAssignmentStatus);
 }
 
-export function canStartRevisionFromStatus(
-  status: QuestionnaireAssignmentStatus | string,
-): boolean {
-  return REVISION_START_STATUSES.has(status as QuestionnaireAssignmentStatus);
+/**
+ * Revision / request-changes eligibility from assignment + latest submission facts.
+ * Fail-closed: post-submit without a submission (manual close / integrity anomaly) → false.
+ */
+export function canStartRevisionFromState(input: {
+  status: QuestionnaireAssignmentStatus | string | ContractStatus;
+  latestSubmission: unknown | null | undefined;
+}): boolean {
+  if (!isQuestionnairePostSubmitStatus(String(input.status))) {
+    return false;
+  }
+  return input.latestSubmission != null;
 }
 
 export const QUESTIONNAIRE_ASSIGNMENT_AUDIT = {

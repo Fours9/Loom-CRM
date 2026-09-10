@@ -28,6 +28,7 @@ import type { MatrixAvailableSkill } from './fields/questionnaire-skills-matrix-
 import { QuestionnaireSaveStatusComponent } from './questionnaire-save-status.component';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { shouldShowReviewSubmit } from './questionnaire-fill-session.policy';
+import { isQuestionnairePostSubmitStatus } from '@loom/contracts-questionnaires';
 import { validateFieldValue } from './validation/questionnaire-validation';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { resolveQuestionnaireFieldDisplay } from './display/questionnaire-display-value';
@@ -76,10 +77,10 @@ const ORG_SYNC_KEYS = [
               text="Лише перегляд"
               visual="saved"
             />
-            @if (store.assignmentStatus() === 'submitted') {
-              <span class="read-only-hint">Анкету надіслано. Перегляд відповідей.</span>
-            } @else if (store.assignmentStatus() === 'reviewed') {
-              <span class="read-only-hint">Анкету переглянуто. Перегляд відповідей.</span>
+            @if (isPostSubmitLocked()) {
+              <span class="read-only-hint"
+                >Анкету закрито. Перегляд відповідей.</span
+              >
             }
           </div>
         }
@@ -675,6 +676,11 @@ export class QuestionnaireWizardShellComponent {
 
   readonly introKey = QUESTIONNAIRE_INTRO_STEP;
   readonly reviewKey = QUESTIONNAIRE_REVIEW_STEP;
+
+  isPostSubmitLocked(): boolean {
+    const status = this.store.assignmentStatus();
+    return !!status && isQuestionnairePostSubmitStatus(status);
+  }
 
   /** Pending questionnaire extras synced via sync-position-context (not null ratings). */
   readonly desiredExtraSkillCodes = signal<string[]>([]);

@@ -79,6 +79,17 @@ export type QuestionnaireDirectorySortBy =
 export type QuestionnaireAssignmentStatus =
   (typeof QUESTIONNAIRE_ASSIGNMENT_STATUSES)[number];
 
+/** Post-submit lock-in statuses (canonical `closed` + legacy submitted/reviewed). */
+export type QuestionnairePostSubmitStatus = 'closed' | 'submitted' | 'reviewed';
+
+export function isQuestionnairePostSubmitStatus(
+  status: string,
+): status is QuestionnairePostSubmitStatus {
+  return (
+    status === 'closed' || status === 'submitted' || status === 'reviewed'
+  );
+}
+
 export const QUESTIONNAIRE_PROPOSAL_STATUSES = [
   'pending',
   'accepted',
@@ -242,10 +253,6 @@ export type ReviewQuestionnaireSubmissionRequest = {
   reviewComment?: string | null;
 };
 
-export type RequestQuestionnaireChangesRequest = {
-  reviewComment: string;
-};
-
 export type ResolveQuestionnaireChangesRequest =
   | { outcome: 'completed'; expectedDraftRevision: number }
   | { outcome: 'declined' };
@@ -336,9 +343,9 @@ export type QuestionnaireAssignmentDetail = {
   capabilities: {
     canEditDraft: boolean;
     canSubmit: boolean;
-    /** Owner may reopen a submitted/reviewed assignment for further edits. */
+    /** Owner may reopen a closed (post-submit + latest submission) assignment. */
     canReopenSelf: boolean;
-    /** Admin (CompleteAny) may start a revision; also opens owner edit (shared revision). */
+    /** Admin (CompleteAny) may start a revision when post-submit + latest submission. */
     canStartRevision: boolean;
     canRequestChanges: boolean;
     canReview: boolean;

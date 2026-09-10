@@ -30,6 +30,16 @@ html {
   scrollbar-gutter: stable;
 }
 
+html.overlay-scroll-locked,
+html.overlay-scroll-locked body {
+  overflow: hidden !important;
+}
+
+/* Modal backdrops: stop wheel/touch overscroll from chaining to the page. */
+.backdrop {
+  overscroll-behavior: contain;
+}
+
 a {
   color: inherit;
   text-decoration: none;

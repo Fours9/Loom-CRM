@@ -81,7 +81,9 @@ type AssignmentWriteDto = {
   probationStartDate?: string | null;
   probationEndDate?: string | null;
   comment?: string | null;
+  /** Org leadership write (ADR 0011) — wire SoT EmploymentManagementKind. */
   managementKind?: 'none' | 'departments' | 'direction';
+  /** @deprecated use managementKind. */
   isDepartmentManager?: boolean;
   managedDepartmentIds?: string[];
 };

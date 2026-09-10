@@ -91,7 +91,7 @@ PW-паритетна картка `/absences/employees/:id`: Напрямок /
 
 - `Дати` редагує employee-level `hiredAt` через `PATCH /employees/:id/employment-meta`. Це дата початку роботи / найму і вона не змінюється автоматично від переводів.
 - `Посада` (підвкладка вкладки **Робота**) використовує shared org catalog snapshot (`directions -> departments -> positions`) і довідники `workFormats` / `employmentTypes`.
-- Створення й редагування призначення — **модалка** (`EmploymentAssignmentDialogComponent`): один exclusive dialog slot (`create` | `edit`), крестик / Escape / backdrop close, scrollable body, кнопка **Створити** або **Зберегти**. Поле **Коментар** → API/DB `comment` (не плутати з `employees.comment`). Historical audit metadata may still have `changeReason`; new assignment API/domain/audit uses `comment`; no backfill. Write path лишається `EmploymentAssignmentsApiService` → `EmployeeProfileService`.
+- Створення й редагування призначення — **модалка** (`EmploymentAssignmentDialogComponent`): один exclusive dialog slot (`create` | `edit`), крестик / Escape / backdrop close, scrollable body, кнопка **Створити** або **Зберегти**. Поле **Коментар** → API/DB `comment` (не плутати з `employees.comment`). Historical audit metadata may still have `changeReason`; new assignment API/domain/audit uses `comment`; no backfill. Write path: `EmploymentAssignmentsApiService` → `POST|PATCH …/employment-assignments` з `managementKind` (+ `managedDepartmentIds`) на wire ([ADR 0011](../adr/0011-org-leadership-vs-account-role.md)); DTO AssertNever ↔ contracts.
 - `companyId` більше не вводиться в UI вручну; компанія лишається read-model, derived з обраного напрямку.
 - Майбутня дата переводу створює `planned` assignment. Поточне активне призначення не перемикається відразу; activation виконується lifecycle service.
 - Якщо planned assignment не може активуватися на дату старту, запис лишається `planned` і показує `activationBlockedReason` в історії/деталях.
@@ -101,9 +101,9 @@ PW-паритетна картка `/absences/employees/:id`: Напрямок /
 **Status:** In progress / Partially implemented.
 
 **Shipped:**
-- foundation: module `apps/api/src/modules/questionnaires/`; contracts `@loom/contracts-questionnaires`; permissions; seed `employee-360` v1 (steps: особисті дані · контакти · … · сильні сторони …; **без** «робота в компанії» — лише Managing); assign/list/detail/draft PATCH (optimistic revision)/submit/request-changes/review; profile proposals + accept/reject via `EmployeeProfileService`
+- foundation: module `apps/api/src/modules/questionnaires/`; contracts `@loom/contracts-questionnaires`; permissions; seed `employee-360` v1 (steps: особисті дані · контакти · … · сильні сторони …; **без** «робота в компанії» — лише Managing); assign/list/detail/draft PATCH (optimistic revision)/submit→`closed`/submission `review` (approve|request-changes)/resolve-changes; profile proposals + accept/reject via `EmployeeProfileService`
 - assign panel + snapshot summary on People «Анкети»
-- **fill wizard (PR-4):** immersive chrome-less `/questionnaires/:id` (route `hideAppChrome`); FillChrome + section progress rail (`fill/progress/`; UX grouping ≠ linear step order); sidebar stepper removed; schema-driven wizard (Intro → schema steps → Review); serialized autosave; unified manual save via RevisionCoordinator; 409 conflict UI; `flush()` before submit; browse SoT in `questionnaire-step-browse` + DraftStore; FE entry `questionnaires/public-api.ts` (+ `buildQuestionnaireAssignmentLink` only — wizard/store private). **First-fill** (`assigned`/`in_progress` + `canEditDraft` + 0 submissions) auto-begins edit session **inside** `store.load()` before step resolve (linear gating). Lock-in on Review = «Надіслати» (`flush` + POST submit); revision on other steps = chrome «Зберегти і закрити»; `changes_requested` / submitted|reviewed stay view-first. List `canStartFill` → People «Почати».
+- **fill wizard (PR-4):** immersive chrome-less `/questionnaires/:id` (route `hideAppChrome`); FillChrome + section progress rail (`fill/progress/`; UX grouping ≠ linear step order); sidebar stepper removed; schema-driven wizard (Intro → schema steps → Review); serialized autosave; unified manual save via RevisionCoordinator; 409 conflict UI; `flush()` before submit; browse SoT in `questionnaire-step-browse` + DraftStore; FE entry `questionnaires/public-api.ts` (+ `buildQuestionnaireAssignmentLink` only — wizard/store private). **First-fill** (`assigned`/`in_progress` + `canEditDraft` + 0 submissions) auto-begins edit session **inside** `store.load()` before step resolve (linear gating). Lock-in on Review = «Надіслати» (`flush` + POST submit → **`closed`**); revision on other steps = chrome «Зберегти і закрити»; `changes_requested` / post-submit `closed` stay view-first (edit via reopen/start-revision). Delete in chrome **⋮** + confirm. List `canStartFill` → People «Почати».
 - **schema UX:** steps `family` + `celebration_dates`; `visibleWhen`; layout groups; from/to periods; preferred_language multi; submit projects visible answers; `@loom/questionnaire-schema`; startup composition root; fail-safe `pnpm questionnaires:reset` ([runbook](../dev/questionnaire-test-reset.md)); `family.other_dates` repeating list (Назва/З/По, **snapshot**, не профіль)
 - **revision + proposals:** owner `POST .../reopen` vs HR request-changes (different submission review side effects); pending → `superseded` on reopen; atomic submit+proposal generate; proposals nested under assignment; UI «Зберегти і закрити» = new immutable submission
 - **request-changes UX** — див. підрозділ нижче
@@ -119,23 +119,24 @@ PW-паритетна картка `/absences/employees/:id`: Напрямок /
 
 Спільний шлях ревʼюера «потрібні правки» (не плутати з owner `reopen` / admin `start-revision`). Статус assignment `changes_requested` може зʼявитися і без reviewer comment — тоді **немає** фальшивого банера «Потрібні зміни».
 
+**Submit = closed.** Після «Надіслати» assignment.status = `closed` (не `submitted`). Revision / request-changes / review потребують **latest submission** (`canStartRevisionFromState`). Manual close без submission — terminal для revision/review (caps = false). **Відкріпити (cancel)** з `closed` дозволено (як раніше з `submitted`).
+
 #### Кнопка «Запросити зміни»
 
-- Capability: `QuestionnairesReview` + status ∈ `{submitted, reviewed}` + **`!canEditDraft`** (немає **прямого** редагування чернетки в **поточному** статусі). Це **не** `!canStartRevision`.
-- На поточній матриці ролей Admin у `submitted|reviewed` зазвичай уже має `canEditDraft === false`, тож кнопку бачить; далі може сам відкрити редагування через lifecycle і **сам** резолвити свій запит (self-resolve дозволено).
-- UI: popover «Що потрібно змінити?» (обовʼязковий trim-коментар, max 2000); після успіху — reload **без** `beginEditSession` (ревʼюер лишається в перегляді).
+- Capability: `QuestionnairesReview` + `canStartRevisionFromState` (post-submit **з** latest) + **`!canEditDraft`**. Дозволено і після `approved` latest (заміна старого request-changes з `reviewed`).
+- `canReview` (approve): Review + post-submit + `latest.reviewStatus === 'pending'`.
+- UI: popover «Що потрібно змінити?» (обовʼязковий trim-коментар, max 2000); після успіху — reload **без** `beginEditSession`. Delete — у меню **⋮** з confirm.
 
 #### API
 
 | Endpoint | Примітка |
 | --- | --- |
-| `POST …/assignments/:id/request-changes` | Body: `{ reviewComment: string }` (обовʼязково) |
-| `POST …/submissions/:id/review` з `reviewStatus: changes_requested` | Той самий обовʼязковий comment; **лише latest** submission, інакше **409** |
-| `POST …/assignments/:id/resolve-changes` | `{ outcome: 'completed', expectedDraftRevision }` або `{ outcome: 'declined' }` |
+| `POST …/submissions/:id/review` | `approved` **або** `changes_requested` (обовʼязковий comment); path id = optimistic identity; TX `=== latest` інакше **409** |
+| `POST …/assignments/:id/resolve-changes` | `{ outcome: 'completed', expectedDraftRevision }` або `{ outcome: 'declined' }` → `closed` |
 
-Доменний fail-closed: whitespace-only comment → помилка навіть якщо HTTP-валідація обійдена. У `applyReopenTransition` для `reviewer_request_changes` також **скидаються** `changeRequestResolution` / `resolvedBy` / `resolvedAt` (повторний request після declined знову активний). На одному submission зберігається лише **останній** цикл запиту; повна історія циклів — окрема entity (поза скоупом).
+Assignment-scoped `POST …/request-changes` **прибрано** (єдиний reviewer-write path).
 
-Summary (list `latestSubmission`, detail `submissions`, directory): поля `reviewComment`, **`reviewedByUserId`**, **`changeRequestResolution`** (`completed` \| `declined` \| `null`). `resolvedBy` / `resolvedAt` на FE не віддаються.
+Доменний fail-closed: whitespace-only comment → помилка. У `applyReviewTransition` для request_changes **скидаються** `changeRequestResolution` / `resolvedBy` / `resolvedAt`. `assignment.reviewedAt`: null на submit / request-changes / decline; `now` на approve latest.
 
 #### Активний reviewer request (`hasActiveReviewerRequest`)
 
@@ -163,14 +164,14 @@ assignment.status === 'changes_requested'
 | `questionnaire.changes_completed` | `reviewedByUserId` запиту (skip якщо === actor) | Resolve `completed` |
 | `questionnaire.changes_declined` | те саме | Resolve `declined` |
 
-Оцінка `canEditDraft(assignedBy)` — **після** transition (status уже `changes_requested`). До transition у `submitted|reviewed` майже завжди `false` → хибний fan-out на всіх Admin. Крайній кейс: actor === assignedBy і після transition може редагувати → **0** notifications (очікувано).
+Оцінка `canEditDraft(assignedBy)` — **після** transition (status уже `changes_requested`).
 
 `payload.assignmentId` → deep link `/questionnaires/:id`. Absences: `payload.requestId` → `/absences/requests/:id` (FE mapper з raw `payload`).
 
 #### Resolve
 
-- **`completed`:** lock assignment + response + active submission; `response.revision === expectedDraftRevision` (інакше **409**, без snapshot/proposals/notify); `submitWithinTransaction` у тій самій TX; resolution на **тому** submission, що тримав запит; notify ревʼюеру.
-- **`declined`:** assignment → `submitted`; resolution = `declined` на submission; notify ревʼюеру; без нового snapshot.
+- **`completed`:** lock assignment + response + active submission; `response.revision === expectedDraftRevision` (інакше **409**, без snapshot/proposals/notify); `submitWithinTransaction` у тій самій TX → **`closed`** + new pending; resolution на **тому** submission, що тримав запит; notify ревʼюеру.
+- **`declined`:** assignment → `closed` + `reviewedAt=null`; resolution = `declined` на submission; notify ревʼюеру; без нового snapshot.
 - Draft PATCH — атомарний CAS (`UPDATE … WHERE revision = :expected`); mismatch → 409.
 
 **Remaining (request-changes):** окрема entity циклів запиту; email/push; Playwright e2e матриця request→decline→re-request.

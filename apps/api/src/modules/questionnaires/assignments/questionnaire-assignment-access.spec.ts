@@ -1,7 +1,7 @@
 import {
   canCancelAssignment,
   canCloseAssignment,
-  canStartRevisionFromStatus,
+  canStartRevisionFromState,
 } from './questionnaire-assignment-transitions';
 import { attachmentStateForStatus } from './questionnaire-assignment-attachment-state';
 import { createdAtRangeBounds } from './questionnaire-assignment-list.query';
@@ -57,10 +57,10 @@ describe('createdAtRangeBounds', () => {
 });
 
 describe('close/cancel transitions', () => {
-  it('can close cancelled but not closed', () => {
+  it('can close cancelled but not closed; can cancel closed (post-submit detach)', () => {
     expect(canCloseAssignment('cancelled')).toBe(true);
     expect(canCloseAssignment('closed')).toBe(false);
-    expect(canCancelAssignment('closed')).toBe(false);
+    expect(canCancelAssignment('closed')).toBe(true);
   });
 });
 
@@ -140,13 +140,14 @@ describe('computeDetailCapabilities matrix', () => {
     expect(ownerCaps.canDelete).toBe(false);
   });
 
-  it('closed blocks all detail mutations', () => {
+  it('closed without submission blocks revision/review (manual close)', () => {
     const caps = computeDetailCapabilities({
       actor,
       employee,
       status: 'closed',
       permissions: perms(UserRole.Admin),
       access: access(true),
+      latestSubmission: null,
     });
     expect(caps).toEqual({
       canEditDraft: false,
@@ -160,13 +161,78 @@ describe('computeDetailCapabilities matrix', () => {
     });
   });
 
-  it('canRequestChanges requires review + revision status + !canEditDraft', () => {
+  it('closed + pending latest: canReview and canRequestChanges', () => {
+    const pending = {
+      reviewStatus: 'pending',
+      reviewComment: null,
+      reviewedByUserId: null,
+      changeRequestResolution: null,
+    };
     const reviewer = computeDetailCapabilities({
       actor: { id: 'u2', role: UserRole.Admin } as User,
       employee,
-      status: 'submitted',
+      status: 'closed',
       permissions: perms(UserRole.Admin),
       access: access(false),
+      latestSubmission: pending,
+    });
+    expect(reviewer.canReview).toBe(true);
+    expect(reviewer.canRequestChanges).toBe(true);
+    expect(reviewer.canStartRevision).toBe(true);
+  });
+
+  it('closed + approved latest: !canReview but canRequestChanges', () => {
+    const approved = {
+      reviewStatus: 'approved',
+      reviewComment: null,
+      reviewedByUserId: 'u2',
+      changeRequestResolution: null,
+    };
+    const caps = computeDetailCapabilities({
+      actor: { id: 'u2', role: UserRole.Admin } as User,
+      employee,
+      status: 'closed',
+      permissions: perms(UserRole.Admin),
+      access: access(false),
+      latestSubmission: approved,
+    });
+    expect(caps.canReview).toBe(false);
+    expect(caps.canRequestChanges).toBe(true);
+  });
+
+  it('closed + declined resolution still revision-eligible', () => {
+    const declined = {
+      reviewStatus: 'changes_requested',
+      reviewComment: 'fix',
+      reviewedByUserId: 'u2',
+      changeRequestResolution: 'declined' as const,
+    };
+    const caps = computeDetailCapabilities({
+      actor: { id: 'u2', role: UserRole.Admin } as User,
+      employee,
+      status: 'closed',
+      permissions: perms(UserRole.Admin),
+      access: access(false),
+      latestSubmission: declined,
+    });
+    expect(caps.canRequestChanges).toBe(true);
+    expect(caps.canReview).toBe(false);
+  });
+
+  it('canRequestChanges requires review + revision state + !canEditDraft', () => {
+    const pending = {
+      reviewStatus: 'pending',
+      reviewComment: null,
+      reviewedByUserId: null,
+      changeRequestResolution: null,
+    };
+    const reviewer = computeDetailCapabilities({
+      actor: { id: 'u2', role: UserRole.Admin } as User,
+      employee,
+      status: 'closed',
+      permissions: perms(UserRole.Admin),
+      access: access(false),
+      latestSubmission: pending,
     });
     expect(reviewer.canEditDraft).toBe(false);
     expect(reviewer.canRequestChanges).toBe(true);
@@ -190,12 +256,19 @@ describe('computeDetailCapabilities matrix', () => {
   });
 
   it('separates canReopenSelf and canStartRevision', () => {
+    const pending = {
+      reviewStatus: 'pending',
+      reviewComment: null,
+      reviewedByUserId: null,
+      changeRequestResolution: null,
+    };
     const owner = computeDetailCapabilities({
       actor: { id: 'u1', role: UserRole.Employee } as User,
       employee,
-      status: 'submitted',
+      status: 'closed',
       permissions: perms(UserRole.Employee),
       access: access(true),
+      latestSubmission: pending,
     });
     expect(owner.canReopenSelf).toBe(true);
     expect(owner.canStartRevision).toBe(false);
@@ -203,26 +276,38 @@ describe('computeDetailCapabilities matrix', () => {
     const admin = computeDetailCapabilities({
       actor,
       employee,
-      status: 'submitted',
+      status: 'closed',
       permissions: perms(UserRole.Admin),
       access: access(false),
+      latestSubmission: pending,
     });
     expect(admin.canReopenSelf).toBe(false);
     expect(admin.canStartRevision).toBe(true);
-    expect(canStartRevisionFromStatus('submitted')).toBe(true);
+    expect(
+      canStartRevisionFromState({
+        status: 'closed',
+        latestSubmission: pending,
+      }),
+    ).toBe(true);
+    expect(
+      canStartRevisionFromState({
+        status: 'closed',
+        latestSubmission: null,
+      }),
+    ).toBe(false);
   });
 
-  it('closed list caps allow only delete + open', () => {
+  it('closed list caps allow open + delete + cancel (detach), not close/attach', () => {
     const caps = listLifecycle({
       actor,
       status: 'closed',
-      employeeId: null,
+      employeeId: 'e1',
       detachedFromEmployeeId: null,
       permissions: perms(UserRole.Admin),
     });
     expect(caps.canDelete).toBe(true);
     expect(caps.canOpen).toBe(true);
-    expect(caps.canCancel).toBe(false);
+    expect(caps.canCancel).toBe(true);
     expect(caps.canClose).toBe(false);
     expect(caps.canAttach).toBe(false);
   });

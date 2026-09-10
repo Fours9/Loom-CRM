@@ -1,4 +1,5 @@
-import { Component, HostListener, input, output } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject, input, output } from '@angular/core';
+import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 
 @Component({
   selector: 'loom-catalog-edit-dialog',
@@ -111,12 +112,21 @@ import { Component, HostListener, input, output } from '@angular/core';
     `,
   ],
 })
-export class CatalogEditDialogComponent {
+export class CatalogEditDialogComponent implements OnInit, OnDestroy {
+  private readonly scrollLock = inject(OverlayScrollLockService);
   readonly headingId = input.required<string>();
   readonly title = input.required<string>();
   readonly error = input('');
   readonly closed = output<void>();
   private backdropPress = false;
+
+  ngOnInit(): void {
+    this.scrollLock.acquire();
+  }
+
+  ngOnDestroy(): void {
+    this.scrollLock.release();
+  }
 
   onBackdropPointerDown(event: Event): void {
     this.backdropPress = event.target === event.currentTarget;

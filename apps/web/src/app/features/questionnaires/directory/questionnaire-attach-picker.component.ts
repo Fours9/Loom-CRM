@@ -1,8 +1,9 @@
-import { Component, computed, input, output } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, input, output } from '@angular/core';
 import type { QuestionnaireAttachConstraint } from '@loom/contracts-questionnaires';
 import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnaireEmployeeTypeaheadComponent } from '../shared/questionnaire-employee-typeahead.component';
 import { signal } from '@angular/core';
+import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
 
 /**
  * Modal for attaching an unattached/detached assignment to any employee.
@@ -122,7 +123,8 @@ import { signal } from '@angular/core';
     `,
   ],
 })
-export class QuestionnaireAttachPickerComponent {
+export class QuestionnaireAttachPickerComponent implements OnInit, OnDestroy {
+  private readonly scrollLock = inject(OverlayScrollLockService);
   readonly constraint = input<QuestionnaireAttachConstraint>(null);
   readonly busy = input(false);
   readonly error = input<string | null>(null);
@@ -138,6 +140,14 @@ export class QuestionnaireAttachPickerComponent {
   );
 
   private backdropPress = false;
+
+  ngOnInit(): void {
+    this.scrollLock.acquire();
+  }
+
+  ngOnDestroy(): void {
+    this.scrollLock.release();
+  }
 
   onBackdropPointerDown(event: MouseEvent): void {
     this.backdropPress = event.target === event.currentTarget;

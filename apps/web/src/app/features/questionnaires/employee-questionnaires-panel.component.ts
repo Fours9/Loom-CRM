@@ -14,6 +14,7 @@ import type {
   QuestionnaireAssignmentListItem,
   QuestionnaireProfileProposalItem,
 } from '@loom/contracts-questionnaires';
+import { isQuestionnairePostSubmitStatus } from '@loom/contracts-questionnaires';
 import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnairesApiService } from './core/questionnaires-api.service';
 import { QuestionnaireSnapshotSummaryComponent } from './questionnaire-snapshot-summary.component';
@@ -164,6 +165,17 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                               (click)="closeAssignmentFromMenu(item.id)"
                             >
                               Закрити
+                            </button>
+                          }
+                          @if (item.capabilities.canDelete) {
+                            <button
+                              type="button"
+                              role="menuitem"
+                              class="danger-item"
+                              [disabled]="busyAssignmentId() === item.id"
+                              (click)="deleteAssignmentFromMenu(item.id)"
+                            >
+                              Видалити
                             </button>
                           }
                         </div>
@@ -418,6 +430,9 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         opacity: 0.55;
         cursor: not-allowed;
       }
+      .more-menu .danger-item {
+        color: #b91c1c;
+      }
       .meta {
         display: flex;
         flex-wrap: wrap;
@@ -633,7 +648,11 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   }
 
   hasLifecycleMoreActions(item: QuestionnaireAssignmentListItem): boolean {
-    return item.capabilities.canCancel || item.capabilities.canClose;
+    return (
+      item.capabilities.canCancel ||
+      item.capabilities.canClose ||
+      item.capabilities.canDelete
+    );
   }
 
   toggleMoreMenu(assignmentId: string, event: Event): void {
@@ -651,6 +670,11 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   closeAssignmentFromMenu(id: string): void {
     this.moreMenuAssignmentId.set(null);
     this.closeAssignment(id);
+  }
+
+  deleteAssignmentFromMenu(id: string): void {
+    this.moreMenuAssignmentId.set(null);
+    this.deleteAssignment(id);
   }
 
   statusLabel(status: string): string {
@@ -674,11 +698,7 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
 
   showProposedChanges(item: QuestionnaireAssignmentListItem): boolean {
     if (this.proposalsForAssignment(item.id).length > 0) return true;
-    return (
-      item.status === 'submitted' ||
-      item.status === 'reviewed' ||
-      item.status === 'closed'
-    );
+    return isQuestionnairePostSubmitStatus(item.status);
   }
 
   onSummaryToggle(assignmentId: string, event: Event): void {
@@ -803,6 +823,17 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
       return;
     }
     this.runLifecycle(id, this.api.closeAssignment(id), 'Не вдалося закрити анкету');
+  }
+
+  deleteAssignment(id: string): void {
+    if (
+      !window.confirm(
+        'Видалити анкету без можливості відновлення? Буде видалено чернетку, усі подання та пропозиції. Уже застосовані до профілю зміни не скасовуються.',
+      )
+    ) {
+      return;
+    }
+    this.runLifecycle(id, this.api.deleteAssignment(id), 'Не вдалося видалити анкету');
   }
 
   private runLifecycle(

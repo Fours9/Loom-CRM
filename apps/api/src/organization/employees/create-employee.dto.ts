@@ -1,4 +1,8 @@
-import { Type } from 'class-transformer';
+import type {
+  CreateEmployeeRequest,
+  EmployeeCreateScheduleDay,
+  EmploymentManagementKind,
+} from '@loom/contracts-employees';
 import {
   IsArray,
   IsBoolean,
@@ -13,11 +17,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import type {
-  CreateEmployeeRequest,
-  EmployeeCreateScheduleDay,
-  EmploymentManagementKind,
-} from '@loom/contracts-employees';
+import { Type } from 'class-transformer';
 
 type AssertNever<T extends never> = T;
 

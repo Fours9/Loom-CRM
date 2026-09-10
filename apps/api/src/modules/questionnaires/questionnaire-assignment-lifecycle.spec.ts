@@ -615,7 +615,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         events.push('submit');
         proposalRows = [oldPending, newPending];
         newPending.status = 'pending';
-        assignment.status = 'submitted';
+        assignment.status = 'closed';
         return { id: 'sub-new', submissionNumber: 2 };
       });
 

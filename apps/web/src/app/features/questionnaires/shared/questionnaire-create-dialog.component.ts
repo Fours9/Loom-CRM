@@ -1,5 +1,6 @@
 import {
   Component,
+  OnDestroy,
   OnInit,
   computed,
   inject,
@@ -19,6 +20,7 @@ import {
   questionnaireTypeDescription,
   questionnaireTypeLabel,
 } from '../questionnaire-labels';
+import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
@@ -186,8 +188,9 @@ import { firstValueFrom } from 'rxjs';
     `,
   ],
 })
-export class QuestionnaireCreateDialogComponent implements OnInit {
+export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
   private readonly api = inject(QuestionnairesApiService);
+  private readonly scrollLock = inject(OverlayScrollLockService);
 
   readonly dialogTitle = input('Створити анкету');
   readonly prefillEmployee = input<Pick<
@@ -238,6 +241,7 @@ export class QuestionnaireCreateDialogComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.scrollLock.acquire();
     const prefill = this.prefillEmployee();
     if (prefill) this.employeeId.set(prefill.id);
 
@@ -254,6 +258,10 @@ export class QuestionnaireCreateDialogComponent implements OnInit {
       },
       error: () => this.error.set('Не вдалося завантажити шаблони'),
     });
+  }
+
+  ngOnDestroy(): void {
+    this.scrollLock.release();
   }
 
   onTemplateChange(code: string): void {

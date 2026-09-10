@@ -108,9 +108,8 @@ export type CreateEmployeeRequest = {
   /** adminEquivalent; numbering intent even without createAccount. Assigned to User only when createAccount. */
   accountRoleId?: EntityId;
   /**
-   * Explicit EA leadership at create (prefix E/M + managed scope).
-   * Independent of AccountRole / createAccount (ADR 0011).
-   * Omitted → derive from Position.managementKindTemplate.
+   * Explicit EA leadership at create (seeded from Position template on FE).
+   * Independent of AccountRole (ADR 0011). Omitted → Position.managementKindTemplate.
    */
   managementKind?: EmploymentManagementKind;
   schedule?: EmployeeCreateScheduleDay[];

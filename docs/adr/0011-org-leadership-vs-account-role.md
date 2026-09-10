@@ -6,7 +6,7 @@ Visibility (кого бачиш) і account access (permissions + UI surfaces) �
 
 ## Decision
 
-1. **Посада ≠ роль акаунту.** Org leadership = `managementKind` на Position template / active EA (`none` | `departments` | `direction`). Account access = `account_roles` + `users.account_role_id` + surfaces.
+1. **Посада ≠ роль акаунту.** Org leadership = `managementKind` на Position template / active EA (`none` | `departments` | `direction`). Account access = `account_roles` + `users.account_role_id` + surfaces. Assignment create/update HTTP body accepts `managementKind` (+ optional `managedDepartmentIds`); wire DTO SoT = `CreateEmploymentAssignmentRequest` / `UpdateEmploymentAssignmentRequest` (`employment-assignment.write.dto.ts`, AssertNever).
 2. **Platform AccessControl** володіє `account_roles`, `app_surfaces`, joins і `AuthorizationContextService`. Organization читає `isAdminEquivalent` / permissions через context; Platform ↛ Organization.
 3. **`AuthorizationContextService.resolve`** — єдиний authZ SoT для Jwt/`/me`, PermissionsGuard, PermissionService, Access, Positions manage, Settings roles API. `users.role` — compatibility mirror only.
 4. **Немає окремого `adminAccess` toggle.** Full admin = system role `admin` або custom з `is_admin_equivalent=true`.

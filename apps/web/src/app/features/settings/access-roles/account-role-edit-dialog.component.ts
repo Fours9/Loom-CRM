@@ -1,8 +1,11 @@
 import {
   Component,
   HostListener,
+  OnDestroy,
+  OnInit,
   computed,
   effect,
+  inject,
   input,
   output,
   signal,
@@ -19,6 +22,7 @@ import {
   groupSurfaces,
   type SurfaceGroupVm,
 } from './surface-catalog';
+import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
 
 const CONFIDENTIAL_VIEW = 'confidential.view';
 
@@ -281,7 +285,8 @@ const CONFIDENTIAL_VIEW = 'confidential.view';
     `,
   ],
 })
-export class AccountRoleEditDialogComponent {
+export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
+  private readonly scrollLock = inject(OverlayScrollLockService);
   /** null = create a custom role. */
   readonly role = input<AccountRole | null>(null);
   readonly surfaces = input<readonly AppSurface[]>([]);
@@ -318,6 +323,14 @@ export class AccountRoleEditDialogComponent {
     const role = this.role();
     if (!role) return true;
     return role.canEditConfidentialGrant;
+  }
+
+  ngOnInit(): void {
+    this.scrollLock.acquire();
+  }
+
+  ngOnDestroy(): void {
+    this.scrollLock.release();
   }
 
   constructor() {

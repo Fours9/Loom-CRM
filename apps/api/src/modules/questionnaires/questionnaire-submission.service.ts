@@ -42,6 +42,7 @@ import {
   applyReopenTransition,
   toSubmissionSummaryDto,
 } from './reopen/questionnaire-reopen-transition';
+import { applyReviewTransition } from './reopen/questionnaire-review-transition';
 import {
   collectChangesRequestedRecipientIds,
   hasActiveReviewerRequest,
@@ -281,7 +282,7 @@ export class QuestionnaireSubmissionService {
       }),
     );
 
-    assignment.status = 'submitted';
+    assignment.status = 'closed';
     assignment.submittedAt = now;
     assignment.reviewedAt = null;
     if (!assignment.startedAt) assignment.startedAt = now;
@@ -292,87 +293,8 @@ export class QuestionnaireSubmissionService {
     return created;
   }
 
-  async requestChanges(
-    actor: User,
-    assignmentId: string,
-    input: { reviewComment: string },
-  ) {
-    if (!this.permissions.has(actor.role, Permission.QuestionnairesReview)) {
-      throw new ForbiddenException('Cannot request changes');
-    }
-
-    const comment = input.reviewComment?.trim() ?? '';
-    if (!comment) {
-      throw new BadRequestException('Review comment is required');
-    }
-
-    const assignment = await this.assignments.findOne({
-      where: { id: assignmentId },
-      relations: { templateVersion: { template: true } },
-    });
-    if (!assignment) throw new NotFoundException('Assignment not found');
-    if (!assignment.employeeId) {
-      throw new BadRequestException('Assignment has no attached employee');
-    }
-
-    const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
-    await this.access.requireCanView(actor, employee);
-    requireActorAccessAssignmentType({
-      actor,
-      employee,
-      templateType: assignment.templateVersion.template.type,
-      permissions: this.permissions,
-      access: this.access,
-    });
-
-    const caps = computeDetailCapabilities({
-      actor,
-      employee,
-      status: assignment.status,
-      permissions: this.permissions,
-      access: this.access,
-    });
-    if (!caps.canRequestChanges) {
-      throw new ForbiddenException('Cannot request changes');
-    }
-
-    const templateTitle =
-      assignment.title?.trim() ||
-      assignment.templateVersion?.template?.title ||
-      'Анкета';
-
-    const { submission } = await this.dataSource.transaction(async (manager) => {
-      const locked = await manager
-        .getRepository(QuestionnaireAssignment)
-        .findOne({
-          where: { id: assignmentId },
-          lock: { mode: 'pessimistic_write' },
-        });
-      if (!locked) throw new NotFoundException('Assignment not found');
-
-      const result = await applyReopenTransition(manager, locked, {
-        kind: 'reviewer_request_changes',
-        actorUserId: actor.id,
-        reviewComment: comment,
-      });
-
-      await this.notifyChangesRequested(
-        manager,
-        actor,
-        result.assignment,
-        employee,
-        templateTitle,
-        comment,
-      );
-
-      return result;
-    });
-
-    return toSubmissionSummaryDto(submission);
-  }
-
   /**
-   * Owner reopens a submitted/reviewed assignment for further edits.
+   * Owner reopens a closed (post-submit) assignment for further edits.
    * Does not mutate latest submission review metadata.
    */
   async reopenSelf(actor: User, assignmentId: string) {
@@ -393,12 +315,14 @@ export class QuestionnaireSubmissionService {
       permissions: this.permissions,
       access: this.access,
     });
+    const latestSubmission = await this.loadLatestSubmission(assignmentId);
     const caps = computeDetailCapabilities({
       actor,
       employee,
       status: assignment.status,
       permissions: this.permissions,
       access: this.access,
+      latestSubmission,
     });
     if (!caps.canReopenSelf) {
       throw new ForbiddenException('Cannot reopen questionnaire');
@@ -444,12 +368,14 @@ export class QuestionnaireSubmissionService {
       access: this.access,
     });
 
+    const latestSubmission = await this.loadLatestSubmission(assignmentId);
     const caps = computeDetailCapabilities({
       actor,
       employee,
       status: assignment.status,
       permissions: this.permissions,
       access: this.access,
+      latestSubmission,
     });
     if (!caps.canStartRevision) {
       throw new ForbiddenException('Cannot start questionnaire revision');
@@ -558,7 +484,8 @@ export class QuestionnaireSubmissionService {
         latest.changeRequestResolvedAt = now;
         await manager.getRepository(QuestionnaireSubmission).save(latest);
 
-        lockedAssignment.status = 'submitted';
+        lockedAssignment.status = 'closed';
+        lockedAssignment.reviewedAt = null;
         await manager
           .getRepository(QuestionnaireAssignment)
           .save(lockedAssignment);
@@ -625,8 +552,9 @@ export class QuestionnaireSubmissionService {
     });
     if (!submission) throw new NotFoundException('Submission not found');
 
+    const assignmentId = submission.response.assignmentId;
     const assignment = await this.assignments.findOne({
-      where: { id: submission.response.assignmentId },
+      where: { id: assignmentId },
       relations: { templateVersion: { template: true } },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
@@ -636,30 +564,29 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
+    requireActorAccessAssignmentType({
+      actor,
+      employee,
+      templateType: assignment.templateVersion.template.type,
+      permissions: this.permissions,
+      access: this.access,
+    });
+
+    const latestSubmission = await this.loadLatestSubmission(assignmentId);
+    const caps = computeDetailCapabilities({
+      actor,
+      employee,
+      status: assignment.status,
+      permissions: this.permissions,
+      access: this.access,
+      latestSubmission,
+    });
 
     if (input.reviewStatus === 'changes_requested') {
       const comment = input.reviewComment?.trim() ?? '';
       if (!comment) {
         throw new BadRequestException('Review comment is required');
       }
-
-      const latest = await this.submissions.findOne({
-        where: { responseId: submission.response.id },
-        order: { submissionNumber: 'DESC' },
-      });
-      if (!latest || latest.id !== submission.id) {
-        throw new ConflictException(
-          'Запросити зміни можна лише до останньої версії анкети',
-        );
-      }
-
-      const caps = computeDetailCapabilities({
-        actor,
-        employee,
-        status: assignment.status,
-        permissions: this.permissions,
-        access: this.access,
-      });
       if (!caps.canRequestChanges) {
         throw new ForbiddenException('Cannot request changes');
       }
@@ -671,19 +598,16 @@ export class QuestionnaireSubmissionService {
 
       const { submission: updated } = await this.dataSource.transaction(
         async (manager) => {
-          const locked = await manager
-            .getRepository(QuestionnaireAssignment)
-            .findOne({
-              where: { id: assignment.id },
-              lock: { mode: 'pessimistic_write' },
-            });
-          if (!locked) throw new NotFoundException('Assignment not found');
-
-          const result = await applyReopenTransition(manager, locked, {
-            kind: 'reviewer_request_changes',
-            actorUserId: actor.id,
-            reviewComment: comment,
-          });
+          const result = await applyReviewTransition(
+            manager,
+            assignmentId,
+            submissionId,
+            {
+              kind: 'request_changes',
+              actorUserId: actor.id,
+              reviewComment: comment,
+            },
+          );
 
           await this.notifyChangesRequested(
             manager,
@@ -700,18 +624,33 @@ export class QuestionnaireSubmissionService {
       return toSubmissionSummaryDto(updated);
     }
 
-    const now = new Date();
-    submission.reviewStatus = 'approved';
-    submission.reviewedByUserId = actor.id;
-    submission.reviewedAt = now;
-    submission.reviewComment = input.reviewComment?.trim() || null;
-    await this.submissions.save(submission);
+    if (!caps.canReview) {
+      throw new ForbiddenException('Cannot review submission');
+    }
 
-    assignment.status = 'reviewed';
-    assignment.reviewedAt = now;
-    await this.assignments.save(assignment);
+    const { submission: updated } = await this.dataSource.transaction(
+      async (manager) => {
+        return applyReviewTransition(manager, assignmentId, submissionId, {
+          kind: 'approve',
+          actorUserId: actor.id,
+          reviewComment: input.reviewComment,
+        });
+      },
+    );
+    return toSubmissionSummaryDto(updated);
+  }
 
-    return toSubmissionSummaryDto(submission);
+  private async loadLatestSubmission(
+    assignmentId: string,
+  ): Promise<QuestionnaireSubmission | null> {
+    const response = await this.responses.findOne({
+      where: { assignmentId },
+    });
+    if (!response) return null;
+    return this.submissions.findOne({
+      where: { responseId: response.id },
+      order: { submissionNumber: 'DESC' },
+    });
   }
 
   private async notifyChangesRequested(
@@ -737,6 +676,12 @@ export class QuestionnaireSubmissionService {
         status: assignment.status,
         permissions: this.permissions,
         access: this.access,
+        latestSubmission: {
+          reviewStatus: 'changes_requested',
+          reviewComment: comment,
+          reviewedByUserId: actor.id,
+          changeRequestResolution: null,
+        },
       });
       assignedByCanEditDraft = caps.canEditDraft;
     }

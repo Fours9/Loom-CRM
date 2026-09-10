@@ -1,4 +1,5 @@
 import type { QuestionnaireAssignmentStatus } from '@loom/contracts-questionnaires';
+import { isQuestionnairePostSubmitStatus } from '@loom/contracts-questionnaires';
 import { QUESTIONNAIRE_REVIEW_STEP } from '../navigation/questionnaire-step-keys';
 
 export type AutoBeginEditSessionInput = {
@@ -51,7 +52,7 @@ export function questionnaireListOpenLabel(input: {
   status: QuestionnaireAssignmentStatus | string;
 }): string {
   if (input.canStartFill) return 'Почати';
-  if (input.status === 'submitted' || input.status === 'reviewed') {
+  if (isQuestionnairePostSubmitStatus(input.status)) {
     return 'Відкрити';
   }
   if (

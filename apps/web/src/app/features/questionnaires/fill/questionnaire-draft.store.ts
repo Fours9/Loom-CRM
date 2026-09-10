@@ -5,6 +5,7 @@ import type {
   QuestionnaireAssignmentStatus,
   QuestionnaireSchemaStep,
 } from '@loom/contracts-questionnaires';
+import { isQuestionnairePostSubmitStatus } from '@loom/contracts-questionnaires';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { QuestionnaireProfileMirrorService } from '../core/questionnaire-profile-mirror.service';
 import { hasActiveReviewerRequest } from '../core/questionnaire-active-change-request';
@@ -93,10 +94,10 @@ export class QuestionnaireDraftStore {
       detail.capabilities.canEditDraft || detail.capabilities.canSubmit;
 
     if (canMutateDraft) {
-      if (status === 'submitted' || status === 'reviewed') return 'read_only';
+      if (isQuestionnairePostSubmitStatus(status)) return 'read_only';
       return this.editSessionActive() ? 'editable' : 'read_only';
     }
-    if (status === 'closed') return 'read_only';
+    if (isQuestionnairePostSubmitStatus(status)) return 'read_only';
     /** Detached (cancelled) is read-only — draft/submissions stay visible until reattached. */
     if (status === 'cancelled') return 'read_only';
     if (status === 'assigned' || status === 'in_progress') return 'owner_only';
@@ -109,7 +110,6 @@ export class QuestionnaireDraftStore {
     if (this.editSessionActive()) return false;
     const detail = this.assignment();
     if (!detail) return false;
-    if (detail.status === 'closed') return false;
     return (
       detail.capabilities.canEditDraft ||
       detail.capabilities.canReopenSelf ||
@@ -122,9 +122,6 @@ export class QuestionnaireDraftStore {
     if (this.editSessionActive()) return false;
     const detail = this.assignment();
     if (!detail) return false;
-    if (detail.status !== 'submitted' && detail.status !== 'reviewed') {
-      return false;
-    }
     return !!detail.capabilities.canRequestChanges;
   });
 
@@ -133,7 +130,7 @@ export class QuestionnaireDraftStore {
     if (this.loadState() !== 'ready') return false;
     const detail = this.assignment();
     if (!detail?.capabilities?.canDelete) return false;
-    if (detail.status === 'closed') return true;
+    if (isQuestionnairePostSubmitStatus(detail.status)) return true;
     return this.editSessionActive() && this.uiMode() === 'editable';
   });
 

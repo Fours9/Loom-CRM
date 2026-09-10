@@ -217,12 +217,12 @@ describe('questionnaireListOpenLabel', () => {
     ).toBe('Відкрити');
   });
 
-  it('closed → Переглянути', () => {
+  it('closed → Відкрити (post-submit lock-in)', () => {
     expect(
       questionnaireListOpenLabel({
         canStartFill: false,
         status: 'closed',
       }),
-    ).toBe('Переглянути');
+    ).toBe('Відкрити');
   });
 });

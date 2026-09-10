@@ -58,6 +58,10 @@ import {
   CreateEmployeeDto,
   ScheduleDayDto,
 } from './create-employee.dto';
+import {
+  CreateEmploymentAssignmentDto,
+  UpdateEmploymentAssignmentDto,
+} from './employment-assignment.write.dto';
 
 class UpdateEmployeeDto {
   @IsOptional() @IsString() firstName?: string;
@@ -208,54 +212,6 @@ class ReplaceImportantDatesDto {
   @ValidateNested({ each: true })
   @Type(() => ImportantDateItemDto)
   dates!: ImportantDateItemDto[];
-}
-
-class CreateAssignmentDto {
-  @IsOptional() @IsUUID() directionId?: string | null;
-  @IsOptional() @IsUUID() departmentId?: string | null;
-  @IsOptional() @IsUUID() positionId?: string | null;
-  @IsOptional() @IsString() functionalRole?: string | null;
-  @IsOptional() @IsUUID() managerEmployeeId?: string | null;
-  @IsOptional() @IsUUID() mentorEmployeeId?: string | null;
-  @IsOptional() @IsUUID() hrResponsibleEmployeeId?: string | null;
-  @IsOptional() @IsString() @MaxLength(255) workLocation?: string | null;
-  @IsOptional() @IsString() @MaxLength(64) workFormat?: string | null;
-  @IsOptional() @IsString() @MaxLength(64) employmentType?: string | null;
-  @IsOptional() @IsString() @MaxLength(64) contractType?: string | null;
-  @IsOptional() @IsString() startDate?: string | null;
-  @IsOptional() @IsString() endDate?: string | null;
-  @IsOptional() @IsString() probationStartDate?: string | null;
-  @IsOptional() @IsString() probationEndDate?: string | null;
-  @IsOptional() @IsString() comment?: string | null;
-  @IsOptional() @IsBoolean() isDepartmentManager?: boolean;
-  @IsOptional()
-  @IsArray()
-  @IsUUID('4', { each: true })
-  managedDepartmentIds?: string[];
-}
-
-class UpdateAssignmentDto {
-  @IsOptional() @IsUUID() directionId?: string | null;
-  @IsOptional() @IsUUID() departmentId?: string | null;
-  @IsOptional() @IsUUID() positionId?: string | null;
-  @IsOptional() @IsString() functionalRole?: string | null;
-  @IsOptional() @IsUUID() managerEmployeeId?: string | null;
-  @IsOptional() @IsUUID() mentorEmployeeId?: string | null;
-  @IsOptional() @IsUUID() hrResponsibleEmployeeId?: string | null;
-  @IsOptional() @IsString() @MaxLength(255) workLocation?: string | null;
-  @IsOptional() @IsString() @MaxLength(64) workFormat?: string | null;
-  @IsOptional() @IsString() @MaxLength(64) employmentType?: string | null;
-  @IsOptional() @IsString() @MaxLength(64) contractType?: string | null;
-  @IsOptional() @IsString() startDate?: string | null;
-  @IsOptional() @IsString() endDate?: string | null;
-  @IsOptional() @IsString() probationStartDate?: string | null;
-  @IsOptional() @IsString() probationEndDate?: string | null;
-  @IsOptional() @IsString() comment?: string | null;
-  @IsOptional() @IsBoolean() isDepartmentManager?: boolean;
-  @IsOptional()
-  @IsArray()
-  @IsUUID('4', { each: true })
-  managedDepartmentIds?: string[];
 }
 
 class StatusTransitionDto {
@@ -427,7 +383,7 @@ export class EmployeesController {
   createAssignment(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: CreateAssignmentDto,
+    @Body() dto: CreateEmploymentAssignmentDto,
   ) {
     return this.profile.createAssignment(user, id, dto);
   }
@@ -438,7 +394,7 @@ export class EmployeesController {
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
-    @Body() dto: UpdateAssignmentDto,
+    @Body() dto: UpdateEmploymentAssignmentDto,
   ) {
     return this.profile.updateAssignment(user, id, assignmentId, dto);
   }
