@@ -1,7 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import type { EmployeeListItem } from '@loom/contracts-employees';
+import type {
+  CreateEmployeeRequest,
+  CreateEmployeeResponse,
+  EmployeeListItem,
+} from '@loom/contracts-employees';
 import type { EmployeeDirectoryFilters } from '../../shared/employees/normalize-directory-filters';
 import type {
   EmployeeDirectorySortDir,
@@ -35,10 +39,9 @@ export class PeopleEmployeesApiService {
     return this.http.get<EmployeeListItem[]>('/api/v1/employees', { params });
   }
 
-  createEmployee(body: {
-    firstName: string;
-    lastName: string;
-  }): Observable<{ id: string }> {
-    return this.http.post<{ id: string }>('/api/v1/employees', body);
+  createEmployee(
+    body: CreateEmployeeRequest,
+  ): Observable<CreateEmployeeResponse> {
+    return this.http.post<CreateEmployeeResponse>('/api/v1/employees', body);
   }
 }

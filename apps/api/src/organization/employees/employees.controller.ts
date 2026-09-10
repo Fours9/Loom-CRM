@@ -54,102 +54,10 @@ import type {
   UpdateEmployeeSkillAssessmentRequest,
   UpsertEmployeeSkillAssessmentRequest,
 } from '@loom/contracts-employees';
-
-class ScheduleDayDto {
-  @IsInt() @Min(1) @Max(7) weekday!: number;
-  @IsOptional() @IsBoolean() isWorkingDay?: boolean;
-  @IsOptional() @IsBoolean() isDayOff?: boolean;
-  @IsOptional() @IsString() startTime?: string | null;
-  @IsOptional() @IsString() endTime?: string | null;
-  @IsOptional() @IsString() breakStart?: string | null;
-  @IsOptional() @IsString() breakEnd?: string | null;
-  @IsOptional() @IsString() note?: string | null;
-}
-
-class CreateEmployeeDto {
-  @IsString()
-  @MinLength(1)
-  firstName!: string;
-
-  @IsString()
-  @MinLength(1)
-  lastName!: string;
-
-  @IsOptional()
-  @IsString()
-  middleName?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  departmentId?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  positionId?: string | null;
-
-  @IsOptional()
-  @IsString()
-  employeeNumber?: string;
-
-  @IsOptional()
-  @IsString()
-  calendarColor?: string | null;
-
-  @IsOptional()
-  @IsString()
-  phoneNumber?: string | null;
-
-  @IsOptional()
-  @IsString()
-  telegram?: string | null;
-
-  @IsOptional()
-  @IsString()
-  workEmail?: string | null;
-
-  @IsOptional()
-  @IsString()
-  personalPhoneNumber?: string | null;
-
-  @IsOptional()
-  @IsString()
-  personalTelegram?: string | null;
-
-  @IsOptional()
-  @IsString()
-  personalEmail?: string | null;
-
-  @IsOptional()
-  @IsBoolean()
-  createAccount?: boolean;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  temporaryPassword?: string;
-
-  @IsOptional()
-  @IsString()
-  profileVisibilityOverride?: string | null;
-
-  @IsOptional()
-  @IsString()
-  absenceVisibilityOverride?: string | null;
-
-  /** FE sends boolean; persisted as text on employee (Absences parity). */
-  @IsOptional()
-  @IsBoolean()
-  showAbsenceTypeToPeersOverride?: boolean | null;
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ScheduleDayDto)
-  schedule?: ScheduleDayDto[];
-}
+import {
+  CreateEmployeeDto,
+  ScheduleDayDto,
+} from './create-employee.dto';
 
 class UpdateEmployeeDto {
   @IsOptional() @IsString() firstName?: string;

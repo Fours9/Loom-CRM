@@ -10,7 +10,7 @@ import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
 import { QuestionnaireProfileProposal } from './questionnaire-profile-proposal.entity';
 import { Permission } from '../../platform/permissions/permission.names';
-import { UserRole, UserStatus } from '../../platform/identity/user.enums';
+import { UserRole } from '../../platform/identity/user.enums';
 import type { User } from '../../platform/identity/user.entity';
 import { QUESTIONNAIRE_ASSIGNMENT_AUDIT } from './assignments/questionnaire-assignment-transitions';
 
@@ -181,13 +181,6 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       isAdmin: jest.fn(() => true),
     };
 
-    const users = {
-      findById: jest.fn(async () => ({
-        id: 'linked-user',
-        status: UserStatus.Active,
-      })),
-    };
-
     const service = new QuestionnaireAssignmentService(
       {} as never,
       {} as never,
@@ -246,7 +239,6 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         })),
       } as never,
       access as never,
-      users as never,
       permissions as never,
       { ensureResponse: jest.fn() } as never,
       {
@@ -265,7 +257,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       employeeId: assignment.employeeId,
     } as never);
 
-    return { service, assignment, deleted, deleteOrder, audit, access, users, dataSource };
+    return { service, assignment, deleted, deleteOrder, audit, access, dataSource };
   }
 
   it.each([
@@ -647,12 +639,6 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
           requireCanView: jest.fn(),
           isOwner: jest.fn(() => false),
           isAdmin: jest.fn(() => true),
-        } as never,
-        {
-          findById: jest.fn(async () => ({
-            id: 'u',
-            status: UserStatus.Active,
-          })),
         } as never,
         {
           has: jest.fn(() => true),

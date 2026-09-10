@@ -1231,6 +1231,7 @@ export class EmployeeDataPanelComponent implements OnChanges {
             name: archived.position.name,
             departmentId: archived.departmentId,
             directionId: archived.directionId,
+            managementKindTemplate: 'none',
             label: `${archived.position.name} (архівне)`,
             archived: true,
           },

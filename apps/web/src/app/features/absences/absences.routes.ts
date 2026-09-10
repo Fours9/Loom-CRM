@@ -2,7 +2,8 @@ import { Routes } from '@angular/router';
 
 /**
  * Full ProjectWeekend UI under /absences — chrome comes from CRM Shell
- * (PW topbar + flyout). `requests/new` and `employees/new` before `:id`.
+ * (PW topbar + flyout). `requests/new` before `:id`.
+ * Employee create SoT is `/people/new` (ADR 0013).
  */
 export const ABSENCE_ROUTES: Routes = [
   {
@@ -19,10 +20,8 @@ export const ABSENCE_ROUTES: Routes = [
   },
   {
     path: 'employees/new',
-    loadComponent: () =>
-      import('./employees/employee-create-page.component').then(
-        (m) => m.EmployeeCreatePageComponent,
-      ),
+    redirectTo: '/people/new',
+    pathMatch: 'full',
   },
   {
     path: 'employees/:id',

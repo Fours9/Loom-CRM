@@ -1,5 +1,5 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import type { EmployeeDirectoryItemVm } from './employee-directory-item.vm';
 import {
   directorySortIndicator,
@@ -104,8 +104,20 @@ import {
         </thead>
         <tbody>
           @for (e of items; track e.id) {
-            <tr [routerLink]="e.detailLink" class="row-link">
-              <td>{{ e.fullName }}</td>
+            <tr
+              class="row-link"
+              tabindex="0"
+              role="link"
+              [attr.aria-label]="e.fullName"
+              (click)="open(e)"
+              (keydown.enter)="open(e)"
+              (keydown.space)="$event.preventDefault(); open(e)"
+            >
+              <td>
+                <a class="row-name" [routerLink]="e.detailLink" (click)="$event.stopPropagation()">{{
+                  e.fullName
+                }}</a>
+              </td>
               <td>{{ e.employeeNumber }}</td>
               <td>{{ e.directionName || '—' }}</td>
               <td>{{ e.departmentName || '—' }}</td>
@@ -200,6 +212,15 @@ import {
       .row-link:hover {
         background: var(--pw-surface-2);
       }
+      .row-name {
+        color: inherit;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .row-name:hover {
+        color: var(--pw-accent);
+        text-decoration: underline;
+      }
       .empty {
         padding: 1rem;
         color: var(--pw-muted);
@@ -223,6 +244,8 @@ import {
   ],
 })
 export class EmployeeDirectoryTableComponent {
+  private readonly router = inject(Router);
+
   @Input() items: EmployeeDirectoryItemVm[] = [];
   @Input() loading = false;
   @Input() sortBy: EmployeeDirectorySortKey = 'fullName';
@@ -235,5 +258,9 @@ export class EmployeeDirectoryTableComponent {
 
   indicator(column: EmployeeDirectorySortKey): string {
     return directorySortIndicator(this.sortBy, this.sortDir, column);
+  }
+
+  open(e: EmployeeDirectoryItemVm): void {
+    void this.router.navigate(e.detailLink);
   }
 }

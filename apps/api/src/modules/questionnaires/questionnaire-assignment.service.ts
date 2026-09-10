@@ -3,13 +3,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
-import { UserStatus } from '../../platform/identity/user.enums';
-import { UsersService } from '../../platform/identity/users.service';
 import { Permission } from '../../platform/permissions/permission.names';
 import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
@@ -100,7 +97,6 @@ export class QuestionnaireAssignmentService {
     private readonly currentEmployment: CurrentEmploymentAssignmentResolver,
     private readonly contextSkillIdBackfill: QuestionnaireContextSkillIdBackfillService,
     private readonly access: EmployeeAccessService,
-    private readonly users: UsersService,
     private readonly permissions: PermissionService,
     private readonly responseService: QuestionnaireResponseService,
     private readonly submissionService: QuestionnaireSubmissionService,
@@ -244,7 +240,8 @@ export class QuestionnaireAssignmentService {
 
   /**
    * Shared validation for attaching an employee to an assignment (create + attach):
-   * the employee must exist, be viewable by the actor, and have an active linked user.
+   * the employee must exist and be viewable by the actor.
+   * A linked User is not required — fill uses owner (active User) or CompleteAny on behalf.
    */
   private async resolveAttachableEmployee(
     actor: User,
@@ -252,18 +249,6 @@ export class QuestionnaireAssignmentService {
   ): Promise<Employee> {
     const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
-
-    if (!employee.userId) {
-      throw new BadRequestException(
-        'Cannot assign questionnaire: employee has no user account',
-      );
-    }
-    const linkedUser = await this.users.findById(employee.userId);
-    if (!linkedUser || linkedUser.status !== UserStatus.Active) {
-      throw new BadRequestException(
-        'Cannot assign questionnaire: employee has no active user account',
-      );
-    }
     return employee;
   }
 

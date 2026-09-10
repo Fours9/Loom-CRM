@@ -36,6 +36,8 @@ import { PermissionsModule } from '../../platform/permissions/permissions.module
 import { OrganizationEmployeeErasureFacade } from './organization-employee-erasure.facade';
 import { IdentityRoleProjection } from './identity-role-projection';
 import { PositionManagedDepartment } from '../positions/position-managed-department.entity';
+import { EmploymentAssignmentOrganizationResolver } from './employment-assignment-organization.resolver';
+import { EmployeeNumberAllocator } from './employee-number.allocator';
 
 @Module({
   imports: [
@@ -75,6 +77,8 @@ import { PositionManagedDepartment } from '../positions/position-managed-departm
     EmployeeSkillMatrixService,
     OrganizationEmployeeErasureFacade,
     IdentityRoleProjection,
+    EmploymentAssignmentOrganizationResolver,
+    EmployeeNumberAllocator,
     PdfRenderer,
     OrganizationEmployeeIdentityLookup,
     {

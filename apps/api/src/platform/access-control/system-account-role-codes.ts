@@ -1,3 +1,7 @@
+import {
+  BRIDGE_MANAGED_ACCOUNT_ROLE_CODES,
+} from '@loom/contracts-access-control';
+
 /** Codes of the seeded, immutable-shape account roles (migration 1730000037000). */
 export const SystemAccountRoleCode = {
   Employee: 'employee',
@@ -23,9 +27,7 @@ export function isSystemAccountRoleCode(
 
 /**
  * Codes the leadership bridge is allowed to assign automatically.
- * Director / admin / custom roles are never auto-assigned (ADR 0011 §6).
+ * SoT: `@loom/contracts-access-control` (ADR 0011 §6).
  */
-export const BRIDGE_MANAGED_ROLE_CODES: readonly SystemAccountRoleCode[] = [
-  SystemAccountRoleCode.Employee,
-  SystemAccountRoleCode.DepartmentManager,
-];
+export const BRIDGE_MANAGED_ROLE_CODES: readonly SystemAccountRoleCode[] =
+  BRIDGE_MANAGED_ACCOUNT_ROLE_CODES as readonly SystemAccountRoleCode[];

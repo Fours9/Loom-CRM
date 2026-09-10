@@ -1,5 +1,7 @@
 /** Ukrainian labels for org leadership, account roles + peer-visibility overrides. */
 
+import type { EmploymentManagementKind } from '@loom/contracts-employees';
+
 export const COMPUTED_ROLE_LABELS: Record<
   'employee' | 'department_manager',
   string
@@ -9,7 +11,14 @@ export const COMPUTED_ROLE_LABELS: Record<
 };
 
 /** Org leadership on a Position template / active EA — not an account role. */
-export type ManagementKind = 'none' | 'departments' | 'direction';
+export type ManagementKind = EmploymentManagementKind;
+
+type AssertNever<T extends never> = T;
+type _ManagementKindParity = AssertNever<
+  | Exclude<ManagementKind, EmploymentManagementKind>
+  | Exclude<EmploymentManagementKind, ManagementKind>
+>;
+void 0 as unknown as _ManagementKindParity;
 
 export const MANAGEMENT_KIND_LABELS: Record<ManagementKind, string> = {
   none: 'Не керує',

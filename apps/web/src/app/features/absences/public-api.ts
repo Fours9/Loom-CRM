@@ -4,4 +4,4 @@ export { EmployeeAbsenceRequestsPanelComponent } from './employees/employee-abse
 /** Weekly work schedule view/edit (ScheduleEditor + PUT /employees/:id/schedule). */
 export { EmployeeWorkSchedulePanelComponent } from './employees/employee-work-schedule-panel.component';
 export { EmployeeAbsenceDocumentsService } from './public/employee-absence-documents.service';
-export { PasswordVisibilityToggleComponent } from './shared/password-visibility-toggle.component';
+export { PasswordVisibilityToggleComponent } from '../../shared/password-visibility-toggle.component';

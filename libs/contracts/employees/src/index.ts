@@ -70,11 +70,55 @@ export type EmployeeListItem = {
   updatedAt: string;
 };
 
+/** One weekday row for create / replace schedule (HTTP wire). */
+export type EmployeeCreateScheduleDay = {
+  weekday: number;
+  isWorkingDay?: boolean;
+  isDayOff?: boolean;
+  startTime?: string | null;
+  endTime?: string | null;
+  breakStart?: string | null;
+  breakEnd?: string | null;
+  note?: string | null;
+};
+
+/**
+ * Full HTTP body for POST /employees.
+ * Optional `employeeNumber` is adminEquivalent-only on the API;
+ * People UI never sends it. Visibility overrides are not create fields.
+ */
 export type CreateEmployeeRequest = {
   firstName: string;
   lastName: string;
+  middleName?: string | null;
+  directionId?: EntityId | null;
   departmentId?: EntityId | null;
   positionId?: EntityId | null;
+  employeeNumber?: string;
+  calendarColor?: string | null;
+  phoneNumber?: string | null;
+  telegram?: string | null;
+  workEmail?: string | null;
+  personalPhoneNumber?: string | null;
+  personalTelegram?: string | null;
+  personalEmail?: string | null;
+  createAccount?: boolean;
+  email?: string;
+  temporaryPassword?: string;
+  /** adminEquivalent; numbering intent even without createAccount. Assigned to User only when createAccount. */
+  accountRoleId?: EntityId;
+  /**
+   * Explicit EA leadership at create (prefix E/M + managed scope).
+   * Independent of AccountRole / createAccount (ADR 0011).
+   * Omitted → derive from Position.managementKindTemplate.
+   */
+  managementKind?: EmploymentManagementKind;
+  schedule?: EmployeeCreateScheduleDay[];
+};
+
+export type CreateEmployeeResponse = {
+  id: EntityId;
+  openDetail: boolean;
 };
 
 export type EmployeeProfileCapabilities = {

@@ -1,9 +1,10 @@
-﻿import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
 import { Department, Position } from '../core/api/models';
-import { AuthService } from '../core/auth/auth.service';
+import { SessionStore } from '../../../core/auth/session.store';
+import { canOpenEmployeeCreate } from '../../../shared/employees/can-open-employee-create';
 import {
   MultiSelectItem,
   MultiSelectListComponent,
@@ -32,8 +33,8 @@ type EmployeeSortKey =
           <h1>Працівники</h1>
           <p>Список анкет і пошук</p>
         </div>
-        @if (isSenior) {
-          <a class="btn" routerLink="/absences/employees/new">Додати працівника</a>
+        @if (canOpenCreate()) {
+          <a class="btn" routerLink="/people/new">Додати працівника</a>
         }
       </header>
 
@@ -132,9 +133,21 @@ type EmployeeSortKey =
           </thead>
           <tbody>
             @for (e of items; track e.id) {
-              <tr [routerLink]="e.detailLink" class="row-link">
+              <tr
+                class="row-link"
+                tabindex="0"
+                role="link"
+                [attr.aria-label]="e.fullName"
+                (click)="open(e)"
+                (keydown.enter)="open(e)"
+                (keydown.space)="$event.preventDefault(); open(e)"
+              >
                 <td><span class="swatch" [style.background]="e.calendarColor"></span></td>
-                <td>{{ e.fullName }}</td>
+                <td>
+                  <a class="row-name" [routerLink]="e.detailLink" (click)="$event.stopPropagation()">{{
+                    e.fullName
+                  }}</a>
+                </td>
                 <td>{{ e.employeeNumber }}</td>
                 <td>{{ e.departmentName }}</td>
                 <td>{{ e.positionName }}</td>
@@ -276,6 +289,15 @@ type EmployeeSortKey =
       .sort-ind.active { color: var(--pw-accent); }
       .row-link { cursor: pointer; }
       .row-link:hover { background: var(--pw-surface-2); }
+      .row-name {
+        color: inherit;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .row-name:hover {
+        color: var(--pw-accent);
+        text-decoration: underline;
+      }
       .swatch {
         display: inline-block;
         width: 14px;
@@ -315,7 +337,8 @@ type EmployeeSortKey =
 })
 export class EmployeesPageComponent implements OnInit {
   private readonly api = inject(ApiService);
-  private readonly auth = inject(AuthService);
+  private readonly session = inject(SessionStore);
+  private readonly router = inject(Router);
 
   items: EmployeeListItemViewModel[] = [];
   departments: Department[] = [];
@@ -328,12 +351,14 @@ export class EmployeesPageComponent implements OnInit {
   loading = false;
   error = '';
 
-  get isSenior(): boolean {
-    return this.auth.isAdmin();
-  }
+  readonly canOpenCreate = computed(() => canOpenEmployeeCreate(this.session));
 
   get departmentItems(): MultiSelectItem[] {
     return this.departments.map((d) => ({ id: d.id, label: d.name }));
+  }
+
+  open(e: EmployeeListItemViewModel): void {
+    void this.router.navigate(e.detailLink);
   }
 
   ngOnInit(): void {

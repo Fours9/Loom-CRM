@@ -4,10 +4,8 @@ import { User } from '../../platform/identity/user.entity';
 import { UserRole } from '../../platform/identity/user.enums';
 import { AccountRole } from '../../platform/access-control/account-role.entity';
 import { resolveSystemAccountRoleId } from '../../platform/access-control/resolve-system-account-role-id';
-import {
-  SystemAccountRoleCode,
-  BRIDGE_MANAGED_ROLE_CODES,
-} from '../../platform/access-control/system-account-role-codes';
+import { isBridgeManagedAccountRoleCode } from '@loom/contracts-access-control';
+import { SystemAccountRoleCode } from '../../platform/access-control/system-account-role-codes';
 import {
   ManagementKind,
   managementKindImpliesManager,
@@ -160,7 +158,7 @@ export class IdentityRoleProjection {
     if (!role) return true;
     if (role.isAdminEquivalent) return false;
     if (!role.isSystem || !role.code) return false;
-    return (BRIDGE_MANAGED_ROLE_CODES as readonly string[]).includes(role.code);
+    return isBridgeManagedAccountRoleCode(role.code);
   }
 
   desiredBridgeCode(

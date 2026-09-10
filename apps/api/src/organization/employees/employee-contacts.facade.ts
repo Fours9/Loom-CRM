@@ -21,6 +21,11 @@ export type EmployeeContactsAuditActor = {
   id: string;
 };
 
+export type EmployeeCreateContactsInput = {
+  work: EmployeeContactsWorkSlice;
+  personal: PersonalContactWriteInput[];
+};
+
 @Injectable()
 export class EmployeeContactsFacade {
   constructor(private readonly audit: AuditService) {}
@@ -65,41 +70,45 @@ export class EmployeeContactsFacade {
     });
   }
 
+  /**
+   * Canonical contact rows + legacy mirrors for a newly created Employee.
+   * Does not emit update-style audit actions (`contacts_updated` / `personal_contacts_updated`).
+   */
+  async initializeForCreate(
+    manager: EntityManager,
+    actor: EmployeeContactsAuditActor,
+    employeeId: string,
+    input: EmployeeCreateContactsInput,
+  ): Promise<void> {
+    await this.writeWorkContacts(manager, employeeId, input.work);
+    await this.writePersonalContacts(manager, employeeId, input.personal);
+
+    await this.audit.record(
+      {
+        actorId: actor.id,
+        action: 'employee.contacts_initialized',
+        entityType: 'Employee',
+        entityId: employeeId,
+        metadata: {
+          work: Boolean(
+            input.work.email?.trim() ||
+              input.work.phone?.trim() ||
+              input.work.telegram?.trim(),
+          ),
+          personalCount: normalizePersonalWrite(input.personal).length,
+        },
+      },
+      manager,
+    );
+  }
+
   async applyWorkContacts(
     manager: EntityManager,
     actor: EmployeeContactsAuditActor,
     employeeId: string,
     work: EmployeeContactsWorkSlice,
   ): Promise<void> {
-    const employeeRepo = manager.getRepository(Employee);
-    const row = await employeeRepo.findOneOrFail({
-      where: { id: employeeId },
-      lock: { mode: 'pessimistic_write' },
-    });
-
-    row.workEmail = work.email?.trim() || null;
-    row.phoneNumber = work.phone?.trim() || null;
-    row.telegram = work.telegram?.trim() || null;
-    await employeeRepo.save(row);
-
-    await this.upsertWorkContact(
-      manager,
-      employeeId,
-      'work_email',
-      row.workEmail,
-    );
-    await this.upsertWorkContact(
-      manager,
-      employeeId,
-      'work_phone',
-      row.phoneNumber,
-    );
-    await this.upsertWorkContact(
-      manager,
-      employeeId,
-      'work_telegram',
-      row.telegram,
-    );
+    await this.writeWorkContacts(manager, employeeId, work);
 
     await this.audit.record(
       {
@@ -119,43 +128,12 @@ export class EmployeeContactsFacade {
     employeeId: string,
     contacts: PersonalContactWriteInput[],
   ): Promise<void> {
-    const normalized = normalizePersonalWrite(contacts);
-    const employeeRepo = manager.getRepository(Employee);
     const contactRepo = manager.getRepository(EmployeeContact);
-
-    await employeeRepo.findOneOrFail({
-      where: { id: employeeId },
-      lock: { mode: 'pessimistic_write' },
-    });
-
     const previous = await contactRepo.find({
       where: { employeeId, type: In([...PERSONAL_CONTACT_TYPES]) },
     });
 
-    await contactRepo
-      .createQueryBuilder()
-      .delete()
-      .where('employee_id = :employeeId', { employeeId })
-      .andWhere('type IN (:...types)', { types: [...PERSONAL_CONTACT_TYPES] })
-      .execute();
-
-    const rows = normalized.map((contact) =>
-      contactRepo.create({
-        employeeId,
-        type: contact.type,
-        value: contact.value,
-        isPrimary: contact.isPrimary,
-        visibility: 'personal',
-      }),
-    );
-    const saved = rows.length ? await contactRepo.save(rows) : [];
-
-    const legacy = legacyPersonalFromContacts(saved);
-    await employeeRepo.update(employeeId, {
-      personalPhoneNumber: legacy.personalPhoneNumber,
-      personalEmail: legacy.personalEmail,
-      personalTelegram: legacy.personalTelegram,
-    });
+    const saved = await this.writePersonalContacts(manager, employeeId, contacts);
 
     await this.audit.record(
       {
@@ -226,6 +204,74 @@ export class EmployeeContactsFacade {
       },
       manager,
     );
+  }
+
+  private async writeWorkContacts(
+    manager: EntityManager,
+    employeeId: string,
+    work: EmployeeContactsWorkSlice,
+  ): Promise<void> {
+    const employeeRepo = manager.getRepository(Employee);
+    const row = await employeeRepo.findOneOrFail({
+      where: { id: employeeId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    row.workEmail = work.email?.trim() || null;
+    row.phoneNumber = work.phone?.trim() || null;
+    row.telegram = work.telegram?.trim() || null;
+    await employeeRepo.save(row);
+
+    await this.upsertWorkContact(manager, employeeId, 'work_email', row.workEmail);
+    await this.upsertWorkContact(manager, employeeId, 'work_phone', row.phoneNumber);
+    await this.upsertWorkContact(
+      manager,
+      employeeId,
+      'work_telegram',
+      row.telegram,
+    );
+  }
+
+  private async writePersonalContacts(
+    manager: EntityManager,
+    employeeId: string,
+    contacts: PersonalContactWriteInput[],
+  ): Promise<EmployeeContact[]> {
+    const normalized = normalizePersonalWrite(contacts);
+    const employeeRepo = manager.getRepository(Employee);
+    const contactRepo = manager.getRepository(EmployeeContact);
+
+    await employeeRepo.findOneOrFail({
+      where: { id: employeeId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    await contactRepo
+      .createQueryBuilder()
+      .delete()
+      .where('employee_id = :employeeId', { employeeId })
+      .andWhere('type IN (:...types)', { types: [...PERSONAL_CONTACT_TYPES] })
+      .execute();
+
+    const rows = normalized.map((contact) =>
+      contactRepo.create({
+        employeeId,
+        type: contact.type,
+        value: contact.value,
+        isPrimary: contact.isPrimary,
+        visibility: 'personal',
+      }),
+    );
+    const saved = rows.length ? await contactRepo.save(rows) : [];
+
+    const legacy = legacyPersonalFromContacts(saved);
+    await employeeRepo.update(employeeId, {
+      personalPhoneNumber: legacy.personalPhoneNumber,
+      personalEmail: legacy.personalEmail,
+      personalTelegram: legacy.personalTelegram,
+    });
+
+    return saved;
   }
 
   private async upsertWorkContact(

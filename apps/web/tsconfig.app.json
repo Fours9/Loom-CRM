@@ -6,6 +6,9 @@
     "paths": {
       "@loom/contracts-common": ["../../libs/contracts/common/src/index.ts"],
       "@loom/contracts-auth": ["../../libs/contracts/auth/src/index.ts"],
+      "@loom/contracts-access-control": [
+        "../../libs/contracts/access-control/src/index.ts"
+      ],
       "@loom/contracts-employees": ["../../libs/contracts/employees/src/index.ts"],
       "@loom/contracts-absences": ["../../libs/contracts/absences/src/index.ts"],
       "@loom/contracts-documents": ["../../libs/contracts/documents/src/index.ts"],

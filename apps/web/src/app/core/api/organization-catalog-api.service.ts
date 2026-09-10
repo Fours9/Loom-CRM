@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+import type { EmploymentManagementKind } from '@loom/contracts-employees';
+
 export type OrganizationCatalogDirection = {
   id: string;
   name: string;
@@ -25,6 +27,7 @@ export type OrganizationCatalogPosition = {
   directionId: string | null;
   departmentName?: string | null;
   directionName?: string | null;
+  managementKindTemplate: EmploymentManagementKind;
 };
 
 export type OrganizationCatalogNamedItem = {
