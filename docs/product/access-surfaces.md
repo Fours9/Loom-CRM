@@ -62,9 +62,20 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 - Grant/revoke via Settings role extras — **pre-mutation adminEquivalent** only.
 - Documents: `employee_documents.is_confidential` + type policy (managed-scope manager semantics). See [ADR 0012](../adr/0012-confidential-classification.md).
 
+## Employee profile permission toggles
+
+| Permission | Scope | Meaning |
+|------------|-------|---------|
+| `employees.create` | **Global** | `POST /employees`; FE CTA with `employees.view`. Does not constrain by managed departments. |
+| `employees.manage_profiles` | Managed-dept | Canonical basic/contacts/schedule (+ specialized pairings). Not in DM base preset (extra). |
+| `employees.assign_account_role` | Managed-dept | Assign AccountRole; `GET …/account-roles/assignable` → `AssignableAccountRoleOption` (`id`, `code`, `name`, `isAdminEquivalent`). Admin-equivalent ceiling (not full permission-subset). |
+| `employees.edit` | — | Deprecated; cannot be newly granted. |
+
+Settings role dialog: effective / `grants*Explicitly` / `canEdit*Grant` triad (confidential pattern).
+
 ## Assign flow
 
-People RoleAccess → `PATCH …/access-settings` `{ accountRoleId, overrides? }` → одна TX (assign AccountRole + LAST_ADMIN + UserRole mirror + tokenVersion once) → `{ requestedAccountRole, effectiveAccountRole }` (equal — no leadership rewrite of AccountRole). Org leadership (`managementKind` / computedRole) remains separate scope.
+People RoleAccess → `PATCH …/access-settings` `{ accountRoleId?, overrides? }` → Assign+scope+ceiling for role; visibility overrides **adminEquivalent only** (delegated body with overrides → 403). `{ requestedAccountRole, effectiveAccountRole }` (equal — no leadership rewrite). Org leadership remains separate scope.
 
 ## Positions
 

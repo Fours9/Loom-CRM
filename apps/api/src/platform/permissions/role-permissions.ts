@@ -11,9 +11,9 @@ const EMPLOYEE: Permission[] = [
   Permission.QuestionnairesCompleteSelf,
 ];
 
+/** Variant A: ManageProfiles is extra-controlled, not in DM base preset. */
 const DEPARTMENT_MANAGER: Permission[] = [
   ...EMPLOYEE,
-  Permission.EmployeesEdit,
   Permission.AbsencesApprove,
   Permission.QuestionnairesAssign,
 ];
@@ -21,6 +21,8 @@ const DEPARTMENT_MANAGER: Permission[] = [
 const ADMIN: Permission[] = [
   ...DEPARTMENT_MANAGER,
   Permission.EmployeesCreate,
+  Permission.EmployeesManageProfiles,
+  Permission.EmployeesAssignAccountRole,
   Permission.EmployeesReadPersonal,
   Permission.EmployeesWritePersonal,
   Permission.EmployeesReadEmergency,

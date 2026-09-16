@@ -8,6 +8,8 @@ import { Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserRole } from '../../platform/identity/user.enums';
 import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
+import { hasPermission } from '../../platform/access-control/authorization-context';
+import { Permission } from '../../platform/permissions/permission.names';
 import { Employee } from '../employees/employee.entity';
 import { EmploymentAssignment } from '../employees/employment-assignment.entity';
 import { EmploymentAssignmentManagedDepartment } from '../employees/employment-assignment-managed-department.entity';
@@ -210,15 +212,17 @@ export class EmployeeAccessService {
     actor: User,
     target: Employee,
   ): Promise<boolean> {
-    if (this.isAdminRole(actor)) return true;
-    const ctx = await this.resolveActorContext(actor);
-    if (ctx.scope === 'managed_departments') {
-      const targetDeptId = await this.targetDepartmentId(target);
-      return Boolean(
-        targetDeptId && ctx.managedDepartmentIds.includes(targetDeptId),
-      );
+    const authz = await this.authorization.resolve(actor.id);
+    if (authz.isAdminEquivalent) return true;
+    if (!hasPermission(authz, Permission.EmployeesManageProfiles)) {
+      return false;
     }
-    return false;
+    const ctx = await this.resolveActorContext(actor);
+    if (ctx.scope !== 'managed_departments') return false;
+    const targetDeptId = await this.targetDepartmentId(target);
+    return Boolean(
+      targetDeptId && ctx.managedDepartmentIds.includes(targetDeptId),
+    );
   }
 
   async canEditEmployeeSchedule(
@@ -245,8 +249,12 @@ export class EmployeeAccessService {
     );
   }
 
-  canEditAdminAccess(viewer: User): boolean {
-    return this.isAdminRole(viewer);
+  async canEditAdminAccess(viewer: User): Promise<boolean> {
+    const authz = await this.authorization.resolve(viewer.id);
+    return (
+      authz.isAdminEquivalent ||
+      hasPermission(authz, Permission.EmployeesAssignAccountRole)
+    );
   }
 
   canViewComment(viewer: User, _target: Employee): boolean {
@@ -283,8 +291,20 @@ export class EmployeeAccessService {
     return this.isAdminRole(viewer);
   }
 
-  canCreateEmployeeAccount(viewer: User, target: Employee): boolean {
-    return this.isAdminRole(viewer) && target.userId == null;
+  async canCreateEmployeeAccount(
+    viewer: User,
+    target: Employee,
+  ): Promise<boolean> {
+    if (target.userId != null) return false;
+    const authz = await this.authorization.resolve(viewer.id);
+    if (authz.isAdminEquivalent) return true;
+    if (!hasPermission(authz, Permission.EmployeesCreate)) return false;
+    const ctx = await this.resolveActorContext(viewer);
+    if (ctx.scope !== 'managed_departments') return false;
+    const targetDeptId = await this.targetDepartmentId(target);
+    return Boolean(
+      targetDeptId && ctx.managedDepartmentIds.includes(targetDeptId),
+    );
   }
 
   canManageExistingEmployeeAccount(viewer: User, target: Employee): boolean {
@@ -320,8 +340,28 @@ export class EmployeeAccessService {
     return this.isAdminRole(viewer);
   }
 
-  canEditVisibilityOverrides(viewer: User, _targetRole: string): boolean {
-    return this.isAdminRole(viewer);
+  /**
+   * Managed-department membership for the target (includes owner when own dept managed).
+   * Distinct from resolveTargetAccess.isViaManagedScope (owner short-circuit).
+   */
+  async isTargetInManagedDepartments(
+    actor: User,
+    target: Employee,
+  ): Promise<boolean> {
+    const ctx = await this.resolveActorContext(actor);
+    if (ctx.scope !== 'managed_departments') return false;
+    const targetDeptId = await this.targetDepartmentId(target);
+    return Boolean(
+      targetDeptId && ctx.managedDepartmentIds.includes(targetDeptId),
+    );
+  }
+
+  async canEditVisibilityOverrides(
+    viewer: User,
+    _targetRole: string,
+  ): Promise<boolean> {
+    const authz = await this.authorization.resolve(viewer.id);
+    return authz.isAdminEquivalent;
   }
 
   private static readonly EMPLOYEE_CARD_RELATIONS = [

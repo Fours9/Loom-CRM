@@ -25,6 +25,16 @@ import {
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
 
 const CONFIDENTIAL_VIEW = 'confidential.view';
+const EMPLOYEES_CREATE = 'employees.create';
+const EMPLOYEES_MANAGE_PROFILES = 'employees.manage_profiles';
+const EMPLOYEES_ASSIGN_ACCOUNT_ROLE = 'employees.assign_account_role';
+
+const TOGGLE_EXTRAS = [
+  CONFIDENTIAL_VIEW,
+  EMPLOYEES_CREATE,
+  EMPLOYEES_MANAGE_PROFILES,
+  EMPLOYEES_ASSIGN_ACCOUNT_ROLE,
+] as const;
 
 @Component({
   selector: 'loom-account-role-edit-dialog',
@@ -114,6 +124,36 @@ const CONFIDENTIAL_VIEW = 'confidential.view';
               Входить до повного адміністративного доступу — окремий дозвіл не знімається.
             </p>
           }
+
+          <label class="check">
+            <input
+              type="checkbox"
+              name="roleCreateEmployees"
+              [(ngModel)]="grantsCreateEmployees"
+              [disabled]="busy() || !canEditCreateEmployees()"
+            />
+            Може створювати працівників
+          </label>
+
+          <label class="check">
+            <input
+              type="checkbox"
+              name="roleManageProfiles"
+              [(ngModel)]="grantsManageProfiles"
+              [disabled]="busy() || !canEditManageProfiles()"
+            />
+            Може редагувати профілі працівників
+          </label>
+
+          <label class="check">
+            <input
+              type="checkbox"
+              name="roleAssignAccountRole"
+              [(ngModel)]="grantsAssignAccountRole"
+              [disabled]="busy() || !canEditAssignAccountRole()"
+            />
+            Може призначати ролі акаунта
+          </label>
 
           @if (presetLocked()) {
             <p class="hint">
@@ -303,6 +343,9 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   permissionPreset: PermissionPreset = 'employee';
   isAdminEquivalent = false;
   grantsConfidential = false;
+  grantsCreateEmployees = false;
+  grantsManageProfiles = false;
+  grantsAssignAccountRole = false;
 
   private readonly selectedSurfaceIds = signal<readonly string[]>([]);
   private backdropPress = false;
@@ -325,6 +368,27 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     return role.canEditConfidentialGrant;
   }
 
+  canEditCreateEmployees(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditCreateEmployeesGrant;
+  }
+
+  canEditManageProfiles(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditManageProfilesGrant;
+  }
+
+  canEditAssignAccountRole(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditAssignAccountRoleGrant;
+  }
+
   ngOnInit(): void {
     this.scrollLock.acquire();
   }
@@ -341,6 +405,15 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
       this.isAdminEquivalent = role?.isAdminEquivalent ?? false;
       this.grantsConfidential = role
         ? role.isAdminEquivalent || role.grantsConfidentialExplicitly
+        : false;
+      this.grantsCreateEmployees = role
+        ? role.isAdminEquivalent || role.grantsCreateEmployeesExplicitly
+        : false;
+      this.grantsManageProfiles = role
+        ? role.isAdminEquivalent || role.grantsManageProfilesExplicitly
+        : false;
+      this.grantsAssignAccountRole = role
+        ? role.isAdminEquivalent || role.grantsAssignAccountRoleExplicitly
         : false;
       this.selectedSurfaceIds.set([...(role?.surfaceIds ?? [])]);
     });
@@ -367,14 +440,21 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   onPresetChange(): void {
     if (this.permissionPreset === 'admin') {
       this.isAdminEquivalent = true;
-      this.grantsConfidential = true;
+      this.lockAdminTogglesOn();
     }
   }
 
   onAdminEquivalentChange(): void {
     if (this.isAdminEquivalent) {
-      this.grantsConfidential = true;
+      this.lockAdminTogglesOn();
     }
+  }
+
+  private lockAdminTogglesOn(): void {
+    this.grantsConfidential = true;
+    this.grantsCreateEmployees = true;
+    this.grantsManageProfiles = true;
+    this.grantsAssignAccountRole = true;
   }
 
   submit(): void {
@@ -383,11 +463,14 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
 
     const extras = new Set(
       (this.role()?.extraPermissions ?? []).filter(
-        (p) => p !== CONFIDENTIAL_VIEW,
+        (p) => !(TOGGLE_EXTRAS as readonly string[]).includes(p),
       ),
     );
-    if (!this.isAdminEquivalent && this.grantsConfidential) {
-      extras.add(CONFIDENTIAL_VIEW);
+    if (!this.isAdminEquivalent) {
+      if (this.grantsConfidential) extras.add(CONFIDENTIAL_VIEW);
+      if (this.grantsCreateEmployees) extras.add(EMPLOYEES_CREATE);
+      if (this.grantsManageProfiles) extras.add(EMPLOYEES_MANAGE_PROFILES);
+      if (this.grantsAssignAccountRole) extras.add(EMPLOYEES_ASSIGN_ACCOUNT_ROLE);
     }
 
     this.saved.emit({

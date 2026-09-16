@@ -18,10 +18,8 @@ import {
   type EmployeeCreateDraft,
 } from '../../shared/employees/employee-create-draft';
 import { PeopleEmployeesApiService } from './people-employees-api.service';
-import {
-  EmployeeRoleAccessApiService,
-  type AccountRoleOption,
-} from './employee-role-access-api.service';
+import { AccountRolesApiService } from '../settings/access-roles/account-roles-api.service';
+import type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
 
 @Component({
   selector: 'loom-people-employee-create-page',
@@ -46,6 +44,7 @@ import {
         [positions]="positions()"
         [accountRoles]="accountRoles()"
         [canCreateAccount]="canCreateAccount()"
+        [canAssignAccountRole]="canAssignAccountRole()"
         [canEditPersonal]="canEditPersonal()"
         (submitted)="submit()"
       />
@@ -98,16 +97,17 @@ import {
 export class PeopleEmployeeCreatePageComponent implements OnInit {
   private readonly api = inject(PeopleEmployeesApiService);
   private readonly catalogApi = inject(OrganizationCatalogApiService);
-  private readonly rolesApi = inject(EmployeeRoleAccessApiService);
+  private readonly accountRolesApi = inject(AccountRolesApiService);
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
 
   readonly canCreateAccount = signal(false);
+  readonly canAssignAccountRole = signal(false);
   readonly canEditPersonal = signal(false);
   readonly directions = signal<OrganizationCatalogDirection[]>([]);
   readonly departments = signal<OrganizationCatalogDepartment[]>([]);
   readonly positions = signal<OrganizationCatalogPosition[]>([]);
-  readonly accountRoles = signal<AccountRoleOption[]>([]);
+  readonly accountRoles = signal<AssignableAccountRoleOption[]>([]);
   readonly loading = signal(false);
   readonly error = signal('');
 
@@ -116,7 +116,14 @@ export class PeopleEmployeeCreatePageComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.canCreateAccount.set(this.session.isAdminEquivalent());
+    this.canCreateAccount.set(
+      this.session.isAdminEquivalent() ||
+        this.session.hasPermission(Permission.EmployeesCreate),
+    );
+    this.canAssignAccountRole.set(
+      this.session.isAdminEquivalent() ||
+        this.session.hasPermission(Permission.EmployeesAssignAccountRole),
+    );
     this.canEditPersonal.set(
       this.session.isAdminEquivalent() ||
         this.session.hasPermission(Permission.EmployeesWritePersonal),
@@ -125,9 +132,9 @@ export class PeopleEmployeeCreatePageComponent implements OnInit {
       canCreateAccount: this.canCreateAccount(),
     });
 
-    const roles$ = this.canCreateAccount()
-      ? this.rolesApi.listAccountRoles()
-      : of([] as AccountRoleOption[]);
+    const roles$ = this.canAssignAccountRole()
+      ? this.accountRolesApi.getAssignableRoles()
+      : of([] as AssignableAccountRoleOption[]);
 
     forkJoin({
       catalog: this.catalogApi.getSnapshot(),

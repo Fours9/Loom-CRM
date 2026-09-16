@@ -21,8 +21,9 @@ import {
 } from '../../shared/organization/labels';
 import {
   EmployeeRoleAccessApiService,
-  type AccountRoleOption,
 } from './employee-role-access-api.service';
+import { AccountRolesApiService } from '../settings/access-roles/account-roles-api.service';
+import type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
 
 @Component({
   selector: 'loom-employee-role-access-panel',
@@ -217,6 +218,7 @@ import {
 })
 export class EmployeeRoleAccessPanelComponent {
   private readonly api = inject(EmployeeRoleAccessApiService);
+  private readonly accountRolesApi = inject(AccountRolesApiService);
 
   readonly employeeId = input.required<string>();
   readonly access = input<EmployeeAccessSection | null | undefined>(null);
@@ -228,7 +230,7 @@ export class EmployeeRoleAccessPanelComponent {
   readonly message = signal('');
   readonly error = signal('');
 
-  readonly roles = signal<AccountRoleOption[]>([]);
+  readonly roles = signal<AssignableAccountRoleOption[]>([]);
   readonly rolesLoading = signal(false);
   readonly rolesError = signal('');
 
@@ -346,7 +348,7 @@ export class EmployeeRoleAccessPanelComponent {
   private loadRoles(): void {
     this.rolesLoading.set(true);
     this.rolesError.set('');
-    this.api.listAccountRoles().subscribe({
+    this.accountRolesApi.getAssignableRoles().subscribe({
       next: (roles) => {
         this.roles.set(roles);
         this.rolesLoading.set(false);

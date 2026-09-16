@@ -15,6 +15,7 @@ Visibility (кого бачиш) і account access (permissions + UI surfaces) �
 7. **Every User INSERT** вимагає `accountRoleId`. Migration: NULL → backfill → assert → NOT NULL.
 8. **Account-role definition CRUD** — лише `isAdminEquivalent` actor. **LAST_ADMIN:** ніколи 0 active adminEquivalent Users.
 9. **Positions:** `GET /positions` = catalog; `GET /positions/manage` + mutations = scoped management.
+10. **Employee profile gates (extras):** `employees.create` (global create), `employees.manage_profiles` (canonical profile edits + managed-dept scope; **not** in DM base preset — extra-controlled), `employees.assign_account_role` (assign + admin-equivalent ceiling: no self, no touch/create adminEq targets). Assignable picker wire = `AssignableAccountRoleOption` (`@loom/contracts-access-control`); Settings definition view keeps `isSystem`. Settings toggles use effective/explicit like `confidential.view`. `employees.edit` deprecated — migration collapses to manage_profiles; Settings rejects new edit grants. Legacy `PATCH /employees/:id` = adminEquivalent-only compatibility. Owner emergency self-edit preserved without ManageProfiles.
 
 ### UX labels
 

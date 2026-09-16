@@ -80,6 +80,7 @@ import {
   rethrowAssignmentWriteError,
 } from './employment-assignment-organization.resolver';
 import type { PersonalContactWriteInput } from './employee-personal-contacts';
+import { canAssignAccountRole } from './employee-account-role-assign.policy';
 import type { CreateEmployeeResponse } from '@loom/contracts-employees';
 
 type DisplayedOrgProjection = {
@@ -563,14 +564,28 @@ export class EmployeesService {
         const roleRepo = manager.getRepository(AccountRole);
 
         let numberingRole: AccountRole | null = null;
-        if (dto.accountRoleId?.trim()) {
+        let accountRoleSource: 'explicit' | 'leadership_seed' | null = null;
+        const requestedAccountRoleIdRaw = dto.accountRoleId?.trim() || null;
+        if (requestedAccountRoleIdRaw) {
           numberingRole = await roleRepo.findOne({
-            where: { id: dto.accountRoleId },
+            where: { id: requestedAccountRoleIdRaw },
             lock: { mode: 'pessimistic_read' },
           });
           if (!numberingRole) {
             throw new BadRequestException('Account role not found');
           }
+          if (
+            !canAssignAccountRole({
+              actorAuthz: authz,
+              actorUserId: actor.id,
+              targetUserId: null,
+              currentTargetRole: null,
+              nextRole: numberingRole,
+            })
+          ) {
+            throw new ForbiddenException();
+          }
+          accountRoleSource = 'explicit';
         }
 
         const requestedNumber = dto.employeeNumber?.trim();
@@ -692,6 +707,7 @@ export class EmployeesService {
             if (!requestedRole) {
               throw new BadRequestException('System account role not found');
             }
+            accountRoleSource = 'leadership_seed';
           }
 
           requestedAccountRoleId = requestedRole.id;
@@ -725,8 +741,7 @@ export class EmployeesService {
             { bumpTokenVersion: false },
           );
           effectiveAccountRoleId = projection.newAccountRoleId;
-          bridgeApplied =
-            (requestedAccountRoleId ?? null) !== effectiveAccountRoleId;
+          bridgeApplied = false;
         } else {
           await this.identityRoleProjection.apply(manager, emp, {
             bumpTokenVersion: false,
@@ -749,6 +764,11 @@ export class EmployeesService {
               requestedAccountRoleId,
               effectiveAccountRoleId,
               bridgeApplied,
+              accountRoleSource,
+              canAssignAccountRole: hasPermission(
+                authz,
+                Permission.EmployeesAssignAccountRole,
+              ),
             },
           },
           manager,
@@ -799,12 +819,16 @@ export class EmployeesService {
       throw new ForbiddenException();
     }
 
-    if (createAccount && !authz.isAdminEquivalent) {
-      throw new ForbiddenException();
-    }
-
-    if (dto.accountRoleId?.trim() && !authz.isAdminEquivalent) {
-      throw new ForbiddenException();
+    // createAccount is gated by EmployeesCreate (already required on the route).
+    // Explicit accountRoleId requires Assign + admin-equivalent ceiling.
+    if (dto.accountRoleId?.trim()) {
+      // Ceiling checked after role load in create TX; here fail-closed without Assign.
+      if (
+        !authz.isAdminEquivalent &&
+        !hasPermission(authz, Permission.EmployeesAssignAccountRole)
+      ) {
+        throw new ForbiddenException();
+      }
     }
 
     if (dto.employeeNumber?.trim() && !authz.isAdminEquivalent) {
@@ -861,16 +885,18 @@ export class EmployeesService {
   }
 
   async update(actor: User, id: string, dto: UpdateEmployeeInput) {
-    const employee = await this.access.getEmployeeOrFail(id);
-    if (!(await this.access.canEditEmployeeProfile(actor, employee))) {
-      throw new NotFoundException('Employee not found');
+    const authz = await this.authorization.resolve(actor.id);
+    // Legacy mixed PATCH — adminEquivalent-only compatibility (canonical writers elsewhere).
+    if (!authz.isAdminEquivalent) {
+      throw new ForbiddenException();
     }
+    const employee = await this.access.getEmployeeOrFail(id);
 
     if (dto.firstName !== undefined) employee.firstName = dto.firstName.trim();
     if (dto.lastName !== undefined) employee.lastName = dto.lastName.trim();
     if (dto.middleName !== undefined)
       employee.middleName = dto.middleName?.trim() || null;
-    if (dto.employeeNumber !== undefined && this.access.isAdmin(actor)) {
+    if (dto.employeeNumber !== undefined) {
       employee.employeeNumber = dto.employeeNumber.trim();
     }
     // Legacy org patch: display mirror only — Access SoT is active EA.
@@ -891,34 +917,19 @@ export class EmployeesService {
     if (dto.phoneNumber !== undefined) employee.phoneNumber = dto.phoneNumber;
     if (dto.telegram !== undefined) employee.telegram = dto.telegram;
     if (dto.workEmail !== undefined) employee.workEmail = dto.workEmail;
-    if (
-      dto.personalPhoneNumber !== undefined &&
-      this.access.canEditPersonalContacts(actor)
-    ) {
+    if (dto.personalPhoneNumber !== undefined) {
       employee.personalPhoneNumber = dto.personalPhoneNumber;
     }
-    if (
-      dto.personalTelegram !== undefined &&
-      this.access.canEditPersonalContacts(actor)
-    ) {
+    if (dto.personalTelegram !== undefined) {
       employee.personalTelegram = dto.personalTelegram;
     }
-    if (
-      dto.personalEmail !== undefined &&
-      this.access.canEditPersonalContacts(actor)
-    ) {
+    if (dto.personalEmail !== undefined) {
       employee.personalEmail = dto.personalEmail;
     }
-    if (
-      dto.comment !== undefined &&
-      (await this.access.canEditComment(actor, employee))
-    ) {
+    if (dto.comment !== undefined) {
       employee.comment = dto.comment;
     }
-    if (
-      dto.adminComment !== undefined &&
-      this.access.canEditAdminComment(actor)
-    ) {
+    if (dto.adminComment !== undefined) {
       employee.adminComment = dto.adminComment;
     }
 
@@ -933,7 +944,7 @@ export class EmployeesService {
       action: 'employee.basic_updated',
       entityType: 'Employee',
       entityId: id,
-      metadata: { fields: Object.keys(dto) },
+      metadata: { fields: Object.keys(dto), legacyPatch: true },
     });
 
     return this.findOne(actor, id);
@@ -945,10 +956,28 @@ export class EmployeesService {
     dto: UpdateAccessSettingsInput,
   ) {
     const actorCtx = await this.authorization.resolve(actor.id);
-    if (!actorCtx.isAdminEquivalent) {
+    const mayAssign =
+      actorCtx.isAdminEquivalent ||
+      hasPermission(actorCtx, Permission.EmployeesAssignAccountRole);
+    if (!mayAssign) {
       throw new ForbiddenException();
     }
-    await this.access.getEmployeeOrFail(id);
+
+    const visibilityRequested =
+      dto.profileVisibilityOverride !== undefined ||
+      dto.absenceVisibilityOverride !== undefined ||
+      dto.showAbsenceTypeToPeersOverride !== undefined;
+    if (visibilityRequested && !actorCtx.isAdminEquivalent) {
+      throw new ForbiddenException();
+    }
+
+    const targetEmployee = await this.access.getEmployeeOrFail(id);
+    if (
+      !actorCtx.isAdminEquivalent &&
+      !(await this.access.isTargetInManagedDepartments(actor, targetEmployee))
+    ) {
+      throw new ForbiddenException();
+    }
 
     const result = await this.dataSource.transaction(async (manager) => {
       const employeeRepo = manager.getRepository(Employee);
@@ -977,22 +1006,13 @@ export class EmployeesService {
         showAbsenceTypeToPeersOverride: emp.showAbsenceTypeToPeersOverride,
       };
 
-      if (
-        dto.profileVisibilityOverride !== undefined &&
-        this.access.canEditVisibilityOverrides(actor, emp.role)
-      ) {
+      if (dto.profileVisibilityOverride !== undefined) {
         emp.profileVisibilityOverride = dto.profileVisibilityOverride;
       }
-      if (
-        dto.absenceVisibilityOverride !== undefined &&
-        this.access.canEditVisibilityOverrides(actor, emp.role)
-      ) {
+      if (dto.absenceVisibilityOverride !== undefined) {
         emp.absenceVisibilityOverride = dto.absenceVisibilityOverride;
       }
-      if (
-        dto.showAbsenceTypeToPeersOverride !== undefined &&
-        this.access.canEditVisibilityOverrides(actor, emp.role)
-      ) {
+      if (dto.showAbsenceTypeToPeersOverride !== undefined) {
         emp.showAbsenceTypeToPeersOverride = this.peerTypeOverrideToColumn(
           dto.showAbsenceTypeToPeersOverride,
         );
@@ -1011,6 +1031,22 @@ export class EmployeesService {
         });
         if (!requestedAccountRole) {
           throw new BadRequestException('Account role not found');
+        }
+
+        const currentTargetRole = user.accountRoleId
+          ? await roleRepo.findOne({ where: { id: user.accountRoleId } })
+          : null;
+
+        if (
+          !canAssignAccountRole({
+            actorAuthz: actorCtx,
+            actorUserId: actor.id,
+            targetUserId: user.id,
+            currentTargetRole,
+            nextRole: requestedAccountRole,
+          })
+        ) {
+          throw new ForbiddenException();
         }
 
         await this.lastAdmin.assertUserDemotionAllowed(
@@ -1040,7 +1076,7 @@ export class EmployeesService {
         const mirror = compatibilityUserRoleFromAccountRole(
           effectiveAccountRole,
         );
-        let roleChanged =
+        const roleChanged =
           before.accountRoleId !== freshUser.accountRoleId ||
           before.role !== mirror;
         freshUser.role = mirror;
@@ -1183,15 +1219,29 @@ export class EmployeesService {
   async attachAccount(
     actor: User,
     id: string,
-    dto: { email: string; temporaryPassword: string },
+    dto: {
+      email: string;
+      temporaryPassword: string;
+      accountRoleId?: string;
+    },
   ) {
     const employee = await this.access.getEmployeeOrFail(id);
-    if (!this.access.canCreateEmployeeAccount(actor, employee)) {
+    if (!(await this.access.canCreateEmployeeAccount(actor, employee))) {
       throw new ForbiddenException();
     }
+    const authz = await this.authorization.resolve(actor.id);
     const email = dto.email.toLowerCase().trim();
     if (await this.users.findByEmail(email)) {
       throw new ConflictException('Email already in use');
+    }
+
+    const requestedRoleId = dto.accountRoleId?.trim() || null;
+    if (
+      requestedRoleId &&
+      !authz.isAdminEquivalent &&
+      !hasPermission(authz, Permission.EmployeesAssignAccountRole)
+    ) {
+      throw new ForbiddenException();
     }
 
     await this.dataSource.transaction(async (manager) => {
@@ -1202,29 +1252,52 @@ export class EmployeesService {
       });
       if (!emp) throw new NotFoundException('Employee not found');
 
-      const activeEa = emp.currentAssignmentId
-        ? await manager.getRepository(EmploymentAssignment).findOne({
-            where: { id: emp.currentAssignmentId },
-          })
-        : null;
-      const leadershipKind = (
-        isManagementKind(activeEa?.managementKind)
-          ? activeEa!.managementKind
-          : ManagementKind.None
-      ) as EmploymentManagementKind;
-      const desiredCode =
-        defaultSystemAccountRoleCodeFromLeadership(leadershipKind) ===
-        'department_manager'
-          ? SystemAccountRoleCode.DepartmentManager
-          : SystemAccountRoleCode.Employee;
-      const accountRoleId = await resolveSystemAccountRoleId(
-        manager,
-        desiredCode,
-      );
       const roleRepo = manager.getRepository(AccountRole);
-      const accountRole = await roleRepo.findOneOrFail({
-        where: { id: accountRoleId },
-      });
+      let accountRole: AccountRole;
+      if (requestedRoleId) {
+        const nextRole = await roleRepo.findOne({
+          where: { id: requestedRoleId },
+        });
+        if (!nextRole) {
+          throw new BadRequestException('Account role not found');
+        }
+        if (
+          !canAssignAccountRole({
+            actorAuthz: authz,
+            actorUserId: actor.id,
+            targetUserId: null,
+            currentTargetRole: null,
+            nextRole,
+          })
+        ) {
+          throw new ForbiddenException();
+        }
+        accountRole = nextRole;
+      } else {
+        const activeEa = emp.currentAssignmentId
+          ? await manager.getRepository(EmploymentAssignment).findOne({
+              where: { id: emp.currentAssignmentId },
+            })
+          : null;
+        const leadershipKind = (
+          isManagementKind(activeEa?.managementKind)
+            ? activeEa!.managementKind
+            : ManagementKind.None
+        ) as EmploymentManagementKind;
+        const desiredCode =
+          defaultSystemAccountRoleCodeFromLeadership(leadershipKind) ===
+          'department_manager'
+            ? SystemAccountRoleCode.DepartmentManager
+            : SystemAccountRoleCode.Employee;
+        const accountRoleId = await resolveSystemAccountRoleId(
+          manager,
+          desiredCode,
+        );
+        accountRole = await roleRepo.findOneOrFail({
+          where: { id: accountRoleId },
+        });
+      }
+
       const mirror = compatibilityUserRoleFromAccountRole(accountRole);
 
       const userRepo = manager.getRepository(User);
@@ -1233,7 +1306,7 @@ export class EmployeesService {
           email,
           passwordHash: await bcrypt.hash(dto.temporaryPassword, 12),
           role: mirror,
-          accountRoleId,
+          accountRoleId: accountRole.id,
           isDepartmentManager: false,
           status: UserStatus.Active,
           mustChangePassword: true,

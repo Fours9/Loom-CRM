@@ -231,7 +231,10 @@ export class EmployeeSerializer {
         viewer,
         employee,
       ),
-      canCreateAccount: this.access.canCreateEmployeeAccount(viewer, employee),
+      canCreateAccount: await this.access.canCreateEmployeeAccount(
+        viewer,
+        employee,
+      ),
       canManageAccount: this.access.canDestructivelyManageAccount(
         viewer,
         employee,
@@ -265,7 +268,7 @@ export class EmployeeSerializer {
       permissions['canViewAbsenceVisibilityOverride'] = true;
       permissions['canViewShowAbsenceTypeToPeersOverride'] = true;
     }
-    if (this.access.canEditVisibilityOverrides(viewer, targetRole)) {
+    if (await this.access.canEditVisibilityOverrides(viewer, targetRole)) {
       permissions['canEditProfileVisibilityOverride'] = true;
       permissions['canEditAbsenceVisibilityOverride'] = true;
       permissions['canEditShowAbsenceTypeToPeersOverride'] = true;

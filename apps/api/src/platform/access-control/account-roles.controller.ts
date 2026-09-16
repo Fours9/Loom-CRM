@@ -97,6 +97,11 @@ export class AccountRolesController {
     return this.accountRoles.listSurfaces(user.id);
   }
 
+  @Get('assignable')
+  listAssignable(@CurrentUser() user: User) {
+    return this.accountRoles.listAssignable(user.id);
+  }
+
   @Get(':id')
   get(@CurrentUser() user: User, @Param('id') id: string) {
     return this.accountRoles.get(user.id, id);

@@ -1,6 +1,9 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { resolveEmployeeNumberPrefixFromAccountRole } from '@loom/contracts-access-control';
+import {
+  resolveEmployeeNumberPrefixFromAccountRole,
+  type AssignableAccountRoleOption,
+} from '@loom/contracts-access-control';
 import { ScheduleEditorComponent } from '../schedule/public-api';
 import { PasswordVisibilityToggleComponent } from '../password-visibility-toggle.component';
 import {
@@ -23,15 +26,6 @@ import type {
   OrganizationCatalogDirection,
   OrganizationCatalogPosition,
 } from '../../core/api/organization-catalog-api.service';
-
-/** Same shape as People `AccountRoleOption` — kept local so shared ≠ features. */
-export type CreateAccountRoleOption = {
-  id: string;
-  code: string | null;
-  name: string;
-  isSystem: boolean;
-  isAdminEquivalent: boolean;
-};
 
 @Component({
   selector: 'loom-employee-create-form',
@@ -80,22 +74,28 @@ export type CreateAccountRoleOption = {
             </label>
           </div>
           @if (canCreateAccount) {
-            <div class="row row-1">
-              <label>
-                Роль
-                <select
-                  [(ngModel)]="draft.accountRoleId"
-                  name="accountRoleId"
-                >
-                  <option value="">{{ autoAccountRoleLabel }}</option>
-                  @for (role of accountRoles; track role.id) {
-                    <option [value]="role.id">
-                      {{ roleOptionLabel(role) }}
-                    </option>
-                  }
-                </select>
-              </label>
-            </div>
+            @if (canAssignAccountRole) {
+              <div class="row row-1">
+                <label>
+                  Роль
+                  <select
+                    [(ngModel)]="draft.accountRoleId"
+                    name="accountRoleId"
+                  >
+                    <option value="">{{ autoAccountRoleLabel }}</option>
+                    @for (role of accountRoles; track role.id) {
+                      <option [value]="role.id">
+                        {{ roleOptionLabel(role) }}
+                      </option>
+                    }
+                  </select>
+                </label>
+              </div>
+            } @else {
+              <p class="muted hint">
+                Роль акаунта буде визначена за посадою (Працівник / Менеджер).
+              </p>
+            }
             <div class="row row-1">
               <label class="toggle-field">
                 <span>Створити обліковий запис</span>
@@ -448,6 +448,12 @@ export type CreateAccountRoleOption = {
         padding: 0.55rem 0;
         color: var(--pw-muted, #666);
       }
+      .muted.hint {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--pw-muted, #666);
+        line-height: 1.4;
+      }
     `,
   ],
 })
@@ -456,8 +462,9 @@ export class EmployeeCreateFormComponent {
   @Input() directions: OrganizationCatalogDirection[] = [];
   @Input() departments: OrganizationCatalogDepartment[] = [];
   @Input() positions: OrganizationCatalogPosition[] = [];
-  @Input() accountRoles: CreateAccountRoleOption[] = [];
+  @Input() accountRoles: AssignableAccountRoleOption[] = [];
   @Input() canCreateAccount = false;
+  @Input() canAssignAccountRole = false;
   @Input() canEditPersonal = false;
   @Output() readonly submitted = new EventEmitter<void>();
 
@@ -505,7 +512,7 @@ export class EmployeeCreateFormComponent {
     return `Автоматично за посадою → ${ACCOUNT_ROLE_LABELS[autoCode]} (номер ${prefix}-…)`;
   }
 
-  roleOptionLabel(role: CreateAccountRoleOption): string {
+  roleOptionLabel(role: AssignableAccountRoleOption): string {
     const prefix = resolveEmployeeNumberPrefixFromAccountRole({
       code: role.code,
       isAdminEquivalent: role.isAdminEquivalent,

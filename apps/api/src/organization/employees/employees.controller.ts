@@ -102,6 +102,7 @@ class ReplaceScheduleDto {
 class AttachAccountDto {
   @IsEmail() email!: string;
   @IsString() @MinLength(8) temporaryPassword!: string;
+  @IsOptional() @IsUUID() accountRoleId?: string;
 }
 
 class AccountStatusDto {
@@ -338,7 +339,7 @@ export class EmployeesController {
   }
 
   @Post(':id/skill-assessments')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   createSkillAssessment(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -348,7 +349,7 @@ export class EmployeesController {
   }
 
   @Put(':id/skill-assessments')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   upsertSkillAssessment(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -358,7 +359,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/skill-assessments/:assessmentId')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   updateSkillAssessment(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -369,7 +370,7 @@ export class EmployeesController {
   }
 
   @Delete(':id/skill-assessments/:assessmentId')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   deleteSkillAssessment(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -379,7 +380,10 @@ export class EmployeesController {
   }
 
   @Post(':id/employment-assignments')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(
+    Permission.EmployeesManageProfiles,
+    Permission.EmployeesChangeAssignment,
+  )
   createAssignment(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -389,7 +393,10 @@ export class EmployeesController {
   }
 
   @Patch(':id/employment-assignments/:assignmentId')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(
+    Permission.EmployeesManageProfiles,
+    Permission.EmployeesChangeAssignment,
+  )
   updateAssignment(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -400,7 +407,10 @@ export class EmployeesController {
   }
 
   @Delete(':id/employment-assignments/:assignmentId')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(
+    Permission.EmployeesManageProfiles,
+    Permission.EmployeesChangeAssignment,
+  )
   deleteAssignment(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -410,7 +420,10 @@ export class EmployeesController {
   }
 
   @Post(':id/status-transitions')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(
+    Permission.EmployeesManageProfiles,
+    Permission.EmployeesChangeStatus,
+  )
   statusTransition(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -420,7 +433,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/basic')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   patchBasic(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -430,7 +443,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/contacts')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   patchContacts(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -440,7 +453,10 @@ export class EmployeesController {
   }
 
   @Patch(':id/personal')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(
+    Permission.EmployeesManageProfiles,
+    Permission.EmployeesWritePersonal,
+  )
   patchPersonal(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -450,7 +466,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/employment-meta')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   patchEmploymentMeta(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -460,7 +476,10 @@ export class EmployeesController {
   }
 
   @Put(':id/personal-contacts')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(
+    Permission.EmployeesManageProfiles,
+    Permission.EmployeesWritePersonal,
+  )
   putPersonalContacts(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -470,7 +489,7 @@ export class EmployeesController {
   }
 
   @Put(':id/emergency-contact')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesView)
   putEmergency(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -480,7 +499,10 @@ export class EmployeesController {
   }
 
   @Put(':id/important-dates')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(
+    Permission.EmployeesManageProfiles,
+    Permission.EmployeesWritePersonal,
+  )
   putImportantDates(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -519,7 +541,7 @@ export class EmployeesController {
   }
 
   @Patch(':id')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   update(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -529,7 +551,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/access-settings')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesAssignAccountRole)
   updateAccessSettings(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -539,7 +561,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/account/email')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   updateAccountEmail(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -549,7 +571,7 @@ export class EmployeesController {
   }
 
   @Post(':id/account')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesCreate)
   attachAccount(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -559,7 +581,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/account/status')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   updateAccountStatus(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -569,7 +591,7 @@ export class EmployeesController {
   }
 
   @Delete(':id/account')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   deleteAccount(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -578,7 +600,7 @@ export class EmployeesController {
   }
 
   @Post(':id/deactivate')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   deactivate(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -587,7 +609,7 @@ export class EmployeesController {
   }
 
   @Post(':id/activate')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   activate(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
@@ -605,7 +627,7 @@ export class EmployeesController {
   }
 
   @Put(':id/schedule')
-  @RequirePermissions(Permission.EmployeesEdit)
+  @RequirePermissions(Permission.EmployeesManageProfiles)
   replaceSchedule(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,

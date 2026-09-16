@@ -4,7 +4,10 @@ import type { EntityId } from '@loom/contracts-common';
 export const Permission = {
   EmployeesView: 'employees.view',
   EmployeesCreate: 'employees.create',
+  /** @deprecated Prefer employees.manage_profiles; rejected as new AccountRole extra. */
   EmployeesEdit: 'employees.edit',
+  EmployeesManageProfiles: 'employees.manage_profiles',
+  EmployeesAssignAccountRole: 'employees.assign_account_role',
   EmployeesReadPersonal: 'employees.read.personal',
   EmployeesWritePersonal: 'employees.write.personal',
   EmployeesReadEmergency: 'employees.read.emergency_contact',

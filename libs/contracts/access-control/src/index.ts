@@ -1,4 +1,18 @@
+import type { EntityId } from '@loom/contracts-common';
 import type { EmploymentManagementKind } from '@loom/contracts-employees';
+
+/**
+ * Slim AccountRole picker wire (`GET /settings/account-roles/assignable`).
+ * Not the Settings definition view — no surfaces, extras, isSystem, or counts.
+ * Authorization: assign_account_role OR adminEquivalent; non-adminEq actors
+ * receive only !isAdminEquivalent roles.
+ */
+export type AssignableAccountRoleOption = {
+  id: EntityId;
+  code: string | null;
+  name: string;
+  isAdminEquivalent: boolean;
+};
 
 /**
  * System account-role codes that may be **defaulted** from org leadership when

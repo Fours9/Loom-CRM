@@ -1,7 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, map, of, throwError } from 'rxjs';
+import type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
 import { FALLBACK_SURFACE_CATALOG } from './surface-catalog';
+
+export type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
 
 /** Permission bundle a role starts from; extras are added on top. */
 export type PermissionPreset = 'employee' | 'department_manager' | 'admin';
@@ -36,6 +39,15 @@ export type AccountRole = {
   canViewConfidential: boolean;
   grantsConfidentialExplicitly: boolean;
   canEditConfidentialGrant: boolean;
+  canCreateEmployees: boolean;
+  grantsCreateEmployeesExplicitly: boolean;
+  canEditCreateEmployeesGrant: boolean;
+  canManageProfiles: boolean;
+  grantsManageProfilesExplicitly: boolean;
+  canEditManageProfilesGrant: boolean;
+  canAssignAccountRole: boolean;
+  grantsAssignAccountRoleExplicitly: boolean;
+  canEditAssignAccountRoleGrant: boolean;
 };
 
 export type CreateAccountRoleBody = {
@@ -60,6 +72,13 @@ export class AccountRolesApiService {
 
   getRoles(): Observable<AccountRole[]> {
     return this.http.get<AccountRole[]>(ROLES_URL);
+  }
+
+  /** Slim catalog for create / Role Access pickers (assign_account_role). */
+  getAssignableRoles(): Observable<AssignableAccountRoleOption[]> {
+    return this.http.get<AssignableAccountRoleOption[]>(
+      `${ROLES_URL}/assignable`,
+    );
   }
 
   createRole(body: CreateAccountRoleBody): Observable<AccountRole> {

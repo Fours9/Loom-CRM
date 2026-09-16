@@ -13,8 +13,6 @@ import type {
   UpdateEmployeeSkillAssessmentRequest,
 } from '@loom/contracts-employees';
 import { User } from '../../platform/identity/user.entity';
-import { Permission } from '../../platform/permissions/permission.names';
-import { PermissionService } from '../../platform/permissions/permission.service';
 import { EmployeeAccessService } from '../access/employee-access.service';
 import { CurrentEmploymentAssignmentResolver } from '../employment-catalog/current-employment-assignment.resolver';
 import { PositionSkillRequirement } from '../position-requirements/position-skill-requirement.entity';
@@ -33,7 +31,6 @@ export class EmployeeSkillMatrixService {
     private readonly assessmentsFacade: EmployeeSkillAssessmentsFacade,
     private readonly currentEmployment: CurrentEmploymentAssignmentResolver,
     private readonly access: EmployeeAccessService,
-    private readonly permissions: PermissionService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -43,9 +40,7 @@ export class EmployeeSkillMatrixService {
   ): Promise<EmployeeSkillMatrixResponse> {
     const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
-    const canEdit =
-      this.permissions.has(actor.role, Permission.EmployeesEdit) &&
-      (await this.canEditQuiet(actor, employee));
+    const canEdit = await this.canEditQuiet(actor, employee);
 
     const { profileItems, extraItems } = await this.buildBuckets(employee);
     return { profileItems, extraItems, capabilities: { canEdit } };

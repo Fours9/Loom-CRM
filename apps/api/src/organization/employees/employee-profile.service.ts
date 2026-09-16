@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,8 +11,18 @@ import { User } from '../../platform/identity/user.entity';
 import { UsersService } from '../../platform/identity/users.service';
 import { UserRole, UserStatus } from '../../platform/identity/user.enums';
 import { AuditService } from '../../platform/audit/audit.service';
-import { permissionsForRole } from '../../platform/permissions/role-permissions';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
+import {
+  hasPermission,
+} from '../../platform/access-control/authorization-context';
 import { Permission } from '../../platform/permissions/permission.names';
+import {
+  canChangeAssignmentOnTarget,
+  canChangeStatusOnTarget,
+  canEditEmergencyOnTarget,
+  canManageProfilesOnTarget,
+  canWritePersonalOnTarget,
+} from './employee-profile-authz';
 import { EmployeeAccessService } from '../access/employee-access.service';
 import { Employee } from './employee.entity';
 import { EmployeeContact } from './employee-contact.entity';
@@ -44,7 +55,6 @@ import { DepartmentsService } from '../departments/departments.service';
 import { EmploymentCatalogService } from '../employment-catalog/employment-catalog.service';
 import { CurrentEmploymentAssignmentResolver } from '../employment-catalog/current-employment-assignment.resolver';
 import { BusinessDateClock } from './business-date-clock';
-import { canMutateEmployeeOrgAssignment } from './can-mutate-employee-org-assignment.policy';
 import {
   getPositionBlockedReason,
   isDepartmentSelectable,
@@ -142,11 +152,8 @@ export class EmployeeProfileService {
     private readonly businessDateClock: BusinessDateClock,
     private readonly identityRoleProjection: IdentityRoleProjection,
     private readonly assignmentOrg: EmploymentAssignmentOrganizationResolver,
+    private readonly authorization: AuthorizationContextService,
   ) {}
-
-  private hasPerm(user: User, perm: Permission): boolean {
-    return permissionsForRole(user.role).includes(perm);
-  }
 
   private parseOptionalDateOnly(value: string | null | undefined): string | null {
     if (value == null) {
@@ -160,7 +167,10 @@ export class EmployeeProfileService {
       throw new BadRequestException('Date must be YYYY-MM-DD');
     }
     const probe = new Date(`${trimmed}T12:00:00Z`);
-    if (Number.isNaN(probe.getTime()) || probe.toISOString().slice(0, 10) !== trimmed) {
+    if (
+      Number.isNaN(probe.getTime()) ||
+      probe.toISOString().slice(0, 10) !== trimmed
+    ) {
       throw new BadRequestException(`Invalid date: ${trimmed}`);
     }
     return trimmed;
@@ -182,49 +192,59 @@ export class EmployeeProfileService {
       return null;
     }
     if (trimmed.length > maxLength) {
-      throw new BadRequestException(`${field} must be at most ${maxLength} characters`);
+      throw new BadRequestException(
+        `${field} must be at most ${maxLength} characters`,
+      );
     }
     return trimmed;
   }
 
   async capabilities(actor: User, target: Employee): Promise<ProfileCapabilities> {
-    const canEdit = await this.access.canEditEmployeeProfile(actor, target);
-    const canView = await this.access.canViewEmployeeProfile(actor, target);
+    const [authz, canView, inManagedDept] = await Promise.all([
+      this.authorization.resolve(actor.id),
+      this.access.canViewEmployeeProfile(actor, target),
+      this.access.isTargetInManagedDepartments(actor, target),
+    ]);
     const owner = this.access.isOwner(actor, target);
-    const admin = this.access.isAdmin(actor);
+    const canEditBasic = canManageProfilesOnTarget(authz, inManagedDept);
+
     return {
-      canEditBasic: canEdit,
-      canEditEmployment: canEdit && canMutateEmployeeOrgAssignment(actor),
+      canEditBasic,
+      canEditEmployment: canChangeAssignmentOnTarget(authz, inManagedDept),
       canViewPersonal:
-        admin ||
+        authz.isAdminEquivalent ||
         owner ||
-        this.hasPerm(actor, Permission.EmployeesReadPersonal),
-      canEditPersonal:
-        admin || this.hasPerm(actor, Permission.EmployeesWritePersonal),
+        hasPermission(authz, Permission.EmployeesReadPersonal),
+      canEditPersonal: canWritePersonalOnTarget(authz, inManagedDept),
       canViewEmergencyContact:
-        admin ||
+        authz.isAdminEquivalent ||
         owner ||
-        this.hasPerm(actor, Permission.EmployeesReadEmergency),
-      canEditEmergencyContact:
-        admin ||
-        owner ||
-        this.hasPerm(actor, Permission.EmployeesWriteEmergency),
-      canChangeStatus:
-        admin || this.hasPerm(actor, Permission.EmployeesChangeStatus),
+        hasPermission(authz, Permission.EmployeesReadEmergency),
+      canEditEmergencyContact: canEditEmergencyOnTarget(
+        authz,
+        inManagedDept,
+        owner,
+      ),
+      canChangeStatus: canChangeStatusOnTarget(authz, inManagedDept),
       canExport: await this.access.canExportProfilePdf(actor, target),
       canViewHistory:
-        admin ||
-        this.hasPerm(actor, Permission.EmployeesViewHistory) ||
-        (canView && this.access.isManager(actor)),
+        authz.isAdminEquivalent ||
+        hasPermission(authz, Permission.EmployeesViewHistory) ||
+        (canView &&
+          (authz.isAdminEquivalent ||
+            hasPermission(authz, Permission.EmployeesManageProfiles))),
       canStartOnboarding: false,
       canAssignQuestionnaire:
-        this.hasPerm(actor, Permission.QuestionnairesAssign) && canView,
-      canCreateAccount: this.access.canCreateEmployeeAccount(actor, target),
+        hasPermission(authz, Permission.QuestionnairesAssign) && canView,
+      canCreateAccount: await this.access.canCreateEmployeeAccount(
+        actor,
+        target,
+      ),
       canResetPassword: this.access.canResetEmployeePassword(actor, target),
       canManageAccount: this.access.canDestructivelyManageAccount(actor, target),
       canDeleteEmployee: this.access.canDeleteEmployee(actor, target),
-      canEditAdminAccess: this.access.canEditAdminAccess(actor),
-      canEditVisibilityOverrides: this.access.canEditVisibilityOverrides(
+      canEditAdminAccess: await this.access.canEditAdminAccess(actor),
+      canEditVisibilityOverrides: await this.access.canEditVisibilityOverrides(
         actor,
         target.role,
       ),
@@ -234,8 +254,13 @@ export class EmployeeProfileService {
   }
 
   /** Owner + Admin may see extended completeness; managers on others get null. */
-  private canViewExtendedCompleteness(actor: User, target: Employee): boolean {
-    return this.access.isAdmin(actor) || this.access.isOwner(actor, target);
+  private async canViewExtendedCompleteness(
+    actor: User,
+    target: Employee,
+  ): Promise<boolean> {
+    if (this.access.isOwner(actor, target)) return true;
+    const authz = await this.authorization.resolve(actor.id);
+    return authz.isAdminEquivalent;
   }
 
   async getProfile(actor: User, id: string) {
@@ -294,7 +319,7 @@ export class EmployeeProfileService {
     const scored = computeProfileCompleteness(facts);
     const completeness = projectProfileCompleteness(
       scored,
-      this.canViewExtendedCompleteness(actor, employee),
+      await this.canViewExtendedCompleteness(actor, employee),
     );
 
     // Permission-aware projection for response sections only.
@@ -548,7 +573,11 @@ export class EmployeeProfileService {
         row.preferredName = dto.preferredName?.trim() || null;
       }
       if (dto.photoUrl !== undefined) row.photoUrl = dto.photoUrl || null;
-      if (dto.employeeNumber !== undefined && this.access.isAdmin(actor)) {
+      if (dto.employeeNumber !== undefined) {
+        const authz = await this.authorization.resolve(actor.id);
+        if (!authz.isAdminEquivalent) {
+          throw new ForbiddenException();
+        }
         row.employeeNumber = dto.employeeNumber.trim();
       }
       await repo.save(row);

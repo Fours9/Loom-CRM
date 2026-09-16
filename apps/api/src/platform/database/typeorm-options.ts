@@ -65,6 +65,7 @@ import { EmploymentManagementKind1730000036000 } from './migrations/173000003600
 import { AccountRolesAndSurfaces1730000037000 } from './migrations/1730000037000-AccountRolesAndSurfaces';
 import { EmployeeDocumentConfidential1730000038000 } from './migrations/1730000038000-EmployeeDocumentConfidential';
 import { QuestionnaireSubmitEqualsClosed1730000039000 } from './migrations/1730000039000-QuestionnaireSubmitEqualsClosed';
+import { EmployeeProfileRoleGates1730000040000 } from './migrations/1730000040000-EmployeeProfileRoleGates';
 import { PositionManagedDepartment } from '../../organization/positions/position-managed-department.entity';
 import { EmploymentAssignmentManagedDepartment } from '../../organization/employees/employment-assignment-managed-department.entity';
 import { AppSurface } from '../access-control/app-surface.entity';
@@ -152,6 +153,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       AccountRolesAndSurfaces1730000037000,
       EmployeeDocumentConfidential1730000038000,
       QuestionnaireSubmitEqualsClosed1730000039000,
+      EmployeeProfileRoleGates1730000040000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

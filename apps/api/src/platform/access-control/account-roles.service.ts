@@ -24,6 +24,9 @@ import { userRoleMirrorFor } from './account-role-mirror';
 import { AuthorizationContextService } from './authorization-context.service';
 import type { AuthorizationContext } from './authorization-context';
 import { LastAdminPolicy } from './last-admin.policy';
+import type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
+
+export type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
 
 const PERMISSION_PRESETS: readonly AccountRolePermissionPreset[] = [
   'employee',
@@ -49,6 +52,15 @@ export type AccountRoleView = {
   grantsConfidentialExplicitly: boolean;
   /** Actor may toggle the confidential extra (adminEq actor + non-adminEq target). */
   canEditConfidentialGrant: boolean;
+  canCreateEmployees: boolean;
+  grantsCreateEmployeesExplicitly: boolean;
+  canEditCreateEmployeesGrant: boolean;
+  canManageProfiles: boolean;
+  grantsManageProfilesExplicitly: boolean;
+  canEditManageProfilesGrant: boolean;
+  canAssignAccountRole: boolean;
+  grantsAssignAccountRoleExplicitly: boolean;
+  canEditAssignAccountRoleGrant: boolean;
 };
 
 export type AppSurfaceView = {
@@ -107,6 +119,33 @@ export class AccountRolesService {
         this.toView(this.dataSource.manager, role, actorCtx),
       ),
     );
+  }
+
+  /**
+   * Slim catalog for AccountRole pickers (create / Role Access).
+   * assign_account_role OR adminEquivalent — not full Settings list().
+   */
+  async listAssignable(
+    actorUserId: string,
+  ): Promise<AssignableAccountRoleOption[]> {
+    const actorCtx = await this.authorization.resolve(actorUserId);
+    const mayList =
+      actorCtx.isAdminEquivalent ||
+      actorCtx.permissions.includes(Permission.EmployeesAssignAccountRole);
+    if (!mayList) {
+      throw new ForbiddenException();
+    }
+    const roles = await this.dataSource.getRepository(AccountRole).find({
+      order: { isSystem: 'DESC', name: 'ASC' },
+    });
+    return roles
+      .filter((role) => actorCtx.isAdminEquivalent || !role.isAdminEquivalent)
+      .map((role) => ({
+        id: role.id,
+        code: role.code,
+        name: role.name,
+        isAdminEquivalent: role.isAdminEquivalent,
+      }));
   }
 
   async get(actorUserId: string, id: string): Promise<AccountRoleView> {
@@ -306,6 +345,14 @@ export class AccountRolesService {
 
   private assertPermissions(values: string[]): Permission[] {
     const unique = [...new Set(values.map((v) => v?.trim()).filter(Boolean))];
+    const deprecated = unique.filter(
+      (value) => value === Permission.EmployeesEdit,
+    );
+    if (deprecated.length) {
+      throw new BadRequestException(
+        `Deprecated permission(s) cannot be granted: ${deprecated.join(', ')}. Use employees.manage_profiles.`,
+      );
+    }
     const invalid = unique.filter((value) => !isPermission(value));
     if (invalid.length) {
       throw new BadRequestException(
@@ -453,6 +500,33 @@ export class AccountRolesService {
     const canEditConfidentialGrant =
       actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
 
+    const grantsCreateEmployeesExplicitly = extraPermissions.includes(
+      Permission.EmployeesCreate,
+    );
+    const canCreateEmployees =
+      role.isAdminEquivalent ||
+      effectivePermissions.includes(Permission.EmployeesCreate);
+    const canEditCreateEmployeesGrant =
+      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
+
+    const grantsManageProfilesExplicitly = extraPermissions.includes(
+      Permission.EmployeesManageProfiles,
+    );
+    const canManageProfiles =
+      role.isAdminEquivalent ||
+      effectivePermissions.includes(Permission.EmployeesManageProfiles);
+    const canEditManageProfilesGrant =
+      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
+
+    const grantsAssignAccountRoleExplicitly = extraPermissions.includes(
+      Permission.EmployeesAssignAccountRole,
+    );
+    const canAssignAccountRole =
+      role.isAdminEquivalent ||
+      effectivePermissions.includes(Permission.EmployeesAssignAccountRole);
+    const canEditAssignAccountRoleGrant =
+      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
+
     return {
       id: role.id,
       code: role.code,
@@ -467,6 +541,15 @@ export class AccountRolesService {
       canViewConfidential,
       grantsConfidentialExplicitly,
       canEditConfidentialGrant,
+      canCreateEmployees,
+      grantsCreateEmployeesExplicitly,
+      canEditCreateEmployeesGrant,
+      canManageProfiles,
+      grantsManageProfilesExplicitly,
+      canEditManageProfilesGrant,
+      canAssignAccountRole,
+      grantsAssignAccountRoleExplicitly,
+      canEditAssignAccountRoleGrant,
     };
   }
 }
