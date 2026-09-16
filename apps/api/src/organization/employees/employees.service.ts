@@ -51,7 +51,6 @@ import { LastAdminPolicy } from '../../platform/access-control/last-admin.policy
 import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
 import {
   SystemAccountRoleCode,
-  BRIDGE_MANAGED_ROLE_CODES,
 } from '../../platform/access-control/system-account-role-codes';
 import { userRoleMirrorFor } from '../../platform/access-control/account-role-mirror';
 import {
@@ -61,6 +60,8 @@ import {
   ManagementKind,
   isManagementKind,
 } from '../employment-catalog/management-kind';
+import { defaultSystemAccountRoleCodeFromLeadership } from '@loom/contracts-access-control';
+import type { EmploymentManagementKind } from '@loom/contracts-employees';
 import { Permission } from '../../platform/permissions/permission.names';
 import {
   hasPermission,
@@ -675,7 +676,9 @@ export class EmployeesService {
           let requestedRole: AccountRole | null = numberingRole;
           if (!requestedRole) {
             const systemCode =
-              membership.managementKind !== ManagementKind.None
+              defaultSystemAccountRoleCodeFromLeadership(
+                membership.managementKind as EmploymentManagementKind,
+              ) === 'department_manager'
                 ? SystemAccountRoleCode.DepartmentManager
                 : SystemAccountRoleCode.Employee;
             const systemRoleId = await resolveSystemAccountRoleId(
@@ -1022,18 +1025,10 @@ export class EmployeesService {
         await userRepo.save(user);
         await employeeRepo.save(emp);
 
-        const bridgeable =
-          requestedAccountRole.isSystem &&
-          !!requestedAccountRole.code &&
-          (BRIDGE_MANAGED_ROLE_CODES as readonly string[]).includes(
-            requestedAccountRole.code,
-          );
-
-        if (bridgeable) {
-          await this.identityRoleProjection.apply(manager, emp, {
-            bumpTokenVersion: false,
-          });
-        }
+        // Mirror sync only — AccountRole is not rewritten from EA leadership.
+        await this.identityRoleProjection.apply(manager, emp, {
+          bumpTokenVersion: false,
+        });
 
         const freshUser = await userRepo.findOneOrFail({
           where: { id: user.id },
@@ -1207,24 +1202,37 @@ export class EmployeesService {
       });
       if (!emp) throw new NotFoundException('Employee not found');
 
-      await this.identityRoleProjection.apply(manager, emp);
-      const fresh = await employeeRepo.findOneOrFail({ where: { id } });
-
+      const activeEa = emp.currentAssignmentId
+        ? await manager.getRepository(EmploymentAssignment).findOne({
+            where: { id: emp.currentAssignmentId },
+          })
+        : null;
+      const leadershipKind = (
+        isManagementKind(activeEa?.managementKind)
+          ? activeEa!.managementKind
+          : ManagementKind.None
+      ) as EmploymentManagementKind;
       const desiredCode =
-        fresh.role === UserRole.DepartmentManager
+        defaultSystemAccountRoleCodeFromLeadership(leadershipKind) ===
+        'department_manager'
           ? SystemAccountRoleCode.DepartmentManager
           : SystemAccountRoleCode.Employee;
       const accountRoleId = await resolveSystemAccountRoleId(
         manager,
         desiredCode,
       );
+      const roleRepo = manager.getRepository(AccountRole);
+      const accountRole = await roleRepo.findOneOrFail({
+        where: { id: accountRoleId },
+      });
+      const mirror = compatibilityUserRoleFromAccountRole(accountRole);
 
       const userRepo = manager.getRepository(User);
       const user = await userRepo.save(
         userRepo.create({
           email,
           passwordHash: await bcrypt.hash(dto.temporaryPassword, 12),
-          role: fresh.role as UserRole,
+          role: mirror,
           accountRoleId,
           isDepartmentManager: false,
           status: UserStatus.Active,
@@ -1234,8 +1242,12 @@ export class EmployeesService {
           lastLoginAt: null,
         }),
       );
-      fresh.userId = user.id;
-      await employeeRepo.save(fresh);
+      emp.userId = user.id;
+      emp.role = mirror;
+      await employeeRepo.save(emp);
+      await this.identityRoleProjection.apply(manager, emp, {
+        bumpTokenVersion: false,
+      });
     });
 
     return this.findOne(actor, id);

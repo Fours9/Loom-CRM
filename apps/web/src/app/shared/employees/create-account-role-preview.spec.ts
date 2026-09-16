@@ -1,24 +1,27 @@
-import { resolveCreateAccountRolePreview } from './create-account-role-preview';
+import {
+  defaultSystemAccountRoleCodeFromLeadership,
+  resolveCreateAccountRolePreview,
+} from './create-account-role-preview';
 
 describe('resolveCreateAccountRolePreview', () => {
-  it('bridges employee → DM when position template is direction', () => {
+  it('keeps requested Manager even when position has no leadership', () => {
+    expect(
+      resolveCreateAccountRolePreview({
+        requestedRoleCode: 'department_manager',
+        managementKind: 'none',
+      }),
+    ).toEqual({
+      requestedRoleCode: 'department_manager',
+      effectiveRoleCode: 'department_manager',
+      bridgeApplied: false,
+    });
+  });
+
+  it('keeps requested employee even when position leads', () => {
     expect(
       resolveCreateAccountRolePreview({
         requestedRoleCode: 'employee',
         managementKind: 'direction',
-      }),
-    ).toEqual({
-      requestedRoleCode: 'employee',
-      effectiveRoleCode: 'department_manager',
-      bridgeApplied: true,
-    });
-  });
-
-  it('keeps employee when template is none', () => {
-    expect(
-      resolveCreateAccountRolePreview({
-        requestedRoleCode: 'employee',
-        managementKind: 'none',
       }),
     ).toEqual({
       requestedRoleCode: 'employee',
@@ -50,5 +53,17 @@ describe('resolveCreateAccountRolePreview', () => {
       effectiveRoleCode: null,
       bridgeApplied: false,
     });
+  });
+});
+
+describe('defaultSystemAccountRoleCodeFromLeadership', () => {
+  it('seeds DM only when leadership is present (omitted-role default)', () => {
+    expect(defaultSystemAccountRoleCodeFromLeadership('none')).toBe('employee');
+    expect(defaultSystemAccountRoleCodeFromLeadership('departments')).toBe(
+      'department_manager',
+    );
+    expect(defaultSystemAccountRoleCodeFromLeadership('direction')).toBe(
+      'department_manager',
+    );
   });
 });

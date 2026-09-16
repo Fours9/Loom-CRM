@@ -64,7 +64,7 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 
 ## Assign flow
 
-People RoleAccess → `PATCH …/access-settings` `{ accountRoleId, overrides? }` → одна TX (assign + bridge canonicalize для system employee/DM + LAST_ADMIN + mirror + tokenVersion once) → `{ requestedAccountRole, effectiveAccountRole }`.
+People RoleAccess → `PATCH …/access-settings` `{ accountRoleId, overrides? }` → одна TX (assign AccountRole + LAST_ADMIN + UserRole mirror + tokenVersion once) → `{ requestedAccountRole, effectiveAccountRole }` (equal — no leadership rewrite of AccountRole). Org leadership (`managementKind` / computedRole) remains separate scope.
 
 ## Positions
 

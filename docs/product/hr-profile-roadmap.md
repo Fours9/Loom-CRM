@@ -81,7 +81,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 - Absences-like directory UX (shared `apps/web/src/app/shared/employees/`): пошук `q`, multi `directionIds` / `departmentIds` / `positionIds`, колонки ПІБ · номер · напрямок · відділ · посада · роль · статус; без color swatch; без completeness filter/column на UI.
 - Cascade: `normalizeDirectoryFilters(requested, catalog)` → один `filtersChange` → один list request; positions: dept-selected → by `departmentId`, else direction-selected → by `directionId` (включно `departmentId=null`).
 - Роль у колонці / `sortBy=role` = `AccountRole.name` коли є акаунт; без акаунта — legacy UA label. `hasAccount` + missing `accountRole` relation → API fail-closed (500), never silent legacy.
-- Create: повна сторінка `/people/new` (`EmployeesCreate` ∧ `EmployeesView`); API `POST /employees` + `EmployeesCreate`; Absences create → redirect; напрямок + AccountRole (adminEquivalent, roles GET gated); audit `requested`/`effective`/`bridgeApplied`; [ADR 0013](../adr/0013-employee-create-sot.md).
+- Create: повна сторінка `/people/new` (`EmployeesCreate` ∧ `EmployeesView`); API `POST /employees` + `EmployeesCreate`; Absences create → redirect; напрямок + AccountRole (adminEquivalent, roles GET gated; **немає rewrite** ролі з `managementKind`); audit `requested`/`effective`/`bridgeApplied`; [ADR 0013](../adr/0013-employee-create-sot.md).
 - Detail → `/people/:id`. List loads через `PeopleEmployeesApiService` + `switchMap`.
 - Contract: `EmployeeListItem` + `accountRole`; API query: `positionIds`/`directionIds` (OR з singular), `sortBy=direction`, uk-UA `localeCompare` + tie-break fullName→employeeNumber.
 

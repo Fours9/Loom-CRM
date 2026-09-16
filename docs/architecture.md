@@ -51,7 +51,7 @@ Practical semantics:
 
 - **Org leadership:** Position `managementKindTemplate` / EA `managementKind` (`none` | `departments` | `direction`). Direction expands to all departments of the EA direction for Access scope. Legacy booleans are display mirrors only.
 - **Account roles (Platform AccessControl):** `account_roles` + `app_surfaces` + `users.account_role_id` (NOT NULL). `AuthorizationContextService.resolve` is the authZ SoT for Guard / `/me` / Access adminEquivalent. `users.role` is a compatibility mirror.
-- **No `adminAccess` toggle** — full admin = system role `admin` or custom `is_admin_equivalent`. RoleAccess assigns `accountRoleId`; system employee/DM are canonicalized from active EA in the same TX.
+- **No `adminAccess` toggle** — full admin = system role `admin` or custom `is_admin_equivalent`. RoleAccess assigns `accountRoleId` independently of EA `managementKind` (leadership is scope only; omitted-role create/attach may seed default employee/DM from leadership).
 - Settings **«Доступи»** (`/settings/access-roles`) — adminEquivalent-only CRUD. Surface AND permission for UI. `GET /positions` = catalog; `GET /positions/manage` = scoped management.
 - Living surfaces catalog: [access-surfaces.md](product/access-surfaces.md). Decision: [ADR 0011](adr/0011-org-leadership-vs-account-role.md).
 

@@ -298,7 +298,7 @@ export type EmployeeEmergencyContactItem = {
   notes: string | null;
 };
 
-/** Assigned vs canonicalized account role (leadership bridge may downgrade/upgrade). */
+/** Account role ref (access SoT). requested/effective are equal after ADR 0011 — no leadership rewrite. */
 export type EmployeeAccountRoleRef = {
   id: EntityId;
   code: string;

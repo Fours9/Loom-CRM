@@ -11,7 +11,7 @@ Visibility (кого бачиш) і account access (permissions + UI surfaces) �
 3. **`AuthorizationContextService.resolve`** — єдиний authZ SoT для Jwt/`/me`, PermissionsGuard, PermissionService, Access, Positions manage, Settings roles API. `users.role` — compatibility mirror only.
 4. **Немає окремого `adminAccess` toggle.** Full admin = system role `admin` або custom з `is_admin_equivalent=true`.
 5. **Три шари:** Permission (API authority), Surface (UI exposure), Scope (entities). Для permission-backed UI: `hasSurface AND hasPermission`. Surface ніколи не дозволяє backend mutation.
-6. **Leadership bridge** лише system `employee` ↔ `department_manager` (у т.ч. `direction` → DM, ніколи auto-director). Assign system employee/DM + active EA canonicalize в одній TX (`requested` vs `effective`).
+6. **AccountRole ≠ org leadership.** `managementKind` on Position/EA is scope only. AccountRole (permissions / surfaces / confidential) is chosen independently. Explicit AccountRole is **never** rewritten from leadership. When AccountRole is **omitted** at create/attach, system may **seed** default `employee` or `department_manager` from leadership as an initial choice only (`defaultSystemAccountRoleCodeFromLeadership`). Director / admin / custom are never auto-seeded from leadership. Assign + audit keep `requested` / `effective` / `bridgeApplied` (identity: `bridgeApplied` always false when role was explicit).
 7. **Every User INSERT** вимагає `accountRoleId`. Migration: NULL → backfill → assert → NOT NULL.
 8. **Account-role definition CRUD** — лише `isAdminEquivalent` actor. **LAST_ADMIN:** ніколи 0 active adminEquivalent Users.
 9. **Positions:** `GET /positions` = catalog; `GET /positions/manage` + mutations = scoped management.

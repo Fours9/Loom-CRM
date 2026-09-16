@@ -1,16 +1,12 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import {
-  resolveEmployeeNumberPrefixFromAccountRole,
-  type AccountRoleBridgeResult,
-} from '@loom/contracts-access-control';
+import { resolveEmployeeNumberPrefixFromAccountRole } from '@loom/contracts-access-control';
 import { ScheduleEditorComponent } from '../schedule/public-api';
 import { PasswordVisibilityToggleComponent } from '../password-visibility-toggle.component';
 import {
   generateTemporaryPassword,
   type EmployeeCreateDraft,
 } from './employee-create-draft';
-import { resolveCreateAccountRolePreview } from './create-account-role-preview';
 import {
   reduceEmploymentOrgFilter,
   filterDepartmentsForSelection,
@@ -100,39 +96,31 @@ export type CreateAccountRoleOption = {
                 </select>
               </label>
             </div>
-            @if (draft.createAccount && accountRoleBridge; as bridge) {
-              <div class="role-bridge">
-                <div class="role-resolution">
-                  <span class="label">Запитана роль</span>
-                  <strong>{{ roleCodeLabel(bridge.requestedRoleCode) }}</strong>
-                </div>
-                <div class="role-resolution">
-                  <span class="label">Ефективна роль</span>
-                  <strong>{{ roleCodeLabel(bridge.effectiveRoleCode) }}</strong>
-                </div>
-                @if (bridge.bridgeApplied) {
-                  <p class="bridge-callout">
-                    Вибрано «{{ roleCodeLabel(bridge.requestedRoleCode) }}», але
-                    через керівництво посади ефективна роль акаунта буде
-                    «{{ roleCodeLabel(bridge.effectiveRoleCode) }}».
-                  </p>
-                }
-              </div>
-            }
             <div class="row row-1">
-              <label>
-                Обліковий запис
-                <select
+              <label class="toggle-field">
+                <span>Створити обліковий запис</span>
+                <input
+                  type="checkbox"
                   [(ngModel)]="draft.createAccount"
                   name="createAccount"
                   (ngModelChange)="onCreateAccountChange()"
-                >
-                  <option [ngValue]="true">Створити обліковий запис</option>
-                  <option [ngValue]="false">Без облікового запису</option>
-                </select>
+                />
               </label>
             </div>
             @if (draft.createAccount) {
+              <div class="row row-1">
+                <label>
+                  Email для входу
+                  <input
+                    type="email"
+                    [(ngModel)]="draft.email"
+                    name="email"
+                    required
+                    maxlength="254"
+                    autocomplete="username"
+                  />
+                </label>
+              </div>
               <div class="row row-1">
                 <label>
                   Тимчасовий пароль
@@ -168,20 +156,6 @@ export type CreateAccountRoleOption = {
         <details class="section-block disclose" open>
           <summary>Контакти</summary>
           <div class="disclose-body">
-            @if (canCreateAccount && draft.createAccount) {
-              <div class="row row-1">
-                <label>
-                  Email для входу
-                  <input
-                    type="email"
-                    [(ngModel)]="draft.email"
-                    name="email"
-                    required
-                    maxlength="254"
-                  />
-                </label>
-              </div>
-            }
             <div class="row row-1">
               <label>
                 Робочий email
@@ -407,6 +381,30 @@ export type CreateAccountRoleOption = {
         gap: 0.3rem;
         min-width: 0;
       }
+      .row > label.toggle-field {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.65rem;
+        cursor: pointer;
+        user-select: none;
+        min-height: 2.4rem;
+        width: fit-content;
+      }
+      .row > label.toggle-field input[type='checkbox'] {
+        width: 1.15rem;
+        height: 1.15rem;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        accent-color: var(--pw-accent, #2a6fdb);
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .row > label.toggle-field span {
+        font-weight: 500;
+        line-height: 1.3;
+      }
       .password-row {
         display: flex;
         gap: 0.5rem;
@@ -449,29 +447,6 @@ export type CreateAccountRoleOption = {
       .value {
         padding: 0.55rem 0;
         color: var(--pw-muted, #666);
-      }
-      .role-bridge {
-        display: grid;
-        gap: 0.5rem;
-      }
-      .role-resolution {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: 0.35rem 0.75rem;
-      }
-      .role-resolution .label {
-        font-size: 0.85rem;
-        color: var(--pw-muted, #666);
-      }
-      .bridge-callout {
-        margin: 0;
-        padding: 0.55rem 0.7rem;
-        border-radius: 8px;
-        background: color-mix(in srgb, var(--pw-muted, #888) 12%, transparent);
-        color: var(--pw-muted, #666);
-        font-size: 0.9rem;
-        line-height: 1.4;
       }
     `,
   ],
@@ -530,32 +505,12 @@ export class EmployeeCreateFormComponent {
     return `Автоматично за посадою → ${ACCOUNT_ROLE_LABELS[autoCode]} (номер ${prefix}-…)`;
   }
 
-  /** Bridge preview only when creating an account with an explicit role. */
-  get accountRoleBridge(): AccountRoleBridgeResult | null {
-    if (!this.draft.createAccount || !this.draft.accountRoleId) return null;
-    const role = this.accountRoles.find(
-      (item) => item.id === this.draft.accountRoleId,
-    );
-    return resolveCreateAccountRolePreview({
-      requestedRoleCode: role?.code ?? null,
-      managementKind: this.selectedManagementKind,
-    });
-  }
-
   roleOptionLabel(role: CreateAccountRoleOption): string {
     const prefix = resolveEmployeeNumberPrefixFromAccountRole({
       code: role.code,
       isAdminEquivalent: role.isAdminEquivalent,
     });
     return prefix ? `${role.name} (номер ${prefix}-…)` : role.name;
-  }
-
-  roleCodeLabel(code: string | null): string {
-    if (code && code in ACCOUNT_ROLE_LABELS) {
-      return ACCOUNT_ROLE_LABELS[code as AccountRoleCode];
-    }
-    const named = this.accountRoles.find((role) => role.code === code);
-    return named?.name || code || '—';
   }
 
   onCreateAccountChange(): void {

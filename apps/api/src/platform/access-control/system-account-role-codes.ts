@@ -26,8 +26,9 @@ export function isSystemAccountRoleCode(
 }
 
 /**
- * Codes the leadership bridge is allowed to assign automatically.
- * SoT: `@loom/contracts-access-control` (ADR 0011 §6).
+ * System roles that may be **seeded as default** when AccountRole is omitted
+ * (create/attach). Explicit AccountRole is never rewritten from leadership.
+ * SoT: `@loom/contracts-access-control` (ADR 0011).
  */
 export const BRIDGE_MANAGED_ROLE_CODES: readonly SystemAccountRoleCode[] =
   BRIDGE_MANAGED_ACCOUNT_ROLE_CODES as readonly SystemAccountRoleCode[];

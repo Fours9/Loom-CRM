@@ -1,8 +1,9 @@
 import type { EmploymentManagementKind } from '@loom/contracts-employees';
 
 /**
- * System account-role codes the leadership bridge may auto-assign (ADR 0011).
- * Director / admin / custom are never auto-assigned.
+ * System account-role codes that may be **defaulted** from org leadership when
+ * AccountRole is omitted at create/attach. They are never auto-rewritten after
+ * an explicit choice (ADR 0011 — AccountRole independent of managementKind).
  */
 export const BRIDGE_MANAGED_ACCOUNT_ROLE_CODES = [
   'employee',
@@ -46,36 +47,37 @@ export function resolveEmployeeNumberPrefixFromAccountRole(role: {
 }
 
 export type AccountRoleBridgeResult = {
-  /** Requested code as provided (null = custom / unknown). */
   requestedRoleCode: string | null;
-  /** Effective code after leadership bridge (null preserved for custom). */
+  /** Always equals requested — AccountRole is not rewritten from leadership. */
   effectiveRoleCode: string | null;
+  /** Always false; retained for audit/API compatibility. */
   bridgeApplied: boolean;
 };
 
 /**
- * Pure leadership → system employee/DM bridge (ADR 0011).
- * Non-bridgeable codes (director/admin/custom) are preserved.
+ * Identity resolution: requested AccountRole code is effective.
+ * `managementKind` is ignored (kept optional for call-site compatibility).
+ * Leadership may still **seed a default** when role is omitted — see
+ * {@link defaultSystemAccountRoleCodeFromLeadership}.
  */
 export function resolveAccountRoleBridge(input: {
   requestedRoleCode: string | null;
-  managementKind: EmploymentManagementKind;
+  managementKind?: EmploymentManagementKind;
 }): AccountRoleBridgeResult {
-  const requestedRoleCode = input.requestedRoleCode;
-  if (!isBridgeManagedAccountRoleCode(requestedRoleCode)) {
-    return {
-      requestedRoleCode,
-      effectiveRoleCode: requestedRoleCode,
-      bridgeApplied: false,
-    };
-  }
-
-  const desired: BridgeManagedAccountRoleCode =
-    input.managementKind === 'none' ? 'employee' : 'department_manager';
-
+  void input.managementKind;
   return {
-    requestedRoleCode,
-    effectiveRoleCode: desired,
-    bridgeApplied: requestedRoleCode !== desired,
+    requestedRoleCode: input.requestedRoleCode,
+    effectiveRoleCode: input.requestedRoleCode,
+    bridgeApplied: false,
   };
+}
+
+/**
+ * Default system employee/DM when AccountRole was not explicitly chosen
+ * (create without accountRoleId, attach-account). Not an overwrite of intent.
+ */
+export function defaultSystemAccountRoleCodeFromLeadership(
+  managementKind: EmploymentManagementKind,
+): BridgeManagedAccountRoleCode {
+  return managementKind === 'none' ? 'employee' : 'department_manager';
 }

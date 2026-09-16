@@ -73,19 +73,16 @@ import {
             <div class="role-resolution">
               <span class="label">Ефективна роль</span>
               <strong>{{ roleRefLabel(effective) }}</strong>
-              @if (roleDiffers()) {
-                <p class="muted hint">
-                  Відрізняється від призначеної — застосовано керівництво з активного
-                  призначення.
-                </p>
-              }
             </div>
           }
 
           <div class="role-resolution">
-            <span class="label">Роль зі структури</span>
+            <span class="label">Керівництво зі структури</span>
             <strong>{{ computedRoleLabel() }}</strong>
-            <p class="muted hint">Визначається активною посадою</p>
+            <p class="muted hint">
+              Org leadership з активного призначення (scope). Не змінює роль
+              акаунта.
+            </p>
           </div>
         </section>
       }
@@ -291,13 +288,6 @@ export class EmployeeRoleAccessPanelComponent {
 
   effectiveRole(): EmployeeAccountRoleRef | null {
     return this.access()?.effectiveAccountRole ?? null;
-  }
-
-  /** Leadership bridge may resolve to a different role than the assigned one. */
-  roleDiffers(): boolean {
-    const requested = this.requestedRole();
-    const effective = this.effectiveRole();
-    return Boolean(requested && effective && requested.id !== effective.id);
   }
 
   roleRefLabel(role: EmployeeAccountRoleRef): string {
