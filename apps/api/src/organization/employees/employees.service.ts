@@ -81,6 +81,7 @@ import {
 } from './employment-assignment-organization.resolver';
 import type { PersonalContactWriteInput } from './employee-personal-contacts';
 import { canAssignAccountRole } from './employee-account-role-assign.policy';
+import { canCreateAccountAtEmployeeCreate } from './employee-profile-authz';
 import type { CreateEmployeeResponse } from '@loom/contracts-employees';
 
 type DisplayedOrgProjection = {
@@ -549,14 +550,10 @@ export class EmployeesService {
 
         const { position, managedDepartmentIds: templateDepts } =
           await loadPositionManagerTemplate(manager, resolved.positionId);
-        const explicitManagementKind = isManagementKind(dto.managementKind)
-          ? dto.managementKind
-          : undefined;
         const membership = resolveManagerMembershipForCreate({
           position,
           positionManagedDepartmentIds: templateDepts,
           assignmentDepartmentId: resolved.departmentId,
-          explicitManagementKind,
         });
 
         const employeeRepo = manager.getRepository(Employee);
@@ -680,6 +677,10 @@ export class EmployeesService {
               'email and temporaryPassword are required when createAccount=true',
             );
           }
+          const txAuthz = await this.authorization.resolve(actor.id, manager);
+          if (!canCreateAccountAtEmployeeCreate(txAuthz)) {
+            throw new ForbiddenException();
+          }
           const email = dto.email.toLowerCase().trim();
           const existing = await manager.getRepository(User).findOne({
             where: { email },
@@ -761,6 +762,11 @@ export class EmployeesService {
             metadata: {
               employeeNumber: emp.employeeNumber,
               createAccount,
+              accountCreationAuthorization: createAccount
+                ? authz.isAdminEquivalent
+                  ? 'admin_equivalent'
+                  : 'employees.create_account_at_create'
+                : null,
               requestedAccountRoleId,
               effectiveAccountRoleId,
               bridgeApplied,
@@ -819,8 +825,12 @@ export class EmployeesService {
       throw new ForbiddenException();
     }
 
-    // createAccount is gated by EmployeesCreate (already required on the route).
+    // createAccount requires EmployeesCreateAccountAtCreate (or adminEq).
     // Explicit accountRoleId requires Assign + admin-equivalent ceiling.
+    if (createAccount && !canCreateAccountAtEmployeeCreate(authz)) {
+      throw new ForbiddenException();
+    }
+
     if (dto.accountRoleId?.trim()) {
       // Ceiling checked after role load in create TX; here fail-closed without Assign.
       if (

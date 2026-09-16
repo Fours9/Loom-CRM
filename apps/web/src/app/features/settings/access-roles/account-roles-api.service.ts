@@ -48,6 +48,9 @@ export type AccountRole = {
   canAssignAccountRole: boolean;
   grantsAssignAccountRoleExplicitly: boolean;
   canEditAssignAccountRoleGrant: boolean;
+  canCreateAccountAtCreate: boolean;
+  grantsCreateAccountAtCreateExplicitly: boolean;
+  canEditCreateAccountAtCreateGrant: boolean;
 };
 
 export type CreateAccountRoleBody = {

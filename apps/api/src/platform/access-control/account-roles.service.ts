@@ -61,6 +61,9 @@ export type AccountRoleView = {
   canAssignAccountRole: boolean;
   grantsAssignAccountRoleExplicitly: boolean;
   canEditAssignAccountRoleGrant: boolean;
+  canCreateAccountAtCreate: boolean;
+  grantsCreateAccountAtCreateExplicitly: boolean;
+  canEditCreateAccountAtCreateGrant: boolean;
 };
 
 export type AppSurfaceView = {
@@ -527,6 +530,15 @@ export class AccountRolesService {
     const canEditAssignAccountRoleGrant =
       actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
 
+    const grantsCreateAccountAtCreateExplicitly = extraPermissions.includes(
+      Permission.EmployeesCreateAccountAtCreate,
+    );
+    const canCreateAccountAtCreate =
+      role.isAdminEquivalent ||
+      effectivePermissions.includes(Permission.EmployeesCreateAccountAtCreate);
+    const canEditCreateAccountAtCreateGrant =
+      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
+
     return {
       id: role.id,
       code: role.code,
@@ -550,6 +562,9 @@ export class AccountRolesService {
       canAssignAccountRole,
       grantsAssignAccountRoleExplicitly,
       canEditAssignAccountRoleGrant,
+      canCreateAccountAtCreate,
+      grantsCreateAccountAtCreateExplicitly,
+      canEditCreateAccountAtCreateGrant,
     };
   }
 }

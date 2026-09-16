@@ -28,12 +28,15 @@ const CONFIDENTIAL_VIEW = 'confidential.view';
 const EMPLOYEES_CREATE = 'employees.create';
 const EMPLOYEES_MANAGE_PROFILES = 'employees.manage_profiles';
 const EMPLOYEES_ASSIGN_ACCOUNT_ROLE = 'employees.assign_account_role';
+const EMPLOYEES_CREATE_ACCOUNT_AT_CREATE =
+  'employees.create_account_at_create';
 
 const TOGGLE_EXTRAS = [
   CONFIDENTIAL_VIEW,
   EMPLOYEES_CREATE,
   EMPLOYEES_MANAGE_PROFILES,
   EMPLOYEES_ASSIGN_ACCOUNT_ROLE,
+  EMPLOYEES_CREATE_ACCOUNT_AT_CREATE,
 ] as const;
 
 @Component({
@@ -154,6 +157,20 @@ const TOGGLE_EXTRAS = [
             />
             Може призначати ролі акаунта
           </label>
+
+          <label class="check">
+            <input
+              type="checkbox"
+              name="roleCreateAccountAtCreate"
+              [(ngModel)]="grantsCreateAccountAtCreate"
+              [disabled]="busy() || !canEditCreateAccountAtCreate()"
+            />
+            Може створювати обліковий запис при створенні працівника
+          </label>
+          <p class="hint">
+            Дозволяє створити акаунт одразу разом із карткою. Створення акаунта
+            пізніше регулюється окремою політикою attach.
+          </p>
 
           @if (presetLocked()) {
             <p class="hint">
@@ -346,6 +363,7 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   grantsCreateEmployees = false;
   grantsManageProfiles = false;
   grantsAssignAccountRole = false;
+  grantsCreateAccountAtCreate = false;
 
   private readonly selectedSurfaceIds = signal<readonly string[]>([]);
   private backdropPress = false;
@@ -389,6 +407,13 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     return role.canEditAssignAccountRoleGrant;
   }
 
+  canEditCreateAccountAtCreate(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditCreateAccountAtCreateGrant;
+  }
+
   ngOnInit(): void {
     this.scrollLock.acquire();
   }
@@ -414,6 +439,9 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
         : false;
       this.grantsAssignAccountRole = role
         ? role.isAdminEquivalent || role.grantsAssignAccountRoleExplicitly
+        : false;
+      this.grantsCreateAccountAtCreate = role
+        ? role.isAdminEquivalent || role.grantsCreateAccountAtCreateExplicitly
         : false;
       this.selectedSurfaceIds.set([...(role?.surfaceIds ?? [])]);
     });
@@ -455,6 +483,7 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     this.grantsCreateEmployees = true;
     this.grantsManageProfiles = true;
     this.grantsAssignAccountRole = true;
+    this.grantsCreateAccountAtCreate = true;
   }
 
   submit(): void {
@@ -471,6 +500,8 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
       if (this.grantsCreateEmployees) extras.add(EMPLOYEES_CREATE);
       if (this.grantsManageProfiles) extras.add(EMPLOYEES_MANAGE_PROFILES);
       if (this.grantsAssignAccountRole) extras.add(EMPLOYEES_ASSIGN_ACCOUNT_ROLE);
+      if (this.grantsCreateAccountAtCreate)
+        extras.add(EMPLOYEES_CREATE_ACCOUNT_AT_CREATE);
     }
 
     this.saved.emit({

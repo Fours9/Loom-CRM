@@ -21,6 +21,7 @@ const DEPARTMENT_MANAGER: Permission[] = [
 const ADMIN: Permission[] = [
   ...DEPARTMENT_MANAGER,
   Permission.EmployeesCreate,
+  Permission.EmployeesCreateAccountAtCreate,
   Permission.EmployeesManageProfiles,
   Permission.EmployeesAssignAccountRole,
   Permission.EmployeesReadPersonal,

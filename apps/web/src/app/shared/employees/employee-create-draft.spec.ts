@@ -6,24 +6,25 @@ import {
 } from './employee-create-draft';
 
 describe('employee-create-draft', () => {
-  it('sets createAccount from canCreateAccount', () => {
-    expect(emptyEmployeeCreateDraft({ canCreateAccount: false }).createAccount)
-      .toBe(false);
-    expect(emptyEmployeeCreateDraft({ canCreateAccount: true }).createAccount)
-      .toBe(true);
+  it('defaults createAccount=false even when AtCreate capability true', () => {
+    expect(emptyEmployeeCreateDraft().createAccount).toBe(false);
+    expect(
+      emptyEmployeeCreateDraft({ canCreateAccountAtCreate: true }).createAccount,
+    ).toBe(false);
   });
 
   it('does not default temporary password', () => {
-    expect(emptyEmployeeCreateDraft({ canCreateAccount: true }).temporaryPassword)
-      .toBe('');
+    expect(emptyEmployeeCreateDraft().temporaryPassword).toBe('');
     expect(generateTemporaryPassword()).not.toBe('TempPass123!');
   });
 
   it('validates required names and account fields', () => {
-    const draft = emptyEmployeeCreateDraft({ canCreateAccount: true });
+    const draft = emptyEmployeeCreateDraft();
     expect(validateEmployeeCreateDraft(draft)).toBe('required_names');
     draft.firstName = 'Іван';
     draft.lastName = 'Тест';
+    expect(validateEmployeeCreateDraft(draft)).toBeNull();
+    draft.createAccount = true;
     expect(validateEmployeeCreateDraft(draft)).toBe('account_email_required');
     draft.email = 'a@b.c';
     expect(validateEmployeeCreateDraft(draft)).toBe('account_password_required');
@@ -34,7 +35,7 @@ describe('employee-create-draft', () => {
   });
 
   it('keeps createAccount=true in normalize (backend fail-closed)', () => {
-    const draft = emptyEmployeeCreateDraft({ canCreateAccount: true });
+    const draft = emptyEmployeeCreateDraft();
     draft.firstName = 'A';
     draft.lastName = 'B';
     draft.createAccount = true;
@@ -45,8 +46,8 @@ describe('employee-create-draft', () => {
     expect(body.email).toBe('x@y.z');
   });
 
-  it('normalizes directionId and optional accountRoleId', () => {
-    const draft = emptyEmployeeCreateDraft({ canCreateAccount: true });
+  it('normalizes directionId and optional accountRoleId without managementKind', () => {
+    const draft = emptyEmployeeCreateDraft();
     draft.firstName = 'A';
     draft.lastName = 'B';
     draft.createAccount = true;
@@ -62,11 +63,13 @@ describe('employee-create-draft', () => {
     expect(body.departmentId).toBe('dep-1');
     expect(body.positionId).toBe('pos-1');
     expect(body.accountRoleId).toBe('role-1');
-    expect(body.managementKind).toBe('departments');
+    expect(
+      (body as CreateEmployeeRequestWithMaybeManagementKind).managementKind,
+    ).toBeUndefined();
   });
 
   it('sends accountRoleId for numbering even when createAccount=false', () => {
-    const draft = emptyEmployeeCreateDraft({ canCreateAccount: true });
+    const draft = emptyEmployeeCreateDraft();
     draft.firstName = 'A';
     draft.lastName = 'B';
     draft.createAccount = false;
@@ -79,8 +82,8 @@ describe('employee-create-draft', () => {
     expect(body.temporaryPassword).toBeUndefined();
   });
 
-  it('omits credentials when createAccount=false but keeps managementKind', () => {
-    const draft = emptyEmployeeCreateDraft({ canCreateAccount: true });
+  it('omits credentials and managementKind when createAccount=false', () => {
+    const draft = emptyEmployeeCreateDraft();
     draft.firstName = 'A';
     draft.lastName = 'B';
     draft.createAccount = false;
@@ -91,6 +94,13 @@ describe('employee-create-draft', () => {
     expect(body.createAccount).toBe(false);
     expect(body.email).toBeUndefined();
     expect(body.temporaryPassword).toBeUndefined();
-    expect(body.managementKind).toBe('direction');
+    expect(
+      (body as CreateEmployeeRequestWithMaybeManagementKind).managementKind,
+    ).toBeUndefined();
   });
 });
+
+/** Local cast — managementKind must not appear on CreateEmployeeRequest. */
+type CreateEmployeeRequestWithMaybeManagementKind = {
+  managementKind?: string;
+};

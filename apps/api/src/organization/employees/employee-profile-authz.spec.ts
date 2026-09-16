@@ -1,6 +1,7 @@
 import { Permission } from '../../platform/permissions/permission.names';
 import type { AuthorizationContext } from '../../platform/access-control/authorization-context';
 import {
+  canCreateAccountAtEmployeeCreate,
   canEditEmergencyOnTarget,
   canManageProfilesOnTarget,
   canWritePersonalOnTarget,
@@ -84,5 +85,27 @@ describe('employee-profile-authz', () => {
         true,
       ),
     ).toBe(false);
+  });
+
+  it('adminEq bypasses create-account-at-create gate', () => {
+    expect(
+      canCreateAccountAtEmployeeCreate(authz({ isAdminEquivalent: true })),
+    ).toBe(true);
+  });
+
+  it('create-account-at-create requires explicit permission for non-admin', () => {
+    expect(canCreateAccountAtEmployeeCreate(authz({ permissions: [] }))).toBe(
+      false,
+    );
+    expect(
+      canCreateAccountAtEmployeeCreate(
+        authz({ permissions: [Permission.EmployeesCreate] }),
+      ),
+    ).toBe(false);
+    expect(
+      canCreateAccountAtEmployeeCreate(
+        authz({ permissions: [Permission.EmployeesCreateAccountAtCreate] }),
+      ),
+    ).toBe(true);
   });
 });

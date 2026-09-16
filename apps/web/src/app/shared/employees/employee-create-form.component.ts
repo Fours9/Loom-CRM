@@ -73,25 +73,33 @@ import type {
               </div>
             </label>
           </div>
-          @if (canCreateAccount) {
-            @if (canAssignAccountRole) {
-              <div class="row row-1">
-                <label>
-                  Роль
-                  <select
-                    [(ngModel)]="draft.accountRoleId"
-                    name="accountRoleId"
-                  >
-                    <option value="">{{ autoAccountRoleLabel }}</option>
-                    @for (role of accountRoles; track role.id) {
-                      <option [value]="role.id">
-                        {{ roleOptionLabel(role) }}
-                      </option>
-                    }
-                  </select>
-                </label>
-              </div>
-            } @else {
+          @if (canAssignAccountRole) {
+            <div class="row row-1">
+              <label>
+                Роль
+                <select
+                  [(ngModel)]="draft.accountRoleId"
+                  name="accountRoleId"
+                >
+                  <option value="">{{ autoAccountRoleLabel }}</option>
+                  @for (role of accountRoles; track role.id) {
+                    <option [value]="role.id">
+                      {{ roleOptionLabel(role) }}
+                    </option>
+                  }
+                </select>
+              </label>
+            </div>
+            @if (!canCreateAccountAtCreate) {
+              <p class="muted hint">
+                Акаунт не буде створено. Вибрана роль використовується лише для
+                префікса номера працівника.
+              </p>
+            }
+          }
+
+          @if (canCreateAccountAtCreate) {
+            @if (!canAssignAccountRole) {
               <p class="muted hint">
                 Роль акаунта буде визначена за посадою (Працівник / Менеджер).
               </p>
@@ -463,7 +471,7 @@ export class EmployeeCreateFormComponent {
   @Input() departments: OrganizationCatalogDepartment[] = [];
   @Input() positions: OrganizationCatalogPosition[] = [];
   @Input() accountRoles: AssignableAccountRoleOption[] = [];
-  @Input() canCreateAccount = false;
+  @Input() canCreateAccountAtCreate = false;
   @Input() canAssignAccountRole = false;
   @Input() canEditPersonal = false;
   @Output() readonly submitted = new EventEmitter<void>();

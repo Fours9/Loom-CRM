@@ -6,6 +6,8 @@ export const Permission = {
   EmployeesEdit: 'employees.edit',
   EmployeesManageProfiles: 'employees.manage_profiles',
   EmployeesAssignAccountRole: 'employees.assign_account_role',
+  /** Workflow-gate: createAccount=true on POST /employees only — ≠ attach. */
+  EmployeesCreateAccountAtCreate: 'employees.create_account_at_create',
   EmployeesReadPersonal: 'employees.read.personal',
   EmployeesWritePersonal: 'employees.write.personal',
   EmployeesReadEmergency: 'employees.read.emergency_contact',

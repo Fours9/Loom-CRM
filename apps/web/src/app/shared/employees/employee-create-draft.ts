@@ -28,19 +28,19 @@ export type EmployeeCreateDraft = {
   /** Empty string = auto by position membership. */
   accountRoleId: string;
   /**
-   * EA leadership + employee-number prefix (E/M).
-   * Independent of createAccount / AccountRole.
+   * Local preview only (from Position.managementKindTemplate).
+   * Not sent on CreateEmployeeRequest — backend SoT is locked Position.
    */
   managementKind: EmploymentManagementKind;
   calendarColor: string;
   schedule: ScheduleDay[];
 };
 
-export function emptyEmployeeCreateDraft(caps: {
-  canCreateAccount: boolean;
+export function emptyEmployeeCreateDraft(_caps?: {
+  canCreateAccountAtCreate?: boolean;
 }): EmployeeCreateDraft {
   return {
-    createAccount: caps.canCreateAccount,
+    createAccount: false,
     lastName: '',
     firstName: '',
     middleName: '',
@@ -138,7 +138,6 @@ export function normalizeEmployeeCreateDraft(
     directionId: org.directionId,
     departmentId: org.departmentId,
     positionId: org.positionId,
-    managementKind: draft.managementKind,
     schedule: normalizeSchedulePayload(
       draft.schedule,
     ) as EmployeeCreateScheduleDay[],

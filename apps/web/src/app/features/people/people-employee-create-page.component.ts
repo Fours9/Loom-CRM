@@ -43,7 +43,7 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
         [departments]="departments()"
         [positions]="positions()"
         [accountRoles]="accountRoles()"
-        [canCreateAccount]="canCreateAccount()"
+        [canCreateAccountAtCreate]="canCreateAccountAtCreate()"
         [canAssignAccountRole]="canAssignAccountRole()"
         [canEditPersonal]="canEditPersonal()"
         (submitted)="submit()"
@@ -101,7 +101,7 @@ export class PeopleEmployeeCreatePageComponent implements OnInit {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
 
-  readonly canCreateAccount = signal(false);
+  readonly canCreateAccountAtCreate = signal(false);
   readonly canAssignAccountRole = signal(false);
   readonly canEditPersonal = signal(false);
   readonly directions = signal<OrganizationCatalogDirection[]>([]);
@@ -111,14 +111,12 @@ export class PeopleEmployeeCreatePageComponent implements OnInit {
   readonly loading = signal(false);
   readonly error = signal('');
 
-  draft: EmployeeCreateDraft = emptyEmployeeCreateDraft({
-    canCreateAccount: false,
-  });
+  draft: EmployeeCreateDraft = emptyEmployeeCreateDraft();
 
   ngOnInit(): void {
-    this.canCreateAccount.set(
+    this.canCreateAccountAtCreate.set(
       this.session.isAdminEquivalent() ||
-        this.session.hasPermission(Permission.EmployeesCreate),
+        this.session.hasPermission(Permission.EmployeesCreateAccountAtCreate),
     );
     this.canAssignAccountRole.set(
       this.session.isAdminEquivalent() ||
@@ -129,7 +127,7 @@ export class PeopleEmployeeCreatePageComponent implements OnInit {
         this.session.hasPermission(Permission.EmployeesWritePersonal),
     );
     this.draft = emptyEmployeeCreateDraft({
-      canCreateAccount: this.canCreateAccount(),
+      canCreateAccountAtCreate: this.canCreateAccountAtCreate(),
     });
 
     const roles$ = this.canAssignAccountRole()

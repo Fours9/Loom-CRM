@@ -105,13 +105,11 @@ export type CreateEmployeeRequest = {
   createAccount?: boolean;
   email?: string;
   temporaryPassword?: string;
-  /** adminEquivalent; numbering intent even without createAccount. Assigned to User only when createAccount. */
-  accountRoleId?: EntityId;
   /**
-   * Explicit EA leadership at create (seeded from Position template on FE).
-   * Independent of AccountRole (ADR 0011). Omitted → Position.managementKindTemplate.
+   * adminEquivalent; numbering intent even without createAccount.
+   * Assigned to User only when createAccount.
    */
-  managementKind?: EmploymentManagementKind;
+  accountRoleId?: EntityId;
   schedule?: EmployeeCreateScheduleDay[];
 };
 

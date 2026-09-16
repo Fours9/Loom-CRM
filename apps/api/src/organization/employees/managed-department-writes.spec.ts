@@ -2,6 +2,7 @@ import {
   resolveManagerMembershipForCreate,
 } from './managed-department-writes';
 import type { Position } from '../positions/position.entity';
+import { ManagementKind } from '../employment-catalog/management-kind';
 
 describe('resolveManagerMembershipForCreate', () => {
   const position = {
@@ -51,5 +52,36 @@ describe('resolveManagerMembershipForCreate', () => {
       assignmentDepartmentId: 'd1',
     });
     expect(r.managedDepartmentIds).toEqual(['x', 'y']);
+  });
+
+  it('without explicit kind, ordinary Position stays none (create SoT)', () => {
+    const ordinary = {
+      id: 'p2',
+      managementKindTemplate: 'none',
+      isDepartmentManagerTemplate: false,
+    } as Position;
+    const r = resolveManagerMembershipForCreate({
+      position: ordinary,
+      positionManagedDepartmentIds: [],
+      assignmentDepartmentId: 'd1',
+    });
+    expect(r.managementKind).toBe(ManagementKind.None);
+    expect(r.isDepartmentManager).toBe(false);
+  });
+
+  it('explicit direction would escalate past Position none (assignment path only)', () => {
+    const ordinary = {
+      id: 'p2',
+      managementKindTemplate: 'none',
+      isDepartmentManagerTemplate: false,
+    } as Position;
+    const r = resolveManagerMembershipForCreate({
+      position: ordinary,
+      positionManagedDepartmentIds: [],
+      assignmentDepartmentId: 'd1',
+      explicitManagementKind: ManagementKind.Direction,
+    });
+    expect(r.managementKind).toBe(ManagementKind.Direction);
+    expect(r.isDepartmentManager).toBe(true);
   });
 });

@@ -65,3 +65,11 @@ export function canChangeStatusOnTarget(
     inManagedDept
   );
 }
+
+/** Workflow-gate for createAccount=true on POST /employees — ≠ attach. */
+export function canCreateAccountAtEmployeeCreate(
+  authz: AuthorizationContext,
+): boolean {
+  if (authz.isAdminEquivalent) return true;
+  return hasPermission(authz, Permission.EmployeesCreateAccountAtCreate);
+}

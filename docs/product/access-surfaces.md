@@ -67,8 +67,9 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 | Permission | Scope | Meaning |
 |------------|-------|---------|
 | `employees.create` | **Global** | `POST /employees`; FE CTA with `employees.view`. Does not constrain by managed departments. |
+| `employees.create_account_at_create` | **Global** (with Create) | Allows `createAccount=true` on `POST /employees` only (workflow-gate). **≠** attach. Admin preset; Settings toggle. OFF does not ban later attach (`employees.create` ∧ managed-dept \| adminEq). |
 | `employees.manage_profiles` | Managed-dept | Canonical basic/contacts/schedule (+ specialized pairings). Not in DM base preset (extra). |
-| `employees.assign_account_role` | Managed-dept | Assign AccountRole; `GET …/account-roles/assignable` → `AssignableAccountRoleOption` (`id`, `code`, `name`, `isAdminEquivalent`). Admin-equivalent ceiling (not full permission-subset). |
+| `employees.assign_account_role` | Managed-dept | Assign AccountRole; `GET …/account-roles/assignable` → `AssignableAccountRoleOption` (`id`, `code`, `name`, `isAdminEquivalent`). Admin-equivalent ceiling (not full permission-subset). Independent of create-account-at-create. |
 | `employees.edit` | — | Deprecated; cannot be newly granted. |
 
 Settings role dialog: effective / `grants*Explicitly` / `canEdit*Grant` triad (confidential pattern).

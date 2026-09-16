@@ -1,13 +1,11 @@
 import type {
   CreateEmployeeRequest,
   EmployeeCreateScheduleDay,
-  EmploymentManagementKind,
 } from '@loom/contracts-employees';
 import {
   IsArray,
   IsBoolean,
   IsEmail,
-  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -128,10 +126,6 @@ export class CreateEmployeeDto implements CreateEmployeeRequest {
   @IsOptional()
   @IsUUID()
   accountRoleId?: string;
-
-  @IsOptional()
-  @IsIn(['none', 'departments', 'direction'] satisfies EmploymentManagementKind[])
-  managementKind?: EmploymentManagementKind;
 
   @IsOptional()
   @IsArray()
