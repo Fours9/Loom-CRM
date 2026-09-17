@@ -71,7 +71,7 @@ npm install -g pnpm@10.15.0 --prefix "$env:LOCALAPPDATA\pnpm-global"
 
 Перевірка: `pnpm --version` → `10.15.0`.
 
-4. **PostgreSQL 16** *або* **Docker** (для `docker compose up -d postgres`). Для snapshot/restore — `pg_dump` / `psql` у PATH (часто `C:\Program Files\PostgreSQL\16\bin`).
+4. **PostgreSQL 16** *або* **Docker** (для `docker compose up -d postgres`). Для snapshot/restore скрипти самі знаходять `pg_dump` / `psql`: спочатку PATH, інакше `C:\Program Files\PostgreSQL\<ver>\bin` (найвища версія). Додавати `\bin` у PATH зручно для ручних CLI, але **не обовʼязково** для `db-snapshot` / `db-restore`.
 
 5. **ngrok** (лише для публічного демо): акаунт на https://dashboard.ngrok.com — токен додасте на кроці тунелю нижче. За відсутності бінарника `start-tunnel.bat` спробує встановити через winget.
 
@@ -165,7 +165,7 @@ git commit -m "Update DB snapshot"
 git push
 ```
 
-Знімок можна робити при запущеному API, але надійніше — коли ніхто активно не пише в БД. Потрібні або `docker compose` з сервісом `postgres`, або локальні `pg_dump` / `psql` у PATH.
+Знімок можна робити при запущеному API, але надійніше — коли ніхто активно не пише в БД. Єдина точка входу CLI: `scripts/lib/postgres-cli.ps1` (Compose `postgres` **або** локальний `pg_dump`/`psql` з PATH **або** з `Program Files\PostgreSQL\<ver>\bin`).
 
 ### Підтягнути чужі/свої зміни з GitHub
 
@@ -288,7 +288,7 @@ Launcher: перевіряє версії Node/pnpm, вільні порти 300
 | Не можу залогінитись на новому ПК | Порожня/інша БД — `.\scripts\db-restore.ps1`, перезапуск API |
 | Шукаю `data/app.sqlite` як у PW | У LoomCRM живої SQLite немає — жива БД у Postgres; знімок: `data/app.snapshot.sql` |
 | Дані в базі «відкотилися» | Запустили `db-restore.ps1` поверх свіжішої живої — знайдіть `data\app.live.bak-<дата>.sql` і відновіть через `psql` |
-| `pg_dump` / `psql` not found | Додайте PostgreSQL `\bin` у PATH або використовуйте Compose postgres |
+| `pg_dump` / `psql` not found | Скрипти шукають також `C:\Program Files\PostgreSQL\<ver>\bin`. Якщо й там немає — поставте PostgreSQL client tools або підніміть Compose `postgres`. Для інших CLI додайте `\bin` у User PATH. |
 | `DATABASE_URL is required` | Скопіюйте `.env.example` → `.env` |
 | Порт 5432 зайнятий / `ECONNREFUSED` | Postgres не запущений — `docker compose up -d postgres` або сервіс PostgreSQL 16 |
 | `Node.js major version must be 22` / engines | На PATH Node 24/20 — поставте **22.x**: `winget install --id OpenJS.NodeJS.22 --version 22.23.2 -e`, новий термінал; див. § «Налаштування нового ПК» |

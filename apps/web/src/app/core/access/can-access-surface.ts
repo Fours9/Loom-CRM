@@ -17,6 +17,7 @@ export const Surface = {
   PeopleTabWork: 'people.tab.work',
   PeopleTabDocuments: 'people.tab.documents',
   PeopleTabQuestionnaires: 'people.tab.questionnaires',
+  PeopleTabAbout: 'people.tab.about',
   PeopleTabMetrics: 'people.tab.metrics',
   PeopleTabAdministration: 'people.tab.administration',
   PeopleTabLater: 'people.tab.later',

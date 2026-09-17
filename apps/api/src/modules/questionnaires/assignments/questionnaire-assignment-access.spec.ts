@@ -11,6 +11,7 @@ import {
   computeCanStartFill,
   canActorAccessAssignmentTemplate,
   applyGrantedTemplateCodeFilter,
+  canManageQuestionnaires,
 } from './questionnaire-assignment-access';
 import { Permission } from '../../../platform/permissions/permission.names';
 import { UserRole } from '../../../platform/identity/user.enums';
@@ -660,5 +661,37 @@ describe('computeCanStartFill', () => {
         hasLatestSubmission: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe('canManageQuestionnaires', () => {
+  it('requires lifecycle ∧ delete ∧ apply', () => {
+    expect(
+      canManageQuestionnaires(
+        authzFixture({
+          permissions: [
+            Permission.QuestionnairesManageLifecycle,
+            Permission.QuestionnairesDelete,
+          ],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      canManageQuestionnaires(
+        authzFixture({
+          permissions: [
+            Permission.QuestionnairesManageLifecycle,
+            Permission.QuestionnairesDelete,
+            Permission.QuestionnairesApplyProfileChanges,
+          ],
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('adminEq bypasses', () => {
+    expect(
+      canManageQuestionnaires(authzFixture({ isAdminEquivalent: true })),
+    ).toBe(true);
   });
 });

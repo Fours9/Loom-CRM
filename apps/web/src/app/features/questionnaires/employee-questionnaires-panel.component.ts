@@ -33,6 +33,12 @@ import {
   QuestionnaireFilterToolbarComponent,
   type QuestionnaireFilterToolbarValue,
 } from './shared/questionnaire-filter-toolbar.component';
+import {
+  proposalCanAccept,
+  proposalCanReject,
+  proposalChangeSummary,
+  proposalChangeTitle,
+} from './questionnaire-proposal-labels';
 
 const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   pending: 'Очікує',
@@ -217,22 +223,29 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                                 <div class="meta">
                                   <span>{{ formatChange(p) }}</span>
                                 </div>
-                                @if (canApply() && p.status === 'pending') {
+                                @if (
+                                  p.status === 'pending' &&
+                                  (canAcceptProposal(p) || canRejectProposal(p))
+                                ) {
                                   <div class="actions">
-                                    <button
-                                      type="button"
-                                      class="btn primary"
-                                      (click)="accept(p.id)"
-                                    >
-                                      Прийняти
-                                    </button>
-                                    <button
-                                      type="button"
-                                      class="btn ghost"
-                                      (click)="reject(p.id)"
-                                    >
-                                      Відхилити
-                                    </button>
+                                    @if (canAcceptProposal(p)) {
+                                      <button
+                                        type="button"
+                                        class="btn primary"
+                                        (click)="accept(p.id)"
+                                      >
+                                        Прийняти
+                                      </button>
+                                    }
+                                    @if (canRejectProposal(p)) {
+                                      <button
+                                        type="button"
+                                        class="btn ghost"
+                                        (click)="reject(p.id)"
+                                      >
+                                        Відхилити
+                                      </button>
+                                    }
                                   </div>
                                 }
                               </li>
@@ -580,7 +593,6 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   readonly items = signal<QuestionnaireAssignmentListItem[]>([]);
   readonly proposals = signal<QuestionnaireProfileProposalItem[]>([]);
   readonly canAssign = signal(false);
-  readonly canApply = signal(false);
   readonly summaryExpandedIds = signal<ReadonlySet<string>>(new Set());
   readonly moreMenuAssignmentId = signal<string | null>(null);
 
@@ -755,34 +767,19 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   }
 
   proposalLabel(p: QuestionnaireProfileProposalItem): string {
-    const c = p.proposedChanges;
-    switch (c.kind) {
-      case 'add_skill':
-        return c.labelUa || c.skillCode || p.targetSection;
-      case 'field_update':
-        return c.answerKey || c.field || p.targetSection;
-      default:
-        return p.targetSection;
-    }
+    return proposalChangeTitle(p);
   }
 
   formatChange(p: QuestionnaireProfileProposalItem): string {
-    const c = p.proposedChanges;
-    switch (c.kind) {
-      case 'add_skill': {
-        const level =
-          c.proposedLevel == null ? 'без оцінки' : String(c.proposedLevel);
-        const verb =
-          c.sourceAtSubmission === 'position_requirement'
-            ? 'Підтвердити оцінку навички'
-            : 'Додати навичку';
-        return `${verb} · рівень: ${level}`;
-      }
-      case 'field_update':
-        return `${JSON.stringify(c.from ?? null)} → ${JSON.stringify(c.to ?? null)}`;
-      default:
-        return '';
-    }
+    return proposalChangeSummary(p);
+  }
+
+  canAcceptProposal(p: QuestionnaireProfileProposalItem): boolean {
+    return proposalCanAccept(p);
+  }
+
+  canRejectProposal(p: QuestionnaireProfileProposalItem): boolean {
+    return proposalCanReject(p);
   }
 
   assign(): void {
@@ -883,14 +880,13 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
           ),
         ),
       proposals: this.api.listProposals(this.employeeId).pipe(
-        catchError(() => of({ items: [], capabilities: { canApply: false } })),
+        catchError(() => of({ items: [] })),
       ),
     }).subscribe({
       next: ({ list, proposals }) => {
         this.items.set(list.items);
         this.canAssign.set(list.capabilities.canAssign);
         this.proposals.set(proposals.items);
-        this.canApply.set(proposals.capabilities.canApply);
         this.loading.set(false);
       },
       error: () => {

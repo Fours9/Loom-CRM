@@ -59,7 +59,7 @@ const allPerms: Permission[] = [
 ];
 
 describe('visiblePeopleProfileTabs', () => {
-  it('always includes data, absences (Робота), metrics, later', () => {
+  it('always includes data, absences (Робота), metrics', () => {
     const tabs = visiblePeopleProfileTabs({
       capabilities: capsNoHistory,
       permissions: [],
@@ -68,8 +68,32 @@ describe('visiblePeopleProfileTabs', () => {
       'data',
       'absences',
       'metrics',
-      'later',
     ]);
+  });
+
+  it('does not include later (Згодом) tab', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsNoHistory,
+      permissions: [],
+    });
+    expect(tabs.some((t) => (t.id as string) === 'later')).toBe(false);
+  });
+
+  it('hides about without surface catalog (fail closed)', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsNoHistory,
+      permissions: [],
+    });
+    expect(tabs.some((t) => t.id === 'about')).toBe(false);
+  });
+
+  it('shows about when surface people.tab.about is granted', () => {
+    const tabs = visiblePeopleProfileTabs({
+      capabilities: capsNoHistory,
+      permissions: [],
+      surfaces: ['people.tab.data', 'people.tab.work', 'people.tab.about'],
+    });
+    expect(tabs.map((t) => t.id)).toEqual(['data', 'absences', 'about']);
   });
 
   it('hides questionnaires without questionnaires.view', () => {
@@ -196,6 +220,10 @@ describe('resolvePeopleProfileTab', () => {
 
   it('falls back to data when administration is hidden', () => {
     expect(resolvePeopleProfileTab('administration', visible)).toBe('data');
+  });
+
+  it('falls back legacy later to data', () => {
+    expect(resolvePeopleProfileTab('later', visible)).toBe('data');
   });
 
   it('keeps visible documents', () => {

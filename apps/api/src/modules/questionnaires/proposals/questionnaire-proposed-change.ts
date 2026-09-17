@@ -7,6 +7,22 @@ export class InvalidProposedChangeError extends Error {
   }
 }
 
+/**
+ * Persistence / parser shape — labelUa optional for legacy field_update rows.
+ * Not exported from @loom/contracts-questionnaires (API-private).
+ */
+export type StoredQuestionnaireProposedChange =
+  | {
+      kind: 'field_update';
+      section: string;
+      field: string;
+      answerKey: string;
+      from: unknown;
+      to: unknown;
+      labelUa?: string;
+    }
+  | Extract<QuestionnaireProposedChange, { kind: 'add_skill' }>;
+
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
@@ -17,7 +33,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
  */
 export function parseQuestionnaireProposedChange(
   raw: unknown,
-): QuestionnaireProposedChange {
+): StoredQuestionnaireProposedChange {
   if (!isPlainObject(raw)) {
     throw new InvalidProposedChangeError('proposedChanges must be an object');
   }
@@ -38,6 +54,8 @@ export function parseQuestionnaireProposedChange(
     if (!Object.prototype.hasOwnProperty.call(raw, 'to')) {
       throw new InvalidProposedChangeError('field_update.to required');
     }
+    const labelUa =
+      typeof raw['labelUa'] === 'string' ? raw['labelUa'] : undefined;
     return {
       kind: 'field_update',
       section: raw['section'],
@@ -45,6 +63,7 @@ export function parseQuestionnaireProposedChange(
       answerKey: raw['answerKey'],
       from: raw['from'],
       to: raw['to'],
+      ...(labelUa !== undefined ? { labelUa } : {}),
     };
   }
   if (kind === 'add_skill') {

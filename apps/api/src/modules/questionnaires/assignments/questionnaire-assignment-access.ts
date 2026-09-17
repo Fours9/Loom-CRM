@@ -91,6 +91,16 @@ export function canApplyProfileChanges(authz: AuthorizationContext): boolean {
   return hasPermission(authz, Permission.QuestionnairesApplyProfileChanges);
 }
 
+/** Canonical Manage = lifecycle ∧ delete ∧ apply_profile_changes (or adminEq). */
+export function canManageQuestionnaires(authz: AuthorizationContext): boolean {
+  return (
+    authz.isAdminEquivalent ||
+    (canManageLifecycle(authz) &&
+      canDeleteQuestionnaire(authz) &&
+      canApplyProfileChanges(authz))
+  );
+}
+
 export function canReadAssignmentComment(authz: AuthorizationContext): boolean {
   return hasPermission(authz, Permission.QuestionnairesReadAssignmentComment);
 }

@@ -25,6 +25,12 @@ import { QuestionnaireDraftStore } from './questionnaire-draft.store';
 import { QuestionnaireFillChromeComponent } from './questionnaire-fill-chrome.component';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { QuestionnaireWizardShellComponent } from './questionnaire-wizard-shell.component';
+import {
+  proposalCanAccept,
+  proposalCanReject,
+  proposalChangeSummary,
+  proposalChangeTitle,
+} from '../questionnaire-proposal-labels';
 
 const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   pending: 'Очікує',
@@ -132,24 +138,31 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                             }}</span>
                           </div>
                           <p class="meta">{{ formatChange(p) }}</p>
-                          @if (canApplyProposals() && p.status === 'pending') {
+                          @if (
+                            p.status === 'pending' &&
+                            (canAcceptProposal(p) || canRejectProposal(p))
+                          ) {
                             <div class="prop-actions">
-                              <button
-                                type="button"
-                                class="btn primary"
-                                [disabled]="actionBusy()"
-                                (click)="acceptProposal(p.id)"
-                              >
-                                Прийняти
-                              </button>
-                              <button
-                                type="button"
-                                class="btn"
-                                [disabled]="actionBusy()"
-                                (click)="rejectProposal(p.id)"
-                              >
-                                Відхилити
-                              </button>
+                              @if (canAcceptProposal(p)) {
+                                <button
+                                  type="button"
+                                  class="btn primary"
+                                  [disabled]="actionBusy()"
+                                  (click)="acceptProposal(p.id)"
+                                >
+                                  Прийняти
+                                </button>
+                              }
+                              @if (canRejectProposal(p)) {
+                                <button
+                                  type="button"
+                                  class="btn"
+                                  [disabled]="actionBusy()"
+                                  (click)="rejectProposal(p.id)"
+                                >
+                                  Відхилити
+                                </button>
+                              }
                             </div>
                           }
                         </li>
@@ -323,7 +336,6 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
   readonly actionBusy = signal(false);
   readonly actionError = signal<string | null>(null);
   readonly assignmentProposals = signal<QuestionnaireProfileProposalItem[]>([]);
-  readonly canApplyProposals = signal(false);
   readonly proposalsLoading = signal(false);
 
   private readonly proposalsReload = effect(() => {
@@ -388,34 +400,19 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
   }
 
   proposalLabel(p: QuestionnaireProfileProposalItem): string {
-    const c = p.proposedChanges;
-    switch (c.kind) {
-      case 'add_skill':
-        return c.labelUa || c.skillCode || p.targetSection;
-      case 'field_update':
-        return c.answerKey || c.field || p.targetSection;
-      default:
-        return p.targetSection;
-    }
+    return proposalChangeTitle(p);
   }
 
   formatChange(p: QuestionnaireProfileProposalItem): string {
-    const c = p.proposedChanges;
-    switch (c.kind) {
-      case 'add_skill': {
-        const level =
-          c.proposedLevel == null ? 'без оцінки' : String(c.proposedLevel);
-        const verb =
-          c.sourceAtSubmission === 'position_requirement'
-            ? 'Підтвердити оцінку навички'
-            : 'Додати навичку';
-        return `${verb} · рівень: ${level}`;
-      }
-      case 'field_update':
-        return `${JSON.stringify(c.from ?? null)} → ${JSON.stringify(c.to ?? null)}`;
-      default:
-        return '';
-    }
+    return proposalChangeSummary(p);
+  }
+
+  canAcceptProposal(p: QuestionnaireProfileProposalItem): boolean {
+    return proposalCanAccept(p);
+  }
+
+  canRejectProposal(p: QuestionnaireProfileProposalItem): boolean {
+    return proposalCanReject(p);
   }
 
   async acceptProposal(id: string): Promise<void> {
@@ -463,7 +460,6 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     this.proposalsLoading.set(true);
     try {
       const res = await firstValueFrom(this.api.listProposals(employeeId));
-      this.canApplyProposals.set(res.capabilities.canApply);
       this.assignmentProposals.set(
         res.items.filter(
           (p) => p.assignmentId === assignmentId && p.status === 'pending',
@@ -471,7 +467,6 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
       );
     } catch {
       this.assignmentProposals.set([]);
-      this.canApplyProposals.set(false);
     } finally {
       this.proposalsLoading.set(false);
     }

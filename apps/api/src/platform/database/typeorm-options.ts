@@ -74,6 +74,8 @@ import { AccountRoleSurface } from '../access-control/account-role-surface.entit
 import { AccountRolePermission } from '../access-control/account-role-permission.entity';
 import { AccountRoleQuestionnaireTemplate } from '../access-control/account-role-questionnaire-template.entity';
 import { AccountRoleQuestionnaireTemplates1730000041000 } from './migrations/1730000041000-AccountRoleQuestionnaireTemplates';
+import { QuestionnaireManageBundleApply1730000042000 } from './migrations/1730000042000-QuestionnaireManageBundleApply';
+import { PeopleTabAboutSurface1730000043000 } from './migrations/1730000043000-PeopleTabAboutSurface';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -158,6 +160,8 @@ export function getDataSourceOptions(): DataSourceOptions {
       QuestionnaireSubmitEqualsClosed1730000039000,
       EmployeeProfileRoleGates1730000040000,
       AccountRoleQuestionnaireTemplates1730000041000,
+      QuestionnaireManageBundleApply1730000042000,
+      PeopleTabAboutSurface1730000043000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

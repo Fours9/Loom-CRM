@@ -425,6 +425,8 @@ export type QuestionnaireProposedChange =
       answerKey: string;
       from: unknown;
       to: unknown;
+      /** Human-readable UA title — required on wire; enrich from schema/contacts map if legacy. */
+      labelUa: string;
     }
   | {
       kind: 'add_skill';
@@ -460,12 +462,20 @@ export type QuestionnaireProfileProposalItem = {
   reviewedByUserId: EntityId | null;
   reviewedAt: string | null;
   createdAt: string;
+  capabilities: {
+    canAccept: boolean;
+    canReject: boolean;
+  };
 };
 
 export type QuestionnaireProfileProposalListResponse = {
   items: QuestionnaireProfileProposalItem[];
-  capabilities: {
-    canApply: boolean;
+  /**
+   * @deprecated Prefer per-item `capabilities.canAccept` / `canReject`.
+   * Kept optional for transitional clients; backend may omit or set false.
+   */
+  capabilities?: {
+    canApply?: boolean;
   };
 };
 

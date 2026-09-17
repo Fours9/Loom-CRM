@@ -37,6 +37,8 @@ const EMPLOYEES_CREATE_ACCOUNT_AT_CREATE =
 const QUESTIONNAIRES_ASSIGN = 'questionnaires.assign';
 const QUESTIONNAIRES_MANAGE_LIFECYCLE = 'questionnaires.manage_lifecycle';
 const QUESTIONNAIRES_DELETE = 'questionnaires.delete';
+const QUESTIONNAIRES_APPLY_PROFILE_CHANGES =
+  'questionnaires.apply_profile_changes';
 
 const TOGGLE_EXTRAS = [
   CONFIDENTIAL_VIEW,
@@ -47,6 +49,7 @@ const TOGGLE_EXTRAS = [
   QUESTIONNAIRES_ASSIGN,
   QUESTIONNAIRES_MANAGE_LIFECYCLE,
   QUESTIONNAIRES_DELETE,
+  QUESTIONNAIRES_APPLY_PROFILE_CHANGES,
 ] as const;
 
 export type PublishedQuestionnaireTemplate = {
@@ -213,7 +216,8 @@ export type PublishedQuestionnaireTemplate = {
                 Може керувати життєвим циклом анкет
               </label>
               <p class="hint">
-                Скасування, закриття, видалення та повторне прикріплення.
+                Скасування, закриття, видалення, повторне прикріплення та
+                прийняття/відхилення пропозицій до профілю.
               </p>
             </div>
 
@@ -649,6 +653,7 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
       if (this.grantsManageQuestionnaires) {
         extras.add(QUESTIONNAIRES_MANAGE_LIFECYCLE);
         extras.add(QUESTIONNAIRES_DELETE);
+        extras.add(QUESTIONNAIRES_APPLY_PROFILE_CHANGES);
       }
     }
 

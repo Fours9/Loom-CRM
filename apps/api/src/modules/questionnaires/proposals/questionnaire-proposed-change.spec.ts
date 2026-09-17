@@ -4,7 +4,26 @@ import {
 } from './questionnaire-proposed-change';
 
 describe('parseQuestionnaireProposedChange', () => {
-  it('parses field_update', () => {
+  it('parses field_update with optional labelUa', () => {
+    expect(
+      parseQuestionnaireProposedChange({
+        kind: 'field_update',
+        section: 'personal',
+        field: 'city',
+        answerKey: 'personal.city',
+        from: null,
+        to: 'Kyiv',
+        labelUa: 'Місто проживання',
+      }),
+    ).toMatchObject({
+      kind: 'field_update',
+      field: 'city',
+      to: 'Kyiv',
+      labelUa: 'Місто проживання',
+    });
+  });
+
+  it('parses field_update without labelUa (legacy)', () => {
     expect(
       parseQuestionnaireProposedChange({
         kind: 'field_update',

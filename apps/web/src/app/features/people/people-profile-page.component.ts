@@ -39,9 +39,8 @@ import { EmployeeQuestionnairesPanelComponent } from '../questionnaires/public-a
 import { EmployeeDocumentsPanelComponent } from './employee-documents-panel.component';
 import { EmployeeProfileCompletenessComponent } from './employee-profile-completeness.component';
 import { EmployeeHistoryPanelComponent } from './employee-history-panel.component';
-import {
-  EmployeeDataPanelComponent,
-} from './employee-data-panel.component';
+import { EmployeeDataPanelComponent } from './employee-data-panel.component';
+import { EmployeeAboutPanelComponent } from './employee-about-panel.component';
 import { EmployeeSkillsMatrixPanelComponent } from './employee-skills-matrix-panel.component';
 import { EmployeeAccountPanelComponent } from './employee-account-panel.component';
 import { EmployeeRoleAccessPanelComponent } from './employee-role-access-panel.component';
@@ -72,6 +71,7 @@ type MetricsTabId = 'skills';
     EmployeeProfileCompletenessComponent,
     EmployeeHistoryPanelComponent,
     EmployeeDataPanelComponent,
+    EmployeeAboutPanelComponent,
     EmployeeSkillsMatrixPanelComponent,
     EmployeeAccountPanelComponent,
     EmployeeRoleAccessPanelComponent,
@@ -260,6 +260,9 @@ type MetricsTabId = 'skills';
               } @error {
                 <p class="error">Не вдалося завантажити анкети.</p>
               }
+            }
+            @case ('about') {
+              <loom-employee-about-panel />
             }
             @case ('metrics') {
               <nav

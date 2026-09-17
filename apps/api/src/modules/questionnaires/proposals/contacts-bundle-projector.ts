@@ -4,6 +4,15 @@ import {
   type EmployeeContactsBundle,
 } from '@loom/employee-contacts';
 
+/** Frozen UA titles for contacts-bundle field_update proposals. */
+export const CONTACTS_PROPOSAL_LABEL_UA: Readonly<Record<string, string>> = {
+  workEmail: 'Робочий email',
+  workPhone: 'Робочий телефон',
+  workTelegram: 'Робочий Telegram',
+  personal_replace: 'Особисті контакти',
+  emergency_replace: 'Екстрені контакти',
+};
+
 export type ContactsBundleProposalCandidate = {
   targetSection: 'contacts';
   proposedChanges: {
@@ -13,6 +22,7 @@ export type ContactsBundleProposalCandidate = {
     answerKey: string;
     from: unknown;
     to: unknown;
+    labelUa: string;
   };
 };
 
@@ -61,6 +71,7 @@ export function buildContactsBundleProposalCandidates(input: {
         answerKey,
         from,
         to,
+        labelUa: CONTACTS_PROPOSAL_LABEL_UA[item.field],
       },
     });
   }
@@ -75,6 +86,7 @@ export function buildContactsBundleProposalCandidates(input: {
         answerKey,
         from: current.personal,
         to: bundle.personal,
+        labelUa: CONTACTS_PROPOSAL_LABEL_UA.personal_replace,
       },
     });
   }
@@ -89,6 +101,7 @@ export function buildContactsBundleProposalCandidates(input: {
         answerKey,
         from: current.emergency,
         to: bundle.emergency,
+        labelUa: CONTACTS_PROPOSAL_LABEL_UA.emergency_replace,
       },
     });
   }

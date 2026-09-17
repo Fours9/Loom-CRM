@@ -28,11 +28,11 @@
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
-**Профіль UI:** список `/people` = Absences-like directory (+ напрямок, AccountRole.name); створення — `/people/new` (`employees.create` ∧ `employees.view`, напрямок + AccountRole-at-create, [ADR 0013](adr/0013-employee-create-sot.md)); деталі `/people/:id` — вкладки Дані, **Робота**, Документи, **Анкети**, Показники, **Адміністрування** (Історія · **Акаунт** · **Роль та допуски**), Згодом. **Роль та допуски:** assign `accountRoleId` + visibility overrides (без adminAccess toggle). Org leadership = `managementKind` на посаді/EA. Access: Platform `AuthorizationContext` + active EA scope; Settings **Доступи** (+ checkbox confidential). Living: [hr-profile-roadmap](product/hr-profile-roadmap.md), [access-surfaces](product/access-surfaces.md), [ADR 0011](adr/0011-org-leadership-vs-account-role.md), [ADR 0012](adr/0012-confidential-classification.md), [ADR 0013](adr/0013-employee-create-sot.md).
+**Профіль UI:** список `/people` = Absences-like directory (+ напрямок, AccountRole.name); створення — `/people/new` (`employees.create` ∧ `employees.view`, напрямок + AccountRole-at-create, [ADR 0013](adr/0013-employee-create-sot.md)); деталі `/people/:id` — вкладки Дані, **Робота**, Документи, **Анкети**, **Про себе**, Показники, **Адміністрування** (Історія · **Акаунт** · **Роль та допуски**). **Про себе:** soft voluntary ([people-about-tab](product/people-about-tab.md)); surface `people.tab.about`. **Роль та допуски:** assign `accountRoleId` + visibility overrides (без adminAccess toggle). Org leadership = `managementKind` на посаді/EA. Access: Platform `AuthorizationContext` + active EA scope; Settings **Доступи** (+ checkbox confidential). Living: [hr-profile-roadmap](product/hr-profile-roadmap.md), [access-surfaces](product/access-surfaces.md), [ADR 0011](adr/0011-org-leadership-vs-account-role.md), [ADR 0012](adr/0012-confidential-classification.md), [ADR 0013](adr/0013-employee-create-sot.md).
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 
-**Анкета 360°:** types `full`/`managing`/`docs`; seed `employee-360` = full («Повна») + Variant A stubs managing/docs; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)). Fill UI = schema-driven wizard на `/questionnaires/:id`. Кожне призначення має людський `code` (напр. `360-002`); створення через попап (тип+опис / працівник / службова примітка); каталог + профіль — пошук за кодом. Permissions: Assign (DM+Admin) vs ManageLifecycle/Delete (Admin).
+**Анкета 360°:** types `full`/`managing`/`docs`; seed `employee-360` = full («Повна») + Variant A stubs managing/docs; immutable `questionnaire_submissions` ([ADR 0009](adr/0009-questionnaire-360-mvp.md)). Fill UI = schema-driven wizard на `/questionnaires/:id`. Кожне призначення має людський `code` (напр. `360-002`); створення через попап (тип+опис / працівник / службова примітка); каталог + профіль — пошук за кодом. Permissions: Assign (DM+Admin) vs Manage triad Lifecycle/Delete/Apply (Admin; proposals under Manage + profile write policy).
 
 | Тип документа | Призначення |
 | --- | --- |
@@ -64,6 +64,8 @@
 ## Продукт / HR
 
 - [HR profile roadmap](product/hr-profile-roadmap.md) — **living** статус фаз
+- [People «Про себе»](product/people-about-tab.md) — вкладка + planned subtabs
+- [Access surfaces](product/access-surfaces.md) — surfaces + permissions
 - [Work calendar roadmap](product/work-calendar-roadmap.md) — expand Absences → TimeEvent (MVP)
 - [Employee Profile Core (target-спека)](product/employee-profile-core.md) — vision / Draft, не «що вже в коді»
 - [Анкета 360° — reference only](product/references/README.md)

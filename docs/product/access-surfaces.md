@@ -39,9 +39,10 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 | `people.tab.work` | так | так | так | так |
 | `people.tab.documents` | seed | seed | seed | так |
 | `people.tab.questionnaires` | seed | seed | seed | так |
+| `people.tab.about` | так | ні | ні | так |
 | `people.tab.metrics` | ні | так | так | так |
 | `people.tab.administration` | ні | ні | ні | так |
-| `people.tab.later` | так | так | так | так |
+| `people.tab.later` | reserved | reserved | reserved | reserved |
 | `settings.access_roles` | ні | ні | ні | так |
 
 ## Permission-backed surfaces
@@ -80,10 +81,10 @@ Settings role dialog: effective / `grants*Explicitly` / `canEdit*Grant` triad (c
 |------|---------|
 | `account_role_questionnaire_templates` | Opaque template codes per AccountRole. AdminEq bypasses (no rows required). |
 | `questionnaires.assign` | Create / attach new / templates picker (within granted codes). **Not** in DM base preset (Variant A) — seeded as extra for DM-preset roles. |
-| Manage bundle | `questionnaires.manage_lifecycle` **and** `questionnaires.delete` together. Settings one checkbox; API rejects XOR (`QUESTIONNAIRE_MANAGE_BUNDLE_PARTIAL`). |
+| Manage bundle | `questionnaires.manage_lifecycle` ∧ `questionnaires.delete` ∧ `questionnaires.apply_profile_changes` together. Settings one checkbox; API rejects incomplete triple (`QUESTIONNAIRE_MANAGE_BUNDLE_PARTIAL`). |
 | Capability SoT | `AuthorizationContext` only — not `users.role` / `PermissionService.has(role)`. |
 
-Unattached `new` READ: Assign ∨ Lifecycle ∨ Delete ∧ template grant (never View alone). Proposal LIST keeps View∨owner + template grant; ACCEPT/REJECT keep ApplyProfileChanges + grant. Notifications with assignment metadata require recipient template grant.
+Unattached `new` READ: Assign ∨ Lifecycle ∨ Delete ∧ template grant (never View alone). Proposal LIST: View∨owner + template grant. Proposal REJECT: Manage bundle ∧ scope ∧ template grant. Proposal ACCEPT: same as REJECT **plus** exhaustive fail-closed target-profile write policy (`classifyProposalProfileWrite` → Organization `canManageProfilesOnTarget` / `canWritePersonalOnTarget` / `canEditEmergencyOnTarget`; unknown `section.field` DENY). Notifications with assignment metadata require recipient template grant.
 
 Migration seed: built-in literals (`employee-starter`/`360`/`managing`/`docs`) by elevatedBefore parity; upgrade adds published `type=full` (plain) or all published (elevated). See [ADR 0009 §16](../adr/0009-questionnaire-360-mvp.md).
 

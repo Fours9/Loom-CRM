@@ -5,7 +5,7 @@ import {
 import { emptyEmployeeContactsBundle } from '@loom/employee-contacts';
 
 describe('contacts bundle projector', () => {
-  it('emits work scalar and replace-set proposals', () => {
+  it('emits work scalar and replace-set proposals with frozen labelUa', () => {
     const current = emptyEmployeeContactsBundle();
     const bundle = {
       ...current,
@@ -16,6 +16,12 @@ describe('contacts bundle projector', () => {
     const fields = candidates.map((c) => c.proposedChanges.field);
     expect(fields).toContain('workEmail');
     expect(fields).toContain('personal_replace');
+    const work = candidates.find((c) => c.proposedChanges.field === 'workEmail');
+    expect(work?.proposedChanges.labelUa).toBe('Робочий email');
+    const personal = candidates.find(
+      (c) => c.proposedChanges.field === 'personal_replace',
+    );
+    expect(personal?.proposedChanges.labelUa).toBe('Особисті контакти');
   });
 
   it('replace-set stale returns apply when current matches from', () => {

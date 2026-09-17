@@ -10,9 +10,10 @@ import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
 import { hasQuestionnaireTemplate } from '../../platform/access-control/authorization-context';
+import type { AuthorizationContext } from '../../platform/access-control/authorization-context';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
 import {
-  canApplyProfileChanges,
+  canManageQuestionnaires,
   canViewQuestionnaires,
   requireActorAccessAssignmentTemplate,
 } from './assignments/questionnaire-assignment-access';
@@ -35,7 +36,6 @@ import {
 } from '@loom/employee-contacts';
 import type {
   QuestionnaireProfileProposalItem,
-  QuestionnaireProposedChange,
 } from '@loom/contracts-questionnaires';
 import { parseQuestionnaireContext } from '@loom/contracts-questionnaires';
 import {
@@ -50,11 +50,14 @@ import {
   buildContactsBundleProposalCandidates,
   contactsReplaceSetStale,
 } from './proposals/contacts-bundle-projector';
-import { canApplySkillAddProposal } from './proposals/skill-add-proposal.policy';
+import { canAcceptQuestionnaireProfileProposal } from './proposals/questionnaire-proposal-accept.policy';
+import { enrichProposalChange } from './proposals/questionnaire-proposal-labels';
 import {
   InvalidProposedChangeError,
   parseQuestionnaireProposedChange,
+  type StoredQuestionnaireProposedChange,
 } from './proposals/questionnaire-proposed-change';
+import { canApplySkillAddProposal } from './proposals/skill-add-proposal.policy';
 import { EmployeeSkillAssessmentsFacade } from '../../organization/skills/employee-skill-assessments.facade';
 import { SkillsService } from '../../organization/skills/skills.service';
 import { Skill } from '../../organization/skills/skill.entity';
@@ -62,6 +65,7 @@ import { Skill } from '../../organization/skills/skill.entity';
 type ProposalMapping = { section: string; field: string };
 type SchemaField = {
   key: string;
+  label?: string;
   valueType?: string;
   options?: Array<{ value: string; label: string }>;
   createsProfileProposal?: boolean;
@@ -165,7 +169,7 @@ export class QuestionnaireProposalService {
 
     const candidates: Array<{
       targetSection: string;
-      proposedChanges: QuestionnaireProposedChange;
+      proposedChanges: StoredQuestionnaireProposedChange;
     }> = [];
 
     for (const field of scalarFields) {
@@ -214,6 +218,7 @@ export class QuestionnaireProposalService {
           answerKey: field.key,
           from: from ?? null,
           to,
+          labelUa: field.label?.trim() || field.key,
         },
       });
     }
@@ -253,7 +258,7 @@ export class QuestionnaireProposalService {
       where: { employeeId: employee.id, status: 'pending' },
     });
     const profileEqual = allPending.filter((p) => {
-      let change: QuestionnaireProposedChange;
+      let change: StoredQuestionnaireProposedChange;
       try {
         change = parseQuestionnaireProposedChange(p.proposedChanges);
       } catch {
@@ -307,7 +312,7 @@ export class QuestionnaireProposalService {
       submission: QuestionnaireSubmission;
       candidates: Array<{
         targetSection: string;
-        proposedChanges: QuestionnaireProposedChange;
+        proposedChanges: StoredQuestionnaireProposedChange;
       }>;
     },
   ): Promise<void> {
@@ -427,6 +432,12 @@ export class QuestionnaireProposalService {
       ...this.readContactsProfileValues(currentBundle),
     };
 
+    const inManagedDept = await this.access.isTargetInManagedDepartments(
+      actor,
+      employee,
+    );
+    const canReject = canManageQuestionnaires(authz);
+
     const dtos: QuestionnaireProfileProposalItem[] = [];
     for (const p of items) {
       const assignmentId = assignmentBySubmission.get(p.submissionId);
@@ -440,28 +451,36 @@ export class QuestionnaireProposalService {
         continue;
       }
 
-      let change: QuestionnaireProposedChange;
+      let stored: StoredQuestionnaireProposedChange;
       try {
-        change = parseQuestionnaireProposedChange(p.proposedChanges);
+        stored = parseQuestionnaireProposedChange(p.proposedChanges);
       } catch {
         continue;
       }
 
-      if (change.kind === 'add_skill') {
+      if (stored.kind === 'add_skill') {
         if (
-          await this.assessments.hasConfirmed(employeeId, change.skillId)
+          await this.assessments.hasConfirmed(employeeId, stored.skillId)
         ) {
           continue;
         }
-        dtos.push(this.toDto(p, assignmentId));
+        dtos.push(
+          this.toDto(p, assignmentId, {
+            stored,
+            schemaFieldLabel: null,
+            canReject,
+            inManagedDept,
+            authz,
+          }),
+        );
         continue;
       }
 
       const schema = schemaByAssignment.get(assignmentId);
-      const schemaField = change.answerKey
-        ? schema?.fieldsByKey.get(change.answerKey)
+      const schemaField = stored.answerKey
+        ? schema?.fieldsByKey.get(stored.answerKey)
         : undefined;
-      const profileKey = `${change.section}.${change.field}`;
+      const profileKey = `${stored.section}.${stored.field}`;
       if (
         proposalMatchesCurrentValue({
           proposal: p,
@@ -472,14 +491,19 @@ export class QuestionnaireProposalService {
         continue;
       }
 
-      dtos.push(this.toDto(p, assignmentId));
+      dtos.push(
+        this.toDto(p, assignmentId, {
+          stored,
+          schemaFieldLabel: schemaField?.label ?? null,
+          canReject,
+          inManagedDept,
+          authz,
+        }),
+      );
     }
 
     return {
       items: dtos,
-      capabilities: {
-        canApply: canApplyProfileChanges(authz),
-      },
     };
   }
 
@@ -497,7 +521,7 @@ export class QuestionnaireProposalService {
     decision: 'accept' | 'reject',
   ) {
     const authz = await this.authorization.resolve(actor.id);
-    if (!canApplyProfileChanges(authz)) {
+    if (!canManageQuestionnaires(authz)) {
       throw new ForbiddenException(
         decision === 'accept'
           ? 'Cannot apply profile changes'
@@ -534,14 +558,31 @@ export class QuestionnaireProposalService {
     const employee = await this.access.getEmployeeOrFail(proposal.employeeId);
     await this.access.requireCanView(actor, employee);
 
-    let change: QuestionnaireProposedChange;
+    let stored: StoredQuestionnaireProposedChange;
     try {
-      change = parseQuestionnaireProposedChange(proposal.proposedChanges);
+      stored = parseQuestionnaireProposedChange(proposal.proposedChanges);
     } catch (err) {
       if (err instanceof InvalidProposedChangeError) {
         throw new BadRequestException(err.message);
       }
       throw err;
+    }
+
+    const inManagedDept = await this.access.isTargetInManagedDepartments(
+      actor,
+      employee,
+    );
+
+    if (decision === 'accept') {
+      if (
+        !canAcceptQuestionnaireProfileProposal({
+          authz,
+          inManagedDept,
+          change: stored,
+        })
+      ) {
+        throw new ForbiddenException('Cannot apply this profile proposal');
+      }
     }
 
     await this.dataSource.transaction(async (manager) => {
@@ -560,7 +601,7 @@ export class QuestionnaireProposalService {
           manager,
           actor,
           proposal.employeeId,
-          change,
+          stored,
           {
             submissionId: proposal.submissionId,
             assignmentId,
@@ -578,8 +619,8 @@ export class QuestionnaireProposalService {
       if (decision === 'accept') {
         await supersedePendingForSameField(manager, {
           employeeId: proposal.employeeId,
-          section: change.section,
-          field: change.field,
+          section: stored.section,
+          field: stored.field,
           exceptProposalId: proposal.id,
         });
       }
@@ -587,7 +628,20 @@ export class QuestionnaireProposalService {
 
     const saved = await this.proposals.findOne({ where: { id: proposalId } });
     if (!saved) throw new NotFoundException('Proposal not found');
-    return this.toDto(saved, assignmentId);
+
+    const schemaByAssignment = await this.schemasByAssignmentIds([assignmentId]);
+    const schemaField =
+      stored.kind === 'field_update' && stored.answerKey
+        ? schemaByAssignment.get(assignmentId)?.fieldsByKey.get(stored.answerKey)
+        : undefined;
+
+    return this.toDto(saved, assignmentId, {
+      stored,
+      schemaFieldLabel: schemaField?.label ?? null,
+      canReject: true,
+      inManagedDept,
+      authz,
+    });
   }
 
   async latestSnapshotSummary(
@@ -657,7 +711,7 @@ export class QuestionnaireProposalService {
     manager: EntityManager,
     actor: User,
     employeeId: string,
-    change: QuestionnaireProposedChange,
+    change: StoredQuestionnaireProposedChange,
     provenance: { submissionId: string; assignmentId: string },
   ): Promise<void> {
     if (change.kind === 'add_skill') {
@@ -722,7 +776,7 @@ export class QuestionnaireProposalService {
     manager: EntityManager,
     actor: User,
     employeeId: string,
-    change: Extract<QuestionnaireProposedChange, { kind: 'add_skill' }>,
+    change: Extract<StoredQuestionnaireProposedChange, { kind: 'add_skill' }>,
     provenance: { submissionId: string; assignmentId: string },
   ): Promise<void> {
     // Lock order: proposal (already locked) → Skill → insertConfirmedIfAbsent
@@ -760,7 +814,7 @@ export class QuestionnaireProposalService {
     manager: EntityManager,
     actor: User,
     employeeId: string,
-    change: Extract<QuestionnaireProposedChange, { kind: 'field_update' }>,
+    change: Extract<StoredQuestionnaireProposedChange, { kind: 'field_update' }>,
   ): Promise<void> {
     const current = await this.contactsFacade.readContactsBundle(
       manager,
@@ -915,18 +969,40 @@ export class QuestionnaireProposalService {
   private toDto(
     p: QuestionnaireProfileProposal,
     assignmentId: string,
+    caps: {
+      stored: StoredQuestionnaireProposedChange;
+      schemaFieldLabel: string | null;
+      canReject: boolean;
+      inManagedDept: boolean;
+      authz: AuthorizationContext;
+    },
   ): QuestionnaireProfileProposalItem {
+    const enriched = enrichProposalChange({
+      stored: caps.stored,
+      schemaFieldLabel: caps.schemaFieldLabel,
+    });
+    const canAccept =
+      caps.canReject &&
+      canAcceptQuestionnaireProfileProposal({
+        authz: caps.authz,
+        inManagedDept: caps.inManagedDept,
+        change: caps.stored,
+      });
     return {
       id: p.id,
       submissionId: p.submissionId,
       assignmentId,
       employeeId: p.employeeId,
       targetSection: p.targetSection,
-      proposedChanges: p.proposedChanges as QuestionnaireProfileProposalItem['proposedChanges'],
+      proposedChanges: enriched,
       status: p.status,
       reviewedByUserId: p.reviewedByUserId,
       reviewedAt: p.reviewedAt?.toISOString() ?? null,
       createdAt: p.createdAt.toISOString(),
+      capabilities: {
+        canAccept,
+        canReject: caps.canReject,
+      },
     };
   }
 

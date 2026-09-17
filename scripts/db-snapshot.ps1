@@ -2,10 +2,13 @@
 # Run this before committing when you want the current DB state in git.
 # Usage: .\scripts\db-snapshot.ps1
 #
-# Prefers Docker Compose service "postgres"; falls back to local pg_dump + DATABASE_URL / .env.
+# Prefers Docker Compose service "postgres"; falls back to local pg_dump
+# (PATH or Program Files\PostgreSQL\<ver>\bin) + DATABASE_URL / .env.
 
 $ErrorActionPreference = 'Stop'
-$Root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'lib\postgres-cli.ps1')
+
+$Root = Get-LoomRepoRoot
 $DataDir = Join-Path $Root 'data'
 $Snapshot = Join-Path $DataDir 'app.snapshot.sql'
 
@@ -13,42 +16,10 @@ if (-not (Test-Path $DataDir)) {
     New-Item -ItemType Directory -Path $DataDir | Out-Null
 }
 
-function Get-DatabaseUrl {
-    if ($env:DATABASE_URL -and $env:DATABASE_URL.Trim()) {
-        return $env:DATABASE_URL.Trim()
-    }
-    $envFile = Join-Path $Root '.env'
-    if (Test-Path $envFile) {
-        foreach ($line in Get-Content $envFile) {
-            if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
-            $k, $v = $line.Split('=', 2)
-            if ($k.Trim() -eq 'DATABASE_URL') {
-                return $v.Trim().Trim('"').Trim("'")
-            }
-        }
-    }
-    return 'postgres://loom:loom@127.0.0.1:5432/loom_crm'
-}
-
-function Invoke-LocalPgDump([string]$Url, [string]$OutFile) {
-    & pg_dump --dbname=$Url --clean --if-exists --no-owner --no-acl --file=$OutFile
+function Invoke-LocalPgDump([string]$PgDumpPath, [string]$Url, [string]$OutFile) {
+    & $PgDumpPath --dbname=$Url --clean --if-exists --no-owner --no-acl --file=$OutFile
     if ($LASTEXITCODE -ne 0) {
-        throw "pg_dump failed for DATABASE_URL"
-    }
-}
-
-function Test-ComposePostgres {
-    $docker = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $docker) { return $false }
-    Push-Location $Root
-    try {
-        $ps = & docker compose ps --status running --services 2>$null
-        if ($LASTEXITCODE -ne 0) { return $false }
-        return ($ps -split "`n" | ForEach-Object { $_.Trim() }) -contains 'postgres'
-    } catch {
-        return $false
-    } finally {
-        Pop-Location
+        throw "pg_dump failed for DATABASE_URL ($PgDumpPath)"
     }
 }
 
@@ -56,7 +27,7 @@ Write-Host "Writing snapshot: $Snapshot"
 
 $Utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
-if (Test-ComposePostgres) {
+if (Test-LoomComposePostgres -RepoRoot $Root) {
     Push-Location $Root
     try {
         # Dump to a file inside the container, then copy — avoids PowerShell UTF-8 mangling of Cyrillic.
@@ -72,16 +43,13 @@ if (Test-ComposePostgres) {
         Pop-Location
     }
 } else {
-    $url = Get-DatabaseUrl
-    $pgDump = Get-Command pg_dump -ErrorAction SilentlyContinue
+    $url = Get-LoomDatabaseUrl -RepoRoot $Root
+    $pgDump = Resolve-LoomPgDump
     if (-not $pgDump) {
-        throw @"
-Neither Compose postgres nor local pg_dump is available.
-Start Postgres: docker compose up -d postgres
-Or install PostgreSQL client tools and ensure DATABASE_URL is set.
-"@
+        throw (Get-LoomPgToolsMissingMessage -ToolLabel 'pg_dump')
     }
-    Invoke-LocalPgDump $url $Snapshot
+    Write-Host "Using pg_dump: $pgDump"
+    Invoke-LocalPgDump $pgDump $url $Snapshot
 }
 
 $header = @"

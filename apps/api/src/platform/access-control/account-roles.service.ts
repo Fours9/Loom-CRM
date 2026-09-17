@@ -74,7 +74,7 @@ export type AccountRoleView = {
   canAssignQuestionnaires: boolean;
   grantsAssignQuestionnairesExplicitly: boolean;
   canEditAssignQuestionnairesGrant: boolean;
-  /** Effective Manage bundle = lifecycle ∧ delete (or adminEq). */
+  /** Effective Manage bundle = lifecycle ∧ delete ∧ apply_profile_changes (or adminEq). */
   canManageQuestionnaires: boolean;
   grantsManageQuestionnairesExplicitly: boolean;
   canEditManageQuestionnairesGrant: boolean;
@@ -406,11 +406,16 @@ export class AccountRolesService {
     }
     const hasLifecycle = unique.includes(Permission.QuestionnairesManageLifecycle);
     const hasDelete = unique.includes(Permission.QuestionnairesDelete);
-    if (hasLifecycle !== hasDelete) {
+    const hasApply = unique.includes(
+      Permission.QuestionnairesApplyProfileChanges,
+    );
+    const manageCount = [hasLifecycle, hasDelete, hasApply].filter(Boolean)
+      .length;
+    if (manageCount !== 0 && manageCount !== 3) {
       throw new BadRequestException({
         code: 'QUESTIONNAIRE_MANAGE_BUNDLE_PARTIAL',
         message:
-          'questionnaires.manage_lifecycle and questionnaires.delete must be granted or revoked together',
+          'questionnaires.manage_lifecycle, questionnaires.delete, and questionnaires.apply_profile_changes must be granted or revoked together',
       });
     }
     return unique as Permission[];
@@ -640,12 +645,20 @@ export class AccountRolesService {
     const grantsDeleteExplicitly = extraPermissions.includes(
       Permission.QuestionnairesDelete,
     );
+    const grantsApplyExplicitly = extraPermissions.includes(
+      Permission.QuestionnairesApplyProfileChanges,
+    );
     const grantsManageQuestionnairesExplicitly =
-      grantsLifecycleExplicitly && grantsDeleteExplicitly;
+      grantsLifecycleExplicitly &&
+      grantsDeleteExplicitly &&
+      grantsApplyExplicitly;
     const canManageQuestionnaires =
       role.isAdminEquivalent ||
       (effectivePermissions.includes(Permission.QuestionnairesManageLifecycle) &&
-        effectivePermissions.includes(Permission.QuestionnairesDelete));
+        effectivePermissions.includes(Permission.QuestionnairesDelete) &&
+        effectivePermissions.includes(
+          Permission.QuestionnairesApplyProfileChanges,
+        ));
 
     return {
       id: role.id,

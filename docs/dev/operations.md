@@ -77,8 +77,8 @@
 | Жива БД (volume / `DATABASE_URL`) | не в git; **не** файл `data/app.sqlite` (це лише PW) |
 | `data/app.snapshot.sql` | знімок у git |
 | `pnpm migration:run` | лише схема — **не** завантажує знімок |
-| `.\scripts\db-snapshot.ps1` | жива → знімок |
-| `.\scripts\db-restore.ps1` | знімок → жива (+ авто-бекап `data/app.live.bak-*.sql`) |
+| `.\scripts\db-snapshot.ps1` | жива → знімок (`scripts/lib/postgres-cli.ps1`: Compose → PATH → Program Files\PostgreSQL) |
+| `.\scripts\db-restore.ps1` | знімок → жива (+ авто-бекап `data/app.live.bak-*.sql`; той самий CLI resolver) |
 
 Після clone / порожньої БД: **спочатку** migrate, **потім** явно `db-restore.ps1`. Інакше логін зі знімка неможливий. `start.bat` **не** робить restore сам.
 
@@ -161,6 +161,7 @@ docker compose logs -f postgres
 | Немає адміна / «пуста» БД після clone | Зробили лише migrate — `.\scripts\db-restore.ps1` (або `start.bat` при порожніх `users`) |
 | Немає адміна на порожній БД без знімка | Seed — перевірте `SEED_ADMIN_*`; демо-стан: `.\scripts\db-restore.ps1` |
 | Потрібен спільний демо-стан між ПК | Оновіть знімок на джерелі (`db-snapshot.ps1` + commit), на приймачі — `db-restore.ps1` |
+| `Neither Compose postgres nor local pg_dump` | Немає Docker **і** клієнтських tools. На Windows часто Postgres уже стоїть, але `\bin` не в PATH — скрипти самі шукають `Program Files\PostgreSQL\<ver>\bin` через `scripts/lib/postgres-cli.ps1`. |
 | Після оновлення UI «старий» | Браузерний кеш / не перезібраний `web` — `docker compose up -d --build web` |
 | Випадкові зміни в `ProjectWeekend/` | Copy-source read-only — відкотити; `pnpm check:copy-source` |
 | UI клікається, даних немає («бек ніби вимкнений») | Часто **жива вкладка SPA** або процес ще на `:4200`, а API на `:3000` мертвий — не витік БД. Див. § [SPA vs сервер](#spa-shell-vs-вимкнений-сервер) |

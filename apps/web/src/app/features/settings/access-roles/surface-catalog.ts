@@ -53,13 +53,14 @@ export const FALLBACK_SURFACE_CATALOG: readonly AppSurface[] = [
     label: 'Анкети',
     requiredPermission: Permission.QuestionnairesView,
   },
+  { id: Surface.PeopleTabAbout, group: 'people', label: 'Про себе' },
   { id: Surface.PeopleTabMetrics, group: 'people', label: 'Показники' },
   {
     id: Surface.PeopleTabAdministration,
     group: 'people',
     label: 'Адміністрування',
   },
-  { id: Surface.PeopleTabLater, group: 'people', label: 'Згодом' },
+  { id: Surface.PeopleTabLater, group: 'people', label: 'Згодом (зарезервовано)' },
   { id: Surface.SettingsAccessRoles, group: 'settings', label: 'Доступи' },
 ];
 

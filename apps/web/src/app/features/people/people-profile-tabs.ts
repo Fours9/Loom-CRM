@@ -13,9 +13,9 @@ export type PeopleProfileTabId =
   | 'absences'
   | 'documents'
   | 'questionnaires'
+  | 'about'
   | 'metrics'
-  | 'administration'
-  | 'later';
+  | 'administration';
 
 export type PeopleProfileTab = {
   id: PeopleProfileTabId;
@@ -27,9 +27,9 @@ const ALL_TABS: readonly PeopleProfileTab[] = [
   { id: 'absences', label: 'Робота' },
   { id: 'documents', label: 'Документи' },
   { id: 'questionnaires', label: 'Анкети' },
+  { id: 'about', label: 'Про себе' },
   { id: 'metrics', label: 'Показники' },
   { id: 'administration', label: 'Адміністрування' },
-  { id: 'later', label: 'Згодом' },
 ];
 
 const TAB_SURFACE: Readonly<Record<PeopleProfileTabId, SurfaceId>> = {
@@ -37,9 +37,9 @@ const TAB_SURFACE: Readonly<Record<PeopleProfileTabId, SurfaceId>> = {
   absences: Surface.PeopleTabWork,
   documents: Surface.PeopleTabDocuments,
   questionnaires: Surface.PeopleTabQuestionnaires,
+  about: Surface.PeopleTabAbout,
   metrics: Surface.PeopleTabMetrics,
   administration: Surface.PeopleTabAdministration,
-  later: Surface.PeopleTabLater,
 };
 
 function hasPermission(
@@ -69,9 +69,11 @@ function hasAnyAdministrationCapability(
  * Visible People profile tabs from capabilities + session permissions + surfaces.
  * Hide unavailable tabs (do not render disabled).
  *
- * Surfaces win when the session carries a catalog: `metrics` and `administration`
- * become surface-only, `documents` / `questionnaires` stay surface AND permission.
+ * Surfaces win when the session carries a catalog: `metrics`, `administration`,
+ * and `about` become surface-only; `documents` / `questionnaires` stay surface AND permission.
  * Without surfaces (pre-rollout) the legacy permission/capability gating applies.
+ *
+ * Note: `people.tab.later` remains a reserved DB surface; «Згодом» is not a UI tab.
  */
 export function visiblePeopleProfileTabs(input: {
   capabilities: EmployeeProfileCapabilities | null | undefined;
@@ -96,9 +98,10 @@ export function visiblePeopleProfileTabs(input: {
       case 'data':
       case 'absences':
       case 'metrics':
-      case 'later':
-        // «Робота» (absences) always hosts «Посада»; schedule subtabs gated in the page.
         return true;
+      case 'about':
+        // Pre-surface catalog: hide until surfaces ship (fail closed for soft tab).
+        return false;
       case 'documents':
         return hasPermission(perms, P.DocumentsView);
       case 'questionnaires':
@@ -134,10 +137,15 @@ export function canShowRoleAccessAdminTab(
   );
 }
 
-/** Never activate a non-visible tab; fallback to data. */
+/**
+ * Never activate a non-visible tab; fallback to data.
+ * Unknown / removed ids (e.g. legacy `?tab=later`) resolve to data.
+ */
 export function resolvePeopleProfileTab(
-  requested: PeopleProfileTabId,
+  requested: string,
   visibleTabs: readonly PeopleProfileTab[],
 ): PeopleProfileTabId {
-  return visibleTabs.some((tab) => tab.id === requested) ? requested : 'data';
+  return visibleTabs.some((tab) => tab.id === requested)
+    ? (requested as PeopleProfileTabId)
+    : 'data';
 }
