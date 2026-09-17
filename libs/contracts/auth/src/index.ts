@@ -68,6 +68,11 @@ export type CurrentUserResponse = {
   permissions: Permission[];
   /** UI surface ids granted by the account role. Absent until the rollout lands. */
   surfaces?: string[];
+  /**
+   * Opaque questionnaire template codes granted to the account role.
+   * Absent / empty = none unless accountRole.isAdminEquivalent.
+   */
+  questionnaireTemplateCodes?: string[];
   accountRole?: CurrentUserAccountRole;
   employeeId: EntityId | null;
   mustChangePassword: boolean;

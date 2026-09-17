@@ -41,6 +41,7 @@ export function questionnaireTypeDescription(type: string): string {
   return entry?.descriptionUa ?? '';
 }
 
+/** @deprecated Prefer template-code grants from /auth/me / role Settings. */
 export function isEmployeeOwnerVisibleType(type: string): boolean {
   return (EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES as readonly string[]).includes(
     type,

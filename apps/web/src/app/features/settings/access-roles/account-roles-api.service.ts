@@ -51,6 +51,14 @@ export type AccountRole = {
   canCreateAccountAtCreate: boolean;
   grantsCreateAccountAtCreateExplicitly: boolean;
   canEditCreateAccountAtCreateGrant: boolean;
+  questionnaireTemplateCodes: string[];
+  canEditQuestionnaireTemplates: boolean;
+  canAssignQuestionnaires: boolean;
+  grantsAssignQuestionnairesExplicitly: boolean;
+  canEditAssignQuestionnairesGrant: boolean;
+  canManageQuestionnaires: boolean;
+  grantsManageQuestionnairesExplicitly: boolean;
+  canEditManageQuestionnairesGrant: boolean;
 };
 
 export type CreateAccountRoleBody = {
@@ -59,6 +67,7 @@ export type CreateAccountRoleBody = {
   isAdminEquivalent?: boolean;
   extraPermissions?: string[];
   surfaceIds?: string[];
+  questionnaireTemplateCodes?: string[];
 };
 
 export type UpdateAccountRoleBody = Partial<CreateAccountRoleBody>;

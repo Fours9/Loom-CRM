@@ -9,14 +9,72 @@ import {
   computeDetailCapabilities,
   computeListLifecycleCapabilities,
   computeCanStartFill,
-  canActorAccessAssignmentType,
+  canActorAccessAssignmentTemplate,
+  applyGrantedTemplateCodeFilter,
 } from './questionnaire-assignment-access';
 import { Permission } from '../../../platform/permissions/permission.names';
 import { UserRole } from '../../../platform/identity/user.enums';
 import type { User } from '../../../platform/identity/user.entity';
 import type { Employee } from '../../../organization/employees/employee.entity';
-import type { PermissionService } from '../../../platform/permissions/permission.service';
 import type { EmployeeAccessService } from '../../../organization/access/employee-access.service';
+import type { AuthorizationContext } from '../../../platform/access-control/authorization-context';
+
+function authzFixture(input: {
+  permissions?: Permission[];
+  questionnaireTemplateCodes?: string[];
+  isAdminEquivalent?: boolean;
+  userId?: string;
+}): AuthorizationContext {
+  return {
+    userId: input.userId ?? 'u1',
+    accountRole: {
+      id: 'role-1',
+      code: null,
+      name: 'Test',
+      permissionPreset: 'employee',
+      isAdminEquivalent: input.isAdminEquivalent ?? false,
+      isSystem: false,
+    },
+    permissions: input.permissions ?? [],
+    surfaces: [],
+    isAdminEquivalent: input.isAdminEquivalent ?? false,
+    questionnaireTemplateCodes: input.questionnaireTemplateCodes ?? [],
+  };
+}
+
+function adminQuestionnairePermissions(): Permission[] {
+  return [
+    Permission.QuestionnairesCompleteSelf,
+    Permission.QuestionnairesCompleteAny,
+    Permission.QuestionnairesAssign,
+    Permission.QuestionnairesManageLifecycle,
+    Permission.QuestionnairesDelete,
+    Permission.QuestionnairesReview,
+  ];
+}
+
+function employeeQuestionnairePermissions(): Permission[] {
+  return [Permission.QuestionnairesCompleteSelf];
+}
+
+function dmQuestionnairePermissions(extra: Permission[] = []): Permission[] {
+  return [
+    Permission.QuestionnairesCompleteSelf,
+    Permission.QuestionnairesAssign,
+    ...extra,
+  ];
+}
+
+function authzForRole(role: UserRole): AuthorizationContext {
+  return authzFixture({
+    permissions:
+      role === UserRole.Admin
+        ? adminQuestionnairePermissions()
+        : role === UserRole.DepartmentManager
+          ? dmQuestionnairePermissions()
+          : employeeQuestionnairePermissions(),
+  });
+}
 
 function listLifecycle(
   input: Omit<
@@ -65,24 +123,6 @@ describe('close/cancel transitions', () => {
 });
 
 describe('computeDetailCapabilities matrix', () => {
-  function perms(role: UserRole): PermissionService {
-    const set = new Set<string>(
-      role === UserRole.Admin
-        ? [
-            Permission.QuestionnairesCompleteSelf,
-            Permission.QuestionnairesCompleteAny,
-            Permission.QuestionnairesAssign,
-            Permission.QuestionnairesManageLifecycle,
-            Permission.QuestionnairesDelete,
-            Permission.QuestionnairesReview,
-          ]
-        : [Permission.QuestionnairesCompleteSelf],
-    );
-    return {
-      has: (_r: string, p: string) => set.has(p),
-    } as unknown as PermissionService;
-  }
-
   function access(isOwner: boolean): EmployeeAccessService {
     return {
       isOwner: () => isOwner,
@@ -97,7 +137,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor,
       employee: null,
       status: 'new',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(false),
     });
     expect(adminCaps.canEditDraft).toBe(true);
@@ -110,7 +150,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor: { id: 'u1', role: UserRole.Employee } as User,
       employee: null,
       status: 'new',
-      permissions: perms(UserRole.Employee),
+      authz: authzForRole(UserRole.Employee),
       access: access(false),
     });
     expect(caps.canEditDraft).toBe(false);
@@ -122,7 +162,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor,
       employee: null,
       status: 'cancelled',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(false),
     });
     expect(adminCaps.canEditDraft).toBe(false);
@@ -133,7 +173,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor: { id: 'u1', role: UserRole.Employee } as User,
       employee,
       status: 'cancelled',
-      permissions: perms(UserRole.Employee),
+      authz: authzForRole(UserRole.Employee),
       access: access(true),
     });
     expect(ownerCaps.canEditDraft).toBe(false);
@@ -145,7 +185,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor,
       employee,
       status: 'closed',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(true),
       latestSubmission: null,
     });
@@ -172,7 +212,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor: { id: 'u2', role: UserRole.Admin } as User,
       employee,
       status: 'closed',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(false),
       latestSubmission: pending,
     });
@@ -192,7 +232,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor: { id: 'u2', role: UserRole.Admin } as User,
       employee,
       status: 'closed',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(false),
       latestSubmission: approved,
     });
@@ -211,7 +251,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor: { id: 'u2', role: UserRole.Admin } as User,
       employee,
       status: 'closed',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(false),
       latestSubmission: declined,
     });
@@ -230,7 +270,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor: { id: 'u2', role: UserRole.Admin } as User,
       employee,
       status: 'closed',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(false),
       latestSubmission: pending,
     });
@@ -241,7 +281,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor: { id: 'u1', role: UserRole.Employee } as User,
       employee,
       status: 'changes_requested',
-      permissions: perms(UserRole.Employee),
+      authz: authzForRole(UserRole.Employee),
       access: access(true),
       latestSubmission: {
         reviewStatus: 'changes_requested',
@@ -266,7 +306,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor: { id: 'u1', role: UserRole.Employee } as User,
       employee,
       status: 'closed',
-      permissions: perms(UserRole.Employee),
+      authz: authzForRole(UserRole.Employee),
       access: access(true),
       latestSubmission: pending,
     });
@@ -277,7 +317,7 @@ describe('computeDetailCapabilities matrix', () => {
       actor,
       employee,
       status: 'closed',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(false),
       latestSubmission: pending,
     });
@@ -303,7 +343,7 @@ describe('computeDetailCapabilities matrix', () => {
       status: 'closed',
       employeeId: 'e1',
       detachedFromEmployeeId: null,
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
     });
     expect(caps.canDelete).toBe(true);
     expect(caps.canOpen).toBe(true);
@@ -318,7 +358,7 @@ describe('computeDetailCapabilities matrix', () => {
       status: 'new',
       employeeId: null,
       detachedFromEmployeeId: null,
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
     });
     expect(caps.canAttach).toBe(true);
     expect(caps.canCancel).toBe(false);
@@ -331,7 +371,7 @@ describe('computeDetailCapabilities matrix', () => {
       status: 'cancelled',
       employeeId: null,
       detachedFromEmployeeId: 'e1',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
     });
     expect(caps.canAttach).toBe(true);
     expect(caps.canCancel).toBe(false);
@@ -344,22 +384,22 @@ describe('computeDetailCapabilities matrix', () => {
       status: 'new',
       employeeId: null,
       detachedFromEmployeeId: null,
-      permissions: perms(UserRole.Employee),
+      authz: authzForRole(UserRole.Employee),
     });
     expect(caps.canAttach).toBe(false);
   });
 
   it('Assign-only (DM): can attach new, cannot cancel/close/delete/reattach', () => {
-    const assignOnly = {
-      has: (_r: string, p: string) => p === Permission.QuestionnairesAssign,
-    } as unknown as PermissionService;
+    const assignOnlyAuthz = authzFixture({
+      permissions: [Permission.QuestionnairesAssign],
+    });
 
     const neu = listLifecycle({
       actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
       status: 'new',
       employeeId: null,
       detachedFromEmployeeId: null,
-      permissions: assignOnly,
+      authz: assignOnlyAuthz,
     });
     expect(neu.canAttach).toBe(true);
     expect(neu.canCancel).toBe(false);
@@ -371,7 +411,7 @@ describe('computeDetailCapabilities matrix', () => {
       status: 'cancelled',
       employeeId: null,
       detachedFromEmployeeId: 'e1',
-      permissions: assignOnly,
+      authz: assignOnlyAuthz,
     });
     expect(cancelled.canAttach).toBe(false);
     expect(cancelled.canClose).toBe(false);
@@ -381,108 +421,84 @@ describe('computeDetailCapabilities matrix', () => {
       status: 'assigned',
       employeeId: 'e1',
       detachedFromEmployeeId: null,
-      permissions: assignOnly,
+      authz: assignOnlyAuthz,
     });
     expect(assigned.canCancel).toBe(false);
   });
 });
 
-describe('canActorAccessAssignmentType', () => {
-  function perms(elevated: boolean): PermissionService {
-    const set = new Set<string>(
-      elevated
-        ? [
-            Permission.QuestionnairesAssign,
-            Permission.QuestionnairesCompleteSelf,
-          ]
-        : [Permission.QuestionnairesCompleteSelf],
-    );
-    return {
-      has: (_r: string, p: string) => set.has(p),
-    } as unknown as PermissionService;
-  }
-
-  function access(isOwner: boolean): EmployeeAccessService {
-    return {
-      isOwner: () => isOwner,
-    } as unknown as EmployeeAccessService;
-  }
-
-  const actor = { id: 'u1', role: UserRole.Employee } as User;
-  const employee = { id: 'e1' } as Employee;
-
-  it('non-owner may access any type after scope', () => {
+describe('canActorAccessAssignmentTemplate', () => {
+  it('returns true when template code is granted', () => {
     expect(
-      canActorAccessAssignmentType({
-        actor,
-        employee,
-        templateType: 'managing',
-        permissions: perms(false),
-        access: access(false),
+      canActorAccessAssignmentTemplate({
+        authz: authzFixture({
+          questionnaireTemplateCodes: ['employee-360'],
+        }),
+        templateCode: 'employee-360',
       }),
     ).toBe(true);
   });
 
-  it('plain owner blocked on managing/docs', () => {
+  it('returns false when template code is not granted', () => {
     expect(
-      canActorAccessAssignmentType({
-        actor,
-        employee,
-        templateType: 'managing',
-        permissions: perms(false),
-        access: access(true),
+      canActorAccessAssignmentTemplate({
+        authz: authzFixture({
+          questionnaireTemplateCodes: ['other-template'],
+        }),
+        templateCode: 'employee-360',
       }),
     ).toBe(false);
-    expect(
-      canActorAccessAssignmentType({
-        actor,
-        employee,
-        templateType: 'full',
-        permissions: perms(false),
-        access: access(true),
-      }),
-    ).toBe(true);
   });
 
-  it('elevated owner may access managing', () => {
+  it('admin equivalent bypasses template grants', () => {
     expect(
-      canActorAccessAssignmentType({
-        actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
-        employee,
-        templateType: 'managing',
-        permissions: perms(true),
-        access: access(true),
+      canActorAccessAssignmentTemplate({
+        authz: authzFixture({
+          isAdminEquivalent: true,
+          questionnaireTemplateCodes: [],
+        }),
+        templateCode: 'any-template',
       }),
     ).toBe(true);
   });
 });
 
-describe('canDelete detail/list matrix', () => {
-  function perms(role: UserRole, extra: string[] = []): PermissionService {
-    const set = new Set<string>(
-      role === UserRole.Admin
-        ? [
-            Permission.QuestionnairesCompleteSelf,
-            Permission.QuestionnairesCompleteAny,
-            Permission.QuestionnairesAssign,
-            Permission.QuestionnairesManageLifecycle,
-            Permission.QuestionnairesDelete,
-            Permission.QuestionnairesReview,
-            ...extra,
-          ]
-        : role === UserRole.DepartmentManager
-          ? [
-              Permission.QuestionnairesCompleteSelf,
-              Permission.QuestionnairesAssign,
-              ...extra,
-            ]
-          : [Permission.QuestionnairesCompleteSelf, ...extra],
+describe('applyGrantedTemplateCodeFilter', () => {
+  it('uses 1=0 when codes are empty (non-adminEq)', () => {
+    const clauses: string[] = [];
+    const qb = {
+      andWhere: (sql: string) => {
+        clauses.push(sql);
+        return qb;
+      },
+    } as never;
+    applyGrantedTemplateCodeFilter(
+      qb,
+      authzFixture({ questionnaireTemplateCodes: [] }),
     );
-    return {
-      has: (_r: string, p: string) => set.has(p),
-    } as unknown as PermissionService;
-  }
+    expect(clauses).toEqual(['1 = 0']);
+  });
 
+  it('skips filter for adminEq', () => {
+    const clauses: string[] = [];
+    const qb = {
+      andWhere: (sql: string) => {
+        clauses.push(sql);
+        return qb;
+      },
+    } as never;
+    applyGrantedTemplateCodeFilter(
+      qb,
+      authzFixture({
+        isAdminEquivalent: true,
+        questionnaireTemplateCodes: [],
+      }),
+    );
+    expect(clauses).toEqual([]);
+  });
+});
+
+describe('canDelete detail/list matrix', () => {
   function access(isOwner: boolean): EmployeeAccessService {
     return {
       isOwner: () => isOwner,
@@ -496,7 +512,7 @@ describe('canDelete detail/list matrix', () => {
       actor: { id: 'u1', role: UserRole.Admin } as User,
       employee,
       status: 'assigned',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(false),
     });
     expect(caps.canDelete).toBe(true);
@@ -507,7 +523,7 @@ describe('canDelete detail/list matrix', () => {
       actor: { id: 'u1', role: UserRole.Employee } as User,
       employee,
       status: 'assigned',
-      permissions: perms(UserRole.Employee),
+      authz: authzForRole(UserRole.Employee),
       access: access(true),
     });
     expect(caps.canDelete).toBe(false);
@@ -518,7 +534,7 @@ describe('canDelete detail/list matrix', () => {
       actor: { id: 'u1', role: UserRole.DepartmentManager } as User,
       employee,
       status: 'assigned',
-      permissions: perms(UserRole.DepartmentManager),
+      authz: authzForRole(UserRole.DepartmentManager),
       access: access(false),
     });
     expect(caps.canDelete).toBe(false);
@@ -529,7 +545,7 @@ describe('canDelete detail/list matrix', () => {
       actor: { id: 'u1', role: UserRole.Admin } as User,
       employee,
       status: 'assigned',
-      permissions: perms(UserRole.Admin),
+      authz: authzForRole(UserRole.Admin),
       access: access(true),
     });
     expect(caps.canDelete).toBe(true);
@@ -540,7 +556,7 @@ describe('canDelete detail/list matrix', () => {
       actor: { id: 'u1', role: UserRole.Employee } as User,
       employee,
       status: 'closed',
-      permissions: perms(UserRole.Employee),
+      authz: authzForRole(UserRole.Employee),
       access: access(true),
     });
     expect(caps.canDelete).toBe(false);
@@ -552,7 +568,7 @@ describe('canDelete detail/list matrix', () => {
       status: 'assigned',
       employeeId: 'e1',
       detachedFromEmployeeId: null,
-      permissions: perms(UserRole.Employee),
+      authz: authzForRole(UserRole.Employee),
     });
     expect(caps.canOpen).toBe(true);
     expect(caps.canDelete).toBe(false);
@@ -560,23 +576,6 @@ describe('canDelete detail/list matrix', () => {
 });
 
 describe('computeCanStartFill', () => {
-  function perms(role: UserRole): PermissionService {
-    const set = new Set<string>(
-      role === UserRole.Admin
-        ? [
-            Permission.QuestionnairesCompleteSelf,
-            Permission.QuestionnairesCompleteAny,
-            Permission.QuestionnairesAssign,
-            Permission.QuestionnairesManageLifecycle,
-            Permission.QuestionnairesDelete,
-          ]
-        : [Permission.QuestionnairesCompleteSelf],
-    );
-    return {
-      has: (_r: string, p: string) => set.has(p),
-    } as unknown as PermissionService;
-  }
-
   const employee = { id: 'e1', userId: 'u1' } as Employee;
   const ownerAccess = {
     isOwner: () => true,
@@ -591,7 +590,7 @@ describe('computeCanStartFill', () => {
         actor: { id: 'u1', role: UserRole.Employee } as User,
         employee,
         status: 'assigned',
-        permissions: perms(UserRole.Employee),
+        authz: authzForRole(UserRole.Employee),
         access: ownerAccess,
         hasLatestSubmission: false,
       }),
@@ -604,7 +603,7 @@ describe('computeCanStartFill', () => {
         actor: { id: 'u1', role: UserRole.Employee } as User,
         employee,
         status: 'in_progress',
-        permissions: perms(UserRole.Employee),
+        authz: authzForRole(UserRole.Employee),
         access: ownerAccess,
         hasLatestSubmission: false,
       }),
@@ -617,7 +616,7 @@ describe('computeCanStartFill', () => {
         actor: { id: 'u1', role: UserRole.Employee } as User,
         employee,
         status: 'assigned',
-        permissions: perms(UserRole.Employee),
+        authz: authzForRole(UserRole.Employee),
         access: ownerAccess,
         hasLatestSubmission: true,
       }),
@@ -630,7 +629,7 @@ describe('computeCanStartFill', () => {
         actor: { id: 'u2', role: UserRole.Employee } as User,
         employee,
         status: 'assigned',
-        permissions: perms(UserRole.Employee),
+        authz: authzForRole(UserRole.Employee),
         access: otherAccess,
         hasLatestSubmission: false,
       }),
@@ -643,7 +642,7 @@ describe('computeCanStartFill', () => {
         actor: { id: 'u2', role: UserRole.Admin } as User,
         employee,
         status: 'assigned',
-        permissions: perms(UserRole.Admin),
+        authz: authzForRole(UserRole.Admin),
         access: otherAccess,
         hasLatestSubmission: false,
       }),
@@ -656,7 +655,7 @@ describe('computeCanStartFill', () => {
         actor: { id: 'u1', role: UserRole.Employee } as User,
         employee,
         status: 'changes_requested',
-        permissions: perms(UserRole.Employee),
+        authz: authzForRole(UserRole.Employee),
         access: ownerAccess,
         hasLatestSubmission: true,
       }),

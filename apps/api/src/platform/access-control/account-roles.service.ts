@@ -18,6 +18,7 @@ import {
   AccountRolePermissionPreset,
 } from './account-role.entity';
 import { AccountRolePermission } from './account-role-permission.entity';
+import { AccountRoleQuestionnaireTemplate } from './account-role-questionnaire-template.entity';
 import { AccountRoleSurface } from './account-role-surface.entity';
 import { AppSurface } from './app-surface.entity';
 import { userRoleMirrorFor } from './account-role-mirror';
@@ -34,6 +35,9 @@ const PERMISSION_PRESETS: readonly AccountRolePermissionPreset[] = [
   'admin',
 ];
 
+const TEMPLATE_CODE_MAX = 64;
+const TEMPLATE_CODE_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
+
 export type AccountRoleView = {
   id: string;
   code: string | null;
@@ -46,6 +50,9 @@ export type AccountRoleView = {
   effectivePermissions: Permission[];
   surfaceIds: string[];
   userCount: number;
+  /** Opaque questionnaire template codes granted to this role (sorted). */
+  questionnaireTemplateCodes: string[];
+  canEditQuestionnaireTemplates: boolean;
   /** Effective confidential.view (adminEq / preset / extras). */
   canViewConfidential: boolean;
   /** Extra row present for confidential.view. */
@@ -64,6 +71,13 @@ export type AccountRoleView = {
   canCreateAccountAtCreate: boolean;
   grantsCreateAccountAtCreateExplicitly: boolean;
   canEditCreateAccountAtCreateGrant: boolean;
+  canAssignQuestionnaires: boolean;
+  grantsAssignQuestionnairesExplicitly: boolean;
+  canEditAssignQuestionnairesGrant: boolean;
+  /** Effective Manage bundle = lifecycle ∧ delete (or adminEq). */
+  canManageQuestionnaires: boolean;
+  grantsManageQuestionnairesExplicitly: boolean;
+  canEditManageQuestionnairesGrant: boolean;
 };
 
 export type AppSurfaceView = {
@@ -79,6 +93,7 @@ export type CreateAccountRoleInput = {
   isAdminEquivalent?: boolean;
   extraPermissions?: string[];
   surfaceIds?: string[];
+  questionnaireTemplateCodes?: string[];
 };
 
 export type UpdateAccountRoleInput = {
@@ -87,6 +102,7 @@ export type UpdateAccountRoleInput = {
   isAdminEquivalent?: boolean;
   extraPermissions?: string[];
   surfaceIds?: string[];
+  questionnaireTemplateCodes?: string[];
 };
 
 /** Account-role definition CRUD — admin-equivalent actors only (ADR 0011 §8). */
@@ -189,6 +205,10 @@ export class AccountRolesService {
       );
       await this.replaceExtras(manager, saved.id, extras);
       await this.replaceSurfaceRows(manager, saved.id, surfaceIds);
+      if (input.questionnaireTemplateCodes !== undefined) {
+        const codes = this.assertTemplateCodes(input.questionnaireTemplateCodes);
+        await this.replaceTemplateRows(manager, saved.id, codes);
+      }
       return saved.id;
     });
 
@@ -271,6 +291,20 @@ export class AccountRolesService {
         }
       }
 
+      if (input.questionnaireTemplateCodes !== undefined) {
+        if (role.isAdminEquivalent) {
+          throw new BadRequestException(
+            'questionnaireTemplateCodes cannot be set on admin-equivalent roles',
+          );
+        }
+        const codes = this.assertTemplateCodes(input.questionnaireTemplateCodes);
+        const before = await this.currentTemplateCodes(manager, role.id);
+        if (!sameStringSet(before, codes)) {
+          await this.replaceTemplateRows(manager, role.id, codes);
+          definitionChanged = true;
+        }
+      }
+
       await manager.getRepository(AccountRole).save(role);
 
       if (definitionChanged) {
@@ -288,6 +322,14 @@ export class AccountRolesService {
     surfaceIds: string[],
   ): Promise<AccountRoleView> {
     return this.update(actorUserId, id, { surfaceIds });
+  }
+
+  async replaceQuestionnaireTemplates(
+    actorUserId: string,
+    id: string,
+    questionnaireTemplateCodes: string[],
+  ): Promise<AccountRoleView> {
+    return this.update(actorUserId, id, { questionnaireTemplateCodes });
   }
 
   async remove(actorUserId: string, id: string): Promise<void> {
@@ -362,7 +404,34 @@ export class AccountRolesService {
         `Unknown permission(s): ${invalid.join(', ')}`,
       );
     }
+    const hasLifecycle = unique.includes(Permission.QuestionnairesManageLifecycle);
+    const hasDelete = unique.includes(Permission.QuestionnairesDelete);
+    if (hasLifecycle !== hasDelete) {
+      throw new BadRequestException({
+        code: 'QUESTIONNAIRE_MANAGE_BUNDLE_PARTIAL',
+        message:
+          'questionnaires.manage_lifecycle and questionnaires.delete must be granted or revoked together',
+      });
+    }
     return unique as Permission[];
+  }
+
+  private assertTemplateCodes(values: string[]): string[] {
+    const unique = [
+      ...new Set(
+        values
+          .map((v) => (typeof v === 'string' ? v.trim() : ''))
+          .filter(Boolean),
+      ),
+    ];
+    for (const code of unique) {
+      if (code.length > TEMPLATE_CODE_MAX || !TEMPLATE_CODE_RE.test(code)) {
+        throw new BadRequestException(
+          `Invalid questionnaire template code: ${code}`,
+        );
+      }
+    }
+    return unique.sort();
   }
 
   private async assertSurfaceIds(
@@ -425,6 +494,16 @@ export class AccountRolesService {
     return rows.map((row) => row.surfaceId);
   }
 
+  private async currentTemplateCodes(
+    manager: EntityManager,
+    accountRoleId: string,
+  ): Promise<string[]> {
+    const rows = await manager
+      .getRepository(AccountRoleQuestionnaireTemplate)
+      .find({ where: { accountRoleId } });
+    return rows.map((row) => row.templateCode).sort();
+  }
+
   private async replaceExtras(
     manager: EntityManager,
     accountRoleId: string,
@@ -448,6 +527,21 @@ export class AccountRolesService {
     if (!surfaceIds.length) return;
     await repo.save(
       surfaceIds.map((surfaceId) => repo.create({ accountRoleId, surfaceId })),
+    );
+  }
+
+  private async replaceTemplateRows(
+    manager: EntityManager,
+    accountRoleId: string,
+    templateCodes: string[],
+  ): Promise<void> {
+    const repo = manager.getRepository(AccountRoleQuestionnaireTemplate);
+    await repo.delete({ accountRoleId });
+    if (!templateCodes.length) return;
+    await repo.save(
+      templateCodes.map((templateCode) =>
+        repo.create({ accountRoleId, templateCode }),
+      ),
     );
   }
 
@@ -479,9 +573,10 @@ export class AccountRolesService {
     role: AccountRole,
     actorCtx: AuthorizationContext,
   ): Promise<AccountRoleView> {
-    const [extras, surfaceIds, userCount] = await Promise.all([
+    const [extras, surfaceIds, templateCodes, userCount] = await Promise.all([
       this.currentExtras(manager, role.id),
       this.currentSurfaceIds(manager, role.id),
+      this.currentTemplateCodes(manager, role.id),
       manager.getRepository(User).count({ where: { accountRoleId: role.id } }),
     ]);
     const extraPermissions = extras.filter(isPermission);
@@ -494,14 +589,15 @@ export class AccountRolesService {
           ]),
         ];
 
+    const canEditGrant =
+      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
+
     const grantsConfidentialExplicitly = extraPermissions.includes(
       Permission.ConfidentialView,
     );
     const canViewConfidential =
       role.isAdminEquivalent ||
       effectivePermissions.includes(Permission.ConfidentialView);
-    const canEditConfidentialGrant =
-      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
 
     const grantsCreateEmployeesExplicitly = extraPermissions.includes(
       Permission.EmployeesCreate,
@@ -509,8 +605,6 @@ export class AccountRolesService {
     const canCreateEmployees =
       role.isAdminEquivalent ||
       effectivePermissions.includes(Permission.EmployeesCreate);
-    const canEditCreateEmployeesGrant =
-      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
 
     const grantsManageProfilesExplicitly = extraPermissions.includes(
       Permission.EmployeesManageProfiles,
@@ -518,8 +612,6 @@ export class AccountRolesService {
     const canManageProfiles =
       role.isAdminEquivalent ||
       effectivePermissions.includes(Permission.EmployeesManageProfiles);
-    const canEditManageProfilesGrant =
-      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
 
     const grantsAssignAccountRoleExplicitly = extraPermissions.includes(
       Permission.EmployeesAssignAccountRole,
@@ -527,8 +619,6 @@ export class AccountRolesService {
     const canAssignAccountRole =
       role.isAdminEquivalent ||
       effectivePermissions.includes(Permission.EmployeesAssignAccountRole);
-    const canEditAssignAccountRoleGrant =
-      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
 
     const grantsCreateAccountAtCreateExplicitly = extraPermissions.includes(
       Permission.EmployeesCreateAccountAtCreate,
@@ -536,8 +626,26 @@ export class AccountRolesService {
     const canCreateAccountAtCreate =
       role.isAdminEquivalent ||
       effectivePermissions.includes(Permission.EmployeesCreateAccountAtCreate);
-    const canEditCreateAccountAtCreateGrant =
-      actorCtx.isAdminEquivalent && !role.isAdminEquivalent;
+
+    const grantsAssignQuestionnairesExplicitly = extraPermissions.includes(
+      Permission.QuestionnairesAssign,
+    );
+    const canAssignQuestionnaires =
+      role.isAdminEquivalent ||
+      effectivePermissions.includes(Permission.QuestionnairesAssign);
+
+    const grantsLifecycleExplicitly = extraPermissions.includes(
+      Permission.QuestionnairesManageLifecycle,
+    );
+    const grantsDeleteExplicitly = extraPermissions.includes(
+      Permission.QuestionnairesDelete,
+    );
+    const grantsManageQuestionnairesExplicitly =
+      grantsLifecycleExplicitly && grantsDeleteExplicitly;
+    const canManageQuestionnaires =
+      role.isAdminEquivalent ||
+      (effectivePermissions.includes(Permission.QuestionnairesManageLifecycle) &&
+        effectivePermissions.includes(Permission.QuestionnairesDelete));
 
     return {
       id: role.id,
@@ -550,21 +658,29 @@ export class AccountRolesService {
       effectivePermissions,
       surfaceIds: [...surfaceIds].sort(),
       userCount,
+      questionnaireTemplateCodes: templateCodes,
+      canEditQuestionnaireTemplates: canEditGrant,
       canViewConfidential,
       grantsConfidentialExplicitly,
-      canEditConfidentialGrant,
+      canEditConfidentialGrant: canEditGrant,
       canCreateEmployees,
       grantsCreateEmployeesExplicitly,
-      canEditCreateEmployeesGrant,
+      canEditCreateEmployeesGrant: canEditGrant,
       canManageProfiles,
       grantsManageProfilesExplicitly,
-      canEditManageProfilesGrant,
+      canEditManageProfilesGrant: canEditGrant,
       canAssignAccountRole,
       grantsAssignAccountRoleExplicitly,
-      canEditAssignAccountRoleGrant,
+      canEditAssignAccountRoleGrant: canEditGrant,
       canCreateAccountAtCreate,
       grantsCreateAccountAtCreateExplicitly,
-      canEditCreateAccountAtCreateGrant,
+      canEditCreateAccountAtCreateGrant: canEditGrant,
+      canAssignQuestionnaires,
+      grantsAssignQuestionnairesExplicitly,
+      canEditAssignQuestionnairesGrant: canEditGrant,
+      canManageQuestionnaires,
+      grantsManageQuestionnairesExplicitly,
+      canEditManageQuestionnairesGrant: canEditGrant,
     };
   }
 }

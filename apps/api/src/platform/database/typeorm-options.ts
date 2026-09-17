@@ -72,6 +72,8 @@ import { AppSurface } from '../access-control/app-surface.entity';
 import { AccountRole } from '../access-control/account-role.entity';
 import { AccountRoleSurface } from '../access-control/account-role-surface.entity';
 import { AccountRolePermission } from '../access-control/account-role-permission.entity';
+import { AccountRoleQuestionnaireTemplate } from '../access-control/account-role-questionnaire-template.entity';
+import { AccountRoleQuestionnaireTemplates1730000041000 } from './migrations/1730000041000-AccountRoleQuestionnaireTemplates';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -88,6 +90,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       AccountRole,
       AccountRoleSurface,
       AccountRolePermission,
+      AccountRoleQuestionnaireTemplate,
       AuditLog,
       Notification,
       Department,
@@ -154,6 +157,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeDocumentConfidential1730000038000,
       QuestionnaireSubmitEqualsClosed1730000039000,
       EmployeeProfileRoleGates1730000040000,
+      AccountRoleQuestionnaireTemplates1730000041000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { catchError, of } from 'rxjs';
 import {
   AccountRolesApiService,
   type AccountRole,
@@ -6,7 +7,9 @@ import {
   type CreateAccountRoleBody,
 } from './account-roles-api.service';
 import { AccountRoleEditDialogComponent } from './account-role-edit-dialog.component';
+import type { PublishedQuestionnaireTemplate } from './account-role-edit-dialog.component';
 import { PERMISSION_PRESET_LABELS } from './surface-catalog';
+import { QuestionnairesApiService } from '../../questionnaires/core/questionnaires-api.service';
 
 @Component({
   selector: 'loom-access-roles-page',
@@ -91,6 +94,7 @@ import { PERMISSION_PRESET_LABELS } from './surface-catalog';
       <loom-account-role-edit-dialog
         [role]="editing()"
         [surfaces]="surfaces()"
+        [publishedTemplates]="publishedTemplates()"
         [busy]="saving()"
         [error]="dialogError()"
         (saved)="save($event)"
@@ -207,9 +211,11 @@ import { PERMISSION_PRESET_LABELS } from './surface-catalog';
 })
 export class AccessRolesPageComponent {
   private readonly api = inject(AccountRolesApiService);
+  private readonly questionnairesApi = inject(QuestionnairesApiService);
 
   readonly roles = signal<AccountRole[]>([]);
   readonly surfaces = signal<AppSurface[]>([]);
+  readonly publishedTemplates = signal<PublishedQuestionnaireTemplate[]>([]);
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly error = signal('');
@@ -226,6 +232,7 @@ export class AccessRolesPageComponent {
 
   constructor() {
     this.loadSurfaces();
+    this.loadPublishedTemplates();
     this.loadRoles();
   }
 
@@ -313,6 +320,23 @@ export class AccessRolesPageComponent {
       error: (err) =>
         this.error.set(errorText(err, 'Не вдалося завантажити перелік екранів')),
     });
+  }
+
+  private loadPublishedTemplates(): void {
+    this.questionnairesApi
+      .listTemplates()
+      .pipe(
+        catchError(() => of({ items: [] as { code: string; title: string }[] })),
+      )
+      .subscribe({
+        next: (response) =>
+          this.publishedTemplates.set(
+            response.items.map((item) => ({
+              code: item.code,
+              title: item.title,
+            })),
+          ),
+      });
   }
 }
 

@@ -112,6 +112,16 @@ const EMPLOYEE_STARTER_SECTION_DEFS: ProgressSectionDefinition[] = [
     stepKeys: [QUESTIONNAIRE_INTRO_STEP],
   },
   {
+    id: 'personal',
+    label: 'Особисті',
+    stepKeys: ['profile_mirror', 'contacts', 'family', 'education'],
+  },
+  {
+    id: 'work',
+    label: 'Робота',
+    stepKeys: ['experience', 'company_work'],
+  },
+  {
     id: 'review',
     label: 'Перегляд',
     stepKeys: [QUESTIONNAIRE_REVIEW_STEP],

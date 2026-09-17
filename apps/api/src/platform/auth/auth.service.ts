@@ -157,6 +157,7 @@ export class AuthService {
       role: user.role,
       permissions: context.permissions as CurrentUserResponse['permissions'],
       surfaces: context.surfaces,
+      questionnaireTemplateCodes: context.questionnaireTemplateCodes,
       accountRole: {
         id: context.accountRole.id,
         code: context.accountRole.code ?? context.accountRole.id,

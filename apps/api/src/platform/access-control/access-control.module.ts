@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../identity/user.entity';
 import { AccountRole } from './account-role.entity';
 import { AccountRolePermission } from './account-role-permission.entity';
+import { AccountRoleQuestionnaireTemplate } from './account-role-questionnaire-template.entity';
 import { AccountRoleSurface } from './account-role-surface.entity';
 import { AppSurface } from './app-surface.entity';
 import { AuthorizationContextService } from './authorization-context.service';
@@ -22,6 +23,7 @@ import { LastAdminPolicy } from './last-admin.policy';
       AccountRole,
       AccountRoleSurface,
       AccountRolePermission,
+      AccountRoleQuestionnaireTemplate,
       AppSurface,
       User,
     ]),

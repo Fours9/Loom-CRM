@@ -7,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
-import { PermissionService } from '../../platform/permissions/permission.service';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
 import { InvalidEmployeeContactsBundle } from '@loom/employee-contacts';
 import { InvalidPositionSkillsMatrix } from '@loom/questionnaire-schema';
@@ -16,7 +16,7 @@ import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import {
   computeDetailCapabilities,
-  requireActorAccessAssignmentType,
+  requireActorAccessAssignmentTemplate,
   requireCanEditDraft,
 } from './assignments/questionnaire-assignment-access';
 import { normalizeDraftAnswersForPatch, validateOrganizationRefAnswers } from './questionnaire-answers-validation';
@@ -29,7 +29,7 @@ export class QuestionnaireResponseService {
     @InjectRepository(QuestionnaireAssignment)
     private readonly assignments: Repository<QuestionnaireAssignment>,
     private readonly access: EmployeeAccessService,
-    private readonly permissions: PermissionService,
+    private readonly authorization: AuthorizationContextService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -56,6 +56,7 @@ export class QuestionnaireResponseService {
     assignmentId: string,
     input: { answers: Record<string, unknown>; revision: number },
   ) {
+    const authz = await this.authorization.resolve(actor.id);
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
       relations: { templateVersion: { template: true } },
@@ -68,19 +69,16 @@ export class QuestionnaireResponseService {
     if (employee) {
       await this.access.requireCanView(actor, employee);
     }
-    requireActorAccessAssignmentType({
-      actor,
-      employee,
-      templateType: assignment.templateVersion.template.type,
-      permissions: this.permissions,
-      access: this.access,
+    requireActorAccessAssignmentTemplate({
+      authz,
+      templateCode: assignment.templateVersion.template.code,
     });
 
     const caps = computeDetailCapabilities({
+      authz,
       actor,
       employee,
       status: assignment.status,
-      permissions: this.permissions,
       access: this.access,
     });
     requireCanEditDraft(caps);

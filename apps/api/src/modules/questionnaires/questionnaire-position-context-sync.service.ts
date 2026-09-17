@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
-import { PermissionService } from '../../platform/permissions/permission.service';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
 import { PositionCatalogFacade } from '../../organization/position-catalog/position-catalog.facade';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
@@ -15,7 +15,7 @@ import { QuestionnaireAssignmentService } from './questionnaire-assignment.servi
 import { QuestionnaireResponseService } from './questionnaire-response.service';
 import {
   computeDetailCapabilities,
-  requireActorAccessAssignmentType,
+  requireActorAccessAssignmentTemplate,
   requireCanEditDraft,
 } from './assignments/questionnaire-assignment-access';
 import { isOwnerEditableStatus } from './assignments/questionnaire-assignment-transitions';
@@ -28,7 +28,7 @@ export class QuestionnairePositionContextSyncService {
     @InjectRepository(QuestionnaireAssignment)
     private readonly assignments: Repository<QuestionnaireAssignment>,
     private readonly access: EmployeeAccessService,
-    private readonly permissions: PermissionService,
+    private readonly authorization: AuthorizationContextService,
     private readonly positionCatalog: PositionCatalogFacade,
     private readonly responseService: QuestionnaireResponseService,
     private readonly assignmentService: QuestionnaireAssignmentService,
@@ -43,6 +43,7 @@ export class QuestionnairePositionContextSyncService {
       desiredExtraSkillCodes: string[];
     },
   ) {
+    const authz = await this.authorization.resolve(actor.id);
     const desiredParsed = validateDesiredExtraSkillCodes(
       input.desiredExtraSkillCodes,
     );
@@ -70,19 +71,16 @@ export class QuestionnairePositionContextSyncService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
-    requireActorAccessAssignmentType({
-      actor,
-      employee,
-      templateType: assignment.templateVersion.template.type,
-      permissions: this.permissions,
-      access: this.access,
+    requireActorAccessAssignmentTemplate({
+      authz,
+      templateCode: assignment.templateVersion.template.code,
     });
 
     const caps = computeDetailCapabilities({
+      authz,
       actor,
       employee,
       status: assignment.status,
-      permissions: this.permissions,
       access: this.access,
     });
     requireCanEditDraft(caps);

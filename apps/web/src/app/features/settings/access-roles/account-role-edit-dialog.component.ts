@@ -23,6 +23,10 @@ import {
   type SurfaceGroupVm,
 } from './surface-catalog';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
+import {
+  MultiSelectListComponent,
+  type MultiSelectItem,
+} from '../../../shared/multi-select-list.component';
 
 const CONFIDENTIAL_VIEW = 'confidential.view';
 const EMPLOYEES_CREATE = 'employees.create';
@@ -30,6 +34,9 @@ const EMPLOYEES_MANAGE_PROFILES = 'employees.manage_profiles';
 const EMPLOYEES_ASSIGN_ACCOUNT_ROLE = 'employees.assign_account_role';
 const EMPLOYEES_CREATE_ACCOUNT_AT_CREATE =
   'employees.create_account_at_create';
+const QUESTIONNAIRES_ASSIGN = 'questionnaires.assign';
+const QUESTIONNAIRES_MANAGE_LIFECYCLE = 'questionnaires.manage_lifecycle';
+const QUESTIONNAIRES_DELETE = 'questionnaires.delete';
 
 const TOGGLE_EXTRAS = [
   CONFIDENTIAL_VIEW,
@@ -37,12 +44,20 @@ const TOGGLE_EXTRAS = [
   EMPLOYEES_MANAGE_PROFILES,
   EMPLOYEES_ASSIGN_ACCOUNT_ROLE,
   EMPLOYEES_CREATE_ACCOUNT_AT_CREATE,
+  QUESTIONNAIRES_ASSIGN,
+  QUESTIONNAIRES_MANAGE_LIFECYCLE,
+  QUESTIONNAIRES_DELETE,
 ] as const;
+
+export type PublishedQuestionnaireTemplate = {
+  code: string;
+  title: string;
+};
 
 @Component({
   selector: 'loom-account-role-edit-dialog',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, MultiSelectListComponent],
   template: `
     <div
       class="backdrop"
@@ -102,75 +117,122 @@ const TOGGLE_EXTRAS = [
             </select>
           </label>
 
-          <label class="check">
-            <input
-              type="checkbox"
-              name="roleAdminEquivalent"
-              [(ngModel)]="isAdminEquivalent"
-              [disabled]="busy() || adminEquivalentLocked()"
-              (ngModelChange)="onAdminEquivalentChange()"
-            />
-            Повний доступ (рівень адміністратора)
-          </label>
+          <fieldset class="permission-group">
+            <legend>Доступ</legend>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleAdminEquivalent"
+                [(ngModel)]="isAdminEquivalent"
+                [disabled]="busy() || adminEquivalentLocked()"
+                (ngModelChange)="onAdminEquivalentChange()"
+              />
+              Повний доступ (рівень адміністратора)
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleConfidentialView"
+                [(ngModel)]="grantsConfidential"
+                [disabled]="busy() || !canEditConfidential()"
+              />
+              Може бачити конфіденційну інформацію
+            </label>
+            @if (isAdminEquivalent) {
+              <p class="hint">
+                Повний доступ включає всі дозволи нижче; окремі галочки
+                не знімаються.
+              </p>
+            }
+          </fieldset>
 
-          <label class="check">
-            <input
-              type="checkbox"
-              name="roleConfidentialView"
-              [(ngModel)]="grantsConfidential"
-              [disabled]="busy() || !canEditConfidential()"
-            />
-            Може бачити конфіденційну інформацію
-          </label>
-          @if (isAdminEquivalent) {
-            <p class="hint">
-              Входить до повного адміністративного доступу — окремий дозвіл не знімається.
-            </p>
-          }
+          <fieldset class="permission-group">
+            <legend>Працівники</legend>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleCreateEmployees"
+                [(ngModel)]="grantsCreateEmployees"
+                [disabled]="busy() || !canEditCreateEmployees()"
+              />
+              Може створювати працівників
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleManageProfiles"
+                [(ngModel)]="grantsManageProfiles"
+                [disabled]="busy() || !canEditManageProfiles()"
+              />
+              Може редагувати профілі працівників
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleAssignAccountRole"
+                [(ngModel)]="grantsAssignAccountRole"
+                [disabled]="busy() || !canEditAssignAccountRole()"
+              />
+              Може призначати ролі акаунта
+            </label>
+            <div class="check-with-hint">
+              <label class="check">
+                <input
+                  type="checkbox"
+                  name="roleCreateAccountAtCreate"
+                  [(ngModel)]="grantsCreateAccountAtCreate"
+                  [disabled]="busy() || !canEditCreateAccountAtCreate()"
+                />
+                Може створювати обліковий запис при створенні працівника
+              </label>
+              <p class="hint">
+                Акаунт одразу з карткою. Пізніше — окрема політика attach.
+              </p>
+            </div>
+          </fieldset>
 
-          <label class="check">
-            <input
-              type="checkbox"
-              name="roleCreateEmployees"
-              [(ngModel)]="grantsCreateEmployees"
-              [disabled]="busy() || !canEditCreateEmployees()"
-            />
-            Може створювати працівників
-          </label>
+          <fieldset class="permission-group">
+            <legend>Анкети</legend>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleAssignQuestionnaires"
+                [(ngModel)]="grantsAssignQuestionnaires"
+                [disabled]="busy() || !canEditAssignQuestionnaires()"
+              />
+              Може створювати анкети
+            </label>
+            <div class="check-with-hint">
+              <label class="check">
+                <input
+                  type="checkbox"
+                  name="roleManageQuestionnaires"
+                  [(ngModel)]="grantsManageQuestionnaires"
+                  [disabled]="busy() || !canEditManageQuestionnaires()"
+                />
+                Може керувати життєвим циклом анкет
+              </label>
+              <p class="hint">
+                Скасування, закриття, видалення та повторне прикріплення.
+              </p>
+            </div>
 
-          <label class="check">
-            <input
-              type="checkbox"
-              name="roleManageProfiles"
-              [(ngModel)]="grantsManageProfiles"
-              [disabled]="busy() || !canEditManageProfiles()"
-            />
-            Може редагувати профілі працівників
-          </label>
-
-          <label class="check">
-            <input
-              type="checkbox"
-              name="roleAssignAccountRole"
-              [(ngModel)]="grantsAssignAccountRole"
-              [disabled]="busy() || !canEditAssignAccountRole()"
-            />
-            Може призначати ролі акаунта
-          </label>
-
-          <label class="check">
-            <input
-              type="checkbox"
-              name="roleCreateAccountAtCreate"
-              [(ngModel)]="grantsCreateAccountAtCreate"
-              [disabled]="busy() || !canEditCreateAccountAtCreate()"
-            />
-            Може створювати обліковий запис при створенні працівника
-          </label>
-          <p class="hint">
-            Дозволяє створити акаунт одразу разом із карткою. Створення акаунта
-            пізніше регулюється окремою політикою attach.
-          </p>
+            <label class="template-codes">
+              <span>Шаблони для доступу</span>
+              <app-multi-select-list
+                [items]="templateItems()"
+                [selectedIds]="templateSelectedIds()"
+                placeholder="Оберіть шаблони"
+                [showSelectAll]="true"
+                selectAllLabel="Усі шаблони"
+                [disabled]="busy() || !canEditQuestionnaireTemplates()"
+                (selectedIdsChange)="onTemplateCodesChange($event)"
+              />
+              @if (!templateItems().length) {
+                <p class="hint">Опубліковані шаблони недоступні.</p>
+              }
+            </label>
+          </fieldset>
 
           @if (presetLocked()) {
             <p class="hint">
@@ -184,7 +246,7 @@ const TOGGLE_EXTRAS = [
             </p>
           }
 
-          <fieldset class="surfaces">
+          <fieldset class="permission-group surfaces">
             <legend>Доступні екрани</legend>
             @if (!surfaceGroups().length) {
               <p class="hint">Каталог екранів недоступний.</p>
@@ -289,18 +351,35 @@ const TOGGLE_EXTRAS = [
         border: none;
         flex: 0 0 auto;
       }
+      .permission-group,
       .surfaces {
         display: grid;
-        gap: 0.9rem;
+        gap: 0.55rem;
         margin: 0;
         padding: 0.8rem 0.9rem;
         border: 1px solid var(--pw-border);
         border-radius: 10px;
       }
+      .permission-group legend,
       .surfaces legend {
         padding: 0 0.35rem;
         font-size: 0.9rem;
         color: var(--pw-text);
+      }
+      .permission-group .check-with-hint {
+        display: grid;
+        gap: 0.25rem;
+      }
+      .permission-group .check-with-hint .hint {
+        margin-left: 1.5rem;
+      }
+      .template-codes {
+        display: grid;
+        gap: 0.35rem;
+        margin-top: 0.35rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid var(--pw-border);
+        font-size: 0.9rem;
       }
       .surface-group {
         display: grid;
@@ -347,6 +426,9 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   /** null = create a custom role. */
   readonly role = input<AccountRole | null>(null);
   readonly surfaces = input<readonly AppSurface[]>([]);
+  readonly publishedTemplates = input<readonly PublishedQuestionnaireTemplate[]>(
+    [],
+  );
   readonly busy = input(false);
   readonly error = input('');
 
@@ -364,13 +446,32 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   grantsManageProfiles = false;
   grantsAssignAccountRole = false;
   grantsCreateAccountAtCreate = false;
+  grantsAssignQuestionnaires = false;
+  grantsManageQuestionnaires = false;
 
   private readonly selectedSurfaceIds = signal<readonly string[]>([]);
+  private readonly selectedTemplateCodes = signal<readonly string[]>([]);
   private backdropPress = false;
 
   readonly surfaceGroups = computed<SurfaceGroupVm[]>(() =>
     groupSurfaces(this.surfaces()),
   );
+
+  /** Published + orphan grants (orphans stay selectable until explicitly removed). */
+  readonly templateItems = computed<MultiSelectItem[]>(() => {
+    const published = this.publishedTemplates().map((template) => ({
+      id: template.code,
+      label: `${template.title} (${template.code})`,
+    }));
+    const publishedIds = new Set(published.map((item) => item.id));
+    const orphans = this.selectedTemplateCodes()
+      .filter((code) => !publishedIds.has(code))
+      .map((code) => ({
+        id: code,
+        label: `Недоступний шаблон (${code})`,
+      }));
+    return [...published, ...orphans];
+  });
 
   /** System roles keep their permission bundle; only name + surfaces are editable. */
   readonly presetLocked = computed(() => Boolean(this.role()?.isSystem));
@@ -414,6 +515,27 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     return role.canEditCreateAccountAtCreateGrant;
   }
 
+  canEditAssignQuestionnaires(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditAssignQuestionnairesGrant;
+  }
+
+  canEditManageQuestionnaires(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditManageQuestionnairesGrant;
+  }
+
+  canEditQuestionnaireTemplates(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditQuestionnaireTemplates;
+  }
+
   ngOnInit(): void {
     this.scrollLock.acquire();
   }
@@ -443,7 +565,14 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
       this.grantsCreateAccountAtCreate = role
         ? role.isAdminEquivalent || role.grantsCreateAccountAtCreateExplicitly
         : false;
+      this.grantsAssignQuestionnaires = role
+        ? role.isAdminEquivalent || role.grantsAssignQuestionnairesExplicitly
+        : false;
+      this.grantsManageQuestionnaires = role
+        ? role.isAdminEquivalent || role.grantsManageQuestionnairesExplicitly
+        : false;
       this.selectedSurfaceIds.set([...(role?.surfaceIds ?? [])]);
+      this.selectedTemplateCodes.set([...(role?.questionnaireTemplateCodes ?? [])]);
     });
   }
 
@@ -462,6 +591,18 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
         ? current.filter((id) => id !== surfaceId)
         : [...current, surfaceId],
     );
+  }
+
+  onTemplateCodesChange(codes: string[]): void {
+    if (this.isAdminEquivalent || !this.canEditQuestionnaireTemplates()) return;
+    this.selectedTemplateCodes.set([...codes]);
+  }
+
+  templateSelectedIds(): string[] {
+    if (this.isAdminEquivalent) {
+      return this.templateItems().map((item) => item.id);
+    }
+    return [...this.selectedTemplateCodes()];
   }
 
   /** `admin` preset is meaningless without adminEquivalent (API rejects the pair). */
@@ -484,6 +625,8 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     this.grantsManageProfiles = true;
     this.grantsAssignAccountRole = true;
     this.grantsCreateAccountAtCreate = true;
+    this.grantsAssignQuestionnaires = true;
+    this.grantsManageQuestionnaires = true;
   }
 
   submit(): void {
@@ -502,15 +645,25 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
       if (this.grantsAssignAccountRole) extras.add(EMPLOYEES_ASSIGN_ACCOUNT_ROLE);
       if (this.grantsCreateAccountAtCreate)
         extras.add(EMPLOYEES_CREATE_ACCOUNT_AT_CREATE);
+      if (this.grantsAssignQuestionnaires) extras.add(QUESTIONNAIRES_ASSIGN);
+      if (this.grantsManageQuestionnaires) {
+        extras.add(QUESTIONNAIRES_MANAGE_LIFECYCLE);
+        extras.add(QUESTIONNAIRES_DELETE);
+      }
     }
 
-    this.saved.emit({
+    const body: CreateAccountRoleBody = {
       name,
       permissionPreset: this.permissionPreset,
       isAdminEquivalent: this.isAdminEquivalent,
       extraPermissions: [...extras],
       surfaceIds: [...this.selectedSurfaceIds()],
-    });
+    };
+    if (!this.isAdminEquivalent) {
+      body.questionnaireTemplateCodes = [...this.selectedTemplateCodes()];
+    }
+
+    this.saved.emit(body);
   }
 
   onBackdropPointerDown(event: Event): void {

@@ -11,15 +11,18 @@ const EMPLOYEE: Permission[] = [
   Permission.QuestionnairesCompleteSelf,
 ];
 
-/** Variant A: ManageProfiles is extra-controlled, not in DM base preset. */
+/**
+ * Variant A: ManageProfiles and QuestionnairesAssign are extra-controlled,
+ * not in the DM base preset (seeded as extras for DM-preset roles on migrate).
+ */
 const DEPARTMENT_MANAGER: Permission[] = [
   ...EMPLOYEE,
   Permission.AbsencesApprove,
-  Permission.QuestionnairesAssign,
 ];
 
 const ADMIN: Permission[] = [
   ...DEPARTMENT_MANAGER,
+  Permission.QuestionnairesAssign,
   Permission.EmployeesCreate,
   Permission.EmployeesCreateAccountAtCreate,
   Permission.EmployeesManageProfiles,

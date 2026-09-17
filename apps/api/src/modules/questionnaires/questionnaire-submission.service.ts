@@ -11,8 +11,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserRole, UserStatus } from '../../platform/identity/user.enums';
-import { Permission } from '../../platform/permissions/permission.names';
-import { PermissionService } from '../../platform/permissions/permission.service';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
+import { hasQuestionnaireTemplate } from '../../platform/access-control/authorization-context';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
 import type { Employee } from '../../organization/employees/employee.entity';
 import { NotificationsService } from '../../platform/notifications/notifications.service';
@@ -49,7 +49,8 @@ import {
 } from './reopen/questionnaire-active-change-request';
 import {
   computeDetailCapabilities,
-  requireActorAccessAssignmentType,
+  canReviewQuestionnaires,
+  requireActorAccessAssignmentTemplate,
   requireCanSubmit,
 } from './assignments/questionnaire-assignment-access';
 import { isOwnerEditableStatus } from './assignments/questionnaire-assignment-transitions';
@@ -68,7 +69,7 @@ export class QuestionnaireSubmissionService {
     @InjectRepository(User)
     private readonly users: Repository<User>,
     private readonly access: EmployeeAccessService,
-    private readonly permissions: PermissionService,
+    private readonly authorization: AuthorizationContextService,
     private readonly responseService: QuestionnaireResponseService,
     private readonly proposals: QuestionnaireProposalService,
     private readonly contextSkillIdBackfill: QuestionnaireContextSkillIdBackfillService,
@@ -77,6 +78,7 @@ export class QuestionnaireSubmissionService {
   ) {}
 
   async submit(actor: User, assignmentId: string) {
+    const authz = await this.authorization.resolve(actor.id);
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
       relations: { templateVersion: { template: true } },
@@ -91,19 +93,16 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
-    requireActorAccessAssignmentType({
-      actor,
-      employee,
-      templateType: assignment.templateVersion.template.type,
-      permissions: this.permissions,
-      access: this.access,
+    requireActorAccessAssignmentTemplate({
+      authz,
+      templateCode: assignment.templateVersion.template.code,
     });
 
     const caps = computeDetailCapabilities({
+      authz,
       actor,
       employee,
       status: assignment.status,
-      permissions: this.permissions,
       access: this.access,
     });
     requireCanSubmit(caps);
@@ -298,6 +297,7 @@ export class QuestionnaireSubmissionService {
    * Does not mutate latest submission review metadata.
    */
   async reopenSelf(actor: User, assignmentId: string) {
+    const authz = await this.authorization.resolve(actor.id);
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
       relations: { templateVersion: { template: true } },
@@ -308,19 +308,16 @@ export class QuestionnaireSubmissionService {
     }
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
-    requireActorAccessAssignmentType({
-      actor,
-      employee,
-      templateType: assignment.templateVersion.template.type,
-      permissions: this.permissions,
-      access: this.access,
+    requireActorAccessAssignmentTemplate({
+      authz,
+      templateCode: assignment.templateVersion.template.code,
     });
     const latestSubmission = await this.loadLatestSubmission(assignmentId);
     const caps = computeDetailCapabilities({
+      authz,
       actor,
       employee,
       status: assignment.status,
-      permissions: this.permissions,
       access: this.access,
       latestSubmission,
     });
@@ -349,6 +346,7 @@ export class QuestionnaireSubmissionService {
    * Admin (CompleteAny) starts a shared revision — also opens owner edit.
    */
   async startRevision(actor: User, assignmentId: string) {
+    const authz = await this.authorization.resolve(actor.id);
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
       relations: { templateVersion: { template: true } },
@@ -360,20 +358,17 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
-    requireActorAccessAssignmentType({
-      actor,
-      employee,
-      templateType: assignment.templateVersion.template.type,
-      permissions: this.permissions,
-      access: this.access,
+    requireActorAccessAssignmentTemplate({
+      authz,
+      templateCode: assignment.templateVersion.template.code,
     });
 
     const latestSubmission = await this.loadLatestSubmission(assignmentId);
     const caps = computeDetailCapabilities({
+      authz,
       actor,
       employee,
       status: assignment.status,
-      permissions: this.permissions,
       access: this.access,
       latestSubmission,
     });
@@ -405,6 +400,7 @@ export class QuestionnaireSubmissionService {
       | { outcome: 'completed'; expectedDraftRevision: number }
       | { outcome: 'declined' },
   ) {
+    const authz = await this.authorization.resolve(actor.id);
     const assignment = await this.assignments.findOne({
       where: { id: assignmentId },
       relations: { templateVersion: { template: true } },
@@ -416,18 +412,16 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
-    requireActorAccessAssignmentType({
-      actor,
-      employee,
-      templateType: assignment.templateVersion.template.type,
-      permissions: this.permissions,
-      access: this.access,
+    requireActorAccessAssignmentTemplate({
+      authz,
+      templateCode: assignment.templateVersion.template.code,
     });
 
     const templateTitle =
       assignment.title?.trim() ||
       assignment.templateVersion?.template?.title ||
       'Анкета';
+    const templateCode = assignment.templateVersion.template.code;
 
     return this.dataSource.transaction(async (manager) => {
       const lockedAssignment = await manager
@@ -455,10 +449,10 @@ export class QuestionnaireSubmissionService {
       if (!latest) throw new NotFoundException('No submission to resolve');
 
       const caps = computeDetailCapabilities({
+        authz,
         actor,
         employee,
         status: lockedAssignment.status,
-        permissions: this.permissions,
         access: this.access,
         latestSubmission: latest,
       });
@@ -495,6 +489,7 @@ export class QuestionnaireSubmissionService {
           actor,
           reviewedByUserId,
           assignmentId,
+          templateCode,
           templateTitle,
           'declined',
         );
@@ -526,6 +521,7 @@ export class QuestionnaireSubmissionService {
         actor,
         reviewedByUserId,
         assignmentId,
+        templateCode,
         templateTitle,
         'completed',
       );
@@ -542,7 +538,8 @@ export class QuestionnaireSubmissionService {
       reviewComment?: string | null;
     },
   ) {
-    if (!this.permissions.has(actor.role, Permission.QuestionnairesReview)) {
+    const authz = await this.authorization.resolve(actor.id);
+    if (!canReviewQuestionnaires(authz)) {
       throw new ForbiddenException('Cannot review submission');
     }
 
@@ -564,20 +561,17 @@ export class QuestionnaireSubmissionService {
 
     const employee = await this.access.getEmployeeOrFail(assignment.employeeId);
     await this.access.requireCanView(actor, employee);
-    requireActorAccessAssignmentType({
-      actor,
-      employee,
-      templateType: assignment.templateVersion.template.type,
-      permissions: this.permissions,
-      access: this.access,
+    requireActorAccessAssignmentTemplate({
+      authz,
+      templateCode: assignment.templateVersion.template.code,
     });
 
     const latestSubmission = await this.loadLatestSubmission(assignmentId);
     const caps = computeDetailCapabilities({
+      authz,
       actor,
       employee,
       status: assignment.status,
-      permissions: this.permissions,
       access: this.access,
       latestSubmission,
     });
@@ -653,6 +647,15 @@ export class QuestionnaireSubmissionService {
     });
   }
 
+  private async recipientHasTemplateGrant(
+    userId: string,
+    templateCode: string,
+    manager: EntityManager,
+  ): Promise<boolean> {
+    const authz = await this.authorization.resolve(userId, manager);
+    return hasQuestionnaireTemplate(authz, templateCode);
+  }
+
   private async notifyChangesRequested(
     manager: EntityManager,
     actor: User,
@@ -661,6 +664,16 @@ export class QuestionnaireSubmissionService {
     templateTitle: string,
     comment: string,
   ): Promise<void> {
+    const templateCode =
+      assignment.templateVersion?.template?.code ??
+      (
+        await manager.getRepository(QuestionnaireAssignment).findOne({
+          where: { id: assignment.id },
+          relations: { templateVersion: { template: true } },
+        })
+      )?.templateVersion?.template?.code;
+    if (!templateCode) return;
+
     const assignedBy = await manager.getRepository(User).findOne({
       where: {
         id: assignment.assignedByUserId,
@@ -670,11 +683,15 @@ export class QuestionnaireSubmissionService {
 
     let assignedByCanEditDraft = false;
     if (assignedBy) {
+      const assignedByAuthz = await this.authorization.resolve(
+        assignedBy.id,
+        manager,
+      );
       const caps = computeDetailCapabilities({
+        authz: assignedByAuthz,
         actor: assignedBy,
         employee,
         status: assignment.status,
-        permissions: this.permissions,
         access: this.access,
         latestSubmission: {
           reviewStatus: 'changes_requested',
@@ -702,6 +719,15 @@ export class QuestionnaireSubmissionService {
       comment.length > 280 ? `${comment.slice(0, 277)}…` : comment;
 
     for (const recipientId of recipientIds) {
+      if (
+        !(await this.recipientHasTemplateGrant(
+          recipientId,
+          templateCode,
+          manager,
+        ))
+      ) {
+        continue;
+      }
       await this.notifications.create(
         {
           recipientId,
@@ -720,6 +746,7 @@ export class QuestionnaireSubmissionService {
     actor: User,
     reviewedByUserId: string,
     assignmentId: string,
+    templateCode: string,
     templateTitle: string,
     outcome: 'completed' | 'declined',
   ): Promise<void> {
@@ -729,6 +756,16 @@ export class QuestionnaireSubmissionService {
       where: { id: reviewedByUserId, status: UserStatus.Active },
     });
     if (!recipient) return;
+
+    if (
+      !(await this.recipientHasTemplateGrant(
+        reviewedByUserId,
+        templateCode,
+        manager,
+      ))
+    ) {
+      return;
+    }
 
     if (outcome === 'completed') {
       await this.notifications.create(

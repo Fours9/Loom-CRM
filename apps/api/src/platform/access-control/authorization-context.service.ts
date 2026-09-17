@@ -10,6 +10,7 @@ import {
 } from '../permissions/role-permissions';
 import { AccountRole } from './account-role.entity';
 import { AccountRolePermission } from './account-role-permission.entity';
+import { AccountRoleQuestionnaireTemplate } from './account-role-questionnaire-template.entity';
 import { AccountRoleSurface } from './account-role-surface.entity';
 import type { AuthorizationContext } from './authorization-context';
 
@@ -45,11 +46,14 @@ export class AuthorizationContextService {
       throw new UnauthorizedException('Account role not found');
     }
 
-    const [surfaceRows, permissionRows] = await Promise.all([
+    const [surfaceRows, permissionRows, templateRows] = await Promise.all([
       em.getRepository(AccountRoleSurface).find({
         where: { accountRoleId: role.id },
       }),
       em.getRepository(AccountRolePermission).find({
+        where: { accountRoleId: role.id },
+      }),
+      em.getRepository(AccountRoleQuestionnaireTemplate).find({
         where: { accountRoleId: role.id },
       }),
     ]);
@@ -67,6 +71,9 @@ export class AuthorizationContextService {
       permissions: this.effectivePermissions(role, permissionRows),
       surfaces: surfaceRows.map((row) => row.surfaceId).sort(),
       isAdminEquivalent: role.isAdminEquivalent,
+      questionnaireTemplateCodes: templateRows
+        .map((row) => row.templateCode)
+        .sort(),
     };
   }
 

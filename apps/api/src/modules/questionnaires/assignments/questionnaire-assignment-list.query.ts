@@ -1,6 +1,5 @@
 import { SelectQueryBuilder } from 'typeorm';
 import {
-  EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES,
   type QuestionnaireAssignmentStatus,
   type QuestionnaireAttachmentState,
   type QuestionnaireDirectorySortBy,
@@ -15,14 +14,12 @@ export type QuestionnaireDirectoryScope =
   | {
       kind: 'self';
       userId: string;
-      /** Restrict to owner-visible template types. */
-      ownerTypeFilter: true;
     }
   | {
       kind: 'departments_and_self';
       departmentIds: string[];
       userId: string;
-      /** Include status=new with both employee ids null (Assign pool). */
+      /** Include status=new with both employee ids null (Assign∨Lifecycle∨Delete pool). */
       includeNewUnattached: boolean;
     };
 
@@ -72,11 +69,6 @@ export function applyDirectoryScope(
   if (scope.kind === 'self') {
     qb.andWhere('a.employee_id IS NOT NULL');
     qb.andWhere('emp.user_id = :scopeUserId', { scopeUserId: scope.userId });
-    if (scope.ownerTypeFilter) {
-      qb.andWhere('tmpl.type IN (:...ownerTypes)', {
-        ownerTypes: [...EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES],
-      });
-    }
     return;
   }
 
@@ -114,14 +106,6 @@ export function applyEmployeeScope(
 ): void {
   qb.andWhere('a.employee_id = :employeeId', { employeeId });
   qb.andWhere('a.status != :cancelledStatus', { cancelledStatus: 'cancelled' });
-}
-
-export function applyOwnerVisibleTypeFilter(
-  qb: SelectQueryBuilder<QuestionnaireAssignment>,
-): void {
-  qb.andWhere('tmpl.type IN (:...ownerTypes)', {
-    ownerTypes: [...EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES],
-  });
 }
 
 export function applyAssignmentFilters(

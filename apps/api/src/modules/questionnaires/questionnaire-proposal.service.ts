@@ -8,9 +8,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
-import { Permission } from '../../platform/permissions/permission.names';
-import { PermissionService } from '../../platform/permissions/permission.service';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
+import { hasQuestionnaireTemplate } from '../../platform/access-control/authorization-context';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
+import {
+  canApplyProfileChanges,
+  canViewQuestionnaires,
+  requireActorAccessAssignmentTemplate,
+} from './assignments/questionnaire-assignment-access';
 import { EmployeeContactsFacade } from '../../organization/employees/employee-contacts.facade';
 import { EmployeeProfileService } from '../../organization/employees/employee-profile.service';
 import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
@@ -92,7 +97,7 @@ export class QuestionnaireProposalService {
     @InjectRepository(QuestionnaireAssignment)
     private readonly assignments: Repository<QuestionnaireAssignment>,
     private readonly access: EmployeeAccessService,
-    private readonly permissions: PermissionService,
+    private readonly authorization: AuthorizationContextService,
     private readonly contactsFacade: EmployeeContactsFacade,
     private readonly profiles: EmployeeProfileService,
     private readonly assessments: EmployeeSkillAssessmentsFacade,
@@ -390,13 +395,11 @@ export class QuestionnaireProposalService {
   }
 
   async listForEmployee(actor: User, employeeId: string) {
+    const authz = await this.authorization.resolve(actor.id);
     const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
 
-    if (
-      !this.permissions.has(actor.role, Permission.QuestionnairesView) &&
-      !this.access.isOwner(actor, employee)
-    ) {
+    if (!canViewQuestionnaires(authz) && !this.access.isOwner(actor, employee)) {
       throw new ForbiddenException('Cannot view proposals');
     }
 
@@ -408,6 +411,9 @@ export class QuestionnaireProposalService {
     const assignmentBySubmission = await this.assignmentIdsBySubmissionIds(
       items.map((p) => p.submissionId),
     );
+    const templateCodeByAssignment = await this.templateCodesByAssignmentIds([
+      ...assignmentBySubmission.values(),
+    ]);
     const schemaByAssignment = await this.schemasByAssignmentIds([
       ...assignmentBySubmission.values(),
     ]);
@@ -425,6 +431,14 @@ export class QuestionnaireProposalService {
     for (const p of items) {
       const assignmentId = assignmentBySubmission.get(p.submissionId);
       if (!assignmentId) continue;
+
+      const sourceTemplateCode = templateCodeByAssignment.get(assignmentId);
+      if (
+        !sourceTemplateCode ||
+        !hasQuestionnaireTemplate(authz, sourceTemplateCode)
+      ) {
+        continue;
+      }
 
       let change: QuestionnaireProposedChange;
       try {
@@ -464,10 +478,7 @@ export class QuestionnaireProposalService {
     return {
       items: dtos,
       capabilities: {
-        canApply: this.permissions.has(
-          actor.role,
-          Permission.QuestionnairesApplyProfileChanges,
-        ),
+        canApply: canApplyProfileChanges(authz),
       },
     };
   }
@@ -485,12 +496,8 @@ export class QuestionnaireProposalService {
     proposalId: string,
     decision: 'accept' | 'reject',
   ) {
-    if (
-      !this.permissions.has(
-        actor.role,
-        Permission.QuestionnairesApplyProfileChanges,
-      )
-    ) {
+    const authz = await this.authorization.resolve(actor.id);
+    if (!canApplyProfileChanges(authz)) {
       throw new ForbiddenException(
         decision === 'accept'
           ? 'Cannot apply profile changes'
@@ -511,6 +518,18 @@ export class QuestionnaireProposalService {
     if (!assignmentId) {
       throw new NotFoundException('Proposal assignment not found');
     }
+
+    const assignment = await this.assignments.findOne({
+      where: { id: assignmentId },
+      relations: { templateVersion: { template: true } },
+    });
+    if (!assignment) {
+      throw new NotFoundException('Proposal assignment not found');
+    }
+    requireActorAccessAssignmentTemplate({
+      authz,
+      templateCode: assignment.templateVersion.template.code,
+    });
 
     const employee = await this.access.getEmployeeOrFail(proposal.employeeId);
     await this.access.requireCanView(actor, employee);
@@ -576,6 +595,7 @@ export class QuestionnaireProposalService {
     employeeId: string,
     assignmentId?: string | null,
   ) {
+    const authz = await this.authorization.resolve(actor.id);
     const employee = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, employee);
 
@@ -593,13 +613,22 @@ export class QuestionnaireProposalService {
     const assignments = scopedId
       ? await this.assignments.find({
           where: { id: scopedId, employeeId },
+          relations: { templateVersion: { template: true } },
         })
       : await this.assignments.find({
           where: { employeeId },
+          relations: { templateVersion: { template: true } },
           order: { createdAt: 'DESC' },
         });
 
     for (const assignment of assignments) {
+      const templateCode = assignment.templateVersion?.template?.code;
+      if (
+        !templateCode ||
+        !hasQuestionnaireTemplate(authz, templateCode)
+      ) {
+        continue;
+      }
       const response = await this.responses.findOne({
         where: { assignmentId: assignment.id },
       });
@@ -899,6 +928,24 @@ export class QuestionnaireProposalService {
       reviewedAt: p.reviewedAt?.toISOString() ?? null,
       createdAt: p.createdAt.toISOString(),
     };
+  }
+
+  private async templateCodesByAssignmentIds(
+    assignmentIds: string[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Set(assignmentIds.filter(Boolean))];
+    const map = new Map<string, string>();
+    if (!unique.length) return map;
+
+    const rows = await this.assignments.find({
+      where: { id: In(unique) },
+      relations: { templateVersion: { template: true } },
+    });
+    for (const row of rows) {
+      const code = row.templateVersion?.template?.code;
+      if (code) map.set(row.id, code);
+    }
+    return map;
   }
 
   private async assignmentIdsBySubmissionIds(

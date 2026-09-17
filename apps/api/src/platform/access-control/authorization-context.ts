@@ -20,6 +20,11 @@ export type AuthorizationContext = {
   permissions: Permission[];
   surfaces: string[];
   isAdminEquivalent: boolean;
+  /**
+   * Sorted opaque questionnaire template codes granted to the account role.
+   * Empty means none (fail-closed) unless isAdminEquivalent.
+   */
+  questionnaireTemplateCodes: string[];
 };
 
 export function hasPermission(
@@ -34,4 +39,13 @@ export function hasSurface(
   surfaceId: string,
 ): boolean {
   return context.isAdminEquivalent || context.surfaces.includes(surfaceId);
+}
+
+/** AdminEq bypasses template grants; otherwise code must be in the grant list. */
+export function hasQuestionnaireTemplate(
+  context: AuthorizationContext,
+  templateCode: string,
+): boolean {
+  if (context.isAdminEquivalent) return true;
+  return context.questionnaireTemplateCodes.includes(templateCode);
 }

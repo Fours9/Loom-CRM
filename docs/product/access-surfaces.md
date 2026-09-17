@@ -74,6 +74,19 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 
 Settings role dialog: effective / `grants*Explicitly` / `canEdit*Grant` triad (confidential pattern).
 
+## Questionnaire template grants + Assign / Manage
+
+| Gate | Meaning |
+|------|---------|
+| `account_role_questionnaire_templates` | Opaque template codes per AccountRole. AdminEq bypasses (no rows required). |
+| `questionnaires.assign` | Create / attach new / templates picker (within granted codes). **Not** in DM base preset (Variant A) — seeded as extra for DM-preset roles. |
+| Manage bundle | `questionnaires.manage_lifecycle` **and** `questionnaires.delete` together. Settings one checkbox; API rejects XOR (`QUESTIONNAIRE_MANAGE_BUNDLE_PARTIAL`). |
+| Capability SoT | `AuthorizationContext` only — not `users.role` / `PermissionService.has(role)`. |
+
+Unattached `new` READ: Assign ∨ Lifecycle ∨ Delete ∧ template grant (never View alone). Proposal LIST keeps View∨owner + template grant; ACCEPT/REJECT keep ApplyProfileChanges + grant. Notifications with assignment metadata require recipient template grant.
+
+Migration seed: built-in literals (`employee-starter`/`360`/`managing`/`docs`) by elevatedBefore parity; upgrade adds published `type=full` (plain) or all published (elevated). See [ADR 0009 §16](../adr/0009-questionnaire-360-mvp.md).
+
 ## Assign flow
 
 People RoleAccess → `PATCH …/access-settings` `{ accountRoleId?, overrides? }` → Assign+scope+ceiling for role; visibility overrides **adminEquivalent only** (delegated body with overrides → 403). `{ requestedAccountRole, effectiveAccountRole }` (equal — no leadership rewrite). Org leadership remains separate scope.

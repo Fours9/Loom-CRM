@@ -53,7 +53,11 @@ export const QUESTIONNAIRE_TYPE_CATALOG: Record<
   },
 };
 
-/** Types a plain employee-owner may see/fill (not elevated). */
+/**
+ * @deprecated Prefer AccountRole questionnaire template-code grants
+ * (`AuthorizationContext.questionnaireTemplateCodes`). Kept for reference /
+ * transitional FE helpers only — not used in API ACL.
+ */
 export const EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES: readonly QuestionnaireType[] =
   ['full'] as const;
 

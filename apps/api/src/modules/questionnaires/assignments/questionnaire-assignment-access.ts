@@ -1,14 +1,16 @@
 import { ForbiddenException } from '@nestjs/common';
 import {
-  EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES,
   isQuestionnairePostSubmitStatus,
-  type QuestionnaireType,
 } from '@loom/contracts-questionnaires';
-import type { User } from '../../../platform/identity/user.entity';
 import { Permission } from '../../../platform/permissions/permission.names';
-import type { PermissionService } from '../../../platform/permissions/permission.service';
+import {
+  hasPermission,
+  hasQuestionnaireTemplate,
+  type AuthorizationContext,
+} from '../../../platform/access-control/authorization-context';
 import type { EmployeeAccessService } from '../../../organization/access/employee-access.service';
 import type { Employee } from '../../../organization/employees/employee.entity';
+import type { User } from '../../../platform/identity/user.entity';
 import type { QuestionnaireAssignment } from '../questionnaire-assignment.entity';
 import type { QuestionnaireAssignmentStatus } from '../questionnaire.enums';
 import {
@@ -22,6 +24,7 @@ import {
   hasActiveReviewerRequest,
   type ActiveChangeRequestSubmission,
 } from '../reopen/questionnaire-active-change-request';
+import type { SelectQueryBuilder } from 'typeorm';
 
 export type AssignmentAccessContext = {
   assignment: QuestionnaireAssignment;
@@ -60,87 +63,94 @@ const EMPTY_CAPS: QuestionnaireDetailCapabilities = {
   canDelete: false,
 };
 
-export function canAssignQuestionnaires(
-  permissions: PermissionService,
-  actor: User,
-): boolean {
-  return permissions.has(actor.role, Permission.QuestionnairesAssign);
+export function canAssignQuestionnaires(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesAssign);
 }
 
-export function canManageLifecycle(
-  permissions: PermissionService,
-  actor: User,
-): boolean {
-  return permissions.has(actor.role, Permission.QuestionnairesManageLifecycle);
+export function canManageLifecycle(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesManageLifecycle);
 }
 
-export function canDeleteQuestionnaire(
-  permissions: PermissionService,
-  actor: User,
-): boolean {
-  return permissions.has(actor.role, Permission.QuestionnairesDelete);
+export function canDeleteQuestionnaire(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesDelete);
 }
 
-export function canCompleteOnBehalf(
-  permissions: PermissionService,
-  actor: User,
-): boolean {
-  return permissions.has(actor.role, Permission.QuestionnairesCompleteAny);
+export function canCompleteOnBehalf(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesCompleteAny);
 }
 
-export function isElevatedQuestionnaireActor(
-  permissions: PermissionService,
-  actor: User,
-): boolean {
+export function canCompleteSelf(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesCompleteSelf);
+}
+
+export function canReviewQuestionnaires(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesReview);
+}
+
+export function canApplyProfileChanges(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesApplyProfileChanges);
+}
+
+export function canReadAssignmentComment(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesReadAssignmentComment);
+}
+
+export function canViewQuestionnaires(authz: AuthorizationContext): boolean {
+  return hasPermission(authz, Permission.QuestionnairesView);
+}
+
+/** Unattached new-pool READ: Assign ∨ Lifecycle ∨ Delete (∨ adminEq via hasPermission). */
+export function canReadUnattachedNewPool(authz: AuthorizationContext): boolean {
   return (
-    canAssignQuestionnaires(permissions, actor) ||
-    canManageLifecycle(permissions, actor) ||
-    canCompleteOnBehalf(permissions, actor) ||
-    canDeleteQuestionnaire(permissions, actor)
+    canAssignQuestionnaires(authz) ||
+    canManageLifecycle(authz) ||
+    canDeleteQuestionnaire(authz)
   );
 }
 
 /**
- * Single type-visibility policy for all assignment read/write paths.
- * Non-owner: caller must already have passed employee/detached scope.
- * Plain owner: full only.
- * Elevated owner (Assign / ManageLifecycle / CompleteAny / Delete): allow all types.
+ * Single template-code visibility policy for every assignment-touching path.
+ * Scope is checked separately; this only gates by granted template codes.
  */
-export function canActorAccessAssignmentType(input: {
-  actor: User;
-  employee: Employee | null;
-  templateType: QuestionnaireType | string;
-  permissions: PermissionService;
-  access: EmployeeAccessService;
+export function canActorAccessAssignmentTemplate(input: {
+  authz: AuthorizationContext;
+  templateCode: string;
 }): boolean {
-  const { actor, employee, templateType, permissions, access } = input;
-  if (!employee) {
-    return true;
-  }
-  const isOwner = access.isOwner(actor, employee);
-  if (!isOwner) {
-    return true;
-  }
-  if (isElevatedQuestionnaireActor(permissions, actor)) {
-    return true;
-  }
-  return (EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES as readonly string[]).includes(
-    templateType,
-  );
+  return hasQuestionnaireTemplate(input.authz, input.templateCode);
 }
 
-export function requireActorAccessAssignmentType(input: {
-  actor: User;
-  employee: Employee | null;
-  templateType: QuestionnaireType | string;
-  permissions: PermissionService;
-  access: EmployeeAccessService;
+export function requireActorAccessAssignmentTemplate(input: {
+  authz: AuthorizationContext;
+  templateCode: string;
 }): void {
-  if (!canActorAccessAssignmentType(input)) {
-    throw new ForbiddenException(
-      'Cannot access this questionnaire type',
-    );
+  if (!canActorAccessAssignmentTemplate(input)) {
+    throw new ForbiddenException('Cannot access this questionnaire template');
   }
+}
+
+/** Fail-closed SQL filter for granted template codes (never empty IN (...)). */
+export function applyGrantedTemplateCodeFilter(
+  qb: SelectQueryBuilder<QuestionnaireAssignment>,
+  authz: AuthorizationContext,
+  templateAlias = 'tmpl',
+): void {
+  if (authz.isAdminEquivalent) return;
+  if (authz.questionnaireTemplateCodes.length === 0) {
+    qb.andWhere('1 = 0');
+    return;
+  }
+  qb.andWhere(`${templateAlias}.code IN (:...questionnaireTemplateCodes)`, {
+    questionnaireTemplateCodes: authz.questionnaireTemplateCodes,
+  });
+}
+
+export function filterByGrantedTemplateCodes<T extends { templateCode: string }>(
+  items: T[],
+  authz: AuthorizationContext,
+): T[] {
+  if (authz.isAdminEquivalent) return items;
+  const allowed = new Set(authz.questionnaireTemplateCodes);
+  return items.filter((item) => allowed.has(item.templateCode));
 }
 
 /**
@@ -148,26 +158,19 @@ export function requireActorAccessAssignmentType(input: {
  * Lifecycle list capabilities are projected separately.
  */
 export function computeDetailCapabilities(input: {
+  authz: AuthorizationContext;
   actor: User;
   employee: Employee | null;
   status: QuestionnaireAssignmentStatus | string;
-  permissions: PermissionService;
   access: EmployeeAccessService;
   latestSubmission?: ActiveChangeRequestSubmission | null;
 }): QuestionnaireDetailCapabilities {
-  const { actor, employee, status, permissions, access, latestSubmission } =
-    input;
-  const canDelete = canDeleteQuestionnaire(permissions, actor);
-  const canAssign = canAssignQuestionnaires(permissions, actor);
-  const onBehalf = canCompleteOnBehalf(permissions, actor);
-  const canReviewPerm = permissions.has(
-    actor.role,
-    Permission.QuestionnairesReview,
-  );
-  const canCompleteSelf = permissions.has(
-    actor.role,
-    Permission.QuestionnairesCompleteSelf,
-  );
+  const { authz, actor, employee, status, access, latestSubmission } = input;
+  const canDelete = canDeleteQuestionnaire(authz);
+  const canAssign = canAssignQuestionnaires(authz);
+  const onBehalf = canCompleteOnBehalf(authz);
+  const canReviewPerm = canReviewQuestionnaires(authz);
+  const completeSelf = canCompleteSelf(authz);
 
   if (status === 'new') {
     return {
@@ -194,7 +197,7 @@ export function computeDetailCapabilities(input: {
   const isOwner = access.isOwner(actor, employee);
 
   const ownerEdit =
-    isOwner && canCompleteSelf && isOwnerEditableStatus(status);
+    isOwner && completeSelf && isOwnerEditableStatus(status);
 
   const onBehalfEdit = onBehalf && isOwnerEditableStatus(status);
 
@@ -206,8 +209,7 @@ export function computeDetailCapabilities(input: {
     latestSubmission: latestSubmission ?? null,
   });
 
-  const canReopenSelf =
-    isOwner && canCompleteSelf && revisionEligible;
+  const canReopenSelf = isOwner && completeSelf && revisionEligible;
 
   const canStartRevision = onBehalf && revisionEligible;
 
@@ -239,38 +241,38 @@ export function computeDetailCapabilities(input: {
 }
 
 export function computeListLifecycleCapabilities(input: {
+  authz: AuthorizationContext;
   actor: User;
   status: QuestionnaireAssignmentStatus | string;
   employeeId: string | null | undefined;
   detachedFromEmployeeId: string | null | undefined;
-  permissions: PermissionService;
   employee: Employee | null;
   access: EmployeeAccessService;
   hasLatestSubmission: boolean;
 }): QuestionnaireListLifecycleCapabilities {
   const {
+    authz,
     actor,
     status,
     employeeId,
     detachedFromEmployeeId,
-    permissions,
     employee,
     access,
     hasLatestSubmission,
   } = input;
-  const canAssign = canAssignQuestionnaires(permissions, actor);
-  const canManage = canManageLifecycle(permissions, actor);
-  const canDelete = canDeleteQuestionnaire(permissions, actor);
+  const canAssign = canAssignQuestionnaires(authz);
+  const canManage = canManageLifecycle(authz);
+  const canDelete = canDeleteQuestionnaire(authz);
   const attachOk = canAttachAssignment({
     status,
     employeeId,
     detachedFromEmployeeId,
   });
   const canStartFill = computeCanStartFill({
+    authz,
     actor,
     employee,
     status,
-    permissions,
     access,
     hasLatestSubmission,
   });
@@ -304,10 +306,10 @@ export function computeListLifecycleCapabilities(input: {
 
 /** First-fill CTA: same canEditDraft rules as detail, no prior submissions. */
 export function computeCanStartFill(input: {
+  authz: AuthorizationContext;
   actor: User;
   employee: Employee | null;
   status: QuestionnaireAssignmentStatus | string;
-  permissions: PermissionService;
   access: EmployeeAccessService;
   hasLatestSubmission: boolean;
 }): boolean {
@@ -316,10 +318,10 @@ export function computeCanStartFill(input: {
     return false;
   }
   return computeDetailCapabilities({
+    authz: input.authz,
     actor: input.actor,
     employee: input.employee,
     status: input.status,
-    permissions: input.permissions,
     access: input.access,
   }).canEditDraft;
 }

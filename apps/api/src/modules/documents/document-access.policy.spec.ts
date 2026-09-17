@@ -21,6 +21,7 @@ describe('ConfidentialAccessPolicy', () => {
       permissions: [],
       surfaces: [],
       isAdminEquivalent: false,
+      questionnaireTemplateCodes: [],
       ...over,
     }) as AuthorizationContext;
 

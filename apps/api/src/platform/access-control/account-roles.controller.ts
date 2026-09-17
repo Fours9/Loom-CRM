@@ -44,6 +44,11 @@ class CreateAccountRoleDto {
   @IsArray()
   @IsString({ each: true })
   surfaceIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  questionnaireTemplateCodes?: string[];
 }
 
 class UpdateAccountRoleDto {
@@ -69,12 +74,23 @@ class UpdateAccountRoleDto {
   @IsArray()
   @IsString({ each: true })
   surfaceIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  questionnaireTemplateCodes?: string[];
 }
 
 class ReplaceSurfacesDto {
   @IsArray()
   @IsString({ each: true })
   surfaceIds!: string[];
+}
+
+class ReplaceQuestionnaireTemplatesDto {
+  @IsArray()
+  @IsString({ each: true })
+  questionnaireTemplateCodes!: string[];
 }
 
 /**
@@ -128,6 +144,19 @@ export class AccountRolesController {
     @Body() dto: ReplaceSurfacesDto,
   ) {
     return this.accountRoles.replaceSurfaces(user.id, id, dto.surfaceIds);
+  }
+
+  @Put(':id/questionnaire-templates')
+  replaceQuestionnaireTemplates(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() dto: ReplaceQuestionnaireTemplatesDto,
+  ) {
+    return this.accountRoles.replaceQuestionnaireTemplates(
+      user.id,
+      id,
+      dto.questionnaireTemplateCodes,
+    );
   }
 
   @Delete(':id')

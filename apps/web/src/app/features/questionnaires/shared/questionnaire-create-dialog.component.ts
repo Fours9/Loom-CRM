@@ -18,7 +18,6 @@ import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { QuestionnaireEmployeeTypeaheadComponent } from './questionnaire-employee-typeahead.component';
 import {
   questionnaireTypeDescription,
-  questionnaireTypeLabel,
 } from '../questionnaire-labels';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
 import { firstValueFrom } from 'rxjs';
@@ -51,7 +50,7 @@ import { firstValueFrom } from 'rxjs';
           >
             @for (t of templates(); track t.code) {
               <option [ngValue]="t.code">
-                {{ typeLabel(t.type) }} — {{ t.title }}
+                {{ t.title }}
               </option>
             }
           </select>
@@ -219,10 +218,6 @@ export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
   });
 
   private backdropPress = false;
-
-  typeLabel(type: string): string {
-    return questionnaireTypeLabel(type);
-  }
 
   private templateTitleFor(code: string): string {
     return this.templates().find((t) => t.code === code)?.title ?? '';

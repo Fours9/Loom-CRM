@@ -62,6 +62,7 @@ describe('AuthService session mapper and changePassword', () => {
         permissions: ['employees.view'],
         surfaces: ['nav.home'],
         isAdminEquivalent: false,
+        questionnaireTemplateCodes: [],
       })),
     } as unknown as AuthorizationContextService;
 

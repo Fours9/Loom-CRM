@@ -155,16 +155,38 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       }),
     };
 
-    const permissions = {
-      has: jest.fn((_role: string, perm: string) => {
-        if (opts.hasAssign === false) {
-          return false;
-        }
-        if (perm === Permission.QuestionnairesAssign) return true;
-        if (perm === Permission.QuestionnairesManageLifecycle) return true;
-        if (perm === Permission.QuestionnairesDelete) return true;
-        return true;
-      }),
+    const authzPermissions: string[] =
+      opts.hasAssign === false
+        ? [Permission.QuestionnairesView]
+        : [
+            Permission.QuestionnairesAssign,
+            Permission.QuestionnairesManageLifecycle,
+            Permission.QuestionnairesDelete,
+            Permission.QuestionnairesView,
+            Permission.QuestionnairesCompleteAny,
+          ];
+
+    const authorization = {
+      resolve: jest.fn(async () => ({
+        userId: 'actor-1',
+        accountRole: {
+          id: 'role-1',
+          code: 'department_manager',
+          name: 'DM',
+          permissionPreset: 'department_manager' as const,
+          isAdminEquivalent: false,
+          isSystem: true,
+        },
+        permissions: authzPermissions,
+        surfaces: [],
+        isAdminEquivalent: false,
+        questionnaireTemplateCodes: [
+          'employee-starter',
+          'employee-360',
+          'employee-managing',
+          'employee-docs',
+        ],
+      })),
     };
 
     const access = {
@@ -239,7 +261,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
         })),
       } as never,
       access as never,
-      permissions as never,
+      authorization as never,
       { ensureResponse: jest.fn() } as never,
       {
         submitWithinTransaction: jest.fn(async () => ({
@@ -641,7 +663,21 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
           isAdmin: jest.fn(() => true),
         } as never,
         {
-          has: jest.fn(() => true),
+          resolve: jest.fn(async () => ({
+            userId: 'admin-1',
+            accountRole: {
+              id: 'role-admin',
+              code: 'admin',
+              name: 'Admin',
+              permissionPreset: 'admin' as const,
+              isAdminEquivalent: true,
+              isSystem: true,
+            },
+            permissions: [],
+            surfaces: [],
+            isAdminEquivalent: true,
+            questionnaireTemplateCodes: [],
+          })),
         } as never,
         { ensureResponse: jest.fn() } as never,
         { submitWithinTransaction } as never,
