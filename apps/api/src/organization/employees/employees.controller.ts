@@ -48,9 +48,13 @@ import { EmployeeHistoryQueryDto } from './employee-history-query.dto';
 import { EmployeeListQueryDto } from './employee-list-query.dto';
 import { EmployeeAccessService } from '../access/employee-access.service';
 import { EmployeeSkillMatrixService } from '../skills/employee-skill-matrix.service';
+import { EmployeeAboutService } from './employee-about.service';
+import { PatchEmployeeAboutSubtabDto } from './patch-employee-about.dto';
 import type {
   CreateEmployeeSkillAssessmentRequest,
   EmployeeSkillMatrixResponse,
+  EmployeeAboutResponse,
+  PatchEmployeeAboutSubtabRequest,
   UpdateEmployeeSkillAssessmentRequest,
   UpsertEmployeeSkillAssessmentRequest,
 } from '@loom/contracts-employees';
@@ -253,6 +257,7 @@ export class EmployeesController {
     private readonly exportService: EmployeeProfileExportService,
     private readonly access: EmployeeAccessService,
     private readonly skillMatrix: EmployeeSkillMatrixService,
+    private readonly about: EmployeeAboutService,
   ) {}
 
   @Get()
@@ -336,6 +341,25 @@ export class EmployeesController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<EmployeeSkillMatrixResponse> {
     return this.skillMatrix.listMatrix(user, id);
+  }
+
+  @Get(':id/about')
+  @RequirePermissions(Permission.EmployeesView)
+  getAbout(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<EmployeeAboutResponse> {
+    return this.about.get(user, id);
+  }
+
+  @Patch(':id/about')
+  @RequirePermissions(Permission.EmployeesView)
+  patchAbout(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PatchEmployeeAboutSubtabDto,
+  ): Promise<EmployeeAboutResponse> {
+    return this.about.patchSubtab(user, id, dto as PatchEmployeeAboutSubtabRequest);
   }
 
   @Post(':id/skill-assessments')

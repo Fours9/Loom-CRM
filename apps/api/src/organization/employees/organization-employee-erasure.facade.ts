@@ -8,6 +8,7 @@ import { EmployeeManagedDepartment } from './employee-managed-department.entity'
 import { EmploymentAssignment } from './employment-assignment.entity';
 import { WorkScheduleDay } from './work-schedule-day.entity';
 import { EmployeeSkillAssessment } from '../skills/employee-skill-assessment.entity';
+import { EmployeeAbout } from './employee-about.entity';
 
 export type LockedEmployeeForDeletion = {
   id: string;
@@ -43,6 +44,7 @@ export class OrganizationEmployeeErasureFacade {
     manager: EntityManager,
     employeeId: string,
   ): Promise<void> {
+    await manager.getRepository(EmployeeAbout).delete({ employeeId });
     await manager
       .getRepository(WorkScheduleDay)
       .delete({ employeeId });

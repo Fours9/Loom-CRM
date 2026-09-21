@@ -262,7 +262,7 @@ type MetricsTabId = 'skills';
               }
             }
             @case ('about') {
-              <loom-employee-about-panel />
+              <loom-employee-about-panel [employeeId]="employeeId" />
             }
             @case ('metrics') {
               <nav

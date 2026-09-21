@@ -21,6 +21,9 @@
       "@loom/employee-contacts": [
         "../../libs/employee-contacts/src/index.ts"
       ],
+      "@loom/employee-about-catalog": [
+        "../../libs/employee-about-catalog/src/index.ts"
+      ],
       "@loom/position-skill-catalog": [
         "../../libs/position-skill-catalog/src/index.ts"
       ],

@@ -76,6 +76,8 @@ import { AccountRoleQuestionnaireTemplate } from '../access-control/account-role
 import { AccountRoleQuestionnaireTemplates1730000041000 } from './migrations/1730000041000-AccountRoleQuestionnaireTemplates';
 import { QuestionnaireManageBundleApply1730000042000 } from './migrations/1730000042000-QuestionnaireManageBundleApply';
 import { PeopleTabAboutSurface1730000043000 } from './migrations/1730000043000-PeopleTabAboutSurface';
+import { EmployeeAbout1730000044000 } from './migrations/1730000044000-EmployeeAbout';
+import { EmployeeAbout } from '../../organization/employees/employee-about.entity';
 
 export function getDataSourceOptions(): DataSourceOptions {
   const config = getApplicationConfig();
@@ -116,6 +118,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       PositionSkillRequirement,
       PositionDuty,
       PositionGoalTemplate,
+      EmployeeAbout,
     ],
     migrations: [
       InitialPlatformBaseline1730000000000,
@@ -162,6 +165,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       AccountRoleQuestionnaireTemplates1730000041000,
       QuestionnaireManageBundleApply1730000042000,
       PeopleTabAboutSurface1730000043000,
+      EmployeeAbout1730000044000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

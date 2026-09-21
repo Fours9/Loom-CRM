@@ -38,6 +38,9 @@ import { IdentityRoleProjection } from './identity-role-projection';
 import { PositionManagedDepartment } from '../positions/position-managed-department.entity';
 import { EmploymentAssignmentOrganizationResolver } from './employment-assignment-organization.resolver';
 import { EmployeeNumberAllocator } from './employee-number.allocator';
+import { EmployeeAbout } from './employee-about.entity';
+import { EmployeeAboutFacade } from './employee-about.facade';
+import { EmployeeAboutService } from './employee-about.service';
 
 @Module({
   imports: [
@@ -56,6 +59,7 @@ import { EmployeeNumberAllocator } from './employee-number.allocator';
       Department,
       AuditLog,
       PositionSkillRequirement,
+      EmployeeAbout,
     ]),
     DepartmentsModule,
     PositionsModule,
@@ -81,6 +85,8 @@ import { EmployeeNumberAllocator } from './employee-number.allocator';
     EmployeeNumberAllocator,
     PdfRenderer,
     OrganizationEmployeeIdentityLookup,
+    EmployeeAboutFacade,
+    EmployeeAboutService,
     {
       provide: EmployeeIdentityLookup,
       useExisting: OrganizationEmployeeIdentityLookup,
@@ -98,6 +104,7 @@ import { EmployeeNumberAllocator } from './employee-number.allocator';
     EmploymentCatalogModule,
     OrganizationEmployeeErasureFacade,
     IdentityRoleProjection,
+    EmployeeAboutFacade,
   ],
 })
 export class EmployeesModule {}

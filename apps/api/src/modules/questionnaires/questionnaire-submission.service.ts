@@ -54,6 +54,7 @@ import {
   requireCanSubmit,
 } from './assignments/questionnaire-assignment-access';
 import { isOwnerEditableStatus } from './assignments/questionnaire-assignment-transitions';
+import { EmployeeAboutFacade } from '../../organization/employees/employee-about.facade';
 
 @Injectable()
 export class QuestionnaireSubmissionService {
@@ -75,6 +76,7 @@ export class QuestionnaireSubmissionService {
     private readonly contextSkillIdBackfill: QuestionnaireContextSkillIdBackfillService,
     private readonly notifications: NotificationsService,
     private readonly dataSource: DataSource,
+    private readonly aboutFacade: EmployeeAboutFacade,
   ) {}
 
   async submit(actor: User, assignmentId: string) {
@@ -288,6 +290,16 @@ export class QuestionnaireSubmissionService {
     await manager.getRepository(QuestionnaireAssignment).save(assignment);
 
     await this.proposals.generateFromSubmission(manager, actor, created.id);
+
+    if (assignment.employeeId) {
+      await this.aboutFacade.syncFromSubmissionSnapshot(manager, {
+        employeeId: assignment.employeeId,
+        snapshotJson: snapshotJson as Record<string, unknown>,
+        submissionId: created.id,
+        actorUserId: actor.id,
+        syncedAt: now,
+      });
+    }
 
     return created;
   }

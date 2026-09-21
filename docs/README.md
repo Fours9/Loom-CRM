@@ -28,7 +28,7 @@
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
-**Профіль UI:** список `/people` = Absences-like directory (+ напрямок, AccountRole.name); створення — `/people/new` (`employees.create` ∧ `employees.view`, напрямок + AccountRole-at-create, [ADR 0013](adr/0013-employee-create-sot.md)); деталі `/people/:id` — вкладки Дані, **Робота**, Документи, **Анкети**, **Про себе**, Показники, **Адміністрування** (Історія · **Акаунт** · **Роль та допуски**). **Про себе:** soft voluntary ([people-about-tab](product/people-about-tab.md)); surface `people.tab.about`. **Роль та допуски:** assign `accountRoleId` + visibility overrides (без adminAccess toggle). Org leadership = `managementKind` на посаді/EA. Access: Platform `AuthorizationContext` + active EA scope; Settings **Доступи** (+ checkbox confidential). Living: [hr-profile-roadmap](product/hr-profile-roadmap.md), [access-surfaces](product/access-surfaces.md), [ADR 0011](adr/0011-org-leadership-vs-account-role.md), [ADR 0012](adr/0012-confidential-classification.md), [ADR 0013](adr/0013-employee-create-sot.md).
+**Профіль UI:** список `/people` = Absences-like directory (+ напрямок, AccountRole.name); створення — `/people/new` (`employees.create` ∧ `employees.view`, напрямок + AccountRole-at-create, [ADR 0013](adr/0013-employee-create-sot.md)); деталі `/people/:id` — вкладки Дані, **Робота**, Документи, **Анкети**, **Про себе**, Показники, **Адміністрування** (Історія · **Акаунт** · **Роль та допуски**). **Про себе:** Profile Core `employee_about` ([people-about-tab](product/people-about-tab.md), [ADR 0014](adr/0014-employee-about.md)); surface `people.tab.about`. **Роль та допуски:** assign `accountRoleId` + visibility overrides (без adminAccess toggle). Org leadership = `managementKind` на посаді/EA. Access: Platform `AuthorizationContext` + active EA scope; Settings **Доступи** (+ checkbox confidential). Living: [hr-profile-roadmap](product/hr-profile-roadmap.md), [access-surfaces](product/access-surfaces.md), [ADR 0011](adr/0011-org-leadership-vs-account-role.md), [ADR 0012](adr/0012-confidential-classification.md), [ADR 0013](adr/0013-employee-create-sot.md), [ADR 0014](adr/0014-employee-about.md).
 
 **Робочий календар:** UI-назва; технічний namespace лишається Absences. Intent: [work-calendar-roadmap](product/work-calendar-roadmap.md), [ADR 0008](adr/0008-work-calendar-via-absences.md).
 
@@ -64,7 +64,7 @@
 ## Продукт / HR
 
 - [HR profile roadmap](product/hr-profile-roadmap.md) — **living** статус фаз
-- [People «Про себе»](product/people-about-tab.md) — вкладка + planned subtabs
+- [People «Про себе»](product/people-about-tab.md) — Profile Core SoT + subtabs ([ADR 0014](adr/0014-employee-about.md))
 - [Access surfaces](product/access-surfaces.md) — surfaces + permissions
 - [Work calendar roadmap](product/work-calendar-roadmap.md) — expand Absences → TimeEvent (MVP)
 - [Employee Profile Core (target-спека)](product/employee-profile-core.md) — vision / Draft, не «що вже в коді»

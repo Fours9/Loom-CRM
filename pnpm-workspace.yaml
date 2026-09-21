@@ -4,4 +4,5 @@ packages:
   - 'libs/frontend/*'
   - 'libs/questionnaire-schema'
   - 'libs/employee-contacts'
+  - 'libs/employee-about-catalog'
   - 'libs/position-skill-catalog'

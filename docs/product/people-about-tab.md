@@ -3,34 +3,50 @@
 Вкладка профілю для **мʼякого / добровільного** контексту про працівника (хобі, сімʼя, стиль роботи).  
 **Не** кадрова SoT «Дані працівника» і **не** операційна «Робота».
 
+## SoT
+
+| Шар | Роль |
+|-----|------|
+| `employee_about` (Organization) | **Current Profile Core** truth (`answers` jsonb) |
+| Questionnaire `snapshot_json` | Immutable history / audit only |
+| `@loom/employee-about-catalog` | Neutral field registry (labels, options, `visibleWhen`, validation) |
+
+HTTP: `GET/PATCH /api/v1/employees/:id/about` — DTOs у `@loom/contracts-employees`.
+
 Visibility: surface `people.tab.about` (Settings «Доступи»). Seed: `employee` + adminEq; DM/director — opt-in.  
-`people.tab.later` лишається reserved (без UI).
+Read = `EmployeesView` ∧ surface. Write = pure `canEditEmployeeAbout` (owner+surface **або** ManageProfiles+managed+surface).
 
-Код:
-- вкладка: [`people-profile-tabs.ts`](../../apps/web/src/app/features/people/people-profile-tabs.ts)
-- оболонка: [`employee-about-panel.component.ts`](../../apps/web/src/app/features/people/employee-about-panel.component.ts)
-- реєстр підвкладок (SoT плану): [`people-about-subtabs.ts`](../../apps/web/src/app/features/people/people-about-subtabs.ts)
+## Sync (questionnaire submit)
 
-## Плановані підвкладки (UI ще не shipped)
+Present-only: keys **PRESENT** in snapshot overwrite About. Absent ≠ clear.  
+Conditional invalidation via `canonicalizeAboutMutation` (e.g. `has_children=no` → clear `family.children`).  
+Clear also via PATCH `null`. Provenance (`last_source_submission_id`, `last_synced_at`) updates only on questionnaire sync.
 
-Єдина точка входу — `PLANNED_ABOUT_SUBTABS` / `visiblePeopleAboutSubtabs()` (зараз повертає `[]`).
+Atomic write: `EmployeeAboutFacade.mergeAnswers({ set, clearKeys, source })`.
 
-| id | Label | Questionnaire sections (field catalog) | Примітка |
-|----|-------|----------------------------------------|----------|
-| `family_home` | Сімʼя і дім | `family` | marital, діти, pets |
-| `celebrations` | Свята і подарунки | `celebration_dates` | ДН-вітання, gifts, інші дати |
-| `hobbies` | Хобі та інтереси | `hobbies` | інтереси, мерч-розміри, їжа, корпоративи |
-| `strengths` | Сильні сторони | `strengths` | енергія / блокери / «ким бачу себе» |
-| `work_style` | Стиль роботи | `work_style` | комунікація, фідбек, мотиватори |
-| `life_goals` | Цілі | `career_goals` (+ narrative з `strengths.in_*`) | життєві/карʼєрні орієнтири; Profile SoT пізніше |
+## Hard-delete
 
-**Свідомо поза «Про себе»** (залишаються в інших вкладках / модулях):
+`employee_about.employee_id` → `ON DELETE RESTRICT`. Erasure: `OrganizationEmployeeErasureFacade` deletes the row before employee DELETE. No CASCADE.
 
-| Контент анкети | Куди |
-|----------------|------|
-| `personal` / `contacts` mirrors + proposals | Дані працівника |
-| `company_work`, grade, skills matrix, probation_goals process | Робота / Показники / Managing |
-| onboarding, hr_documents, consents | Документи / Анкети / окремі модулі |
-| experience, education | CV-контекст — не в першому slice About (можна додати пізніше окремим ADR) |
+## Код
 
-Джерело полів: [questionnaire-360-field-catalog.md](./questionnaire-360-field-catalog.md). Persistence Profile Core для About — окреме рішення (поки snapshot анкети).
+- catalog: [`libs/employee-about-catalog`](../../libs/employee-about-catalog)
+- entity/facade/service: `apps/api/src/organization/employees/employee-about.*`
+- ADR: [0014-employee-about](../adr/0014-employee-about.md)
+- FE adapter: [`people-about-subtabs.ts`](../../apps/web/src/app/features/people/people-about-subtabs.ts) → `ABOUT_SUBTAB_DEFS`
+- panel: [`employee-about-panel.component.ts`](../../apps/web/src/app/features/people/employee-about-panel.component.ts)
+
+## Підвкладки
+
+| id | Label | Keys (catalog) |
+|----|-------|----------------|
+| `family_home` | Сімʼя і дім | `family.*` |
+| `celebrations` | Свята і подарунки | celebration + gift keys |
+| `hobbies` | Хобі та інтереси | hobbies (без gift) |
+| `strengths` | Сильні сторони | strengths (без in_* years) |
+| `work_style` | Стиль роботи | `work_style.*` |
+| `life_goals` | Цілі | `strengths.in_*` + `career_goals.plan` |
+
+**Свідомо поза «Про себе»:** personal/contacts mirrors, experience/education, probation_goals, skills matrix, consents/docs.
+
+Backfill: lazy — лише нові submits + ручний PATCH (історичні snapshots не копіюються міграцією).

@@ -12,6 +12,10 @@ module.exports = {
       '<rootDir>/../../libs/contracts/questionnaires/src/index.ts',
     '^@loom/position-skill-catalog$':
       '<rootDir>/../../libs/position-skill-catalog/src/index.ts',
+    '^@loom/employee-about-catalog$':
+      '<rootDir>/../../libs/employee-about-catalog/src/index.ts',
+    '^@loom/contracts-employees$':
+      '<rootDir>/../../libs/contracts/employees/src/index.ts',
   },
   transform: {
     '^.+\\.ts$': [

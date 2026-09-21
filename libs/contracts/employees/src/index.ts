@@ -510,3 +510,48 @@ export type UpsertEmployeeSkillAssessmentRequest = {
   skillId: EntityId;
   level: number | null;
 };
+
+/** People «Про себе» — Organization HTTP contract (Profile Core SoT). */
+export type PeopleAboutSubtabId =
+  | 'family_home'
+  | 'celebrations'
+  | 'hobbies'
+  | 'strengths'
+  | 'work_style'
+  | 'life_goals';
+
+export type EmployeeAboutFieldOption = {
+  value: string;
+  labelUa: string;
+};
+
+export type EmployeeAboutFieldView = {
+  key: string;
+  labelUa: string;
+  valueType: string;
+  raw: unknown;
+  displayValue: string | null;
+  options?: readonly EmployeeAboutFieldOption[];
+};
+
+export type EmployeeAboutSubtabView = {
+  id: PeopleAboutSubtabId;
+  labelUa: string;
+  fields: EmployeeAboutFieldView[];
+};
+
+export type EmployeeAboutResponse = {
+  answers: Record<string, unknown>;
+  subtabs: EmployeeAboutSubtabView[];
+  updatedAt: string | null;
+  canEdit: boolean;
+};
+
+/**
+ * PATCH body for one About subtab.
+ * `null` value = clear that key.
+ */
+export type PatchEmployeeAboutSubtabRequest = {
+  subtabId: PeopleAboutSubtabId;
+  values: Record<string, unknown>;
+};
