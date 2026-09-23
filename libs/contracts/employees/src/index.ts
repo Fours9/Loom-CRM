@@ -1,5 +1,35 @@
 import type { EntityId } from '@loom/contracts-common';
 
+/** Bump when employee profile PDF layout changes. */
+export const PROFILE_PDF_TEMPLATE_VERSION = '1.2';
+
+export type EmployeeProfilePrintScheduleDay = {
+  weekday: number;
+  weekdayLabel: string;
+  isWorkingDay: boolean;
+  workTime: string | null;
+  breakTime: string | null;
+};
+
+/** Neutral print DTO for Platform PdfRenderer (no Nest/TypeORM). */
+export type EmployeeProfilePrintModel = {
+  employeeNumber: string;
+  lastName: string;
+  firstName: string;
+  middleName: string | null;
+  fullName: string;
+  departmentName: string | null;
+  positionName: string | null;
+  phoneNumber: string | null;
+  telegram: string | null;
+  email: string | null;
+  schedule: EmployeeProfilePrintScheduleDay[] | null;
+  comment: string | null;
+  generatedAtLabel: string;
+  generatedByLabel: string;
+  templateVersion: string;
+};
+
 export type DepartmentReference = {
   id: EntityId;
   name: string;

@@ -15,6 +15,10 @@ export type ResolveQuestionnaireActiveStepInput = {
 /**
  * Linear MVP gating: Intro → schema steps → Review.
  * Future steps are unreachable until prior required fields are complete.
+ *
+ * Opening without an explicit step never auto-jumps to Review — even when
+ * all required fields are already valid (typical for voluntary schemas).
+ * Default is Intro; mid-fill resumes at the first incomplete schema step.
  */
 export function resolveQuestionnaireActiveStep(
   input: ResolveQuestionnaireActiveStepInput,
@@ -29,8 +33,7 @@ export function resolveQuestionnaireActiveStep(
 
   if (!requested) {
     if (schemaKeys.length === 0) return QUESTIONNAIRE_INTRO_STEP;
-    if (allComplete) return QUESTIONNAIRE_REVIEW_STEP;
-    if (completed.size === 0) return QUESTIONNAIRE_INTRO_STEP;
+    if (completed.size === 0 || allComplete) return QUESTIONNAIRE_INTRO_STEP;
     return firstIncomplete ?? QUESTIONNAIRE_INTRO_STEP;
   }
 

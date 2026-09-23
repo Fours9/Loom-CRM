@@ -82,4 +82,6 @@ export const QUESTIONNAIRE_ASSIGNMENT_AUDIT = {
   attached: 'questionnaire.assignment.attached',
   closed: 'questionnaire.assignment.closed',
   deleted: 'questionnaire.assignment.deleted',
+  exportPdf: 'questionnaire.export_pdf',
+  exportBlankPdf: 'questionnaire.export_blank_pdf',
 } as const;

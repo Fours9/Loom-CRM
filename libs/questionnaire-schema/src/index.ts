@@ -53,3 +53,31 @@ export type {
   PositionSkillCustom,
   MatrixRatingPolicy,
 } from './position-skills-matrix';
+
+export {
+  resolveQuestionnaireFieldValue,
+} from './field-value-resolve';
+export type {
+  QuestionnaireFieldValueSource,
+  QuestionnaireFieldValueResult,
+} from './field-value-resolve';
+
+export {
+  choiceLabel,
+  formatQuestionnaireFieldDisplay,
+} from './field-display-format';
+export type { QuestionnaireFieldFormatContext } from './field-display-format';
+
+export { resolveQuestionnairePrintSource } from './print-source';
+export type {
+  QuestionnairePrintSource,
+  QuestionnairePrintSourceKind,
+  QuestionnairePrintDraftSlice,
+  QuestionnairePrintSubmissionSlice,
+} from './print-source';
+
+export {
+  buildQuestionnairePrintModel,
+  listPrintModelFieldKeys,
+} from './print-model';
+export type { BuildQuestionnairePrintModelInput } from './print-model';

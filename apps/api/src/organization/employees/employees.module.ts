@@ -25,7 +25,7 @@ import { EmployeesController } from './employees.controller';
 import { EmployeeSerializer } from './employee.serializer';
 import { EmployeeProfileExportService } from './employee-profile-export.service';
 import { EmployeeContactsFacade } from './employee-contacts.facade';
-import { PdfRenderer } from '../../platform/pdf/pdf-renderer';
+import { PdfModule } from '../../platform/pdf/pdf.module';
 import { OrganizationEmployeeIdentityLookup } from '../identity/organization-employee-identity.lookup';
 import { EmployeeIdentityLookup } from '../../platform/auth/auth.service';
 import { BusinessDateClock } from './business-date-clock';
@@ -68,6 +68,7 @@ import { EmployeeAboutService } from './employee-about.service';
     IdentityModule,
     AuditModule,
     PermissionsModule,
+    PdfModule,
   ],
   providers: [
     EmployeesService,
@@ -83,7 +84,6 @@ import { EmployeeAboutService } from './employee-about.service';
     IdentityRoleProjection,
     EmploymentAssignmentOrganizationResolver,
     EmployeeNumberAllocator,
-    PdfRenderer,
     OrganizationEmployeeIdentityLookup,
     EmployeeAboutFacade,
     EmployeeAboutService,

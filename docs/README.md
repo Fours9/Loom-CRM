@@ -24,7 +24,7 @@
 | **Organization** | employees (Profile Core), departments, positions (+ manager template), schedules, **Access variant 2** (active EA scope); assignment `comment` |
 | **Absences** | повний PW-паритетний модуль; `canRequestDeletion` для approved\|rejected\|cancelled (`pwPermissions`) |
 | **Documents** | MVP + confidential classification (`is_confidential`, `confidential.view`); multi-file upload; People-вкладка + агрегат вкладень Absences (storage поки `content_base64`; Platform Files — planned) |
-| **Questionnaires** | Phase 3: immersive fill; unattached `new` + attach/detach; template types (360=Повна); print stubs; PDF layout contract in roadmap (not shipped) |
+| **Questionnaires** | Phase 3: immersive fill; unattached `new` + attach/detach; template types (360=Повна); **PDF blank+filled** ([questionnaire-pdf.md](product/questionnaire-pdf.md), [ADR 0015](adr/0015-questionnaire-pdf.md)) |
 
 **Ролі runtime:** `employee` · `department_manager` · `admin`. Окремої ролі `hr` немає (кадрові дії — через Admin + permissions).
 
@@ -38,7 +38,7 @@
 | --- | --- |
 | **Living status** | цей hub, [roadmap](product/hr-profile-roadmap.md), [work calendar](product/work-calendar-roadmap.md), [architecture](architecture.md), [AGENTS.md](../AGENTS.md) |
 | **Target / vision** | [employee-profile-core.md](product/employee-profile-core.md) — **не** статус імплементації |
-| **Frozen decisions** | [ADR](adr/) 0001–0012 (рішення зафіксовані) |
+| **Frozen decisions** | [ADR](adr/) 0001–0015 (рішення зафіксовані) |
 
 Відкладено (Phase 1 polish): photo upload у профілі (потрібен Platform Files). History cursor pagination — поза поточним polish.
 
@@ -64,6 +64,7 @@
 ## Продукт / HR
 
 - [HR profile roadmap](product/hr-profile-roadmap.md) — **living** статус фаз
+- [Questionnaire PDF](product/questionnaire-pdf.md) — blank+filled A4 export ([ADR 0015](adr/0015-questionnaire-pdf.md))
 - [People «Про себе»](product/people-about-tab.md) — Profile Core SoT + subtabs ([ADR 0014](adr/0014-employee-about.md))
 - [Access surfaces](product/access-surfaces.md) — surfaces + permissions
 - [Work calendar roadmap](product/work-calendar-roadmap.md) — expand Absences → TimeEvent (MVP)

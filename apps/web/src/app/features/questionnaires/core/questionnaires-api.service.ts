@@ -218,4 +218,31 @@ export class QuestionnairesApiService {
       { params },
     );
   }
+
+  listPrintableTemplates(): Observable<QuestionnaireTemplateListResponse> {
+    return this.http.get<QuestionnaireTemplateListResponse>(
+      `/api/v1/questionnaires/templates/printable`,
+    );
+  }
+
+  exportAssignmentPdf(
+    assignmentId: string,
+    expectedDraftRevision?: number,
+  ): Observable<Blob> {
+    const params: Record<string, string> = {};
+    if (expectedDraftRevision !== undefined) {
+      params['expectedDraftRevision'] = String(expectedDraftRevision);
+    }
+    return this.http.get(
+      `/api/v1/questionnaires/assignments/${assignmentId}/export.pdf`,
+      { params, responseType: 'blob' },
+    );
+  }
+
+  exportBlankPdf(templateCode: string): Observable<Blob> {
+    return this.http.get(
+      `/api/v1/questionnaires/templates/${encodeURIComponent(templateCode)}/blank.pdf`,
+      { responseType: 'blob' },
+    );
+  }
 }

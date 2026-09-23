@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -9,19 +10,24 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../../platform/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../platform/auth/decorators/current-user.decorator';
 import { User } from '../../platform/identity/user.entity';
 import { Permission } from '../../platform/permissions/permission.names';
 import { RequirePermissions } from '../../platform/permissions/require-permissions.decorator';
 import { PermissionsGuard } from '../../platform/permissions/permissions.guard';
+import { attachmentContentDisposition } from '../../platform/http/content-disposition';
 import { QuestionnaireAssignmentService } from './questionnaire-assignment.service';
 import { QuestionnaireResponseService } from './questionnaire-response.service';
 import { QuestionnaireSubmissionService } from './questionnaire-submission.service';
 import { QuestionnaireProposalService } from './questionnaire-proposal.service';
 import { QuestionnairePositionContextSyncService } from './questionnaire-position-context-sync.service';
+import { QuestionnairePdfExportService } from './questionnaire-pdf-export.service';
 import {
   AttachQuestionnaireAssignmentDto,
   CreateQuestionnaireAssignmentDto,
@@ -43,6 +49,7 @@ export class QuestionnairesController {
     private readonly submissions: QuestionnaireSubmissionService,
     private readonly proposals: QuestionnaireProposalService,
     private readonly positionContextSync: QuestionnairePositionContextSyncService,
+    private readonly pdfExport: QuestionnairePdfExportService,
   ) {}
 
   @Get('directory')
@@ -52,6 +59,32 @@ export class QuestionnairesController {
     @Query() query: QuestionnaireDirectoryQueryDto,
   ) {
     return this.assignments.listDirectory(actor, query);
+  }
+
+  @Get('templates/printable')
+  @RequirePermissions(Permission.QuestionnairesView)
+  listPrintableTemplates(@CurrentUser() actor: User) {
+    return this.assignments.listPrintableTemplates(actor);
+  }
+
+  @Get('templates/:code/blank.pdf')
+  @RequirePermissions(Permission.QuestionnairesView)
+  async exportBlankTemplatePdf(
+    @CurrentUser() actor: User,
+    @Param('code') code: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, asciiFilename, utf8Filename } =
+      await this.pdfExport.exportBlankTemplatePdf(actor, code);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': attachmentContentDisposition(
+        utf8Filename,
+        asciiFilename,
+      ),
+      'Content-Length': buffer.length,
+    });
+    return new StreamableFile(buffer);
   }
 
   @Get('templates')
@@ -86,6 +119,40 @@ export class QuestionnairesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.assignments.getDetail(actor, id);
+  }
+
+  @Get('assignments/:id/export.pdf')
+  @RequirePermissions(Permission.QuestionnairesView)
+  async exportAssignmentPdf(
+    @CurrentUser() actor: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('expectedDraftRevision') expectedDraftRevisionRaw: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    let expectedDraftRevision: number | undefined;
+    if (
+      expectedDraftRevisionRaw !== undefined &&
+      expectedDraftRevisionRaw !== ''
+    ) {
+      const n = Number(expectedDraftRevisionRaw);
+      if (!Number.isInteger(n) || n < 0) {
+        throw new ConflictException('Invalid expectedDraftRevision');
+      }
+      expectedDraftRevision = n;
+    }
+    const { buffer, asciiFilename, utf8Filename } =
+      await this.pdfExport.exportAssignmentPdf(actor, id, {
+        expectedDraftRevision,
+      });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': attachmentContentDisposition(
+        utf8Filename,
+        asciiFilename,
+      ),
+      'Content-Length': buffer.length,
+    });
+    return new StreamableFile(buffer);
   }
 
   @Post('assignments/:id/cancel')

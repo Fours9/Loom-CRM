@@ -2,11 +2,16 @@
  * RFC 6266 Content-Disposition for file downloads.
  * ASCII fallback avoids non-ASCII in the legacy filename= parameter.
  */
-export function attachmentContentDisposition(utf8Filename: string): string {
+export function attachmentContentDisposition(
+  utf8Filename: string,
+  asciiFilename?: string,
+): string {
   const extension = safeExtension(utf8Filename);
-  const asciiFallback = `download${extension}`;
+  const safeAscii = (
+    asciiFilename?.replace(/["\\\r\n]/g, '_') || `download${extension}`
+  ).trim();
   const encoded = encodeURIComponent(utf8Filename).replace(/['()]/g, escape);
-  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+  return `attachment; filename="${safeAscii || `download${extension}`}"; filename*=UTF-8''${encoded}`;
 }
 
 function safeExtension(filename: string): string {

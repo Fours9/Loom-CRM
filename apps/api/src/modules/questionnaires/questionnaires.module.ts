@@ -7,6 +7,7 @@ import { AuditModule } from '../../platform/audit/audit.module';
 import { IdentityModule } from '../../platform/identity/identity.module';
 import { NotificationsModule } from '../../platform/notifications/notifications.module';
 import { PermissionsModule } from '../../platform/permissions/permissions.module';
+import { PdfModule } from '../../platform/pdf/pdf.module';
 import { User } from '../../platform/identity/user.entity';
 import { EmployeeContact } from '../../organization/employees/employee-contact.entity';
 import { Skill } from '../../organization/skills/skill.entity';
@@ -26,6 +27,7 @@ import { QuestionnaireContextSkillIdBackfillService } from './assignments/questi
 import { QuestionnaireSeedService } from './seed/questionnaire-seed.service';
 import { QuestionnairesController } from './questionnaires.controller';
 import { QuestionnairesErasureFacade } from './questionnaires-erasure.facade';
+import { QuestionnairePdfExportService } from './questionnaire-pdf-export.service';
 
 @Module({
   imports: [
@@ -49,6 +51,7 @@ import { QuestionnairesErasureFacade } from './questionnaires-erasure.facade';
     PermissionsModule,
     AuditModule,
     NotificationsModule,
+    PdfModule,
   ],
   providers: [
     QuestionnaireAssignmentService,
@@ -58,6 +61,7 @@ import { QuestionnairesErasureFacade } from './questionnaires-erasure.facade';
     QuestionnairePositionContextSyncService,
     QuestionnaireContextSkillIdBackfillService,
     QuestionnaireSeedService,
+    QuestionnairePdfExportService,
     QuestionnairesErasureFacade,
   ],
   controllers: [QuestionnairesController],

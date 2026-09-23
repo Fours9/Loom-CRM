@@ -217,6 +217,55 @@ export type QuestionnaireSchemaJson = {
   steps: QuestionnaireSchemaStep[];
 };
 
+/** Bump when PDF visual grammar / print model shape changes. */
+export const QUESTIONNAIRE_PRINT_LAYOUT_VERSION = '1.0';
+
+export type QuestionnairePrintMeta = {
+  title: string;
+  templateCode: string;
+  templateTypeLabelUa: string;
+  assignmentCode?: string;
+  employeeDisplayName?: string;
+  generatedAtLabel: string;
+  generatedByLabel: string;
+  schemaVersion: number;
+  printLayoutVersion: string;
+};
+
+export type QuestionnairePrintField =
+  | {
+      kind: 'scalar';
+      key: string;
+      label: string;
+      valueType: QuestionnaireValueType;
+      display: string | null;
+    }
+  | {
+      kind: 'repeating_group';
+      key: string;
+      label: string;
+      rows: Array<{
+        cells: Array<{
+          key: string;
+          label: string;
+          display: string | null;
+        }>;
+      }>;
+    };
+
+export type QuestionnairePrintStep = {
+  key: string;
+  label: string;
+  fields: QuestionnairePrintField[];
+};
+
+export type QuestionnairePrintModel = {
+  mode: 'blank' | 'filled';
+  meta: QuestionnairePrintMeta;
+  steps: QuestionnairePrintStep[];
+};
+
+
 export type CreateQuestionnaireAssignmentRequest = {
   employeeId?: EntityId;
   /** Template code; default employee-360 when omitted. */

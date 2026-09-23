@@ -101,6 +101,26 @@ describe('resolveQuestionnaireActiveStep', () => {
     ).toBe(QUESTIONNAIRE_INTRO_STEP);
   });
 
+  it('defaults to intro when all complete (no auto-jump to review)', () => {
+    expect(
+      resolveQuestionnaireActiveStep({
+        requestedStepKey: null,
+        schemaSteps,
+        completedStepKeys: ['a', 'b', 'c'],
+      }),
+    ).toBe(QUESTIONNAIRE_INTRO_STEP);
+  });
+
+  it('resumes at first incomplete when partially complete', () => {
+    expect(
+      resolveQuestionnaireActiveStep({
+        requestedStepKey: null,
+        schemaSteps,
+        completedStepKeys: ['a'],
+      }),
+    ).toBe('b');
+  });
+
   it('empty schema defaults to intro', () => {
     expect(
       resolveQuestionnaireActiveStep({

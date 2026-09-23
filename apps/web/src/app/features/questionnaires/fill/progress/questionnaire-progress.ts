@@ -9,6 +9,10 @@ import {
   completionPercentVisible,
   isQuestionnaireFieldVisible,
   areStepVisibleRequiredValid,
+  fieldsByKey,
+  formatQuestionnaireFieldDisplay,
+  choiceLabel as sharedChoiceLabel,
+  resolveMatrixRatingPolicy,
 } from '@loom/questionnaire-schema';
 import {
   collectStepIssues,
@@ -20,17 +24,6 @@ import {
   resolveQuestionnaireFieldDisplay,
   reviewSourceLabel,
 } from '../display/questionnaire-display-value';
-import { fieldsByKey } from '@loom/questionnaire-schema';
-import {
-  emptyEmployeeContactsBundle,
-  normalizeEmployeeContactsBundle,
-  formatContactsBundleReviewSummary,
-} from '@loom/employee-contacts';
-import {
-  formatPositionSkillsMatrixReviewSummary,
-  parsePositionSkillsMatrixStrict,
-  resolveMatrixRatingPolicy,
-} from '@loom/questionnaire-schema';
 import { skillDefinitionByCode } from '@loom/position-skill-catalog';
 import type { OrganizationCatalogSnapshot } from '../../../../core/api/organization-catalog-api.service';
 import { resolveOrganizationReviewLabel } from './organization-review-label';
@@ -170,24 +163,7 @@ export function collectVisibleStepIssues(
   return issues;
 }
 
-export function choiceLabel(
-  field: QuestionnaireSchemaField,
-  value: unknown,
-): string {
-  if (field.valueType === 'multi_choice' && Array.isArray(value)) {
-    return value
-      .map((v) => field.options?.find((o) => o.value === v)?.label ?? String(v))
-      .join(', ');
-  }
-  if (typeof value === 'string') {
-    return field.options?.find((o) => o.value === value)?.label ?? value;
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'Так' : 'Ні';
-  }
-  if (value === null || value === undefined) return '—';
-  return String(value);
-}
+export const choiceLabel = sharedChoiceLabel;
 
 export function reviewRowsForStep(
   step: QuestionnaireSchemaStep,
@@ -257,63 +233,32 @@ function formatReviewDisplay(
     reviewMode?: 'draft' | 'historical';
   },
 ): string {
-  if (field.valueType === 'contacts_bundle') {
-    try {
-      return formatContactsBundleReviewSummary(
-        normalizeEmployeeContactsBundle(value ?? emptyEmployeeContactsBundle()),
+  const skillsByCode = new Map(
+    (options?.contextSkills ?? []).map((s) => [s.code, s]),
+  );
+  const version = options?.contextVersion ?? null;
+
+  return formatQuestionnaireFieldDisplay(field, value, {
+    resolveOrgLabel: (f, v) =>
+      resolveOrganizationReviewLabel({
+        field: f,
+        value: v,
+        historicalContext: options?.historicalContext ?? null,
+        liveCatalog: options?.liveCatalog ?? null,
+        mode: options?.reviewMode ?? 'draft',
+      }),
+    resolveSkillLabel: (code) =>
+      options?.skillLabelByCode?.(code) ??
+      skillDefinitionByCode(code)?.labelUa ??
+      code,
+    formatMatrixLevel: (code, level) => {
+      const policy = resolveMatrixRatingPolicy(
+        version,
+        skillsByCode.get(code) ?? null,
       );
-    } catch {
-      return '—';
-    }
-  }
-  if (field.valueType === 'position_skills_matrix') {
-    try {
-      const matrix = parsePositionSkillsMatrixStrict(value);
-      const skillsByCode = new Map(
-        (options?.contextSkills ?? []).map((s) => [s.code, s]),
-      );
-      const version = options?.contextVersion ?? null;
-      return formatPositionSkillsMatrixReviewSummary(
-        matrix,
-        (code) =>
-          options?.skillLabelByCode?.(code) ??
-          skillDefinitionByCode(code)?.labelUa ??
-          code,
-        (code, level) => {
-          const policy = resolveMatrixRatingPolicy(
-            version,
-            skillsByCode.get(code) ?? null,
-          );
-          return policy.unit === '%' ? `${level}%` : String(level);
-        },
-      );
-    } catch {
-      return '—';
-    }
-  }
-  if (field.valueType === 'organization_ref') {
-    return resolveOrganizationReviewLabel({
-      field,
-      value,
-      historicalContext: options?.historicalContext ?? null,
-      liveCatalog: options?.liveCatalog ?? null,
-      mode: options?.reviewMode ?? 'draft',
-    });
-  }
-  if (field.valueType === 'repeating_group') {
-    const rows = Array.isArray(value) ? value : [];
-    if (!rows.length) return '—';
-    return `${rows.length} запис(ів)`;
-  }
-  if (
-    field.valueType === 'single_choice' ||
-    field.valueType === 'multi_choice' ||
-    field.valueType === 'boolean'
-  ) {
-    return choiceLabel(field, value);
-  }
-  if (value === null || value === undefined || value === '') return '—';
-  return String(value);
+      return policy.unit === '%' ? `${level}%` : String(level);
+    },
+  });
 }
 
 // re-export for callers that still import collectStepIssues pattern

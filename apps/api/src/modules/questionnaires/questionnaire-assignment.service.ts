@@ -397,63 +397,7 @@ export class QuestionnaireAssignmentService {
 
     let profileMirror: Record<string, unknown> | null = null;
     if (employee) {
-      const includePersonal = this.access.canViewPersonalContacts(
-        actor,
-        employee,
-      );
-      const includeEmployment =
-        this.access.isOwner(actor, employee) ||
-        this.access.isAdmin(actor) ||
-        (await this.access.canViewEmployeeProfile(actor, employee));
-
-      if (includePersonal || includeEmployment) {
-        let employment = null;
-        if (includeEmployment) {
-          const ea = await this.currentEmployment.resolve(employee);
-          employment = ea
-            ? {
-                directionId: ea.directionId,
-                departmentId: ea.departmentId,
-                positionId: ea.positionId,
-                workFormat: ea.workFormat,
-                employmentType: ea.employmentType,
-                startDate: ea.startDate,
-                probationEndDate: ea.probationEndDate,
-              }
-            : {
-                directionId: null,
-                departmentId: employee.departmentId,
-                positionId: employee.positionId,
-                workFormat: null,
-                employmentType: null,
-                startDate: null,
-                probationEndDate: null,
-              };
-        }
-
-        const contactsBundle = includePersonal
-          ? await this.contactsFacade.readContactsBundle(
-              this.dataSource.manager,
-              employee.id,
-            )
-          : null;
-
-        profileMirror = buildQuestionnaireProfileMirror(
-          {
-            ...employee,
-            workEmail: employee.workEmail,
-            workPhone: employee.phoneNumber,
-            workTelegram: employee.telegram,
-          },
-          [],
-          contactsBundle,
-          {
-            includePersonal,
-            includeEmployment,
-            employment,
-          },
-        );
-      }
+      profileMirror = await this.buildProfileMirrorForEmployee(actor, employee);
     }
 
     return {
@@ -494,6 +438,124 @@ export class QuestionnaireAssignmentService {
         ...caps,
         canViewAssignmentComment,
       },
+    };
+  }
+
+  /**
+   * Canonical profileMirror for detail + draft PDF (same ACL as getDetail).
+   */
+  async buildProfileMirrorForEmployee(
+    actor: User,
+    employee: Employee,
+  ): Promise<Record<string, unknown> | null> {
+    const includePersonal = this.access.canViewPersonalContacts(
+      actor,
+      employee,
+    );
+    const includeEmployment =
+      this.access.isOwner(actor, employee) ||
+      this.access.isAdmin(actor) ||
+      (await this.access.canViewEmployeeProfile(actor, employee));
+
+    if (!includePersonal && !includeEmployment) {
+      return null;
+    }
+
+    let employment = null;
+    if (includeEmployment) {
+      const ea = await this.currentEmployment.resolve(employee);
+      employment = ea
+        ? {
+            directionId: ea.directionId,
+            departmentId: ea.departmentId,
+            positionId: ea.positionId,
+            workFormat: ea.workFormat,
+            employmentType: ea.employmentType,
+            startDate: ea.startDate,
+            probationEndDate: ea.probationEndDate,
+          }
+        : {
+            directionId: null,
+            departmentId: employee.departmentId,
+            positionId: employee.positionId,
+            workFormat: null,
+            employmentType: null,
+            startDate: null,
+            probationEndDate: null,
+          };
+    }
+
+    const contactsBundle = includePersonal
+      ? await this.contactsFacade.readContactsBundle(
+          this.dataSource.manager,
+          employee.id,
+        )
+      : null;
+
+    return buildQuestionnaireProfileMirror(
+      {
+        ...employee,
+        workEmail: employee.workEmail,
+        workPhone: employee.phoneNumber,
+        workTelegram: employee.telegram,
+      },
+      [],
+      contactsBundle,
+      {
+        includePersonal,
+        includeEmployment,
+        employment,
+      },
+    );
+  }
+
+  async listPrintableTemplates(
+    actor: User,
+  ): Promise<QuestionnaireTemplateListResponse> {
+    const authz = await this.authorization.resolve(actor.id);
+    if (!canViewQuestionnaires(authz)) {
+      throw new ForbiddenException('Cannot list printable questionnaire templates');
+    }
+
+    const rows = await this.templates
+      .createQueryBuilder('tmpl')
+      .innerJoin(
+        QuestionnaireTemplateVersion,
+        'v',
+        'v.template_id = tmpl.id AND v.published_at IS NOT NULL',
+      )
+      .where('tmpl.status = :status', { status: 'published' })
+      .select([
+        'tmpl.code AS code',
+        'tmpl.title AS title',
+        'tmpl.type AS type',
+        'MAX(v.version) AS version',
+      ])
+      .groupBy('tmpl.id')
+      .addGroupBy('tmpl.code')
+      .addGroupBy('tmpl.title')
+      .addGroupBy('tmpl.type')
+      .orderBy('tmpl.title', 'ASC')
+      .getRawMany<{
+        code: string;
+        title: string;
+        type: string;
+        version: string;
+      }>();
+
+    const items = filterByGrantedTemplateCodes(
+      rows.map((r) => ({
+        code: r.code,
+        title: r.title,
+        type: r.type as QuestionnaireTemplateListResponse['items'][number]['type'],
+        version: Number(r.version),
+        templateCode: r.code,
+      })),
+      authz,
+    );
+
+    return {
+      items: items.map(({ templateCode: _tc, ...rest }) => rest),
     };
   }
 
@@ -1152,7 +1214,7 @@ export class QuestionnaireAssignmentService {
     return map;
   }
 
-  private async requireCanViewAssignment(
+  async requireCanViewAssignment(
     actor: User,
     assignment: QuestionnaireAssignment,
     authz: AuthorizationContext,

@@ -17,6 +17,7 @@ import type {
 import { isQuestionnairePostSubmitStatus } from '@loom/contracts-questionnaires';
 import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnairesApiService } from './core/questionnaires-api.service';
+import { downloadBlob } from './core/download-blob';
 import { QuestionnaireSnapshotSummaryComponent } from './questionnaire-snapshot-summary.component';
 import { buildQuestionnaireAssignmentLink } from './navigation/questionnaire-navigation';
 import { questionnaireListOpenLabel } from './fill/questionnaire-fill-session.policy';
@@ -132,10 +133,10 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                   <button
                     type="button"
                     class="btn view"
-                    disabled
-                    title="Незабаром"
+                    [disabled]="busyAssignmentId() === item.id"
+                    (click)="printAssignment(item.id, item.code)"
                   >
-                    Роздрукувати
+                    {{ busyAssignmentId() === item.id ? '…' : 'Роздрукувати' }}
                   </button>
                   @if (hasLifecycleMoreActions(item)) {
                     <div class="more-menu-wrap">
@@ -831,6 +832,22 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
       return;
     }
     this.runLifecycle(id, this.api.deleteAssignment(id), 'Не вдалося видалити анкету');
+  }
+
+  printAssignment(id: string, code: string): void {
+    if (this.busyAssignmentId()) return;
+    this.busyAssignmentId.set(id);
+    this.error.set(null);
+    this.api.exportAssignmentPdf(id).subscribe({
+      next: (blob) => {
+        this.busyAssignmentId.set(null);
+        downloadBlob(blob, `anketa-${code || id}.pdf`);
+      },
+      error: () => {
+        this.busyAssignmentId.set(null);
+        this.error.set('Не вдалося сформувати PDF');
+      },
+    });
   }
 
   private runLifecycle(

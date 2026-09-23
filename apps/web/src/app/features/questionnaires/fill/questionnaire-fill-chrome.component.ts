@@ -11,7 +11,10 @@ import {
 import { ThemeService } from '../../../core/theme/theme.service';
 import { canBrowseQuestionnaireStep } from '../navigation/questionnaire-step-browse';
 import { questionnaireTypeLabel } from '../questionnaire-labels';
+import { QuestionnairesApiService } from '../core/questionnaires-api.service';
+import { downloadBlob } from '../core/download-blob';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
+import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
 import { QuestionnaireRevisionCoordinator } from './questionnaire-revision.coordinator';
 import { QuestionnaireSectionRailComponent } from './progress/questionnaire-section-rail.component';
 import { QuestionnaireRequestChangesPopoverComponent } from './questionnaire-request-changes-popover.component';
@@ -20,6 +23,7 @@ import {
   buildProgressSections,
   type ProgressSection,
 } from './progress/questionnaire-section-map';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'loom-questionnaire-fill-chrome',
@@ -65,11 +69,14 @@ import {
         <button
           type="button"
           class="btn"
-          disabled
-          title="Незабаром"
+          [disabled]="printBusy() || actionBusy()"
+          (click)="onPrint()"
         >
-          Роздрукувати
+          {{ printBusy() ? 'Формування…' : 'Роздрукувати' }}
         </button>
+        @if (printError()) {
+          <span class="print-error" role="alert">{{ printError() }}</span>
+        }
         <button
           type="button"
           class="theme-toggle"
@@ -283,6 +290,11 @@ import {
       .theme-label {
         display: none;
       }
+      .print-error {
+        color: var(--pw-danger, #b42318);
+        font-size: 0.8rem;
+        max-width: 12rem;
+      }
       .page-chrome {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -450,9 +462,13 @@ export class QuestionnaireFillChromeComponent {
   readonly store = inject(QuestionnaireDraftStore);
   readonly revision = inject(QuestionnaireRevisionCoordinator);
   readonly theme = inject(ThemeService);
+  private readonly autosave = inject(QuestionnaireAutosaveCoordinator);
+  private readonly api = inject(QuestionnairesApiService);
 
   readonly actionBusy = input(false);
   readonly moreMenuOpen = signal(false);
+  readonly printBusy = signal(false);
+  readonly printError = signal('');
 
   readonly back = output<void>();
   readonly edit = output<void>();
@@ -502,6 +518,32 @@ export class QuestionnaireFillChromeComponent {
 
   markRequestChangesError(message: string): void {
     this.requestPopover?.setError(message);
+  }
+
+  async onPrint(): Promise<void> {
+    if (this.printBusy() || this.actionBusy()) return;
+    const assignmentId = this.store.assignment()?.id;
+    if (!assignmentId) return;
+
+    this.printError.set('');
+    this.printBusy.set(true);
+    try {
+      const flushed = await this.autosave.flush();
+      if (!flushed || this.store.saveState() === 'error') {
+        this.printError.set('Не вдалося зберегти чернетку перед друком');
+        return;
+      }
+      const revision = this.store.revision();
+      const blob = await firstValueFrom(
+        this.api.exportAssignmentPdf(assignmentId, revision),
+      );
+      const code = this.store.assignment()?.code ?? assignmentId;
+      downloadBlob(blob, `anketa-${code}.pdf`);
+    } catch {
+      this.printError.set('Не вдалося сформувати PDF');
+    } finally {
+      this.printBusy.set(false);
+    }
   }
 
   readonly progressSections = computed(() =>

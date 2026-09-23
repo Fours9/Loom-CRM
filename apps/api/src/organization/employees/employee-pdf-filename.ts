@@ -83,14 +83,7 @@ export function buildEmployeePdfFilenames(employee: Employee): {
 }
 
 export function contentDisposition(asciiFilename: string, utf8Filename: string): string {
-  const encoded = encodeURIComponent(utf8Filename).replace(/['()]/g, escape);
-  const safeAscii = asciiFilename.replace(/["\\\r\n]/g, '_') || `download${safeExt(utf8Filename)}`;
-  return `attachment; filename="${safeAscii}"; filename*=UTF-8''${encoded}`;
-}
-
-function safeExt(filename: string): string {
-  const match = /\.([a-zA-Z0-9]{1,16})$/.exec(filename.trim());
-  return match ? `.${match[1].toLowerCase()}` : '';
+  return attachmentContentDisposition(utf8Filename, asciiFilename);
 }
 
 /** Prefer platform helper for generic downloads without a prepared ASCII name. */

@@ -12,9 +12,11 @@ import type {
   QuestionnaireAttachmentState,
   QuestionnaireDirectoryItem,
   QuestionnaireDirectorySortBy,
+  QuestionnaireTemplateListResponse,
   QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
+import { downloadBlob } from '../core/download-blob';
 import { buildQuestionnaireAssignmentLink } from '../navigation/questionnaire-navigation';
 import {
   QUESTIONNAIRE_TYPE_LABELS,
@@ -49,14 +51,35 @@ type Pos = { id: string; name: string };
           <p class="muted">Усі призначення анкет у вашому доступі</p>
         </div>
         <div class="header-actions">
-          <button
-            type="button"
-            class="btn"
-            disabled
-            title="Незабаром"
-          >
-            Роздрукувати заготовку
-          </button>
+          <div class="blank-print-wrap">
+            <button
+              type="button"
+              class="btn"
+              [disabled]="blankPrintBusy()"
+              (click)="toggleBlankPicker()"
+            >
+              {{ blankPrintBusy() ? 'Формування…' : 'Роздрукувати заготовку' }}
+            </button>
+            @if (showBlankPicker()) {
+              <div class="blank-picker" role="menu">
+                @if (printableLoading()) {
+                  <p class="muted">Завантаження…</p>
+                } @else if (!printableTemplates().length) {
+                  <p class="muted">Немає доступних шаблонів</p>
+                } @else {
+                  @for (t of printableTemplates(); track t.code) {
+                    <button
+                      type="button"
+                      role="menuitem"
+                      (click)="printBlank(t.code)"
+                    >
+                      {{ t.title }}
+                    </button>
+                  }
+                }
+              </div>
+            }
+          </div>
           @if (canCreate()) {
             <button
               type="button"
@@ -491,6 +514,37 @@ type Pos = { id: string; name: string };
       .error {
         color: #b42318;
       }
+      .blank-print-wrap {
+        position: relative;
+      }
+      .blank-picker {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 4px);
+        z-index: 20;
+        min-width: 220px;
+        max-height: 280px;
+        overflow: auto;
+        padding: 0.35rem;
+        border: 1px solid var(--pw-border-strong, #ccc);
+        border-radius: 8px;
+        background: var(--pw-surface, #fff);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .blank-picker button {
+        text-align: left;
+        border: 0;
+        background: transparent;
+        padding: 0.45rem 0.55rem;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .blank-picker button:hover {
+        background: color-mix(in srgb, var(--pw-accent, #2563eb) 12%, transparent);
+      }
     `,
   ],
 })
@@ -511,6 +565,12 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   readonly total = signal(0);
   readonly canCreate = signal(false);
   readonly showCreate = signal(false);
+  readonly showBlankPicker = signal(false);
+  readonly blankPrintBusy = signal(false);
+  readonly printableLoading = signal(false);
+  readonly printableTemplates = signal<
+    QuestionnaireTemplateListResponse['items']
+  >([]);
 
   readonly departments = signal<Dept[]>([]);
   readonly positions = signal<Pos[]>([]);
@@ -559,6 +619,43 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
       createdFrom: this.createdFrom() || undefined,
       createdTo: this.createdTo() || undefined,
     };
+  }
+
+  toggleBlankPicker(): void {
+    if (this.blankPrintBusy()) return;
+    const next = !this.showBlankPicker();
+    this.showBlankPicker.set(next);
+    if (next && !this.printableTemplates().length) {
+      this.printableLoading.set(true);
+      this.api.listPrintableTemplates().subscribe({
+        next: (res) => {
+          this.printableTemplates.set(res.items);
+          this.printableLoading.set(false);
+        },
+        error: () => {
+          this.printableLoading.set(false);
+          this.showBlankPicker.set(false);
+          this.error.set('Не вдалося завантажити шаблони для друку');
+        },
+      });
+    }
+  }
+
+  printBlank(templateCode: string): void {
+    if (this.blankPrintBusy()) return;
+    this.blankPrintBusy.set(true);
+    this.showBlankPicker.set(false);
+    this.error.set(null);
+    this.api.exportBlankPdf(templateCode).subscribe({
+      next: (blob) => {
+        this.blankPrintBusy.set(false);
+        downloadBlob(blob, `anketa-${templateCode}-blank.pdf`);
+      },
+      error: () => {
+        this.blankPrintBusy.set(false);
+        this.error.set('Не вдалося сформувати PDF заготовки');
+      },
+    });
   }
 
   ngOnInit(): void {
