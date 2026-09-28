@@ -78,6 +78,10 @@ export type {
 
 export {
   buildQuestionnairePrintModel,
+  coalesceGoalsPrintSteps,
   listPrintModelFieldKeys,
+  mapFieldToPrintControl,
+  QUESTIONNAIRE_PRINT_OMIT_FIELD_KEYS,
 } from './print-model';
 export type { BuildQuestionnairePrintModelInput } from './print-model';
+export type { QuestionnairePrintMatrixCatalogSkill } from './field-display-format';

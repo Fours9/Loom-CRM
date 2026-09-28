@@ -1,5 +1,5 @@
 /**
- * employee-starter (Первинна) — subset of Full 360 + Managing company_work.
+ * employee-starter (Первинна) — subset of Full 360 + Managing company_work + consents.
  * Steps reused from employee-360 / shared factories so field SoT stays single.
  */
 
@@ -34,5 +34,6 @@ export const EMPLOYEE_STARTER_V1_SCHEMA = {
       label: 'Робота в компанії',
       fields: buildCompanyWorkFields('managing'),
     },
+    stepFrom360('consents_review'),
   ],
 } satisfies QuestionnaireSchemaJson;

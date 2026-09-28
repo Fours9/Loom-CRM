@@ -94,9 +94,15 @@ const EMPLOYEE_MANAGING_SECTION_DEFS: ProgressSectionDefinition[] = [
     stepKeys: ['profile_mirror', 'company_work', 'grade'],
   },
   {
-    id: 'skills_goals',
-    label: 'Навички та цілі',
-    stepKeys: ['skills', 'career_goals', 'probation_goals'],
+    id: 'skills',
+    label: 'Навички',
+    stepKeys: ['skills'],
+  },
+  {
+    /** Parent «Цілі»; rail substeps = career_goals + probation_goals (or legacy single goals). */
+    id: 'goals',
+    label: 'Цілі',
+    stepKeys: ['career_goals', 'probation_goals', 'goals'],
   },
   {
     id: 'review',
@@ -120,6 +126,11 @@ const EMPLOYEE_STARTER_SECTION_DEFS: ProgressSectionDefinition[] = [
     id: 'work',
     label: 'Робота',
     stepKeys: ['experience', 'company_work'],
+  },
+  {
+    id: 'consents',
+    label: 'Згоди',
+    stepKeys: ['consents_review'],
   },
   {
     id: 'review',

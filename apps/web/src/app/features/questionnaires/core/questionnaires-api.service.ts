@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpResponse } from '@angular/common/http';
+import { Observable, map } from 'rxjs';
 import type {
   AttachQuestionnaireAssignmentRequest,
   CreateQuestionnaireAssignmentRequest,
@@ -18,6 +18,12 @@ import type {
   ReviewQuestionnaireSubmissionRequest,
   QuestionnaireTemplateListResponse,
 } from '@loom/contracts-questionnaires';
+import { filenameFromContentDisposition } from './content-disposition-filename';
+
+export type QuestionnairePdfDownload = {
+  blob: Blob;
+  filename: string;
+};
 
 @Injectable({ providedIn: 'root' })
 export class QuestionnairesApiService {
@@ -228,21 +234,44 @@ export class QuestionnairesApiService {
   exportAssignmentPdf(
     assignmentId: string,
     expectedDraftRevision?: number,
-  ): Observable<Blob> {
+  ): Observable<QuestionnairePdfDownload> {
     const params: Record<string, string> = {};
     if (expectedDraftRevision !== undefined) {
       params['expectedDraftRevision'] = String(expectedDraftRevision);
     }
-    return this.http.get(
-      `/api/v1/questionnaires/assignments/${assignmentId}/export.pdf`,
-      { params, responseType: 'blob' },
-    );
+    return this.http
+      .get(`/api/v1/questionnaires/assignments/${assignmentId}/export.pdf`, {
+        params,
+        responseType: 'blob',
+        observe: 'response',
+      })
+      .pipe(map((res) => this.toPdfDownload(res, `anketa-${assignmentId}.pdf`)));
   }
 
-  exportBlankPdf(templateCode: string): Observable<Blob> {
-    return this.http.get(
-      `/api/v1/questionnaires/templates/${encodeURIComponent(templateCode)}/blank.pdf`,
-      { responseType: 'blob' },
-    );
+  exportBlankPdf(templateCode: string): Observable<QuestionnairePdfDownload> {
+    return this.http
+      .get(
+        `/api/v1/questionnaires/templates/${encodeURIComponent(templateCode)}/blank.pdf`,
+        { responseType: 'blob', observe: 'response' },
+      )
+      .pipe(
+        map((res) =>
+          this.toPdfDownload(res, `anketa-${templateCode}-blank.pdf`),
+        ),
+      );
+  }
+
+  private toPdfDownload(
+    res: HttpResponse<Blob>,
+    fallback: string,
+  ): QuestionnairePdfDownload {
+    const blob = res.body;
+    if (!blob) {
+      throw new Error('Empty PDF response');
+    }
+    const filename =
+      filenameFromContentDisposition(res.headers.get('Content-Disposition')) ??
+      fallback;
+    return { blob, filename };
   }
 }

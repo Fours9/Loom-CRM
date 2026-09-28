@@ -1,9 +1,8 @@
 import {
   isSectionPassed,
-  isSectionVisited,
   isStepPassed,
-  isStepVisited,
   sectionSpineProgress,
+  substepSpineProgress,
 } from './questionnaire-section-rail-state';
 import type { ProgressSection } from './questionnaire-section-map';
 
@@ -33,31 +32,21 @@ const sections: ProgressSection[] = [
   },
 ];
 
-describe('questionnaire section rail visit vs passed', () => {
-  it('section/step dots fill only from visits, not position', () => {
-    const visited = new Set<string>(['__intro__', 'identity']);
-    const activeSectionId = 'personal';
-
-    expect(isSectionPassed(sections, activeSectionId, 'intro')).toBe(true);
-    expect(isSectionPassed(sections, activeSectionId, 'work')).toBe(false);
-
-    expect(isSectionVisited(sections[0], visited)).toBe(true);
-    expect(isSectionVisited(sections[1], visited)).toBe(true); // identity visited
-    expect(isSectionVisited(sections[2], visited)).toBe(false);
-    expect(isSectionVisited(sections[3], visited)).toBe(false);
-
-    expect(isStepVisited('__intro__', visited)).toBe(true);
-    expect(isStepVisited('identity', visited)).toBe(true);
-    expect(isStepVisited('education', visited)).toBe(false);
-    expect(isStepVisited('work', visited)).toBe(false);
+describe('questionnaire section rail position trail', () => {
+  it('lights all sections before the active one (even if never opened)', () => {
+    expect(isSectionPassed(sections, 'work', 'intro')).toBe(true);
+    expect(isSectionPassed(sections, 'work', 'personal')).toBe(true);
+    expect(isSectionPassed(sections, 'work', 'work')).toBe(false);
+    expect(isSectionPassed(sections, 'work', 'review')).toBe(false);
   });
 
-  it('spine progress follows position, not visit', () => {
+  it('spine progress follows position', () => {
     expect(sectionSpineProgress(sections, 'intro')).toBe('0%');
     expect(sectionSpineProgress(sections, 'review')).toBe('100%');
+    expect(substepSpineProgress(sections[1]!.steps, 'education')).toBe('100%');
   });
 
-  it('step passed is position within active section', () => {
+  it('lights all substeps before the active step', () => {
     const personal = sections[1]!.steps;
     expect(isStepPassed(personal, 'education', 'identity')).toBe(true);
     expect(isStepPassed(personal, 'education', 'education')).toBe(false);

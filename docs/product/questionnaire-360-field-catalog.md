@@ -116,8 +116,8 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | 10 | `hobbies` | Хобі, інтереси та корпоративне життя | questionnaire_snapshot | in_mvp (full) |
 | 11 | `work_style` | Стиль роботи та комунікація | questionnaire_snapshot | in_mvp (full) |
 | 12 | `safety` | Безпека праці | safety | later_module (not seeded) |
-| 13 | `career_goals` | Кар'єрні цілі | goals / questionnaire_snapshot | **managing** |
-| 14 | `probation_goals` | Цілі випробувального | goals / questionnaire_snapshot | **managing** |
+| 13 | `goals` (wizard steps `career_goals` + `probation_goals`) | Цілі | goals / questionnaire_snapshot | **managing** — parent rail/PDF «Цілі»; substeps keep field keys |
+| 14 | _(substep of `goals`)_ | Кар'єрні… / Випробувальний… | — | not separate major sections |
 | 15 | `manager_review` | Оцінка керівника | reviews | **not shipped** (deferred — ADR 0010 §14) |
 | 16 | `onboarding` | Онбординг | onboarding / questionnaire_snapshot | **docs** |
 | 17 | `hr_documents` | Кадрові документи | documents / questionnaire_snapshot | **docs** |
@@ -129,7 +129,8 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | Template | Blocks / steps |
 | --- | --- |
 | `employee-360` (full) | profile_mirror · contacts · family · celebration_dates · experience · education · strengths · hobbies · work_style · consents |
-| `employee-managing` | profile_mirror · company_work · grade · skills · career_goals · probation_goals |
+| `employee-starter` (full / Первинна) | profile_mirror · contacts · family · education · experience · company_work · consents |
+| `employee-managing` | profile_mirror · company_work · grade · skills · **goals** (rail/PDF parent; substeps `career_goals` + `probation_goals`) |
 | `employee-docs` | profile_mirror · onboarding · hr_documents |
 
 **Not shipped (policy):** `grade.net_salary` (restricted compensation); entire `manager_review` block — wait for field/step sensitivity + scoped manager completion ACL.
@@ -377,23 +378,16 @@ Gifts / ДН greeting live under `celebration_dates` (not hobbies). All voluntar
 
 ---
 
-## Fields — block 13 `career_goals` (**managing**)
+## Fields — block 13 `goals` (**managing** parent «Цілі»)
+
+Progress rail section **Цілі** with schema substeps `career_goals` + `probation_goals`. PDF projector coalesces both into one print section «Цілі» (field labels remain nested). Answer keys unchanged:
 
 | key | valueType | children | notes |
 |-----|-----------|----------|-------|
-| career_goals.plan | repeating_group | `title` (text), `description` (textarea), `targetDate` (date) | voluntary snapshot |
+| career_goals.plan | repeating_group | `title` (text), `description` (textarea), `targetDate` (date) | wizard step `career_goals`; voluntary snapshot |
+| probation_goals.items | repeating_group | `title`, `description`, `dueDate` (date), `status` (`planned`\|`active`\|`done`) | wizard step `probation_goals`; voluntary snapshot |
 
 Frozen `context.positionCatalog.goalTemplates` (titles / `goalKind`) are available for a future non-blocking suggestions panel — **not** wired in fill UI yet.
-
----
-
-## Fields — block 14 `probation_goals` (**managing**)
-
-| key | valueType | children | notes |
-|-----|-----------|----------|-------|
-| probation_goals.items | repeating_group | `title`, `description`, `dueDate` (date), `status` (`planned`\|`active`\|`done`) | voluntary snapshot |
-
-Same optional `goalTemplates` context hook as career goals (future UI).
 
 ---
 

@@ -134,7 +134,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                     type="button"
                     class="btn view"
                     [disabled]="busyAssignmentId() === item.id"
-                    (click)="printAssignment(item.id, item.code)"
+                    (click)="printAssignment(item.id)"
                   >
                     {{ busyAssignmentId() === item.id ? '…' : 'Роздрукувати' }}
                   </button>
@@ -834,14 +834,14 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
     this.runLifecycle(id, this.api.deleteAssignment(id), 'Не вдалося видалити анкету');
   }
 
-  printAssignment(id: string, code: string): void {
+  printAssignment(id: string): void {
     if (this.busyAssignmentId()) return;
     this.busyAssignmentId.set(id);
     this.error.set(null);
     this.api.exportAssignmentPdf(id).subscribe({
-      next: (blob) => {
+      next: ({ blob, filename }) => {
         this.busyAssignmentId.set(null);
-        downloadBlob(blob, `anketa-${code || id}.pdf`);
+        downloadBlob(blob, filename);
       },
       error: () => {
         this.busyAssignmentId.set(null);

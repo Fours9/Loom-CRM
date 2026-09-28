@@ -647,9 +647,9 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
     this.showBlankPicker.set(false);
     this.error.set(null);
     this.api.exportBlankPdf(templateCode).subscribe({
-      next: (blob) => {
+      next: ({ blob, filename }) => {
         this.blankPrintBusy.set(false);
-        downloadBlob(blob, `anketa-${templateCode}-blank.pdf`);
+        downloadBlob(blob, filename);
       },
       error: () => {
         this.blankPrintBusy.set(false);

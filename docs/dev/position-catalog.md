@@ -60,7 +60,7 @@ Historical Review uses `submission.context_json` (or registry if null), never cu
 | Field | Use today | Optional polish |
 | --- | --- | --- |
 | `skills` | `position_skills_matrix` rows + validation | — |
-| `goalTemplates` | captured; **not** shown in fill wizard yet | non-blocking suggestions on `career_goals` / `probation_goals` |
+| `goalTemplates` | captured; **not** shown in fill wizard yet | non-blocking suggestions on `career_goals.plan` / `probation_goals.items` (rail parent `goals` / «Цілі») |
 | `duties` | captured; **not** shown in fill wizard yet | optional duties panel |
 
 ## Migrations

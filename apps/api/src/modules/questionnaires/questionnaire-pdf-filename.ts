@@ -32,6 +32,9 @@ const UA_TO_LATIN: Record<string, string> = {
   ь: '',
   ю: 'yu',
   я: 'ya',
+  "'": '',
+  '’': '',
+  '`': '',
 };
 
 function transliterate(value: string): string {
@@ -58,6 +61,15 @@ function sanitize(value: string): string {
     .replace(/^[.\s_]+|[.\s_]+$/g, '');
 }
 
+function padEmployeeNumber(raw: string | null | undefined): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return '';
+  if (/^\d+$/.test(trimmed)) {
+    return trimmed.padStart(4, '0');
+  }
+  return sanitize(trimmed);
+}
+
 /** Europe/Kyiv calendar date as yyyyMMdd. */
 export function formatKyivYyyyMmDd(date: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -70,18 +82,63 @@ export function formatKyivYyyyMmDd(date: Date = new Date()): string {
   return `${get('year')}${get('month')}${get('day')}`;
 }
 
+export type QuestionnairePdfFilenameEmployee = {
+  employeeNumber?: string | null;
+  lastName?: string | null;
+  firstName?: string | null;
+};
+
+/**
+ * Download names for questionnaire PDFs.
+ * Filled + attached employee → includes таб.№ + ПІБ (profile-PDF parity).
+ * Blank / unattached → template title + date (no fake person).
+ */
 export function buildQuestionnairePdfFilenames(input: {
+  templateTitle: string;
   templateCode: string;
   assignmentCode?: string | null;
+  employee?: QuestionnairePdfFilenameEmployee | null;
   blank?: boolean;
   now?: Date;
 }): { asciiFilename: string; utf8Filename: string } {
   const date = formatKyivYyyyMmDd(input.now);
-  const code = sanitize(input.templateCode) || 'template';
-  const mid = input.blank
-    ? 'blank'
-    : sanitize(input.assignmentCode ?? 'assignment') || 'assignment';
-  const utf8Filename = `anketa-${code}-${mid}-${date}.pdf`;
-  const asciiFilename = `anketa-${sanitize(transliterate(code))}-${sanitize(transliterate(mid))}-${date}.pdf`;
+  const title =
+    sanitize(input.templateTitle) ||
+    sanitize(input.templateCode) ||
+    'anketa';
+  const titleAscii =
+    sanitize(transliterate(input.templateTitle)) ||
+    sanitize(transliterate(input.templateCode)) ||
+    'anketa';
+
+  if (input.blank) {
+    const utf8Filename = `Анкета_заготовка_${title}_${date}.pdf`;
+    const asciiFilename = `Anketa_blank_${titleAscii}_${date}.pdf`;
+    return { asciiFilename, utf8Filename };
+  }
+
+  const assignment =
+    sanitize(input.assignmentCode ?? '') || 'assignment';
+  const assignmentAscii =
+    sanitize(transliterate(input.assignmentCode ?? '')) || 'assignment';
+
+  const number = padEmployeeNumber(input.employee?.employeeNumber);
+  const last = sanitize(input.employee?.lastName ?? '');
+  const first = sanitize(input.employee?.firstName ?? '');
+  const lastAscii = sanitize(transliterate(input.employee?.lastName ?? ''));
+  const firstAscii = sanitize(transliterate(input.employee?.firstName ?? ''));
+
+  if (number || last || first) {
+    const person = [number, last, first].filter(Boolean).join('_');
+    const personAscii = [number, lastAscii, firstAscii]
+      .filter(Boolean)
+      .join('_');
+    const utf8Filename = `Анкета_${title}_${person}_${assignment}.pdf`;
+    const asciiFilename = `Anketa_${titleAscii}_${personAscii}_${assignmentAscii}.pdf`;
+    return { asciiFilename, utf8Filename };
+  }
+
+  const utf8Filename = `Анкета_${title}_${assignment}_${date}.pdf`;
+  const asciiFilename = `Anketa_${titleAscii}_${assignmentAscii}_${date}.pdf`;
   return { asciiFilename, utf8Filename };
 }

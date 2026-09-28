@@ -45,8 +45,8 @@ Atomic write: `EmployeeAboutFacade.mergeAnswers({ set, clearKeys, source })`.
 | `hobbies` | Хобі та інтереси | hobbies (без gift) |
 | `strengths` | Сильні сторони | strengths (без in_* years) |
 | `work_style` | Стиль роботи | `work_style.*` |
-| `life_goals` | Цілі | `strengths.in_*` + `career_goals.plan` |
+| `life_goals` | Цілі | `strengths.in_*` + `career_goals.plan` + `probation_goals.items` |
 
-**Свідомо поза «Про себе»:** personal/contacts mirrors, experience/education, probation_goals, skills matrix, consents/docs.
+**Свідомо поза «Про себе»:** personal/contacts mirrors, experience/education, skills matrix, consents/docs.
 
 Backfill: lazy — лише нові submits + ручний PATCH (історичні snapshots не копіюються міграцією).

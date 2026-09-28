@@ -34,7 +34,7 @@ export const ABOUT_SUBTAB_DEFS: readonly AboutSubtabDef[] = [
     id: 'life_goals',
     labelUa: 'Цілі',
     purposeUa:
-      'Життєві / карʼєрні орієнтири (strengths.in_* + career_goals.plan).',
+      'Життєві / карʼєрні орієнтири та цілі (strengths.in_* + career_goals.plan + probation_goals.items).',
   },
 ] as const;
 

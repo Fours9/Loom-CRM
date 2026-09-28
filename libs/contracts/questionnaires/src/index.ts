@@ -218,7 +218,19 @@ export type QuestionnaireSchemaJson = {
 };
 
 /** Bump when PDF visual grammar / print model shape changes. */
-export const QUESTIONNAIRE_PRINT_LAYOUT_VERSION = '1.0';
+export const QUESTIONNAIRE_PRINT_LAYOUT_VERSION = '2.4';
+
+/** Layout SoT — paper-form blank/spare geometry (not projector whim). */
+export const PAPER_FORM_MIN_ROWS = 3;
+export const TEXTAREA_PAPER_LINES = 3;
+export const REPEATING_TEXTAREA_LINES = 2;
+export const BLANK_CONTACTS_PERSONAL_ROWS = {
+  phone: 1,
+  email: 1,
+  telegram: 1,
+} as const;
+export const BLANK_CONTACTS_EMERGENCY_ROWS = 1;
+export const BLANK_SKILLS_MATRIX_ROWS = 5;
 
 export type QuestionnairePrintMeta = {
   title: string;
@@ -232,25 +244,92 @@ export type QuestionnairePrintMeta = {
   printLayoutVersion: string;
 };
 
-export type QuestionnairePrintField =
+/** Reusable atomic paper control — top-level, repeating cells, contacts slots. */
+export type QuestionnairePrintControl =
+  | { kind: 'text_line'; key: string; label: string; value: string | null }
   | {
-      kind: 'scalar';
+      kind: 'text_box';
       key: string;
       label: string;
-      valueType: QuestionnaireValueType;
-      display: string | null;
+      lines: number;
+      value: string | null;
     }
   | {
-      kind: 'repeating_group';
+      kind: 'choice_list';
       key: string;
       label: string;
-      rows: Array<{
-        cells: Array<{
-          key: string;
-          label: string;
-          display: string | null;
-        }>;
+      exclusive: boolean;
+      /** Default vertical; horizontal = caption above checkbox in one row. */
+      layout?: 'vertical' | 'horizontal';
+      options: Array<{ value: string; label: string; checked: boolean }>;
+    }
+  | { kind: 'checkbox_item'; key: string; label: string; checked: boolean };
+
+export type QuestionnairePrintSkillRating =
+  | {
+      kind: 'choice_scale';
+      options: Array<{ value: number; label: string; checked: boolean }>;
+    }
+  | {
+      kind: 'number';
+      value: number | null;
+      min: number;
+      max: number;
+      unit: '%' | null;
+    }
+  | {
+      kind: 'freehand';
+      value: string | null;
+    };
+
+export type QuestionnairePrintSkillRow = {
+  identity:
+    | { kind: 'catalog'; code: string }
+    | { kind: 'custom'; name: string }
+    | { kind: 'blank' };
+  label: string | null;
+  rating: QuestionnairePrintSkillRating;
+  comment: string | null;
+};
+
+export type QuestionnairePrintPersonalContactType =
+  | 'personal_phone'
+  | 'personal_email'
+  | 'personal_telegram';
+
+export type QuestionnairePrintField =
+  | QuestionnairePrintControl
+  | {
+      kind: 'repeating_table';
+      key: string;
+      label: string;
+      columns: Array<{ key: string; label: string }>;
+      rows: Array<{ cells: QuestionnairePrintControl[] }>;
+    }
+  | {
+      kind: 'contacts_form';
+      key: string;
+      label: string;
+      work: QuestionnairePrintControl[];
+      personal: Array<{
+        contactType: QuestionnairePrintPersonalContactType;
+        primary: boolean;
+        control: QuestionnairePrintControl;
       }>;
+      emergency: Array<{
+        controls: [
+          QuestionnairePrintControl, // fullName
+          QuestionnairePrintControl, // relationship
+          QuestionnairePrintControl, // primaryPhone
+          QuestionnairePrintControl, // secondaryPhone
+        ];
+      }>;
+    }
+  | {
+      kind: 'skills_matrix';
+      key: string;
+      label: string;
+      rows: QuestionnairePrintSkillRow[];
     };
 
 export type QuestionnairePrintStep = {

@@ -162,7 +162,6 @@ import { firstValueFrom } from 'rxjs';
         <loom-questionnaire-section-rail
           [sections]="progressSections()"
           [activeStepKey]="store.activeStepKey()"
-          [visitedStepKeys]="store.visitedStepKeys()"
           [canOpenStep]="canOpenRailStep"
           [canOpenSection]="canOpenRailSection"
           (stepSelect)="stepSelect.emit($event)"
@@ -534,11 +533,10 @@ export class QuestionnaireFillChromeComponent {
         return;
       }
       const revision = this.store.revision();
-      const blob = await firstValueFrom(
+      const { blob, filename } = await firstValueFrom(
         this.api.exportAssignmentPdf(assignmentId, revision),
       );
-      const code = this.store.assignment()?.code ?? assignmentId;
-      downloadBlob(blob, `anketa-${code}.pdf`);
+      downloadBlob(blob, filename);
     } catch {
       this.printError.set('Не вдалося сформувати PDF');
     } finally {

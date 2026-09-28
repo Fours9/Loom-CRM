@@ -1,6 +1,11 @@
+/**
+ * Section / step trail helpers for the fill progress rail.
+ * Dot fill and spine follow **position relative to the active step**,
+ * not visit history (jumping ahead must still light all prior marks).
+ */
 import type { ProgressSection } from './questionnaire-section-map';
 
-/** Spine fill = position along sections (not visit/completion). */
+/** Spine fill = position along sections. */
 export function sectionSpineProgress(
   sections: ProgressSection[],
   activeSectionId: string | undefined,
@@ -21,7 +26,7 @@ export function substepSpineProgress(
   return `${(idx / (steps.length - 1)) * 100}%`;
 }
 
-/** Position relative to active section only (trail / spine). */
+/** Marks before the active section (trail fill). */
 export function isSectionPassed(
   sections: ProgressSection[],
   activeSectionId: string | undefined,
@@ -35,8 +40,8 @@ export function isSectionPassed(
 }
 
 /**
- * Section dot fill: user opened at least one page in this section.
- * Intro / Review count when visited.
+ * @deprecated Visit history is no longer used for rail fill.
+ * Kept for callers / specs that still track opens.
  */
 export function isSectionVisited(
   section: ProgressSection | undefined,
@@ -46,9 +51,10 @@ export function isSectionVisited(
   return section.steps.some((s) => visitedStepKeys.has(s.key));
 }
 
-/** @deprecated Use isSectionVisited — kept for call-site rename clarity. */
+/** @deprecated Use isSectionVisited */
 export const isSectionCompleted = isSectionVisited;
 
+/** Marks before the active step within the active section. */
 export function isStepPassed(
   steps: { key: string }[],
   activeStepKey: string,
@@ -60,7 +66,7 @@ export function isStepPassed(
   return idx >= 0 && activeIdx >= 0 && idx < activeIdx;
 }
 
-/** Step dot fill: user opened this page this session. */
+/** @deprecated Visit history is no longer used for rail fill. */
 export function isStepVisited(
   stepKey: string,
   visitedStepKeys: ReadonlySet<string>,

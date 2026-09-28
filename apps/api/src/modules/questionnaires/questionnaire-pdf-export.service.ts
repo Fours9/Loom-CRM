@@ -129,9 +129,19 @@ export class QuestionnairePdfExportService {
 
     let profileMirror: Record<string, unknown> | null = null;
     let employeeDisplayName: string | undefined;
+    let employeeForFilename: {
+      employeeNumber: string | null;
+      lastName: string | null;
+      firstName: string | null;
+    } | null = null;
     if (assignment.employeeId) {
       const emp = await this.access.getEmployeeOrFail(assignment.employeeId);
       employeeDisplayName = `${emp.lastName} ${emp.firstName}`.trim();
+      employeeForFilename = {
+        employeeNumber: emp.employeeNumber ?? null,
+        lastName: emp.lastName ?? null,
+        firstName: emp.firstName ?? null,
+      };
       if (source.sourceKind === 'draft') {
         profileMirror =
           await this.assignmentService.buildProfileMirrorForEmployee(
@@ -165,8 +175,10 @@ export class QuestionnairePdfExportService {
 
     const buffer = await this.pdfRenderer.renderQuestionnaire(model);
     const names = buildQuestionnairePdfFilenames({
+      templateTitle: schema.title || template.title,
       templateCode: template.code,
       assignmentCode: assignment.code,
+      employee: employeeForFilename,
       now,
     });
 
@@ -242,6 +254,7 @@ export class QuestionnairePdfExportService {
 
     const buffer = await this.pdfRenderer.renderQuestionnaire(model);
     const names = buildQuestionnairePdfFilenames({
+      templateTitle: schema.title || template.title,
       templateCode: template.code,
       blank: true,
       now,
@@ -273,6 +286,16 @@ export class QuestionnairePdfExportService {
       (catalog?.skills ?? []).map((s) => [s.code, s]),
     );
     const version = ctx?.version ?? null;
+    /** Non-null only when frozen context present; null → legacy registry in projector. */
+    const matrixCatalogSkills = catalog
+      ? catalog.skills.map((s) => ({
+          code: s.code,
+          labelUa: s.labelUa,
+          scaleKind: s.scaleKind,
+          scaleMin: s.scaleMin,
+          scaleMax: s.scaleMax,
+        }))
+      : null;
 
     return {
       resolveOrgLabel: (field: QuestionnaireSchemaField, value: unknown) => {
@@ -304,6 +327,8 @@ export class QuestionnairePdfExportService {
         );
         return policy.unit === '%' ? `${level}%` : String(level);
       },
+      matrixCatalogSkills,
+      matrixContextVersion: version,
     };
   }
 }

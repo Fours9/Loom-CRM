@@ -12,9 +12,7 @@ import {
 } from './questionnaire-section-map';
 import {
   isSectionPassed as sectionPassed,
-  isSectionVisited as sectionVisited,
   isStepPassed as stepPassed,
-  isStepVisited as stepVisited,
   sectionSpineProgress,
   substepSpineProgress,
 } from './questionnaire-section-rail-state';
@@ -43,7 +41,6 @@ import {
                 class="mark"
                 [class.current]="section.id === activeSection()?.id"
                 [class.passed]="isSectionPassed(section.id)"
-                [class.visited]="isSectionVisited(section.id)"
               >
                 <button
                   type="button"
@@ -92,7 +89,6 @@ import {
                   class="mark"
                   [class.current]="sub.key === activeStepKey()"
                   [class.passed]="isStepPassed(sub.key)"
-                  [class.visited]="isStepVisited(sub.key)"
                 >
                   <button
                     type="button"
@@ -234,13 +230,10 @@ import {
         box-shadow: 0 0 0 4px
           color-mix(in srgb, var(--pw-accent) 28%, transparent);
       }
-      /* Fill only after the user opened the page — not by position trail. */
-      .mark.visited .dot {
+      /* Trail fill = all marks before the current position (not visit history). */
+      .mark.passed .dot {
         border-color: var(--pw-accent);
         background: color-mix(in srgb, var(--pw-accent) 78%, var(--pw-surface));
-      }
-      .mark.visited.current .dot {
-        background: var(--pw-accent);
       }
       .captions {
         align-items: start;
@@ -270,8 +263,6 @@ export class QuestionnaireSectionRailComponent {
 
   readonly sections = input.required<ProgressSection[]>();
   readonly activeStepKey = input.required<string>();
-  /** Steps the user opened in this fill session. */
-  readonly visitedStepKeys = input<ReadonlySet<string>>(new Set());
   readonly canOpenStep = input<(stepKey: string) => boolean>((_k) => true);
   readonly canOpenSection = input<(sectionId: string) => boolean>((_id) => true);
 
@@ -307,7 +298,7 @@ export class QuestionnaireSectionRailComponent {
     return !!section && section.steps.length > 1;
   });
 
-  /** Spine fill = position along sections (not completion). */
+  /** Spine fill = position along sections. */
   sectionProgress(): string {
     return sectionSpineProgress(this.sections(), this.activeSection()?.id);
   }
@@ -322,20 +313,9 @@ export class QuestionnaireSectionRailComponent {
     return sectionPassed(this.sections(), this.activeSection()?.id, sectionId);
   }
 
-  isSectionVisited(sectionId: string): boolean {
-    return sectionVisited(
-      this.sections().find((s) => s.id === sectionId),
-      this.visitedStepKeys(),
-    );
-  }
-
   isStepPassed(stepKey: string): boolean {
     const section = this.activeSection();
     if (!section) return false;
     return stepPassed(section.steps, this.activeStepKey(), stepKey);
-  }
-
-  isStepVisited(stepKey: string): boolean {
-    return stepVisited(stepKey, this.visitedStepKeys());
   }
 }

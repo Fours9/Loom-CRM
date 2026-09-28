@@ -9,6 +9,15 @@ import {
   parsePositionSkillsMatrixStrict,
 } from './position-skills-matrix';
 
+/** Frozen catalog skill row for filled matrix print (from assignment/submission context). */
+export type QuestionnairePrintMatrixCatalogSkill = {
+  code: string;
+  labelUa: string;
+  scaleKind?: 'range' | 'percent';
+  scaleMin?: number;
+  scaleMax?: number;
+};
+
 export type QuestionnaireFieldFormatContext = {
   /** Required for organization_ref; return raw id / «—» when unknown. */
   resolveOrgLabel: (
@@ -17,6 +26,14 @@ export type QuestionnaireFieldFormatContext = {
   ) => string;
   resolveSkillLabel?: (code: string) => string;
   formatMatrixLevel?: (code: string, level: number) => string;
+  /**
+   * Filled matrix: when non-null, use frozen context skills + scales.
+   * When null/undefined on filled mode → legacy SKILL_DEFINITIONS registry.
+   * Blank mode ignores this (generic freehand rows, no registry).
+   */
+  matrixCatalogSkills?: QuestionnairePrintMatrixCatalogSkill[] | null;
+  /** Context version for resolveMatrixRatingPolicy (1 | 2); null → legacy policy. */
+  matrixContextVersion?: 1 | 2 | null;
 };
 
 export function choiceLabel(
@@ -39,9 +56,9 @@ export function choiceLabel(
 }
 
 /**
- * Format one field's raw value for review/PDF display.
+ * Format one field's raw value for FE Review display.
  * Repeating groups return a compact «N запис(ів)» summary — print model
- * expands structured rows separately.
+ * expands structured paper controls separately (layout 2.0).
  */
 export function formatQuestionnaireFieldDisplay(
   field: QuestionnaireSchemaField,

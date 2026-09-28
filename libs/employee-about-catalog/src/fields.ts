@@ -330,7 +330,7 @@ export const ABOUT_FIELD_DEFS: readonly AboutFieldDef[] = [
   {
     key: 'career_goals.plan',
     subtab: 'life_goals',
-    labelUa: 'Індивідуальний план розвитку',
+    labelUa: "Кар'єрні цілі та розвиток",
     valueType: 'repeating_group',
     maxItems: 50,
     children: [
@@ -342,6 +342,33 @@ export const ABOUT_FIELD_DEFS: readonly AboutFieldDef[] = [
         maxLength: TEXTAREA,
       },
       { key: 'targetDate', labelUa: 'Дедлайн', valueType: 'date' },
+    ],
+  },
+  {
+    key: 'probation_goals.items',
+    subtab: 'life_goals',
+    labelUa: 'Цілі на випробувальний термін',
+    valueType: 'repeating_group',
+    maxItems: 50,
+    children: [
+      { key: 'title', labelUa: 'Ціль', valueType: 'text', maxLength: TEXT },
+      {
+        key: 'description',
+        labelUa: 'Опис',
+        valueType: 'textarea',
+        maxLength: TEXTAREA,
+      },
+      { key: 'dueDate', labelUa: 'Термін', valueType: 'date' },
+      {
+        key: 'status',
+        labelUa: 'Статус',
+        valueType: 'single_choice',
+        options: [
+          { value: 'planned', labelUa: 'Заплановано' },
+          { value: 'active', labelUa: 'В процесі' },
+          { value: 'done', labelUa: 'Виконано' },
+        ],
+      },
     ],
   },
 ] as const;

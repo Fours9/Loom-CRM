@@ -1,5 +1,6 @@
 /**
- * employee-managing v1 — grade, skills matrix, career/probation goals (Track B).
+ * employee-managing v1 — grade, skills matrix, career + probation goal steps.
+ * Progress rail groups both under section «Цілі»; PDF coalesces to one print section.
  * Synced from docs/product/references/anketa_360.html (no net_salary / manager_review).
  */
 
@@ -98,12 +99,13 @@ export const EMPLOYEE_MANAGING_V1_SCHEMA = {
       ],
     },
     {
+      /** Rail substep under progress section «Цілі»; answer key career_goals.* */
       key: 'career_goals',
       label: "Кар'єрні цілі та розвиток",
       fields: [
         {
           key: 'career_goals.plan',
-          label: 'Індивідуальний план розвитку',
+          label: "Кар'єрні цілі та розвиток",
           valueType: 'repeating_group',
           requiredPolicy: 'voluntary',
           children: [
@@ -130,12 +132,13 @@ export const EMPLOYEE_MANAGING_V1_SCHEMA = {
       ],
     },
     {
+      /** Rail substep under progress section «Цілі»; answer key probation_goals.* */
       key: 'probation_goals',
       label: 'Цілі на випробувальний термін',
       fields: [
         {
           key: 'probation_goals.items',
-          label: 'Цілі',
+          label: 'Цілі на випробувальний термін',
           valueType: 'repeating_group',
           requiredPolicy: 'voluntary',
           children: [

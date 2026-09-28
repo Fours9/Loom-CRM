@@ -98,7 +98,7 @@ describe('buildProgressSections', () => {
     expect(sections.every((s) => s.steps.length > 0)).toBe(true);
   });
 
-  it('employee-starter groups personal + work content steps', () => {
+  it('employee-starter groups personal + work + consents', () => {
     const starterSteps = [
       { key: 'profile_mirror', label: 'Особисті дані' },
       { key: 'contacts', label: 'Контакти' },
@@ -106,6 +106,7 @@ describe('buildProgressSections', () => {
       { key: 'education', label: 'Освіта та навчання' },
       { key: 'experience', label: 'Професійний досвід' },
       { key: 'company_work', label: 'Робота в компанії' },
+      { key: 'consents_review', label: 'Згода та підписи' },
     ];
     const sections = buildProgressSections({
       templateCode: 'employee-starter',
@@ -115,6 +116,7 @@ describe('buildProgressSections', () => {
       'intro',
       'personal',
       'work',
+      'consents',
       'review',
     ]);
     expect(sections.find((s) => s.id === 'personal')!.steps.map((t) => t.key)).toEqual(
@@ -123,6 +125,44 @@ describe('buildProgressSections', () => {
     expect(sections.find((s) => s.id === 'work')!.steps.map((t) => t.key)).toEqual(
       ['experience', 'company_work'],
     );
+    expect(sections.find((s) => s.id === 'consents')!.steps.map((t) => t.key)).toEqual(
+      ['consents_review'],
+    );
+  });
+
+  it('employee-managing nests career + probation under Цілі', () => {
+    const managingSteps = [
+      { key: 'profile_mirror', label: 'Особисті дані' },
+      { key: 'company_work', label: 'Робота в компанії' },
+      { key: 'grade', label: 'Грейд і рівень посади' },
+      { key: 'skills', label: 'Матриця навичок' },
+      { key: 'career_goals', label: "Кар'єрні цілі та розвиток" },
+      { key: 'probation_goals', label: 'Цілі на випробувальний термін' },
+    ];
+    const sections = buildProgressSections({
+      templateCode: 'employee-managing',
+      schemaSteps: managingSteps,
+    });
+    expect(sections.map((s) => s.id)).toEqual([
+      'intro',
+      'profile',
+      'skills',
+      'goals',
+      'review',
+    ]);
+    expect(sections.find((s) => s.id === 'skills')!.steps.map((t) => t.key)).toEqual(
+      ['skills'],
+    );
+    expect(sections.find((s) => s.id === 'goals')!.label).toBe('Цілі');
+    expect(
+      sections.find((s) => s.id === 'goals')!.steps.map((t) => t.key),
+    ).toEqual(['career_goals', 'probation_goals']);
+    expect(
+      sections.find((s) => s.id === 'goals')!.steps.map((t) => t.label),
+    ).toEqual([
+      "Кар'єрні цілі та розвиток",
+      'Цілі на випробувальний термін',
+    ]);
   });
 
   it('findProgressSection resolves by step key', () => {
