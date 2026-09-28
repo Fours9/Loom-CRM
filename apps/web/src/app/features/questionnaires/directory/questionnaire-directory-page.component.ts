@@ -764,12 +764,9 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
     void this.router.navigateByUrl(link.routerLink);
   }
 
-  async onCreated(event: { id: string }): Promise<void> {
+  async onCreated(_event: { id: string }): Promise<void> {
     this.showCreate.set(false);
-    const link = buildQuestionnaireAssignmentLink({
-      assignmentId: event.id,
-    });
-    await this.router.navigateByUrl(link.routerLink);
+    this.reload();
   }
 
   openAttachPicker(item: QuestionnaireDirectoryItem): void {

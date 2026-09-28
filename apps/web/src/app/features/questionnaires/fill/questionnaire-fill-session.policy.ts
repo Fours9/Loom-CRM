@@ -51,7 +51,7 @@ export function questionnaireListOpenLabel(input: {
   canStartFill: boolean;
   status: QuestionnaireAssignmentStatus | string;
 }): string {
-  if (input.canStartFill) return 'Почати';
+  if (input.canStartFill) return 'Переглянути';
   if (isQuestionnairePostSubmitStatus(input.status)) {
     return 'Відкрити';
   }

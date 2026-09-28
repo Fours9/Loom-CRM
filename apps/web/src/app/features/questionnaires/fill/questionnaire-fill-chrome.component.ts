@@ -145,11 +145,27 @@ import { firstValueFrom } from 'rxjs';
                 <button
                   type="button"
                   role="menuitem"
-                  class="danger-item"
+                  class="danger-item icon-only"
+                  title="Видалити"
+                  aria-label="Видалити"
                   [disabled]="actionBusy() || revision.manualSaveBusy()"
                   (click)="onDeleteFromMenu()"
                 >
-                  {{ actionBusy() ? 'Видалення…' : 'Видалити анкету' }}
+                  @if (actionBusy()) {
+                    <span class="busy-label">…</span>
+                  } @else {
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill="currentColor"
+                        d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
+                      />
+                    </svg>
+                  }
                 </button>
               </div>
             }
@@ -268,6 +284,18 @@ import { firstValueFrom } from 'rxjs';
       }
       .more-menu .danger-item {
         color: #b91c1c;
+      }
+      .more-menu .icon-only {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        min-width: 2.4rem;
+        padding: 0.45rem;
+      }
+      .more-menu .busy-label {
+        font-size: 0.95rem;
+        line-height: 1;
       }
       .theme-toggle {
         display: inline-flex;

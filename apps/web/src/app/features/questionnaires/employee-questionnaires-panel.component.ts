@@ -178,11 +178,23 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                             <button
                               type="button"
                               role="menuitem"
-                              class="danger-item"
+                              class="danger-item icon-only"
+                              title="Видалити"
+                              aria-label="Видалити"
                               [disabled]="busyAssignmentId() === item.id"
                               (click)="deleteAssignmentFromMenu(item.id)"
                             >
-                              Видалити
+                              <svg
+                                viewBox="0 0 24 24"
+                                width="18"
+                                height="18"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  fill="currentColor"
+                                  d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
+                                />
+                              </svg>
                             </button>
                           }
                         </div>
@@ -447,6 +459,14 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
       .more-menu .danger-item {
         color: #b91c1c;
       }
+      .more-menu .icon-only {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        min-width: 2.4rem;
+        padding: 0.45rem;
+      }
       .meta {
         display: flex;
         flex-wrap: wrap;
@@ -639,12 +659,10 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
     this.reload();
   }
 
-  onCreated(event: { id: string }): void {
+  onCreated(_event: { id: string }): void {
     this.showCreate.set(false);
     this.assignOk.set(true);
     this.reload();
-    const link = buildQuestionnaireAssignmentLink({ assignmentId: event.id });
-    void this.router.navigateByUrl(link.routerLink);
   }
 
   ngOnChanges(changes: SimpleChanges): void {

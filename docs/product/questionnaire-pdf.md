@@ -68,7 +68,7 @@ Server SoT: `buildQuestionnairePdfFilenames` → `Content-Disposition` (`filenam
 | Filled + unattached | `Анкета_{title}_{assignmentCode}_{yyyyMMdd}.pdf` |
 | Blank template | `Анкета_заготовка_{title}_{yyyyMMdd}.pdf` |
 
-PDF body meta already shows `employeeDisplayName` when attached (header line).
+PDF body meta shows `employeeDisplayName` when attached (subject) and `generatedByLabel` as **Прізвище Імʼя** of the actor’s linked employee (email only if name unavailable).
 
 ## Architecture
 

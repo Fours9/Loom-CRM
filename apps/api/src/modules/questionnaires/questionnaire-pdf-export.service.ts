@@ -25,6 +25,8 @@ import { AuditService } from '../../platform/audit/audit.service';
 import { PdfRenderer } from '../../platform/pdf/pdf-renderer';
 import { formatKyivDateTime } from '../../organization/employees/employee-pdf-filename';
 import { EmployeeAccessService } from '../../organization/access/employee-access.service';
+import { EmployeesService } from '../../organization/employees/employees.service';
+import { formatPdfGeneratedByLabel } from '../../platform/pdf/format-pdf-generated-by-label';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import { QuestionnaireSubmission } from './questionnaire-submission.entity';
 import { QuestionnaireTemplate } from './questionnaire-template.entity';
@@ -51,6 +53,7 @@ export class QuestionnairePdfExportService {
     private readonly versions: Repository<QuestionnaireTemplateVersion>,
     private readonly assignmentService: QuestionnaireAssignmentService,
     private readonly access: EmployeeAccessService,
+    private readonly employees: EmployeesService,
     private readonly authorization: AuthorizationContextService,
     private readonly audit: AuditService,
     private readonly pdfRenderer: PdfRenderer,
@@ -166,7 +169,7 @@ export class QuestionnairePdfExportService {
         assignmentCode: assignment.code,
         employeeDisplayName,
         generatedAtLabel: formatKyivDateTime(now),
-        generatedByLabel: actor.email ?? actor.id,
+        generatedByLabel: await this.resolveGeneratedByLabel(actor),
         schemaVersion: schema.version ?? assignment.templateVersion.version,
         printLayoutVersion: QUESTIONNAIRE_PRINT_LAYOUT_VERSION,
       },
@@ -245,7 +248,7 @@ export class QuestionnairePdfExportService {
         templateCode: template.code,
         templateTypeLabelUa: typeLabel,
         generatedAtLabel: formatKyivDateTime(now),
-        generatedByLabel: actor.email ?? actor.id,
+        generatedByLabel: await this.resolveGeneratedByLabel(actor),
         schemaVersion: schema.version ?? version.version,
         printLayoutVersion: QUESTIONNAIRE_PRINT_LAYOUT_VERSION,
       },
@@ -274,6 +277,16 @@ export class QuestionnairePdfExportService {
     });
 
     return { buffer, ...names };
+  }
+
+  private async resolveGeneratedByLabel(actor: User): Promise<string> {
+    const linked = await this.employees.findByUserId(actor.id);
+    return formatPdfGeneratedByLabel({
+      lastName: linked?.lastName,
+      firstName: linked?.firstName,
+      email: actor.email,
+      fallbackId: actor.id,
+    });
   }
 
   private buildFormatContext(contextJson: Record<string, unknown> | null) {

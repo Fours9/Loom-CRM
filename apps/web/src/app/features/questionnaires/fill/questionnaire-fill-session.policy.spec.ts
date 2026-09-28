@@ -181,13 +181,13 @@ describe('load order: auto-edit before applyRequestedStep', () => {
 });
 
 describe('questionnaireListOpenLabel', () => {
-  it('canStartFill → Почати', () => {
+  it('canStartFill → Переглянути', () => {
     expect(
       questionnaireListOpenLabel({
         canStartFill: true,
         status: 'assigned',
       }),
-    ).toBe('Почати');
+    ).toBe('Переглянути');
   });
 
   it('assigned without canStartFill → Відкрити', () => {

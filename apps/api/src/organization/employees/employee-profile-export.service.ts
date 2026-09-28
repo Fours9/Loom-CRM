@@ -16,6 +16,7 @@ import {
   buildEmployeePdfFilenames,
   formatKyivDateTime,
 } from './employee-pdf-filename';
+import { formatPdfGeneratedByLabel } from '../../platform/pdf/format-pdf-generated-by-label';
 
 const WEEKDAY_LABELS: Record<number, string> = {
   1: 'Понеділок',
@@ -113,8 +114,20 @@ export class EmployeeProfileExportService {
       schedule,
       comment: employee.comment,
       generatedAtLabel: formatKyivDateTime(new Date()),
-      generatedByLabel: actor.email,
+      generatedByLabel: await this.resolveGeneratedByLabel(actor),
       templateVersion: PROFILE_PDF_TEMPLATE_VERSION,
     };
+  }
+
+  private async resolveGeneratedByLabel(actor: User): Promise<string> {
+    const linked = await this.employeesRepo.findOne({
+      where: { userId: actor.id },
+    });
+    return formatPdfGeneratedByLabel({
+      lastName: linked?.lastName,
+      firstName: linked?.firstName,
+      email: actor.email,
+      fallbackId: actor.id,
+    });
   }
 }

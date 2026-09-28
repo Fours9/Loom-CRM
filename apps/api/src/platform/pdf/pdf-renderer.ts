@@ -248,9 +248,6 @@ export class PdfRenderer {
     doc.fontSize(16).text(model.meta.title, left, top, {
       width: pageWidth - metaWidth - 12,
     });
-    doc.fontSize(9).fillColor('#a00').text('Конфіденційно', {
-      width: pageWidth - metaWidth - 12,
-    });
     doc.fillColor('#444').fontSize(9);
     doc.text(
       `${model.meta.templateTypeLabelUa} · ${model.meta.templateCode}`,
