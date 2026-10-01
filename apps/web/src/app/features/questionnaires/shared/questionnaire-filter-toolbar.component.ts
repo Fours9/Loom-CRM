@@ -66,7 +66,7 @@ export type QuestionnaireFilterToolbarValue = {
         </label>
       }
       @if (has('attachmentState')) {
-        <label>
+        <label data-help-id="q.attachment-filter">
           Стан
           <select
             [value]="value().attachmentState ?? ''"

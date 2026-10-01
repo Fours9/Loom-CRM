@@ -26,10 +26,16 @@ import {
 import { hasActiveReviewerRequest } from '../core/questionnaire-active-change-request';
 import { QuestionnaireAttachPickerComponent } from './questionnaire-attach-picker.component';
 import { QuestionnaireCreateDialogComponent } from '../shared/questionnaire-create-dialog.component';
-import {
-  QuestionnaireFilterToolbarComponent,
+import { QuestionnaireFilterToolbarComponent,
   type QuestionnaireFilterToolbarValue,
 } from '../shared/questionnaire-filter-toolbar.component';
+import {
+  HelpCalloutComponent,
+  HelpTriggerComponent,
+} from '../../../core/help';
+import {
+  QUESTIONNAIRE_LIFECYCLE_CALLOUT,
+} from '../help/questionnaire-help.definition';
 
 type Dept = { id: string; name: string };
 type Pos = { id: string; name: string };
@@ -42,12 +48,17 @@ type Pos = { id: string; name: string };
     QuestionnaireAttachPickerComponent,
     QuestionnaireCreateDialogComponent,
     QuestionnaireFilterToolbarComponent,
+    HelpTriggerComponent,
+    HelpCalloutComponent,
   ],
   template: `
     <div class="page">
       <header class="header">
         <div class="header-titles">
-          <h1>Анкети</h1>
+          <div class="title-row">
+            <h1>Анкети</h1>
+            <loom-help-trigger tourId="questionnaires.directory" />
+          </div>
           <p class="muted">Усі призначення анкет у вашому доступі</p>
         </div>
         <div class="header-actions">
@@ -84,6 +95,7 @@ type Pos = { id: string; name: string };
             <button
               type="button"
               class="btn primary"
+              data-help-id="q.create"
               (click)="showCreate.set(true)"
             >
               Створити анкету
@@ -91,6 +103,12 @@ type Pos = { id: string; name: string };
           }
         </div>
       </header>
+
+      <loom-help-callout
+        [calloutId]="lifecycleCallout.id"
+        [version]="lifecycleCallout.version"
+        [body]="lifecycleCallout.body"
+      />
 
       <loom-questionnaire-filter-toolbar
         [value]="filterValue()"
@@ -108,7 +126,19 @@ type Pos = { id: string; name: string };
       @if (loading()) {
         <p class="muted">Завантаження…</p>
       } @else if (!items().length) {
-        <p class="muted">Анкет не знайдено.</p>
+        <div class="empty">
+          <p class="muted">Анкет не знайдено.</p>
+          @if (canCreate()) {
+            <button
+              type="button"
+              class="btn primary"
+              data-help-id="q.create"
+              (click)="showCreate.set(true)"
+            >
+              Створити анкету
+            </button>
+          }
+        </div>
       } @else {
         <div class="table-wrap">
           <table>
@@ -238,6 +268,7 @@ type Pos = { id: string; name: string };
                           class="icon-btn"
                           title="Закріпити"
                           aria-label="Закріпити анкету до працівника"
+                          data-help-id="q.attach"
                           (click)="openAttachPicker(item)"
                         >
                           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -335,10 +366,20 @@ type Pos = { id: string; name: string };
         margin: 0;
         font-size: 1.4rem;
       }
+      .title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
       .header-actions {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
+      }
+      .empty {
+        display: grid;
+        gap: 0.75rem;
+        justify-items: start;
       }
       .muted {
         color: var(--pw-muted);
@@ -549,6 +590,7 @@ type Pos = { id: string; name: string };
   ],
 })
 export class QuestionnaireDirectoryPageComponent implements OnInit {
+  readonly lifecycleCallout = QUESTIONNAIRE_LIFECYCLE_CALLOUT;
   private readonly api = inject(QuestionnairesApiService);
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);

@@ -40,6 +40,14 @@ import {
   proposalChangeSummary,
   proposalChangeTitle,
 } from './questionnaire-proposal-labels';
+import {
+  HelpCalloutComponent,
+  HelpTriggerComponent,
+} from '../../core/help';
+import {
+  QUESTIONNAIRE_LIFECYCLE_CALLOUT,
+  QUESTIONNAIRE_PROPOSALS_HINT,
+} from './help/questionnaire-help.definition';
 
 const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   pending: 'Очікує',
@@ -54,11 +62,16 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
     QuestionnaireSnapshotSummaryComponent,
     QuestionnaireCreateDialogComponent,
     QuestionnaireFilterToolbarComponent,
+    HelpTriggerComponent,
+    HelpCalloutComponent,
   ],
   template: `
     <div class="panel">
       <div class="toolbar">
-        <h2>Анкети</h2>
+        <div class="title-row">
+          <h2>Анкети</h2>
+          <loom-help-trigger tourId="questionnaires.employee" />
+        </div>
         @if (canAssign()) {
           <button
             type="button"
@@ -69,6 +82,12 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           </button>
         }
       </div>
+
+      <loom-help-callout
+        [calloutId]="lifecycleCallout.id"
+        [version]="lifecycleCallout.version"
+        [body]="lifecycleCallout.body"
+      />
 
       <loom-questionnaire-filter-toolbar
         [value]="filterValue()"
@@ -88,7 +107,18 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
       @if (loading()) {
         <p class="muted">Завантаження…</p>
       } @else if (!items().length) {
-        <p class="muted">Немає призначених анкет.</p>
+        <div class="empty">
+          <p class="muted">Немає призначених анкет.</p>
+          @if (canAssign()) {
+            <button
+              type="button"
+              class="btn primary"
+              (click)="showCreate.set(true)"
+            >
+              Призначити анкету
+            </button>
+          }
+        </div>
       } @else {
         <ul class="list">
           @for (item of items(); track item.id) {
@@ -126,6 +156,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                   <button
                     type="button"
                     class="btn view"
+                    data-help-id="q.open"
                     (click)="openAssignment(item)"
                   >
                     {{ openLabel(item) }}
@@ -136,6 +167,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                       class="btn ghost more-btn"
                       title="Додаткові дії"
                       aria-label="Додаткові дії"
+                      data-help-id="q.more"
                       [attr.aria-expanded]="moreMenuAssignmentId() === item.id"
                       [attr.aria-haspopup]="'menu'"
                       [disabled]="busyAssignmentId() === item.id"
@@ -254,6 +286,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                         <span class="fold-count">{{ count }}</span>
                       }
                     </summary>
+                    <p class="hint">{{ proposalsHint }}</p>
                     <div class="fold-body">
                       @if (proposalsForAssignment(item.id); as props) {
                         @if (props.length) {
@@ -352,6 +385,22 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
+      }
+      .title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+      }
+      .empty {
+        display: grid;
+        gap: 0.65rem;
+        justify-items: start;
+      }
+      .hint {
+        margin: 0.35rem 0 0.5rem;
+        font-size: 0.85rem;
+        color: var(--pw-muted);
+        line-height: 1.4;
       }
       h2,
       h3 {
@@ -637,6 +686,8 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   ],
 })
 export class EmployeeQuestionnairesPanelComponent implements OnChanges {
+  readonly lifecycleCallout = QUESTIONNAIRE_LIFECYCLE_CALLOUT;
+  readonly proposalsHint = QUESTIONNAIRE_PROPOSALS_HINT;
   private readonly api = inject(QuestionnairesApiService);
   private readonly router = inject(Router);
 

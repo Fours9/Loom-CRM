@@ -2,13 +2,15 @@ import { Component, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ApiAvailabilityStore } from './core/api/api-availability.store';
 import { SessionStore } from './core/auth/session.store';
+import { HelpSpotlightOverlayComponent } from './core/help';
 
 @Component({
   selector: 'loom-root',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, HelpSpotlightOverlayComponent],
   template: `
     <router-outlet />
+    <loom-help-spotlight-overlay />
 
     @if (api.status() === 'unreachable') {
       <div class="api-lock" role="alertdialog" aria-modal="true" aria-labelledby="api-lock-title">

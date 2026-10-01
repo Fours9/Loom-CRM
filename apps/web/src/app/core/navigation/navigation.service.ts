@@ -37,7 +37,7 @@ const NAV_TREE: NavNode[] = [
     permission: Permission.AbsencesCalendarView,
     surface: Surface.NavAbsences,
   },
-  { path: '/statistics', label: 'Статистика', surface: Surface.NavStatistics },
+  { path: '/statistics', label: 'Статистика · незабаром', surface: Surface.NavStatistics },
   {
     path: '/settings',
     label: 'Налаштування',

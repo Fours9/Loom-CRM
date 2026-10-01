@@ -24,6 +24,7 @@ import {
   type ProgressSection,
 } from './progress/questionnaire-section-map';
 import { firstValueFrom } from 'rxjs';
+import { HelpTriggerComponent } from '../../../core/help';
 
 @Component({
   selector: 'loom-questionnaire-fill-chrome',
@@ -31,6 +32,7 @@ import { firstValueFrom } from 'rxjs';
   imports: [
     QuestionnaireSectionRailComponent,
     QuestionnaireRequestChangesPopoverComponent,
+    HelpTriggerComponent,
   ],
   template: `
     <header class="step-topbar">
@@ -66,6 +68,7 @@ import { firstValueFrom } from 'rxjs';
         }
       </div>
       <div class="step-topbar-actions">
+        <loom-help-trigger tourId="questionnaires.fill" />
         @if (printError()) {
           <span class="print-error" role="alert">{{ printError() }}</span>
         }
@@ -87,16 +90,19 @@ import { firstValueFrom } from 'rxjs';
           }
         </button>
         @if (store.canShowRequestChangesButton()) {
-          <loom-questionnaire-request-changes-popover
-            #requestPopover
-            [busy]="actionBusy()"
-            (submitComment)="onRequestChangesSubmit($event)"
-          />
+          <span data-help-id="q.request-changes">
+            <loom-questionnaire-request-changes-popover
+              #requestPopover
+              [busy]="actionBusy()"
+              (submitComment)="onRequestChangesSubmit($event)"
+            />
+          </span>
         }
         @if (store.canShowEditButton()) {
           <button
             type="button"
             class="btn primary"
+            data-help-id="q.edit"
             [disabled]="actionBusy()"
             (click)="edit.emit()"
           >
@@ -124,6 +130,7 @@ import { firstValueFrom } from 'rxjs';
             class="btn ghost more-btn"
             title="Додаткові дії"
             aria-label="Додаткові дії"
+            data-help-id="q.more"
             [attr.aria-expanded]="moreMenuOpen()"
             [attr.aria-haspopup]="'menu'"
             [disabled]="actionBusy() || revision.manualSaveBusy() || printBusy()"
