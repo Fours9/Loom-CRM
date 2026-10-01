@@ -27,7 +27,7 @@ import {
   standalone: true,
   imports: [FormsModule, RouterLink, DatePipe],
   template: `
-    <section class="page">
+    <section class="page" data-help-id="absences.request-detail">
       <div class="sheet">
         <p class="back"><a routerLink="/absences/requests">← До списку</a></p>
 
@@ -436,7 +436,7 @@ import {
             @if (hasSidebarActions || request.history.length) {
               <aside class="col actions-col">
                 @if (hasSidebarActions) {
-                  <div class="card actions-card">
+                  <div class="card actions-card" data-help-id="absences.request-detail.actions">
                     <div class="actions-card-head">
                       <h2>Дії</h2>
                       <div class="actions-card-tools">

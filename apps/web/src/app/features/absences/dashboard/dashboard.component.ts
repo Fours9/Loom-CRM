@@ -1,4 +1,4 @@
-﻿import { Component, OnInit, inject } from '@angular/core';
+﻿import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
 import { AbsenceRequestListItem, EmployeeProfile } from '../core/api/models';
@@ -14,6 +14,12 @@ import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { requestFrameTone } from '../shared/request-status-presentation';
 import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
 import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
+import { HelpPageContextService } from '../../../core/help';
+import {
+  resolveAbsenceSidePanel,
+  type AbsenceSidePanelId,
+} from '../absence-side-panel.model';
+import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-help-context';
 
 @Component({
   selector: 'app-dashboard',
@@ -185,7 +191,8 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                     role="tab"
                     class="tab-btn"
                     [class.active]="sidePanel === 'schedule'"
-                    (click)="sidePanel = 'schedule'; $event.preventDefault(); $event.stopPropagation()"
+                    data-help-id="absences.side.schedule"
+                    (click)="selectSidePanel('schedule'); $event.preventDefault(); $event.stopPropagation()"
                   >
                     Графік
                   </button>
@@ -195,7 +202,8 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                       role="tab"
                       class="tab-btn"
                       [class.active]="sidePanel === 'comment'"
-                      (click)="sidePanel = 'comment'; $event.preventDefault(); $event.stopPropagation()"
+                      data-help-id="absences.side.comment"
+                      (click)="selectSidePanel('comment'); $event.preventDefault(); $event.stopPropagation()"
                     >
                       Коментар
                     </button>
@@ -205,13 +213,18 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
                     role="tab"
                     class="tab-btn"
                     [class.active]="sidePanel === 'requests'"
-                    (click)="sidePanel = 'requests'; $event.preventDefault(); $event.stopPropagation()"
+                    data-help-id="absences.side.requests"
+                    (click)="selectSidePanel('requests'); $event.preventDefault(); $event.stopPropagation()"
                   >
                     Заявки
                   </button>
                 </div>
               </summary>
-              <div class="side-tools-body" [attr.data-panel]="sidePanel">
+              <div
+                class="side-tools-body"
+                [attr.data-panel]="sidePanel"
+                [attr.data-help-id]="'absences.side.' + sidePanel + '.body'"
+              >
                 @if (sidePanel === 'schedule') {
                   <app-schedule-editor
                     [days]="employee.schedule"
@@ -754,9 +767,10 @@ import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
     `,
   ],
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   readonly auth = inject(AuthService);
+  private readonly helpPage = inject(HelpPageContextService);
 
   readonly personAvatarPath = PERSON_AVATAR_PATH;
   readonly createRequestLink = buildCreateAbsenceRequestLink();
@@ -771,7 +785,7 @@ export class DashboardComponent implements OnInit {
   requests: AbsenceRequestListItem[] = [];
   loading = false;
   error = '';
-  sidePanel: 'schedule' | 'comment' | 'requests' = 'schedule';
+  sidePanel: AbsenceSidePanelId = 'schedule';
   pdfLoading = false;
 
   get heroOrgMeta(): string {
@@ -794,6 +808,7 @@ export class DashboardComponent implements OnInit {
       next: (employee) => {
         this.employee = employee;
         this.loading = false;
+        this.normalizeAndSyncHelp();
         this.api.getEmployeeRequests(employee.id).subscribe({
           next: (res) => (this.requests = res.items.slice(0, 5)),
         });
@@ -803,6 +818,36 @@ export class DashboardComponent implements OnInit {
         this.loading = false;
       },
     });
+  }
+
+  ngOnDestroy(): void {
+    this.helpPage.clearFeatureContext('absences-dashboard');
+  }
+
+  selectSidePanel(requested: AbsenceSidePanelId): void {
+    this.sidePanel = resolveAbsenceSidePanel(
+      requested,
+      Boolean(this.employee?.permissions?.canViewComment),
+    );
+    this.syncHelpContext();
+  }
+
+  private normalizeAndSyncHelp(): void {
+    this.sidePanel = resolveAbsenceSidePanel(
+      this.sidePanel,
+      Boolean(this.employee?.permissions?.canViewComment),
+    );
+    this.syncHelpContext();
+  }
+
+  private syncHelpContext(): void {
+    this.helpPage.setFeatureContext(
+      'absences-dashboard',
+      resolveAbsencesDashboardHelpContext(
+        this.sidePanel,
+        Boolean(this.employee?.permissions?.canViewComment),
+      ),
+    );
   }
 
   /** Prefer AccountRole.name from profile; session fallback for self; else legacy. */

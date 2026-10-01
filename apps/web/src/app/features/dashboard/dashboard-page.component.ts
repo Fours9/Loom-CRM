@@ -30,7 +30,7 @@ import { PLATFORM_TAGLINE } from '../../core/brand/platform';
         </blockquote>
       </header>
 
-      <div class="grid">
+      <div class="grid" data-help-id="home.tiles">
         <a class="tile" routerLink="/absences">
           <strong>Робочий календар</strong>
           <span>Заявки, календар і командні події часу</span>

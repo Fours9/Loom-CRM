@@ -15,7 +15,7 @@ import {
   standalone: true,
   imports: [FormsModule, RouterLink],
   template: `
-    <section class="page">
+    <section class="page" data-help-id="absences.admin">
       <h1>Адміністрування</h1>
       <p class="lead">Налаштування конфіденційності</p>
 
@@ -29,7 +29,7 @@ import {
       </p>
 
       <div class="grid">
-        <article class="card card-privacy">
+        <article class="card card-privacy" data-help-id="absences.admin.privacy">
           <h2>Конфіденційність</h2>
           @if (privacy) {
             <label class="check">

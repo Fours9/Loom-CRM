@@ -37,7 +37,7 @@ type RequestSortKey =
     RequestStatusBadgeComponent,
   ],
   template: `
-    <section class="page">
+    <section class="page" data-help-id="absences.requests">
       <header class="page-head">
         <div>
           <h1>Заявки</h1>
@@ -45,6 +45,7 @@ type RequestSortKey =
         </div>
         <a
           class="btn"
+          data-help-id="absences.requests.new"
           [routerLink]="createRequestLink.routerLink"
           [queryParams]="createRequestLink.queryParams"
         >
@@ -52,7 +53,7 @@ type RequestSortKey =
         </a>
       </header>
 
-      <div class="filters">
+      <div class="filters" data-help-id="absences.requests.filters">
         <label class="filter-block narrow">
           <span>Статус</span>
           <select [(ngModel)]="statusGroup" (ngModelChange)="onFilterChange()">

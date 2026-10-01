@@ -27,18 +27,20 @@ type EmployeeSortKey =
   standalone: true,
   imports: [FormsModule, RouterLink, MultiSelectListComponent],
   template: `
-    <section class="page">
+    <section class="page" data-help-id="absences.employees">
       <header class="page-head">
         <div>
           <h1>Працівники</h1>
           <p>Список анкет і пошук</p>
         </div>
         @if (canOpenCreate()) {
-          <a class="btn" routerLink="/people/new">Додати працівника</a>
+          <a class="btn" routerLink="/people/new" data-help-id="absences.employees.add">
+            Додати працівника
+          </a>
         }
       </header>
 
-      <div class="filters">
+      <div class="filters" data-help-id="absences.employees.filters">
         <input [(ngModel)]="q" (ngModelChange)="load()" placeholder="Пошук ПІБ / номер / email" />
         <label class="filter-block">
           <span>Відділи</span>

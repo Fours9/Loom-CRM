@@ -54,12 +54,12 @@ import {
     CalendarSegmentComponent,
   ],
   template: `
-    <section class="page" [class.embedded]="embedded">
+    <section class="page" [class.embedded]="embedded" data-help-id="absences.calendar">
       <header class="top" [class.embedded]="embedded">
         @if (!embedded) {
           <h1>Робочий календар</h1>
         }
-        <div class="nav-row">
+        <div class="nav-row" data-help-id="absences.calendar.nav">
           <button
             type="button"
             class="ghost"
@@ -99,7 +99,7 @@ import {
             </button>
           }
         </div>
-        <div class="filters">
+        <div class="filters" data-help-id="absences.calendar.filters">
           @if (!isEmployeeOnly) {
             <label>
               {{ 'calendar.filters.department' | t }}

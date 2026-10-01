@@ -77,7 +77,12 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
     <div class="panel">
       @if (canUpload()) {
         <div class="toolbar">
-          <button type="button" class="btn primary" (click)="openUploadDialog()">
+          <button
+            type="button"
+            class="btn primary"
+            data-help-id="people.documents.upload"
+            (click)="openUploadDialog()"
+          >
             Додати документи
           </button>
           @if (uploadSuccess()) {

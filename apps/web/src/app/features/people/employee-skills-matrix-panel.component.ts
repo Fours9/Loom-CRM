@@ -80,7 +80,12 @@ import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.ser
           @if (canEdit) {
             <div class="add">
               @if (!pickerOpen) {
-                <button type="button" class="link" (click)="openPicker()">
+                <button
+                  type="button"
+                  class="link"
+                  data-help-id="people.metrics.skills.add"
+                  (click)="openPicker()"
+                >
                   Додати навичку
                 </button>
               } @else {

@@ -1,4 +1,4 @@
-﻿import { Component, OnInit, inject } from '@angular/core';
+﻿import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
@@ -30,6 +30,12 @@ import {
   type AbsenceTypeDetailOverrideUi,
   type VisibilityOverrideUi,
 } from '../../../shared/organization/labels';
+import { HelpPageContextService } from '../../../core/help';
+import {
+  resolveAbsenceSidePanel,
+  type AbsenceSidePanelId,
+} from '../absence-side-panel.model';
+import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absences-help-context';
 
 @Component({
   selector: 'app-employee-detail-page',
@@ -428,7 +434,8 @@ import {
                     role="tab"
                     class="tab-btn"
                     [class.active]="sidePanel === 'schedule'"
-                    (click)="sidePanel = 'schedule'; $event.preventDefault(); $event.stopPropagation()"
+                    data-help-id="absences.side.schedule"
+                    (click)="selectSidePanel('schedule'); $event.preventDefault(); $event.stopPropagation()"
                   >
                     Графік
                   </button>
@@ -438,7 +445,8 @@ import {
                       role="tab"
                       class="tab-btn"
                       [class.active]="sidePanel === 'comment'"
-                      (click)="sidePanel = 'comment'; $event.preventDefault(); $event.stopPropagation()"
+                      data-help-id="absences.side.comment"
+                      (click)="selectSidePanel('comment'); $event.preventDefault(); $event.stopPropagation()"
                     >
                       Коментар
                     </button>
@@ -448,13 +456,18 @@ import {
                     role="tab"
                     class="tab-btn"
                     [class.active]="sidePanel === 'requests'"
-                    (click)="sidePanel = 'requests'; $event.preventDefault(); $event.stopPropagation()"
+                    data-help-id="absences.side.requests"
+                    (click)="selectSidePanel('requests'); $event.preventDefault(); $event.stopPropagation()"
                   >
                     Заявки
                   </button>
                 </div>
               </summary>
-              <div class="side-tools-body" [attr.data-panel]="sidePanel">
+              <div
+                class="side-tools-body"
+                [attr.data-panel]="sidePanel"
+                [attr.data-help-id]="'absences.side.' + sidePanel + '.body'"
+              >
                 @if (sidePanel === 'schedule') {
                   @if (editingProfile && employee.permissions?.canEditSchedule) {
                     <app-schedule-editor [days]="editSchedule" namePrefix="edit_" />
@@ -1118,11 +1131,12 @@ import {
     `,
   ],
 })
-export class EmployeeDetailPageComponent implements OnInit {
+export class EmployeeDetailPageComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly helpPage = inject(HelpPageContextService);
 
   readonly personAvatarPath = PERSON_AVATAR_PATH;
   readonly createRequestLink = buildCreateAbsenceRequestLink();
@@ -1171,7 +1185,7 @@ export class EmployeeDetailPageComponent implements OnInit {
   requests: AbsenceRequestListItem[] = [];
   editingProfile = false;
   editSchedule: ScheduleDay[] = [];
-  sidePanel: 'schedule' | 'comment' | 'requests' = 'schedule';
+  sidePanel: AbsenceSidePanelId = 'schedule';
   pdfLoading = false;
   private editBaseline: EmployeeProfile | null = null;
   /** `?edit=1` may open edit once; do not re-enter after save/reload. */
@@ -1233,6 +1247,7 @@ export class EmployeeDetailPageComponent implements OnInit {
         this.employee = employee;
         this.fillEditFromEmployee(employee);
         this.fillOverridesFromEmployee(employee);
+        this.normalizeAndSyncHelp();
         this.api.getEmployeeRequests(employee.id).subscribe({
           next: (res) => (this.requests = res.items.slice(0, 8)),
         });
@@ -1240,6 +1255,36 @@ export class EmployeeDetailPageComponent implements OnInit {
       },
       error: () => (this.error = 'Не вдалося відкрити анкету'),
     });
+  }
+
+  ngOnDestroy(): void {
+    this.helpPage.clearFeatureContext('absences-employee-detail');
+  }
+
+  selectSidePanel(requested: AbsenceSidePanelId): void {
+    this.sidePanel = resolveAbsenceSidePanel(
+      requested,
+      Boolean(this.employee?.permissions?.canViewComment),
+    );
+    this.syncHelpContext();
+  }
+
+  private normalizeAndSyncHelp(): void {
+    this.sidePanel = resolveAbsenceSidePanel(
+      this.sidePanel,
+      Boolean(this.employee?.permissions?.canViewComment),
+    );
+    this.syncHelpContext();
+  }
+
+  private syncHelpContext(): void {
+    this.helpPage.setFeatureContext(
+      'absences-employee-detail',
+      resolveAbsencesEmployeeDetailHelpContext(
+        this.sidePanel,
+        Boolean(this.employee?.permissions?.canViewComment),
+      ),
+    );
   }
 
   private openEditFromQueryIfNeeded(): void {

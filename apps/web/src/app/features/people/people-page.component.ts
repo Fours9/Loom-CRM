@@ -43,14 +43,14 @@ import { PeopleEmployeesApiService } from './people-employees-api.service';
     EmployeeDirectoryTableComponent,
   ],
   template: `
-    <section class="page">
+    <section class="page" data-help-id="people.directory">
       <header class="page-head">
         <div>
           <h1>Працівники</h1>
           <p>Кадровий список Loom CRM · профіль: /people/:id</p>
         </div>
         @if (canCreate()) {
-          <a routerLink="/people/new" class="btn">Додати</a>
+          <a routerLink="/people/new" class="btn" data-help-id="people.directory.add">Додати</a>
         }
       </header>
 
@@ -59,6 +59,7 @@ import { PeopleEmployeesApiService } from './people-employees-api.service';
       }
 
       <loom-employee-directory-filters
+        data-help-id="people.directory.filters"
         [filters]="filters()"
         [options]="filterOptions()"
         [sortBy]="sortBy()"
@@ -69,6 +70,7 @@ import { PeopleEmployeesApiService } from './people-employees-api.service';
       />
 
       <loom-employee-directory-table
+        data-help-id="people.directory.table"
         [items]="items()"
         [loading]="loading()"
         [sortBy]="sortBy()"

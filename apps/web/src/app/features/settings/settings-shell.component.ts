@@ -8,7 +8,7 @@ import { SessionStore } from '../../core/auth/session.store';
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
   template: `
-    <section class="page">
+    <section class="page" data-help-id="settings.shell">
       <header class="page-head">
         <h1>Налаштування</h1>
         <p class="lead">Платформені параметри</p>
@@ -19,6 +19,7 @@ import { SessionStore } from '../../core/auth/session.store';
             routerLink="access-roles"
             routerLinkActive="active"
             [routerLinkActiveOptions]="{ exact: true }"
+            data-help-id="settings.access-link"
             >Доступи</a
           >
         </nav>

@@ -19,12 +19,12 @@ type CatalogDialogState =
   standalone: true,
   imports: [FormsModule, CatalogEditDialogComponent, EmploymentCatalogListComponent],
   template: `
-    <section class="settings">
+    <section class="settings" data-help-id="positions.formats">
       @if (error()) {
         <p class="error">{{ error() }}</p>
       }
 
-      <div class="catalog-rail">
+      <div class="catalog-rail" data-help-id="positions.formats.list">
         <article
           class="card panel"
           [class.collapsed]="!panelOpen().workFormats"

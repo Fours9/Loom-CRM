@@ -16,6 +16,11 @@ export class HelpTourRegistry {
     return this.tours.get(tourId) ?? null;
   }
 
+  /** Test / diagnostics */
+  listTours(): readonly HelpTourDefinition[] {
+    return [...this.tours.values()];
+  }
+
   clear(): void {
     this.tours.clear();
   }

@@ -46,7 +46,7 @@ import { PositionManagementFacade } from './position-management.facade';
         </div>
 
         @if (vm.catalogTab() === 'skills') {
-          <div class="tab-body">
+          <div class="tab-body" data-help-id="positions.catalog.skills">
             <p class="hint">Навички посади змінюються в модалці редагування.</p>
             <ul>
               @for (r of vm.skillRequirements(); track r.id) {
@@ -63,7 +63,7 @@ import { PositionManagementFacade } from './position-management.facade';
         }
 
         @if (vm.catalogTab() === 'goals') {
-          <div class="tab-body">
+          <div class="tab-body" data-help-id="positions.catalog.goals">
             @if (vm.canManagePositions()) {
               <form class="position-form" (ngSubmit)="vm.addGoalTemplate()">
                 <label>
@@ -114,7 +114,7 @@ import { PositionManagementFacade } from './position-management.facade';
         }
 
         @if (vm.catalogTab() === 'duties') {
-          <div class="tab-body">
+          <div class="tab-body" data-help-id="positions.catalog.duties">
             @if (vm.canManagePositions()) {
               <form class="position-form" (ngSubmit)="vm.addDuty()">
                 <label>

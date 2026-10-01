@@ -5,6 +5,7 @@ import {
   OnDestroy,
   SimpleChanges,
   inject,
+  output,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type {
@@ -26,7 +27,7 @@ import {
   standalone: true,
   imports: [FormsModule, EmployeeAboutRepeatingFieldComponent],
   template: `
-    <section class="about" aria-label="Про себе">
+    <section class="about" aria-label="Про себе" data-help-id="people.about.region">
       <p class="lead">
         Мʼякий контекст про працівника (хобі, сімʼя, стиль роботи) — окремо від
         кадрових «Даних працівника». Sync з анкет не замінює цю вкладку.
@@ -37,7 +38,12 @@ import {
       } @else if (error) {
         <p class="error">{{ error }}</p>
       } @else if (data) {
-        <nav class="tabs subtabs" role="tablist" aria-label="Про себе — розділи">
+        <nav
+          class="tabs subtabs"
+          role="tablist"
+          aria-label="Про себе — розділи"
+          data-help-id="people.about.subtabs"
+        >
           @for (tab of data.subtabs; track tab.id) {
             <button
               type="button"
@@ -129,6 +135,7 @@ import {
                 <button
                   type="button"
                   class="primary"
+                  data-help-id="people.about.save"
                   [disabled]="saving"
                   (click)="save()"
                 >
@@ -275,6 +282,8 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
   activeSubtab: PeopleAboutSubtabId | null = null;
   draft: Record<string, unknown> = {};
 
+  readonly subtabChange = output<PeopleAboutSubtabId | null>();
+
   get canEdit(): boolean {
     return Boolean(this.data?.canEdit);
   }
@@ -295,9 +304,18 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
   }
 
   selectSubtab(id: PeopleAboutSubtabId): void {
-    this.activeSubtab = id;
+    this.setActiveSubtab(id);
     this.hydrateDraft();
     this.saveError = null;
+  }
+
+  private setActiveSubtab(
+    next: PeopleAboutSubtabId | null,
+    opts?: { forceEmit?: boolean },
+  ): void {
+    if (this.activeSubtab === next && !opts?.forceEmit) return;
+    this.activeSubtab = next;
+    this.subtabChange.emit(next);
   }
 
   isMultiChecked(key: string, value: string): boolean {
@@ -379,16 +397,18 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
       next: (res) => {
         this.data = res;
         const visible = visiblePeopleAboutSubtabs();
-        this.activeSubtab = resolvePeopleAboutSubtab(
+        const next = resolvePeopleAboutSubtab(
           this.activeSubtab ?? visible[0]?.id ?? '',
           visible,
         );
+        this.setActiveSubtab(next, { forceEmit: true });
         this.hydrateDraft();
         this.loading = false;
       },
       error: (err) => {
         this.loading = false;
         this.data = null;
+        this.setActiveSubtab(null, { forceEmit: true });
         this.error =
           err?.status === 403
             ? 'Немає доступу до вкладки «Про себе»'

@@ -16,7 +16,7 @@ import { QuestionnairesApiService } from '../../questionnaires/core/questionnair
   standalone: true,
   imports: [AccountRoleEditDialogComponent],
   template: `
-    <section class="access-roles">
+    <section class="access-roles" data-help-id="settings.access-roles">
       <header class="head">
         <div>
           <h2>Доступи</h2>
@@ -25,7 +25,12 @@ import { QuestionnairesApiService } from '../../questionnaires/core/questionnair
             у структурі задається посадою, а не роллю акаунта.
           </p>
         </div>
-        <button type="button" (click)="openCreate()" [disabled]="loading()">
+        <button
+          type="button"
+          data-help-id="settings.access-roles.create"
+          (click)="openCreate()"
+          [disabled]="loading()"
+        >
           Нова роль
         </button>
       </header>

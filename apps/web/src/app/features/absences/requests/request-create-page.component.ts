@@ -37,7 +37,7 @@ type EmployeeSortKey =
   standalone: true,
   imports: [FormsModule, RouterLink, MultiSelectListComponent],
   template: `
-    <section class="page">
+    <section class="page" data-help-id="absences.request-create">
       <div class="sheet">
         <header class="page-head">
           <p><a routerLink="/absences/requests">← До списку</a></p>
@@ -46,7 +46,7 @@ type EmployeeSortKey =
 
         <form class="form" (ngSubmit)="submit()">
           @if (canPickEmployee) {
-            <fieldset class="target">
+            <fieldset class="target" data-help-id="absences.request-create.target">
               <legend>За кого подати</legend>
               <label class="radio">
                 <input
@@ -225,7 +225,7 @@ type EmployeeSortKey =
             }
           }
 
-          <label>
+          <label data-help-id="absences.request-create.type">
             <span>Тип</span>
             <select [(ngModel)]="type" name="type" (ngModelChange)="onTypeChange()">
               @for (group of typeGroups; track group.category) {
@@ -419,7 +419,14 @@ type EmployeeSortKey =
           }
 
           <div class="pw-form-actions">
-            <button class="btn" type="submit" [disabled]="saving">Подати</button>
+            <button
+              class="btn"
+              type="submit"
+              [disabled]="saving"
+              data-help-id="absences.request-create.submit"
+            >
+              Подати
+            </button>
           </div>
         </form>
       </div>

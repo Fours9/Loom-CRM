@@ -53,6 +53,14 @@ import {
   type PeopleProfileTabId,
 } from './people-profile-tabs';
 import { HelpPageContextService } from '../../core/help';
+import { resolvePeopleHelpContext } from './help/resolve-people-help-context';
+import type { EmployeeDataTabId } from './employee-data-tabs.model';
+import type { PeopleAboutSubtabId } from '@loom/contracts-employees';
+import type {
+  PeopleAdminSubtabId,
+  PeopleMetricsSubtabId,
+  PeopleWorkSubtabId,
+} from './help/resolve-people-help-context';
 
 type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
@@ -156,6 +164,7 @@ type MetricsTabId = 'skills';
                 (profileChange)="onDataProfileChange($event)"
                 (historyAssignChange)="historyAssign.set($event)"
                 (errorChange)="error.set($event)"
+                (subtabChange)="onDataSubtab($event)"
               />
             }
             @case ('absences') {
@@ -219,10 +228,15 @@ type MetricsTabId = 'skills';
                   (errorChange)="error.set($event)"
                 />
               } @else if (absenceTab() === 'schedule') {
-                <app-employee-work-schedule-panel [employeeId]="profile()!.header.id" />
+                <div data-help-id="people.work.schedule">
+                  <app-employee-work-schedule-panel [employeeId]="profile()!.header.id" />
+                </div>
               } @else if (absenceTab() === 'requests') {
-                <app-employee-absence-requests-panel [employeeId]="profile()!.header.id" />
+                <div data-help-id="people.work.requests">
+                  <app-employee-absence-requests-panel [employeeId]="profile()!.header.id" />
+                </div>
               } @else {
+                <div data-help-id="people.work.calendar">
                 @defer (on immediate) {
                   <app-calendar-page
                     [presetEmployeeId]="profile()!.header.id"
@@ -236,9 +250,11 @@ type MetricsTabId = 'skills';
                 } @error {
                   <p class="error">Не вдалося завантажити календар.</p>
                 }
+                </div>
               }
             }
             @case ('documents') {
+              <div data-help-id="people.documents">
               @defer (on immediate) {
                 <app-employee-documents-panel [employeeId]="profile()!.header.id" />
               } @placeholder {
@@ -248,6 +264,7 @@ type MetricsTabId = 'skills';
               } @error {
                 <p class="error">Не вдалося завантажити документи.</p>
               }
+              </div>
             }
             @case ('questionnaires') {
               @defer (on immediate) {
@@ -264,7 +281,10 @@ type MetricsTabId = 'skills';
               }
             }
             @case ('about') {
-              <loom-employee-about-panel [employeeId]="employeeId" />
+              <loom-employee-about-panel
+                [employeeId]="employeeId"
+                (subtabChange)="onAboutSubtab($event)"
+              />
             }
             @case ('metrics') {
               <nav
@@ -285,7 +305,9 @@ type MetricsTabId = 'skills';
                 </button>
               </nav>
               @if (metricsTab() === 'skills') {
-                <loom-employee-skills-matrix-panel [employeeId]="employeeId" />
+                <div data-help-id="people.metrics.skills">
+                  <loom-employee-skills-matrix-panel [employeeId]="employeeId" />
+                </div>
               }
             }
             @case ('administration') {
@@ -336,24 +358,30 @@ type MetricsTabId = 'skills';
               </nav>
 
               @if (adminTab() === 'history' && profile()!.capabilities.canViewHistory) {
-                <loom-employee-history-panel [items]="audit()" />
+                <div data-help-id="people.admin.history">
+                  <loom-employee-history-panel [items]="audit()" />
+                </div>
               }
               @if (adminTab() === 'account' && showAccountAdminTab()) {
-                <loom-employee-account-panel
-                  [employeeId]="employeeId"
-                  [header]="profile()!.header"
-                  [caps]="profile()!.capabilities"
-                  (changed)="reloadProfile()"
-                  (deleted)="onEmployeeHardDeleted()"
-                />
+                <div data-help-id="people.admin.account">
+                  <loom-employee-account-panel
+                    [employeeId]="employeeId"
+                    [header]="profile()!.header"
+                    [caps]="profile()!.capabilities"
+                    (changed)="reloadProfile()"
+                    (deleted)="onEmployeeHardDeleted()"
+                  />
+                </div>
               }
               @if (adminTab() === 'roleAccess' && showRoleAccessAdminTab()) {
-                <loom-employee-role-access-panel
-                  [employeeId]="employeeId"
-                  [access]="profile()!.sections.access"
-                  [caps]="profile()!.capabilities"
-                  (changed)="reloadProfile()"
-                />
+                <div data-help-id="people.admin.roleAccess">
+                  <loom-employee-role-access-panel
+                    [employeeId]="employeeId"
+                    [access]="profile()!.sections.access"
+                    [caps]="profile()!.capabilities"
+                    (changed)="reloadProfile()"
+                  />
+                </div>
               }
             }
             @default {
@@ -554,6 +582,8 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly absenceTab = signal<AbsenceTabId>('position');
   readonly adminTab = signal<AdminTabId>('history');
   readonly metricsTab = signal<MetricsTabId>('skills');
+  readonly dataSubtab = signal<EmployeeDataTabId>('basics');
+  readonly aboutSubtab = signal<PeopleAboutSubtabId | null>(null);
   readonly audit = signal<EmployeeProfileHistoryItem[]>([]);
   readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
 
@@ -596,12 +626,17 @@ export class PeopleProfilePageComponent implements OnInit {
     });
 
     effect(() => {
-      const tab = this.tab();
-      this.helpPageContext.setFeatureContext('people-profile', {
-        label: peopleProfileTabLabel(tab),
-        tourId: tab === 'questionnaires' ? 'questionnaires.employee' : null,
-        soon: tab !== 'questionnaires',
-      });
+      this.helpPageContext.setFeatureContext(
+        'people-profile',
+        resolvePeopleHelpContext({
+          tab: this.tab(),
+          dataSubtab: this.dataSubtab(),
+          aboutSubtab: this.aboutSubtab(),
+          workSubtab: this.absenceTab() as PeopleWorkSubtabId,
+          metricsSubtab: this.metricsTab() as PeopleMetricsSubtabId,
+          adminSubtab: this.adminTab() as PeopleAdminSubtabId,
+        }),
+      );
     });
     this.destroyRef.onDestroy(() => {
       this.helpPageContext.clearFeatureContext('people-profile');
@@ -691,6 +726,14 @@ export class PeopleProfilePageComponent implements OnInit {
     this.error.set(null);
   }
 
+  onDataSubtab(id: EmployeeDataTabId): void {
+    this.dataSubtab.set(id);
+  }
+
+  onAboutSubtab(id: PeopleAboutSubtabId | null): void {
+    this.aboutSubtab.set(id);
+  }
+
   reloadProfile(): void {
     if (!this.employeeId) return;
     this.http
@@ -744,6 +787,8 @@ export class PeopleProfilePageComponent implements OnInit {
     this.error.set(null);
     this.tab.set('data');
     this.absenceTab.set('position');
+    this.dataSubtab.set('basics');
+    this.aboutSubtab.set(null);
   }
 
   /** Keep completeness bar at the same viewport Y when tab body reflows. */

@@ -1,8 +1,8 @@
-import { navigationLabel } from '../../core/navigation/navigation.model';
 import type { HelpDomainBundle } from '../../core/help/help-tour.models';
 import type { HelpRouteDescriptor } from '../../core/help/help-page.models';
 import { helpTourRegistry } from '../../core/help/help-tour.registry';
 import { helpPageContextRegistry } from '../../core/help/help-page-context.registry';
+import { navigationLabel } from '../../core/navigation/navigation.model';
 
 export const APP_MAIN_HELP_BUNDLE: HelpDomainBundle = {
   tours: [
@@ -37,74 +37,14 @@ export const APP_MAIN_HELP_BUNDLE: HelpDomainBundle = {
   ],
 };
 
-/** Route-level soon stubs + home (labels from navigation.model SoT). */
+/** Only cross-cutting stubs not owned by feature help bundles. */
 export const APP_ROUTE_HELP_DESCRIPTORS: readonly HelpRouteDescriptor[] = [
-  {
-    id: 'route.home',
-    pattern: [],
-    exact: true,
-    context: {
-      label: navigationLabel('/'),
-      tourId: null,
-      soon: true,
-    },
-  },
-  {
-    id: 'route.people',
-    pattern: ['people'],
-    exact: true,
-    context: {
-      label: navigationLabel('/people'),
-      tourId: null,
-      soon: true,
-    },
-  },
-  {
-    id: 'route.people.detail',
-    pattern: ['people', ':id'],
-    exact: true,
-    context: {
-      label: navigationLabel('/people'),
-      tourId: null,
-      soon: true,
-    },
-  },
-  {
-    id: 'route.positions',
-    pattern: ['positions'],
-    exact: false,
-    context: {
-      label: navigationLabel('/positions'),
-      tourId: null,
-      soon: true,
-    },
-  },
-  {
-    id: 'route.absences',
-    pattern: ['absences', '**'],
-    exact: false,
-    context: {
-      label: navigationLabel('/absences'),
-      tourId: null,
-      soon: true,
-    },
-  },
   {
     id: 'route.statistics',
     pattern: ['statistics'],
     exact: true,
     context: {
       label: navigationLabel('/statistics'),
-      tourId: null,
-      soon: true,
-    },
-  },
-  {
-    id: 'route.settings',
-    pattern: ['settings', '**'],
-    exact: false,
-    context: {
-      label: navigationLabel('/settings'),
       tourId: null,
       soon: true,
     },

@@ -19,7 +19,7 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
   standalone: true,
   imports: [FormsModule, PasswordVisibilityToggleComponent],
   template: `
-    <div class="account-panel">
+    <div class="account-panel" data-help-id="people.admin.account.actions">
       @if (message()) {
         <p class="ok">{{ message() }}</p>
       }

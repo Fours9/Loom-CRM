@@ -6,6 +6,7 @@ import {
   Output,
   SimpleChanges,
   inject,
+  output,
   signal,
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
@@ -57,8 +58,11 @@ import {
   type EmploymentAssignmentDialogState,
   type EmploymentAssignmentForm,
 } from './employment-assignment-dialog.model';
+import {
+  type EmployeeDataTabId,
+} from './employee-data-tabs.model';
 
-type DataTabId = 'basics' | 'contacts' | 'dates';
+export type { EmployeeDataTabId };
 export type EmployeeDataPanelMode = 'employee-data' | 'position';
 
 type ImportantDateDraft = {
@@ -114,6 +118,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 }
 
 @if (panelMode === 'employee-data' && dataTab() === 'basics') {
+  <div data-help-id="people.data.basics">
   <div class="section-head">
     <h2>Основні</h2>
     @if (profile.capabilities.canEditBasic || profile.capabilities.canEditPersonal) {
@@ -126,7 +131,12 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
             Скасувати
           </button>
         } @else {
-          <button type="button" class="btn ghost" (click)="startBasicsEditing()">
+          <button
+            type="button"
+            class="btn ghost"
+            data-help-id="people.data.basics.edit"
+            (click)="startBasicsEditing()"
+          >
             Редагувати
           </button>
         }
@@ -161,9 +171,11 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
       <label>Мова <input [(ngModel)]="personalCoreForm.preferredLanguage" name="lang" /></label>
     </div>
   }
+  </div>
 }
 
 @if (panelMode === 'employee-data' && dataTab() === 'contacts') {
+  <div data-help-id="people.data.contacts">
   <div class="section-head">
     <h2>Контакти</h2>
     @if (
@@ -180,7 +192,12 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
             Скасувати
           </button>
         } @else {
-          <button type="button" class="btn ghost" (click)="startContactsEditing()">
+          <button
+            type="button"
+            class="btn ghost"
+            data-help-id="people.data.contacts.edit"
+            (click)="startContactsEditing()"
+          >
             Редагувати
           </button>
         }
@@ -194,9 +211,11 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
     [editing]="editingContacts()"
     (bundleChange)="onContactsBundleDraftChange($event)"
   />
+  </div>
 }
 
 @if (panelMode === 'employee-data' && dataTab() === 'dates') {
+  <div data-help-id="people.data.dates">
   <div class="section-head">
     <h2>Дати</h2>
     @if (
@@ -212,7 +231,12 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
             Скасувати
           </button>
         } @else {
-          <button type="button" class="btn ghost" (click)="startDatesEditing()">
+          <button
+            type="button"
+            class="btn ghost"
+            data-help-id="people.data.dates.edit"
+            (click)="startDatesEditing()"
+          >
             Редагувати
           </button>
         }
@@ -363,14 +387,21 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
       <p class="muted">Важливих дат ще немає.</p>
     }
   }
+  </div>
 }
 
 @if (panelMode === 'position') {
+  <div data-help-id="people.work.position">
   <div class="section-head">
     <h2>Посада</h2>
     @if (profile.capabilities.canEditEmployment) {
       <div class="section-actions">
-        <button type="button" class="btn ghost" (click)="startCreatingAssignment()">
+        <button
+          type="button"
+          class="btn ghost"
+          data-help-id="people.work.position.new"
+          (click)="startCreatingAssignment()"
+        >
           Нове призначення
         </button>
       </div>
@@ -441,6 +472,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
     }
   </ul>
   }
+  </div>
 }
 
 @if (openAssignmentDialog(); as dialog) {
@@ -949,8 +981,10 @@ export class EmployeeDataPanelComponent implements OnChanges {
   @Output() readonly profileChange = new EventEmitter<EmployeeProfileResponse>();
   @Output() readonly historyAssignChange = new EventEmitter<AssignmentHistoryItem[]>();
   @Output() readonly errorChange = new EventEmitter<string | null>();
+  /** Emits on user change, employee reset, and initial (parent syncs help). */
+  readonly subtabChange = output<EmployeeDataTabId>();
 
-  readonly dataTab = signal<DataTabId>('basics');
+  readonly dataTab = signal<EmployeeDataTabId>('basics');
   readonly editingBasics = signal(false);
   readonly editingContacts = signal(false);
   readonly editingDates = signal(false);
@@ -990,13 +1024,23 @@ export class EmployeeDataPanelComponent implements OnChanges {
         this.loadOrgCatalog();
       }
     }
-    if (changes['employeeId'] && !changes['employeeId'].firstChange) {
-      this.dataTab.set('basics');
-      this.resetEditingModes();
-      if (this.profile) {
-        this.applyProfile(this.profile);
-        if (this.panelMode === 'position') {
-          this.loadOrgCatalog();
+    if (changes['employeeId'] && this.employeeId) {
+      if (changes['employeeId'].firstChange) {
+        this.subtabChange.emit(this.dataTab());
+      } else {
+        // Always emit after employee reset so parent Help matches visible tab
+        // even when already on basics (DoD 24).
+        if (this.dataTab() === 'basics') {
+          this.subtabChange.emit('basics');
+        } else {
+          this.setDataTabState('basics');
+        }
+        this.resetEditingModes();
+        if (this.profile) {
+          this.applyProfile(this.profile);
+          if (this.panelMode === 'position') {
+            this.loadOrgCatalog();
+          }
         }
       }
     }
@@ -1024,12 +1068,15 @@ export class EmployeeDataPanelComponent implements OnChanges {
     );
   }
 
-  setDataTab(id: DataTabId): void {
-    if (this.dataTab() === id) return;
-    this.withPreservedScroll(() => {
-      this.dataTab.set(id);
-      this.resetEditingModes();
-    });
+  setDataTab(id: EmployeeDataTabId): void {
+    this.withPreservedScroll(() => this.setDataTabState(id));
+  }
+
+  private setDataTabState(next: EmployeeDataTabId): void {
+    if (this.dataTab() === next) return;
+    this.dataTab.set(next);
+    this.resetEditingModes();
+    this.subtabChange.emit(next);
   }
 
   startBasicsEditing(): void {

@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { OrganizationCatalogColumnComponent } from './organization-catalog-column.component';
 import { PositionDetailsPanelComponent } from './position-details-panel.component';
 import { PositionEditDialogComponent } from './position-edit-dialog.component';
@@ -8,6 +15,9 @@ import { DirectionEditDialogComponent } from './direction-edit-dialog.component'
 import { DepartmentEditDialogComponent } from './department-edit-dialog.component';
 import { PositionManagementFacade } from './position-management.facade';
 import { PositionSettingsTabComponent } from './position-settings-tab.component';
+import { HelpPageContextService } from '../../core/help';
+import { resolvePositionsHelpContext } from './help/resolve-positions-help-context';
+import type { PositionPageTabId } from './position-help-context.model';
 
 @Component({
   selector: 'loom-position-management-page',
@@ -24,7 +34,10 @@ import { PositionSettingsTabComponent } from './position-settings-tab.component'
     PositionSettingsTabComponent,
   ],
   template: `
-    <section class="section">
+    <section
+      class="section"
+      [attr.data-help-id]="tab() === 'settings' ? 'positions.formats' : 'positions.management'"
+    >
       <h1>Керування посадами</h1>
       <p class="lead">Напрямки, відділи, посади та навички організації</p>
 
@@ -128,7 +141,26 @@ import { PositionSettingsTabComponent } from './position-settings-tab.component'
 })
 export class PositionManagementPageComponent implements OnInit {
   readonly vm = inject(PositionManagementFacade);
-  readonly tab = signal<'management' | 'settings'>('management');
+  readonly tab = signal<PositionPageTabId>('management');
+  private readonly helpPage = inject(HelpPageContextService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  constructor() {
+    effect(() => {
+      this.helpPage.setFeatureContext(
+        'positions',
+        resolvePositionsHelpContext({
+          pageTab: this.tab(),
+          selectedPositionId: this.vm.selectedPositionId(),
+          catalogTab: this.vm.catalogTab(),
+          standalone: false,
+        }),
+      );
+    });
+    this.destroyRef.onDestroy(() => {
+      this.helpPage.clearFeatureContext('positions');
+    });
+  }
 
   ngOnInit(): void {
     this.vm.reload();

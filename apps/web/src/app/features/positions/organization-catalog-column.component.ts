@@ -5,7 +5,7 @@ import { PositionManagementFacade } from './position-management.facade';
   selector: 'loom-organization-catalog-column',
   standalone: true,
   template: `
-    <div class="catalog-layout">
+    <div class="catalog-layout" data-help-id="positions.tree">
       <div class="catalog-rail">
         <article
           class="card panel"

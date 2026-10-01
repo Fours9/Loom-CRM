@@ -141,7 +141,12 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
       }
 
       @if (caps().canEditAdminAccess || caps().canEditVisibilityOverrides) {
-        <button type="button" (click)="save()" [disabled]="busy()">
+        <button
+          type="button"
+          data-help-id="people.admin.roleAccess.save"
+          (click)="save()"
+          [disabled]="busy()"
+        >
           Зберегти
         </button>
       }
