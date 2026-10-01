@@ -36,6 +36,8 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
     /** Submission rows for reattach emptiness checks. */
     submissionRows?: Array<{ id: string }>;
     contextJson?: Record<string, unknown> | null;
+    revision?: number;
+    snapshotSkills?: Array<{ code: string }>;
   }) {
     const assignment = {
       id: 'a1',
@@ -67,7 +69,12 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
 
     const deleted: string[] = [];
     const deleteOrder: string[] = [];
-    const answersJson = opts.answersJson ?? {};
+    const responseRow = {
+      id: 'r1',
+      assignmentId: 'a1',
+      answersJson: { ...(opts.answersJson ?? {}) },
+      revision: opts.revision ?? 2,
+    };
     const submissionRows = opts.submissionRows ?? [{ id: 's1' }, { id: 's2' }];
 
     const makeManager = (): EntityManager =>
@@ -96,13 +103,11 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
           }
           if (entity === QuestionnaireResponse) {
             return {
-              findOne: async () => ({
-                id: 'r1',
-                assignmentId: 'a1',
-                answersJson,
-                revision: 2,
-              }),
-              save: jest.fn(async (row: unknown) => row),
+              findOne: async () => responseRow,
+              save: async (row: Record<string, unknown>) => {
+                Object.assign(responseRow, row);
+                return responseRow;
+              },
             };
           }
           if (entity === QuestionnaireSubmission) {
@@ -223,14 +228,26 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
           positionCatalog: {
             employeeId,
             employmentAssignmentId: null,
-            positionId: null,
-            positionName: null,
-            departmentId: null,
-            departmentName: null,
-            directionId: null,
-            directionName: null,
+            positionId: employeeId === 'emp-2' ? 'pos-b' : null,
+            positionName: employeeId === 'emp-2' ? 'Position B' : null,
+            departmentId: employeeId === 'emp-2' ? 'dep-b' : null,
+            departmentName: employeeId === 'emp-2' ? 'Dept B' : null,
+            directionId: employeeId === 'emp-2' ? 'dir-b' : null,
+            directionName: employeeId === 'emp-2' ? 'Dir B' : null,
             capturedAt: '2026-01-01T00:00:00.000Z',
-            skills: [],
+            skills: (opts.snapshotSkills ?? []).map((s, i) => ({
+              skillId: `22222222-2222-4222-8222-22222222222${i}`,
+              code: s.code,
+              labelUa: s.code,
+              group: '',
+              targetLevel: 3,
+              required: true,
+              weight: null,
+              scaleKind: 'range',
+              scaleMin: 0,
+              scaleMax: 5,
+              source: 'position_requirement',
+            })),
             goalTemplates: [],
             duties: [],
           },
@@ -262,7 +279,7 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       } as never,
       access as never,
       authorization as never,
-      { ensureResponse: jest.fn() } as never,
+      { ensureResponse: jest.fn(async () => responseRow) } as never,
       {
         submitWithinTransaction: jest.fn(async () => ({
           id: 'sub-new',
@@ -279,7 +296,16 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       employeeId: assignment.employeeId,
     } as never);
 
-    return { service, assignment, deleted, deleteOrder, audit, access, dataSource };
+    return {
+      service,
+      assignment,
+      responseRow,
+      deleted,
+      deleteOrder,
+      audit,
+      access,
+      dataSource,
+    };
   }
 
   it.each([
@@ -395,6 +421,11 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       expect(ctx.assignment.status).toBe('assigned');
       expect(ctx.assignment.employeeId).toBe('emp-1');
       expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
+      expect(ctx.assignment.startedAt).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+      expect(ctx.assignment.submittedAt).toEqual(
+        new Date('2026-01-02T00:00:00.000Z'),
+      );
+      expect(ctx.responseRow.revision).toBe(2);
       expect(ctx.assignment.contextJson).toEqual({
         version: 1,
         positionCatalog: {
@@ -425,17 +456,62 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       );
     });
 
-    it('rejects reattach to a different employee when not empty', async () => {
+    it('allows reattach to a different employee when not empty and rewrites draft atomically', async () => {
       const ctx = buildService({
         status: 'cancelled',
         employeeId: null,
         detachedFromEmployeeId: 'emp-1',
-        answersJson: { 'skills.matrix': { ratings: [], custom: [] } },
-        submissionRows: [],
+        revision: 7,
+        answersJson: {
+          'personal.first_name': 'Дмитро',
+          'company_work.position_id': 'pos-a',
+          'skills.matrix': {
+            ratings: [
+              { skillCode: 'overlock', level: 4 },
+              { skillCode: 'crm', level: 2 },
+            ],
+            custom: [{ name: 'Extra', level: 1 }],
+          },
+        },
+        submissionRows: [{ id: 's-dmytro' }],
+        snapshotSkills: [{ code: 'crm' }, { code: 'sales' }],
       });
-      await expect(
-        ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      await ctx.service.attach(adminActor(), 'a1', { employeeId: 'emp-2' });
+      expect(ctx.assignment.status).toBe('assigned');
+      expect(ctx.assignment.employeeId).toBe('emp-2');
+      expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
+      expect(ctx.assignment.startedAt).toBeNull();
+      expect(ctx.assignment.submittedAt).toBeNull();
+      expect(ctx.assignment.reviewedAt).toBeNull();
+      expect(ctx.responseRow.revision).toBe(8);
+      expect(ctx.responseRow.answersJson['personal.first_name']).toBe('Дмитро');
+      expect(ctx.responseRow.answersJson['company_work.position_id']).toBe(
+        'pos-b',
+      );
+      const matrix = ctx.responseRow.answersJson['skills.matrix'] as {
+        ratings: Array<{ skillCode: string }>;
+        custom: unknown[];
+      };
+      expect(matrix.ratings.map((r) => r.skillCode)).toEqual(['crm']);
+      expect(matrix.custom).toEqual([
+        { name: 'Extra', level: 1, comment: null },
+      ]);
+      expect(ctx.assignment.contextJson).toEqual(
+        expect.objectContaining({
+          version: 2,
+          positionCatalog: expect.objectContaining({ employeeId: 'emp-2' }),
+        }),
+      );
+      expect(ctx.audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            fromEmployeeId: 'emp-1',
+            toEmployeeId: 'emp-2',
+            attachKind: 'reattach',
+          }),
+        }),
+        expect.anything(),
+      );
     });
 
     it('allows reattach to a different employee when empty and captures fresh context', async () => {
@@ -467,6 +543,9 @@ describe('QuestionnaireAssignmentService lifecycle', () => {
       expect(ctx.assignment.status).toBe('assigned');
       expect(ctx.assignment.employeeId).toBe('emp-2');
       expect(ctx.assignment.detachedFromEmployeeId).toBeNull();
+      expect(ctx.assignment.startedAt).toBeNull();
+      expect(ctx.assignment.submittedAt).toBeNull();
+      expect(ctx.responseRow.revision).toBe(3);
       expect(ctx.assignment.contextJson).toEqual(
         expect.objectContaining({
           version: 2,

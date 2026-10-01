@@ -77,6 +77,7 @@ import { AccountRoleQuestionnaireTemplates1730000041000 } from './migrations/173
 import { QuestionnaireManageBundleApply1730000042000 } from './migrations/1730000042000-QuestionnaireManageBundleApply';
 import { PeopleTabAboutSurface1730000043000 } from './migrations/1730000043000-PeopleTabAboutSurface';
 import { EmployeeAbout1730000044000 } from './migrations/1730000044000-EmployeeAbout';
+import { QuestionnaireSubmissionSubjectEmployee1730000045000 } from './migrations/1730000045000-QuestionnaireSubmissionSubjectEmployee';
 import { EmployeeAbout } from '../../organization/employees/employee-about.entity';
 
 export function getDataSourceOptions(): DataSourceOptions {
@@ -166,6 +167,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       QuestionnaireManageBundleApply1730000042000,
       PeopleTabAboutSurface1730000043000,
       EmployeeAbout1730000044000,
+      QuestionnaireSubmissionSubjectEmployee1730000045000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

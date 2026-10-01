@@ -11,7 +11,6 @@ import {
 import {
   InvalidPositionSkillsMatrix,
   parsePositionSkillsMatrixStrict,
-  pruneUnratedMatrixRatings,
   type PositionSkillsMatrixAnswer,
 } from '@loom/questionnaire-schema';
 import { PositionCatalogFacade } from '../../organization/position-catalog/position-catalog.facade';
@@ -20,15 +19,18 @@ import { QuestionnaireAssignment } from './questionnaire-assignment.entity';
 import { QuestionnaireResponse } from './questionnaire-response.entity';
 import {
   resolveValidatedExtras,
-  staleRatingCodes,
   validateDesiredExtraSkillCodes,
 } from './questionnaire-position-context-sync.policy';
 import {
   resolveQuestionnaireOrganizationSelection,
   applyCanonicalOrganizationAnswers,
 } from './questionnaire-organization-selection';
+import {
+  reconcileSkillsMatrixForNewContext,
+  SKILLS_MATRIX_ANSWER_KEY,
+} from './assignments/reconcile-skills-matrix-for-new-context';
 
-const MATRIX_KEY = 'skills.matrix';
+const MATRIX_KEY = SKILLS_MATRIX_ANSWER_KEY;
 
 export type SyncLockedInput = {
   desiredExtraSkillCodes: string[];
@@ -140,19 +142,14 @@ export async function syncLocked(
   ];
   const contextSkillCodes = new Set(contextSkills.map((s) => s.code));
 
-  let matrix = readMatrix(answers);
-  const draftRatingCodes = matrix.ratings
-    .map((r) => r.skillCode)
-    .filter(Boolean);
-  const stale = staleRatingCodes(draftRatingCodes, contextSkillCodes);
-  if (stale.size > 0) {
-    matrix = {
-      ...matrix,
-      ratings: matrix.ratings.filter((r) => !stale.has(r.skillCode)),
-    };
+  readMatrix(answers); // validate shape before reconcile
+  const reconciled = reconcileSkillsMatrixForNewContext({
+    matrix: answers[MATRIX_KEY],
+    targetContextSkills: contextSkillCodes,
+  });
+  if (reconciled.matrix !== undefined) {
+    answers[MATRIX_KEY] = reconciled.matrix;
   }
-  matrix = pruneUnratedMatrixRatings(matrix);
-  answers[MATRIX_KEY] = matrix;
 
   const contextV2: QuestionnaireContextV2 = {
     version: 2,

@@ -801,13 +801,6 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
     const raw = (err as { error?: { message?: string | string[] } })?.error
       ?.message;
     const message = Array.isArray(raw) ? raw[0] : raw;
-    if (
-      typeof message === 'string' &&
-      (message.includes('Cannot reattach to a different employee') ||
-        message.includes('одного працівника до іншого'))
-    ) {
-      return 'Не можна прикріпити анкету одного працівника до іншого. Створіть нову анкету.';
-    }
     if (typeof message === 'string' && message.trim()) {
       return message;
     }

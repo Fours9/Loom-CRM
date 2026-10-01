@@ -37,6 +37,14 @@ export class QuestionnaireSubmission {
   @Column({ name: 'submitted_by_user_id', type: 'uuid' })
   submittedByUserId!: string;
 
+  /**
+   * Employee who was the assignment subject at submit time (immutable).
+   * Cross-employee reattach must not rewrite this; employee-facing reads filter by it.
+   */
+  @Index()
+  @Column({ name: 'subject_employee_id', type: 'uuid' })
+  subjectEmployeeId!: string;
+
   @Column({ name: 'submitted_at', type: 'timestamptz' })
   submittedAt!: Date;
 

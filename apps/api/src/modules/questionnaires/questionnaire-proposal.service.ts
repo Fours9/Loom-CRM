@@ -688,7 +688,10 @@ export class QuestionnaireProposalService {
       });
       if (!response) continue;
       const submission = await this.submissions.findOne({
-        where: { responseId: response.id },
+        where: {
+          responseId: response.id,
+          subjectEmployeeId: employeeId,
+        },
         order: { submissionNumber: 'DESC' },
       });
       if (!submission) continue;

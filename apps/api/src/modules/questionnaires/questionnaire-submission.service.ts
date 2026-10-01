@@ -257,6 +257,10 @@ export class QuestionnaireSubmissionService {
       }
       throw err;
     }
+    if (!assignment.employeeId) {
+      throw new BadRequestException('Assignment has no attached employee');
+    }
+
     const snapshotJson = projectVisibleQuestionnaireAnswers(schema, answers);
 
     const latest = await manager.getRepository(QuestionnaireSubmission).findOne({
@@ -275,6 +279,7 @@ export class QuestionnaireSubmissionService {
         snapshotJson,
         contextJson: assignment.contextJson ?? null,
         submittedByUserId: actor.id,
+        subjectEmployeeId: assignment.employeeId,
         submittedAt: now,
         reviewStatus: 'pending',
         changeRequestResolution: null,

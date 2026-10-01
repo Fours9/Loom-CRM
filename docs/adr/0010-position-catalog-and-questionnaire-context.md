@@ -113,5 +113,5 @@ Skills matrices, goals, and duties should depend on the employee’s **position*
 - Historical V1 submission contexts stay immutable; assignment context may be upgraded to V2 via sync.
 - Native skill scale: V1 questionnaire ratings stay 0–5; V2 ratings follow frozen native scale. Profile assessments are a separate Organization store bridged by proposals.
 - Immutable submissions stay interpretable years later via `version` + frozen context.
-- Cross-employee reattach after fill is rejected — safer than multi-subject history in one assignment.
+- Cross-employee reattach after fill is **allowed**: draft portable answers preserved; context-owned org allowlist overwritten from target snapshot; `skills.matrix` reconciled via the same stale-code policy as Managing `syncLocked`; response `revision` bumps once; assignment `startedAt`/`submittedAt`/`reviewedAt` reset. Submissions carry immutable `subjectEmployeeId` (set at submit); employee-facing reads (e.g. `latestSnapshotSummary`) filter by it so Roman never sees Dmitry’s historical snapshot.
 - Optional wizard suggestions from `goalTemplates` / `duties` remain polish (context already captured).

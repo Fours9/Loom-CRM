@@ -61,7 +61,7 @@ import {
   allocateNextAssignmentCode,
   questionnaireAssignmentCodePrefix,
 } from './assignments/questionnaire-assignment-code';
-import { isEmptyForDifferentEmployeeReattach } from './assignments/questionnaire-reattach-empty';
+import { resolveCrossEmployeeReattachMutation } from './assignments/cross-employee-reattach-mutation';
 import type {
   QuestionnaireAttachConstraint,
   QuestionnaireDirectoryQuery,
@@ -660,50 +660,62 @@ export class QuestionnaireAssignmentService {
         previousDetachedEmployeeId != null &&
         previousDetachedEmployeeId === employee.id;
 
-      if (attachKind === 'reattach' && !sameEmployeeReattach) {
-        const response = await manager
-          .getRepository(QuestionnaireResponse)
-          .findOne({ where: { assignmentId: assignment.id } });
-        const submissions = response
-          ? await manager.getRepository(QuestionnaireSubmission).find({
-              where: { responseId: response.id },
-              select: ['id'],
-            })
-          : [];
-        if (
-          !isEmptyForDifferentEmployeeReattach({
-            submissions,
-            response,
-          })
-        ) {
-          throw new ConflictException(
-            'Не можна прикріпити анкету одного працівника до іншого. Створіть нову анкету.',
-          );
-        }
-        assignment.contextJson = null;
-      }
-
-      if (!sameEmployeeReattach) {
-        assignment.contextJson =
-          (await this.positionCatalog.buildSnapshotForEmployee(
-            employee.id,
-            manager,
-          )) as Record<string, unknown>;
-      }
-
-      assignment.employeeId = employee.id;
-      assignment.detachedFromEmployeeId = null;
-      assignment.status = 'assigned';
-      assignment.reviewedAt = null;
-      await manager.getRepository(QuestionnaireAssignment).save(assignment);
+      const crossEmployeeReattach =
+        attachKind === 'reattach' && !sameEmployeeReattach;
 
       await this.responseService.ensureResponse(assignment.id, manager);
-      if (!sameEmployeeReattach && assignment.contextJson) {
-        await this.seedCompanyWorkAnswersFromContext(
-          assignment.id,
-          assignment.contextJson,
+      const response = await manager
+        .getRepository(QuestionnaireResponse)
+        .findOne({
+          where: { assignmentId: assignment.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+      if (!response) {
+        throw new ConflictException('Questionnaire response missing');
+      }
+
+      if (crossEmployeeReattach) {
+        const nextContext = (await this.positionCatalog.buildSnapshotForEmployee(
+          employee.id,
           manager,
-        );
+        )) as Record<string, unknown>;
+        const mutation = resolveCrossEmployeeReattachMutation({
+          answersJson: response.answersJson,
+          nextContext,
+        });
+        assignment.contextJson = mutation.nextContext;
+        assignment.employeeId = employee.id;
+        assignment.detachedFromEmployeeId = null;
+        assignment.status = 'assigned';
+        assignment.startedAt = null;
+        assignment.submittedAt = null;
+        assignment.reviewedAt = null;
+        response.answersJson = mutation.nextAnswers;
+        response.revision = response.revision + 1;
+        await manager.getRepository(QuestionnaireAssignment).save(assignment);
+        await manager.getRepository(QuestionnaireResponse).save(response);
+      } else {
+        if (!sameEmployeeReattach) {
+          assignment.contextJson =
+            (await this.positionCatalog.buildSnapshotForEmployee(
+              employee.id,
+              manager,
+            )) as Record<string, unknown>;
+        }
+
+        assignment.employeeId = employee.id;
+        assignment.detachedFromEmployeeId = null;
+        assignment.status = 'assigned';
+        assignment.reviewedAt = null;
+        await manager.getRepository(QuestionnaireAssignment).save(assignment);
+
+        if (!sameEmployeeReattach && assignment.contextJson) {
+          await this.seedCompanyWorkAnswersFromContext(
+            assignment.id,
+            assignment.contextJson,
+            manager,
+          );
+        }
       }
 
       await this.audit.record(
