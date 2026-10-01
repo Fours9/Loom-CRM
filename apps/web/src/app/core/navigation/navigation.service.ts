@@ -1,53 +1,13 @@
 import { Injectable, computed, inject } from '@angular/core';
-import { Permission } from '@loom/contracts-auth';
-import { Surface, canAccessSurface, type SurfaceId } from '../access/can-access-surface';
 import { SessionStore } from '../auth/session.store';
+import { canAccessSurface } from '../access/can-access-surface';
+import {
+  APP_NAV_TREE,
+  navigationDisplayLabel,
+  type AppNavNode,
+} from './navigation.model';
 
-export type NavNode = {
-  path: string;
-  label: string;
-  permission?: Permission;
-  surface?: SurfaceId;
-  hidden?: boolean;
-};
-
-const NAV_TREE: NavNode[] = [
-  { path: '/', label: 'Головна', surface: Surface.NavHome },
-  {
-    path: '/people',
-    label: 'Працівники',
-    permission: Permission.EmployeesView,
-    surface: Surface.NavPeople,
-  },
-  {
-    path: '/positions',
-    label: 'Керування посадами',
-    permission: Permission.PositionsManage,
-    surface: Surface.NavPositions,
-  },
-  {
-    path: '/questionnaires',
-    label: 'Анкети',
-    permission: Permission.QuestionnairesView,
-    surface: Surface.NavQuestionnaires,
-  },
-  {
-    path: '/absences',
-    label: 'Робочий календар',
-    permission: Permission.AbsencesCalendarView,
-    surface: Surface.NavAbsences,
-  },
-  { path: '/statistics', label: 'Статистика · незабаром', surface: Surface.NavStatistics },
-  {
-    path: '/settings',
-    label: 'Налаштування',
-    permission: Permission.SettingsManage,
-    surface: Surface.NavSettings,
-  },
-  { path: '/recruitment', label: 'Рекрутинг', hidden: true },
-  { path: '/tasks', label: 'Завдання', hidden: true },
-  { path: '/documents', label: 'Документи', hidden: true },
-];
+export type NavNode = AppNavNode & { label: string };
 
 @Injectable({ providedIn: 'root' })
 export class NavigationService {
@@ -57,10 +17,9 @@ export class NavigationService {
     const status = this.session.status();
     const user = this.session.user();
     const surfaceSession = this.session.surfaceSession();
-    // Surfaces are authoritative once the API ships them; before that, permissions only.
     const useSurfaces = this.session.surfacesReady();
 
-    return NAV_TREE.filter((item) => {
+    return APP_NAV_TREE.filter((item) => {
       if (item.hidden) return false;
       if (status !== 'authenticated' || !user) {
         if (!item.permission) return true;
@@ -75,7 +34,12 @@ export class NavigationService {
       }
       if (!item.permission) return true;
       return user.permissions.includes(item.permission);
-    });
+    }).map(
+      (item): NavNode => ({
+        ...item,
+        label: navigationDisplayLabel(item),
+      }),
+    );
   });
 
   readonly visibleItems = computed(() =>

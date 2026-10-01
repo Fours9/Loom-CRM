@@ -3,6 +3,10 @@ import { RouterOutlet } from '@angular/router';
 import { ApiAvailabilityStore } from './core/api/api-availability.store';
 import { SessionStore } from './core/auth/session.store';
 import { HelpSpotlightOverlayComponent } from './core/help';
+import { HelpPageContextService } from './core/help/help-page-context.service';
+import { registerAppHelp } from './help/register-app-help';
+
+registerAppHelp();
 
 @Component({
   selector: 'loom-root',
@@ -86,6 +90,8 @@ import { HelpSpotlightOverlayComponent } from './core/help';
 export class AppComponent {
   readonly api = inject(ApiAvailabilityStore);
   private readonly session = inject(SessionStore);
+  /** Eager: NavigationStart clears feature overrides from app boot. */
+  private readonly _helpPageContext = inject(HelpPageContextService);
 
   readonly retrying = signal(false);
   readonly retryError = signal<string | null>(null);

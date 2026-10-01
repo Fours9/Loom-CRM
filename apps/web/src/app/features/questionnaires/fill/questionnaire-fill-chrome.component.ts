@@ -24,7 +24,7 @@ import {
   type ProgressSection,
 } from './progress/questionnaire-section-map';
 import { firstValueFrom } from 'rxjs';
-import { HelpTriggerComponent } from '../../../core/help';
+import { HelpMenuComponent } from '../../../core/help';
 
 @Component({
   selector: 'loom-questionnaire-fill-chrome',
@@ -32,7 +32,7 @@ import { HelpTriggerComponent } from '../../../core/help';
   imports: [
     QuestionnaireSectionRailComponent,
     QuestionnaireRequestChangesPopoverComponent,
-    HelpTriggerComponent,
+    HelpMenuComponent,
   ],
   template: `
     <header class="step-topbar">
@@ -68,7 +68,7 @@ import { HelpTriggerComponent } from '../../../core/help';
         }
       </div>
       <div class="step-topbar-actions">
-        <loom-help-trigger tourId="questionnaires.fill" />
+        <loom-help-menu [showMain]="false" />
         @if (printError()) {
           <span class="print-error" role="alert">{{ printError() }}</span>
         }

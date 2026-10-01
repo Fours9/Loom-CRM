@@ -1,11 +1,34 @@
-import { helpTourRegistry } from '../../../core/help';
+import type { HelpRouteDescriptor } from '../../../core/help/help-page.models';
+import { helpPageContextRegistry } from '../../../core/help/help-page-context.registry';
+import { helpTourRegistry } from '../../../core/help/help-tour.registry';
 import { QUESTIONNAIRE_HELP_BUNDLE } from './questionnaire-help.definition';
 
-let registered = false;
+export const QUESTIONNAIRE_ROUTE_HELP_DESCRIPTORS: readonly HelpRouteDescriptor[] =
+  [
+    {
+      id: 'route.questionnaires.directory',
+      pattern: ['questionnaires'],
+      exact: true,
+      context: {
+        label: 'Анкети',
+        tourId: 'questionnaires.directory',
+        soon: false,
+      },
+    },
+    {
+      id: 'route.questionnaires.fill',
+      pattern: ['questionnaires', ':id'],
+      exact: true,
+      context: {
+        label: 'Анкета',
+        tourId: 'questionnaires.fill',
+        soon: false,
+      },
+    },
+  ];
 
-/** Idempotent registration of questionnaire help tours (call once from routes). */
+/** Register questionnaire tours + page descriptors (idempotent Map.set). */
 export function registerQuestionnaireHelp(): void {
-  if (registered) return;
   helpTourRegistry.register(QUESTIONNAIRE_HELP_BUNDLE);
-  registered = true;
+  helpPageContextRegistry.register(QUESTIONNAIRE_ROUTE_HELP_DESCRIPTORS);
 }

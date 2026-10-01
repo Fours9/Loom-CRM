@@ -31,7 +31,6 @@ import { QuestionnaireFilterToolbarComponent,
 } from '../shared/questionnaire-filter-toolbar.component';
 import {
   HelpCalloutComponent,
-  HelpTriggerComponent,
 } from '../../../core/help';
 import {
   QUESTIONNAIRE_LIFECYCLE_CALLOUT,
@@ -48,17 +47,13 @@ type Pos = { id: string; name: string };
     QuestionnaireAttachPickerComponent,
     QuestionnaireCreateDialogComponent,
     QuestionnaireFilterToolbarComponent,
-    HelpTriggerComponent,
     HelpCalloutComponent,
   ],
   template: `
     <div class="page">
       <header class="header">
         <div class="header-titles">
-          <div class="title-row">
-            <h1>Анкети</h1>
-            <loom-help-trigger tourId="questionnaires.directory" />
-          </div>
+          <h1>Анкети</h1>
           <p class="muted">Усі призначення анкет у вашому доступі</p>
         </div>
         <div class="header-actions">

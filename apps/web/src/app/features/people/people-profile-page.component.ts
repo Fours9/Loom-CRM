@@ -47,10 +47,12 @@ import { EmployeeRoleAccessPanelComponent } from './employee-role-access-panel.c
 import {
   canShowAccountAdminTab,
   canShowRoleAccessAdminTab,
+  peopleProfileTabLabel,
   resolvePeopleProfileTab,
   visiblePeopleProfileTabs,
   type PeopleProfileTabId,
 } from './people-profile-tabs';
+import { HelpPageContextService } from '../../core/help';
 
 type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
@@ -543,6 +545,7 @@ export class PeopleProfilePageComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly destroyRef = inject(DestroyRef);
   private readonly session = inject(SessionStore);
+  private readonly helpPageContext = inject(HelpPageContextService);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -590,6 +593,18 @@ export class PeopleProfilePageComponent implements OnInit {
       if (resolved !== current) {
         this.tab.set(resolved);
       }
+    });
+
+    effect(() => {
+      const tab = this.tab();
+      this.helpPageContext.setFeatureContext('people-profile', {
+        label: peopleProfileTabLabel(tab),
+        tourId: tab === 'questionnaires' ? 'questionnaires.employee' : null,
+        soon: tab !== 'questionnaires',
+      });
+    });
+    this.destroyRef.onDestroy(() => {
+      this.helpPageContext.clearFeatureContext('people-profile');
     });
 
     effect(() => {

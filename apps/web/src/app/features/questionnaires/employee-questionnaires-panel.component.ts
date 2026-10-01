@@ -42,7 +42,6 @@ import {
 } from './questionnaire-proposal-labels';
 import {
   HelpCalloutComponent,
-  HelpTriggerComponent,
 } from '../../core/help';
 import {
   QUESTIONNAIRE_LIFECYCLE_CALLOUT,
@@ -62,7 +61,6 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
     QuestionnaireSnapshotSummaryComponent,
     QuestionnaireCreateDialogComponent,
     QuestionnaireFilterToolbarComponent,
-    HelpTriggerComponent,
     HelpCalloutComponent,
   ],
   template: `
@@ -70,7 +68,6 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
       <div class="toolbar">
         <div class="title-row">
           <h2>Анкети</h2>
-          <loom-help-trigger tourId="questionnaires.employee" />
         </div>
         @if (canAssign()) {
           <button

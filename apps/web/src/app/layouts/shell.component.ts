@@ -29,11 +29,19 @@ import { NotificationsApi } from '../core/notifications/notifications.api';
 import { AppNotification } from '../core/notifications/notification.models';
 import { notificationFrameTone } from '../core/notifications/notification-frame';
 import { PERSON_AVATAR_PATH } from '../shared/icons/person-avatar-icon';
+import { HelpMenuComponent } from '../core/help';
 
 @Component({
   selector: 'loom-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TranslatePipe, DatePipe],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    TranslatePipe,
+    DatePipe,
+    HelpMenuComponent,
+  ],
   template: `
     <div
       class="shell app-shell"
@@ -49,6 +57,7 @@ import { PERSON_AVATAR_PATH } from '../shared/icons/person-avatar-icon';
             #menuBtn
             type="button"
             class="icon-btn menu-btn"
+            data-help-id="shell.navigation"
             [attr.aria-expanded]="sideExpanded()"
             aria-controls="side-nav"
             [attr.aria-label]="sideExpanded() ? 'Згорнути меню' : 'Відкрити меню'"
@@ -107,9 +116,11 @@ import { PERSON_AVATAR_PATH } from '../shared/icons/person-avatar-icon';
         }
 
           <div class="user">
+          <loom-help-menu [showMain]="true" />
           <button
             type="button"
             class="theme-toggle"
+            data-help-id="shell.theme"
             (click)="theme.toggle()"
             [attr.aria-label]="
               theme.mode() === 'dark' ? 'Увімкнути світлу тему' : 'Увімкнути темну тему'
@@ -124,7 +135,7 @@ import { PERSON_AVATAR_PATH } from '../shared/icons/person-avatar-icon';
               <span class="theme-label">Світла</span>
             }
           </button>
-          <div class="inbox">
+          <div class="inbox" data-help-id="shell.inbox">
             <button
               type="button"
               class="bell icon-btn"

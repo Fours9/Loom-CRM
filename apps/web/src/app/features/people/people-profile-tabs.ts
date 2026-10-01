@@ -32,6 +32,11 @@ const ALL_TABS: readonly PeopleProfileTab[] = [
   { id: 'administration', label: 'Адміністрування' },
 ];
 
+/** Shared People tab label SoT for help / other consumers. */
+export function peopleProfileTabLabel(id: PeopleProfileTabId): string {
+  return ALL_TABS.find((t) => t.id === id)?.label ?? id;
+}
+
 const TAB_SURFACE: Readonly<Record<PeopleProfileTabId, SurfaceId>> = {
   data: Surface.PeopleTabData,
   absences: Surface.PeopleTabWork,
