@@ -15,6 +15,7 @@ import type {
 } from '@loom/contracts-employees';
 import { Subscription } from 'rxjs';
 import { EmployeeAboutApiService } from './employee-about-api.service';
+import { EmployeeAboutRepeatingFieldComponent } from './employee-about-repeating-field.component';
 import {
   resolvePeopleAboutSubtab,
   visiblePeopleAboutSubtabs,
@@ -23,7 +24,7 @@ import {
 @Component({
   selector: 'loom-employee-about-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, EmployeeAboutRepeatingFieldComponent],
   template: `
     <section class="about" aria-label="Про себе">
       <p class="lead">
@@ -57,7 +58,14 @@ import {
             @for (field of view.fields; track field.key) {
               <div class="field">
                 <label [attr.for]="field.key">{{ field.labelUa }}</label>
-                @if (canEdit) {
+                @if (field.valueType === 'repeating_group') {
+                  <loom-employee-about-repeating-field
+                    [field]="field"
+                    [editable]="canEdit"
+                    [value]="draft[field.key]"
+                    (valueChange)="onRepeatingChange(field.key, $event)"
+                  />
+                } @else if (canEdit) {
                   @switch (field.valueType) {
                     @case ('single_choice') {
                       <select
@@ -99,14 +107,6 @@ import {
                         type="date"
                         [(ngModel)]="draft[field.key]"
                       />
-                    }
-                    @case ('repeating_group') {
-                      <p class="muted display">
-                        {{ field.displayValue || 'не вказано' }}
-                      </p>
-                      <p class="hint">
-                        Редагування списків — через анкету або наступний slice UI.
-                      </p>
                     }
                     @default {
                       <input
@@ -319,6 +319,10 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
     this.draft[key] = cur;
   }
 
+  onRepeatingChange(key: string, value: unknown): void {
+    this.draft[key] = value;
+  }
+
   save(): void {
     if (!this.activeSubtab || !this.data) return;
     const view = this.activeView;
@@ -326,10 +330,17 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
 
     const values: Record<string, unknown> = {};
     for (const field of view.fields) {
-      if (field.valueType === 'repeating_group') continue;
       const next = this.draft[field.key];
       const prev = field.raw;
       if (this.valuesEqual(next, prev)) continue;
+      if (field.valueType === 'repeating_group') {
+        if (!Array.isArray(next) || next.length === 0) {
+          values[field.key] = null;
+        } else {
+          values[field.key] = next;
+        }
+        continue;
+      }
       if (next === '' || next === undefined) {
         values[field.key] = null;
       } else {
@@ -400,14 +411,27 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
   private cloneRaw(field: EmployeeAboutFieldView): unknown {
     if (field.raw == null) {
       if (field.valueType === 'multi_choice') return [];
+      if (field.valueType === 'repeating_group') return [];
       return null;
     }
-    if (Array.isArray(field.raw)) return [...field.raw];
+    if (Array.isArray(field.raw)) {
+      return field.raw.map((row) =>
+        row && typeof row === 'object' && !Array.isArray(row)
+          ? { ...(row as Record<string, unknown>) }
+          : row,
+      );
+    }
     return field.raw;
   }
 
   private valuesEqual(a: unknown, b: unknown): boolean {
     if (a == null && (b == null || b === '')) return true;
+    if (Array.isArray(a) && (b == null || (Array.isArray(b) && b.length === 0))) {
+      return a.length === 0;
+    }
+    if ((a == null || (Array.isArray(a) && a.length === 0)) && Array.isArray(b)) {
+      return b.length === 0;
+    }
     if (Array.isArray(a) && Array.isArray(b)) {
       return JSON.stringify(a) === JSON.stringify(b);
     }

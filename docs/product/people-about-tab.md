@@ -35,6 +35,7 @@ Atomic write: `EmployeeAboutFacade.mergeAnswers({ set, clearKeys, source })`.
 - ADR: [0014-employee-about](../adr/0014-employee-about.md)
 - FE adapter: [`people-about-subtabs.ts`](../../apps/web/src/app/features/people/people-about-subtabs.ts) → `ABOUT_SUBTAB_DEFS`
 - panel: [`employee-about-panel.component.ts`](../../apps/web/src/app/features/people/employee-about-panel.component.ts)
+- repeating editor: [`employee-about-repeating-field.component.ts`](../../apps/web/src/app/features/people/employee-about-repeating-field.component.ts) (catalog `children` from GET projection)
 
 ## Підвкладки
 
@@ -46,6 +47,8 @@ Atomic write: `EmployeeAboutFacade.mergeAnswers({ set, clearKeys, source })`.
 | `strengths` | Сильні сторони | strengths (без in_* years) |
 | `work_style` | Стиль роботи | `work_style.*` |
 | `life_goals` | Цілі | `strengths.in_*` + `career_goals.plan` + `probation_goals.items` |
+
+`life_goals` repeating groups (`career_goals.plan`, `probation_goals.items`) are **editable in About UI** via catalog-projected `children` (same keys as Managing questionnaire). Sync from questionnaire submit remains present-only overwrite; manual PATCH uses the same `EmployeeAboutFacade.mergeAnswers` entry.
 
 **Свідомо поза «Про себе»:** personal/contacts mirrors, experience/education, skills matrix, consents/docs.
 

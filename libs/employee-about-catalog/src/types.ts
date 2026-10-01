@@ -64,6 +64,9 @@ export type AboutProjectedField = {
   raw: unknown;
   displayValue: string | null;
   options?: readonly AboutOption[];
+  /** Present for repeating_group — child field defs from catalog SoT. */
+  children?: readonly AboutChildFieldDef[];
+  maxItems?: number;
 };
 
 export type AboutProjectedSubtab = {

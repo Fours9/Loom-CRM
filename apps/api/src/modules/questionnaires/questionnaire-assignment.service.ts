@@ -677,7 +677,7 @@ export class QuestionnaireAssignmentService {
           })
         ) {
           throw new ConflictException(
-            'Cannot reattach to a different employee when the assignment has draft answers or submissions. Create a new assignment instead.',
+            'Не можна прикріпити анкету одного працівника до іншого. Створіть нову анкету.',
           );
         }
         assignment.contextJson = null;

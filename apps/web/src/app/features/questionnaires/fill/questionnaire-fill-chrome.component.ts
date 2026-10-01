@@ -66,14 +66,6 @@ import { firstValueFrom } from 'rxjs';
         }
       </div>
       <div class="step-topbar-actions">
-        <button
-          type="button"
-          class="btn"
-          [disabled]="printBusy() || actionBusy()"
-          (click)="onPrint()"
-        >
-          {{ printBusy() ? 'Формування…' : 'Роздрукувати' }}
-        </button>
         @if (printError()) {
           <span class="print-error" role="alert">{{ printError() }}</span>
         }
@@ -126,33 +118,55 @@ import { firstValueFrom } from 'rxjs';
             }}
           </button>
         }
-        @if (store.canShowDeleteButton()) {
-          <div class="more-menu-wrap">
-            <button
-              type="button"
-              class="btn ghost more-btn"
-              title="Додаткові дії"
-              aria-label="Додаткові дії"
-              [attr.aria-expanded]="moreMenuOpen()"
-              [attr.aria-haspopup]="'menu'"
-              [disabled]="actionBusy() || revision.manualSaveBusy()"
-              (click)="toggleMoreMenu($event)"
-            >
-              <span class="more-icon" aria-hidden="true">⋮</span>
-            </button>
-            @if (moreMenuOpen()) {
-              <div class="more-menu" role="menu">
+        <div class="more-menu-wrap">
+          <button
+            type="button"
+            class="btn ghost more-btn"
+            title="Додаткові дії"
+            aria-label="Додаткові дії"
+            [attr.aria-expanded]="moreMenuOpen()"
+            [attr.aria-haspopup]="'menu'"
+            [disabled]="actionBusy() || revision.manualSaveBusy() || printBusy()"
+            (click)="toggleMoreMenu($event)"
+          >
+            <span class="more-icon" aria-hidden="true">⋮</span>
+          </button>
+          @if (moreMenuOpen()) {
+            <div class="more-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                class="menu-row"
+                [disabled]="printBusy() || actionBusy()"
+                (click)="onPrintFromMenu()"
+              >
+                @if (printBusy()) {
+                  <span class="busy-label">Формування…</span>
+                } @else {
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"
+                    />
+                  </svg>
+                  <span>Роздрукувати</span>
+                }
+              </button>
+              @if (store.canShowDeleteButton()) {
                 <button
                   type="button"
                   role="menuitem"
-                  class="danger-item icon-only"
-                  title="Видалити"
-                  aria-label="Видалити"
+                  class="menu-row danger-item"
                   [disabled]="actionBusy() || revision.manualSaveBusy()"
                   (click)="onDeleteFromMenu()"
                 >
                   @if (actionBusy()) {
-                    <span class="busy-label">…</span>
+                    <span class="busy-label">Видалення…</span>
                   } @else {
                     <svg
                       viewBox="0 0 24 24"
@@ -165,12 +179,13 @@ import { firstValueFrom } from 'rxjs';
                         d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
                       />
                     </svg>
+                    <span>Видалити</span>
                   }
                 </button>
-              </div>
-            }
-          </div>
-        }
+              }
+            </div>
+          }
+        </div>
       </div>
     </header>
     <header class="page-chrome">
@@ -275,6 +290,14 @@ import { firstValueFrom } from 'rxjs';
         color: inherit;
         font: inherit;
       }
+      .more-menu .menu-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+      }
+      .more-menu .menu-row svg {
+        flex: none;
+      }
       .more-menu button:hover:not(:disabled) {
         background: color-mix(in srgb, var(--pw-border, #d0d7e2) 45%, transparent);
       }
@@ -283,15 +306,12 @@ import { firstValueFrom } from 'rxjs';
         cursor: not-allowed;
       }
       .more-menu .danger-item {
-        color: #b91c1c;
+        color: #fff;
+        background: #b91c1c;
       }
-      .more-menu .icon-only {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: auto;
-        min-width: 2.4rem;
-        padding: 0.45rem;
+      .more-menu .danger-item:hover:not(:disabled) {
+        background: #991b1b;
+        color: #fff;
       }
       .more-menu .busy-label {
         font-size: 0.95rem;
@@ -525,6 +545,11 @@ export class QuestionnaireFillChromeComponent {
   onDeleteFromMenu(): void {
     this.moreMenuOpen.set(false);
     this.deleteAssignment.emit();
+  }
+
+  onPrintFromMenu(): void {
+    this.moreMenuOpen.set(false);
+    void this.onPrint();
   }
 
   onRequestChangesSubmit(comment: string): void {

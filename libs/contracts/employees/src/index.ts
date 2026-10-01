@@ -555,6 +555,14 @@ export type EmployeeAboutFieldOption = {
   labelUa: string;
 };
 
+export type EmployeeAboutChildFieldView = {
+  key: string;
+  labelUa: string;
+  valueType: string;
+  options?: readonly EmployeeAboutFieldOption[];
+  maxLength?: number;
+};
+
 export type EmployeeAboutFieldView = {
   key: string;
   labelUa: string;
@@ -562,6 +570,9 @@ export type EmployeeAboutFieldView = {
   raw: unknown;
   displayValue: string | null;
   options?: readonly EmployeeAboutFieldOption[];
+  /** Catalog children for repeating_group editors (About SoT). */
+  children?: readonly EmployeeAboutChildFieldView[];
+  maxItems?: number;
 };
 
 export type EmployeeAboutSubtabView = {

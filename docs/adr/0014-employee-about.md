@@ -12,7 +12,7 @@ People «Про себе» needs a current soft-profile SoT independent of quest
 4. **Shared vocabulary** lives in pure lib `@loom/employee-about-catalog` (`ABOUT_SUBTAB_DEFS`, `ABOUT_FIELD_DEFS`, `canonicalizeAboutMutation`, validation, projector). Organization and Questionnaire seeds must not create Organization → Questionnaires imports for labels/options.
 5. **HTTP contracts** for `/employees/:id/about` live in `@loom/contracts-employees`.
 6. **Write path (single entry):** `EmployeeAboutFacade.mergeAnswers({ set, clearKeys, source })` with atomic JSONB `(answers || set) - clearKeys`. Empty set+clearKeys → no-op.
-7. **Sync:** on questionnaire `submitWithinTransaction`, present About keys from snapshot + conditional `clearKeys`; `source.kind = 'questionnaire'`. Manual PATCH uses `source.kind = 'manual'` and must not wipe provenance.
+7. **Sync:** on questionnaire `submitWithinTransaction`, present About keys from snapshot + conditional `clearKeys`; `source.kind = 'questionnaire'`. Manual PATCH uses `source.kind = 'manual'` and must not wipe provenance. About GET projects catalog `children` for repeating_group so FE editors stay catalog-driven (no hard-coded goal schemas in Angular).
 8. **Semantics:** absent snapshot key never clears; controller PRESENT that hides a dependent → clear dependent (same policy for sync and PATCH).
 9. **AuthZ:** read = view ∧ `people.tab.about`; write = `canEditEmployeeAbout` pure helper.
 

@@ -130,77 +130,110 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                   >
                     {{ openLabel(item) }}
                   </button>
-                  <button
-                    type="button"
-                    class="btn view"
-                    [disabled]="busyAssignmentId() === item.id"
-                    (click)="printAssignment(item.id)"
-                  >
-                    {{ busyAssignmentId() === item.id ? '…' : 'Роздрукувати' }}
-                  </button>
-                  @if (hasLifecycleMoreActions(item)) {
-                    <div class="more-menu-wrap">
-                      <button
-                        type="button"
-                        class="btn ghost more-btn"
-                        title="Додаткові дії"
-                        aria-label="Додаткові дії"
-                        [attr.aria-expanded]="moreMenuAssignmentId() === item.id"
-                        [attr.aria-haspopup]="'menu'"
-                        [disabled]="busyAssignmentId() === item.id"
-                        (click)="toggleMoreMenu(item.id, $event)"
-                      >
-                        <span class="more-icon" aria-hidden="true">⋮</span>
-                      </button>
-                      @if (moreMenuAssignmentId() === item.id) {
-                        <div class="more-menu" role="menu">
-                          @if (item.capabilities.canCancel) {
-                            <button
-                              type="button"
-                              role="menuitem"
-                              [disabled]="busyAssignmentId() === item.id"
-                              (click)="cancelAssignmentFromMenu(item.id)"
+                  <div class="more-menu-wrap">
+                    <button
+                      type="button"
+                      class="btn ghost more-btn"
+                      title="Додаткові дії"
+                      aria-label="Додаткові дії"
+                      [attr.aria-expanded]="moreMenuAssignmentId() === item.id"
+                      [attr.aria-haspopup]="'menu'"
+                      [disabled]="busyAssignmentId() === item.id"
+                      (click)="toggleMoreMenu(item.id, $event)"
+                    >
+                      <span class="more-icon" aria-hidden="true">⋮</span>
+                    </button>
+                    @if (moreMenuAssignmentId() === item.id) {
+                      <div class="more-menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="menu-row"
+                          [disabled]="busyAssignmentId() === item.id"
+                          (click)="printAssignmentFromMenu(item.id)"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            aria-hidden="true"
+                          >
+                            <path
+                              fill="currentColor"
+                              d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"
+                            />
+                          </svg>
+                          <span>Роздрукувати</span>
+                        </button>
+                        @if (item.capabilities.canCancel) {
+                          <button
+                            type="button"
+                            role="menuitem"
+                            class="menu-row"
+                            [disabled]="busyAssignmentId() === item.id"
+                            (click)="cancelAssignmentFromMenu(item.id)"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              width="18"
+                              height="18"
+                              aria-hidden="true"
                             >
-                              Відкріпити
-                            </button>
-                          }
-                          @if (item.capabilities.canClose) {
-                            <button
-                              type="button"
-                              role="menuitem"
-                              [disabled]="busyAssignmentId() === item.id"
-                              (click)="closeAssignmentFromMenu(item.id)"
+                              <path
+                                fill="currentColor"
+                                d="M17 7h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1 0 1.43-.99 2.63-2.32 2.98l1.46 1.46C20.88 15.61 22 13.95 22 12c0-2.76-2.24-5-5-5zM16 11h-2.19l2 2H16v-2zM2 4.27l3.11 3.11C3.29 8.12 2 9.91 2 12c0 2.76 2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1 0-1.59 1.21-2.9 2.76-3.07L8.73 11H8v2h2.73L13 15.27V17h1.73l4.01 4L20 19.73 3.27 3 2 4.27z"
+                              />
+                            </svg>
+                            <span>Відкріпити</span>
+                          </button>
+                        }
+                        @if (item.capabilities.canClose) {
+                          <button
+                            type="button"
+                            role="menuitem"
+                            class="menu-row"
+                            [disabled]="busyAssignmentId() === item.id"
+                            (click)="closeAssignmentFromMenu(item.id)"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              width="18"
+                              height="18"
+                              aria-hidden="true"
                             >
-                              Закрити
-                            </button>
-                          }
-                          @if (item.capabilities.canDelete) {
-                            <button
-                              type="button"
-                              role="menuitem"
-                              class="danger-item icon-only"
-                              title="Видалити"
-                              aria-label="Видалити"
-                              [disabled]="busyAssignmentId() === item.id"
-                              (click)="deleteAssignmentFromMenu(item.id)"
+                              <path
+                                fill="currentColor"
+                                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"
+                              />
+                            </svg>
+                            <span>Закрити</span>
+                          </button>
+                        }
+                        @if (item.capabilities.canDelete) {
+                          <button
+                            type="button"
+                            role="menuitem"
+                            class="menu-row danger-item"
+                            [disabled]="busyAssignmentId() === item.id"
+                            (click)="deleteAssignmentFromMenu(item.id)"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              width="18"
+                              height="18"
+                              aria-hidden="true"
                             >
-                              <svg
-                                viewBox="0 0 24 24"
-                                width="18"
-                                height="18"
-                                aria-hidden="true"
-                              >
-                                <path
-                                  fill="currentColor"
-                                  d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
-                                />
-                              </svg>
-                            </button>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
+                              <path
+                                fill="currentColor"
+                                d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h1v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7h1a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm2 2h2v1h-2V5zm-2 4a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1z"
+                              />
+                            </svg>
+                            <span>Видалити</span>
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
                 </div>
               </div>
               <div class="meta">
@@ -449,6 +482,14 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         font-size: 0.9rem;
         cursor: pointer;
       }
+      .more-menu .menu-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+      }
+      .more-menu .menu-row svg {
+        flex: none;
+      }
       .more-menu button:hover:not(:disabled) {
         background: color-mix(in srgb, var(--pw-muted) 14%, transparent);
       }
@@ -457,15 +498,12 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         cursor: not-allowed;
       }
       .more-menu .danger-item {
-        color: #b91c1c;
+        color: #fff;
+        background: #b91c1c;
       }
-      .more-menu .icon-only {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: auto;
-        min-width: 2.4rem;
-        padding: 0.45rem;
+      .more-menu .danger-item:hover:not(:disabled) {
+        background: #991b1b;
+        color: #fff;
       }
       .meta {
         display: flex;
@@ -678,19 +716,16 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
     this.moreMenuAssignmentId.set(null);
   }
 
-  hasLifecycleMoreActions(item: QuestionnaireAssignmentListItem): boolean {
-    return (
-      item.capabilities.canCancel ||
-      item.capabilities.canClose ||
-      item.capabilities.canDelete
-    );
-  }
-
   toggleMoreMenu(assignmentId: string, event: Event): void {
     event.stopPropagation();
     this.moreMenuAssignmentId.update((openId) =>
       openId === assignmentId ? null : assignmentId,
     );
+  }
+
+  printAssignmentFromMenu(id: string): void {
+    this.moreMenuAssignmentId.set(null);
+    this.printAssignment(id);
   }
 
   cancelAssignmentFromMenu(id: string): void {

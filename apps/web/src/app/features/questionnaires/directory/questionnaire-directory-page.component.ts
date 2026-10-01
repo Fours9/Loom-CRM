@@ -236,8 +236,8 @@ type Pos = { id: string; name: string };
                         <button
                           type="button"
                           class="icon-btn"
-                          title="Прикріпити"
-                          aria-label="Прикріпити анкету до працівника"
+                          title="Закріпити"
+                          aria-label="Закріпити анкету до працівника"
                           (click)="openAttachPicker(item)"
                         >
                           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -792,11 +792,26 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
       },
       error: (err) => {
         this.attachBusy.set(false);
-        this.attachError.set(
-          err?.error?.message || 'Не вдалося прикріпити анкету',
-        );
+        this.attachError.set(this.attachFailureMessage(err));
       },
     });
+  }
+
+  private attachFailureMessage(err: unknown): string {
+    const raw = (err as { error?: { message?: string | string[] } })?.error
+      ?.message;
+    const message = Array.isArray(raw) ? raw[0] : raw;
+    if (
+      typeof message === 'string' &&
+      (message.includes('Cannot reattach to a different employee') ||
+        message.includes('одного працівника до іншого'))
+    ) {
+      return 'Не можна прикріпити анкету одного працівника до іншого. Створіть нову анкету.';
+    }
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+    return 'Не вдалося прикріпити анкету';
   }
 
   private currentQuery(): Record<string, string | null> {

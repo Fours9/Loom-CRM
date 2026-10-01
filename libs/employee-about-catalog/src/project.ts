@@ -90,6 +90,8 @@ export function projectEmployeeAbout(input: {
         raw: raw ?? null,
         displayValue: formatAboutDisplayValue(def, raw),
         options: def.options,
+        children: def.children,
+        maxItems: def.maxItems,
       };
     });
     return {

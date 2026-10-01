@@ -53,13 +53,52 @@ describe('projectEmployeeAbout', () => {
     expect(field.displayValue).toBe('Так');
   });
 
-  it('unknown option is fail-safe', () => {
-    const r = projectEmployeeAbout({
-      answers: { 'family.has_children': 'legacy_maybe' },
+  it('projects life_goals career + probation repeating children from catalog', () => {
+    const r = projectEmployeeAbout({ answers: {} });
+    const life = r.subtabs.find((s) => s.id === 'life_goals')!;
+    expect(life.fields.map((f) => f.key)).toEqual([
+      'strengths.in_one_year',
+      'strengths.in_two_to_three_years',
+      'career_goals.plan',
+      'probation_goals.items',
+    ]);
+    const career = life.fields.find((f) => f.key === 'career_goals.plan')!;
+    const probation = life.fields.find((f) => f.key === 'probation_goals.items')!;
+    expect(career.valueType).toBe('repeating_group');
+    expect(career.children?.map((c) => c.key)).toEqual([
+      'title',
+      'description',
+      'targetDate',
+    ]);
+    expect(probation.children?.map((c) => c.key)).toEqual([
+      'title',
+      'description',
+      'dueDate',
+      'status',
+    ]);
+  });
+
+  it('accepts life_goals repeating patch for career and probation', () => {
+    const r = validateAboutSubtabPatch({
+      subtabId: 'life_goals',
+      values: {
+        'career_goals.plan': [
+          { title: 'Lead', description: 'Grow', targetDate: '2027-01-01' },
+        ],
+        'probation_goals.items': [
+          {
+            title: 'Onboard',
+            description: 'First 90 days',
+            dueDate: '2026-12-01',
+            status: 'planned',
+          },
+        ],
+      },
     });
-    const field = r.subtabs
-      .find((s) => s.id === 'family_home')!
-      .fields.find((f) => f.key === 'family.has_children')!;
-    expect(field.displayValue).toBe('Невідоме значення: legacy_maybe');
+    expect(r.clearKeys).toEqual([]);
+    expect(Object.keys(r.set).sort()).toEqual([
+      'career_goals.plan',
+      'probation_goals.items',
+    ]);
   });
 });
