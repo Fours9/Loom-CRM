@@ -58,6 +58,7 @@
 - [Reset анкет (pre-prod)](dev/questionnaire-test-reset.md)
 - [Production readiness checklist](dev/production-readiness.md)
 - [Cutover ProjectWeekend → LoomCRM](cutover.md)
+- [Порт PW → Loom (локальний runbook)](dev/pw-to-loom-port.md)
 - [COPYMAP](COPYMAP.md)
 - [Absences API parity](absences-api-parity.md)
 - [Absences UI parity](absences-ui-parity.md)

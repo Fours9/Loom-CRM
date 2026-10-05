@@ -115,3 +115,9 @@ Backend modules live under `apps/api/src/{platform,organization,modules}` — no
 ## Data access
 
 Single NestJS REST API is the only data entry point for the Angular client. One PostgreSQL database; tables owned by modules; no TypeORM `synchronize`.
+
+## Data port (ProjectWeekend → Loom)
+
+Ops tooling lives in `scripts/cutover/` (not a Nest module; no Nest DI; must not import Absences/Organization services). It reads ProjectWeekend SQLite **readonly** and writes Loom Postgres.
+
+Invariants: ResetPolicy **NO CASCADE** (fail-closed if a new FK child is omitted); `users.account_role_id` AuthZ SoT + `users.role` mirror; manager scope via employment assignment SoT; deterministic uuid v5 for source-backed and synthetic rows. Runbook: [dev/pw-to-loom-port.md](dev/pw-to-loom-port.md). Hub: [cutover.md](cutover.md).

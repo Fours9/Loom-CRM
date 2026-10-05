@@ -57,6 +57,7 @@ Use the exact `packageManager` from root `package.json` (`pnpm@10.15.0`) via Cor
 
 - Never commit `.env`, `.env.production`, real JWT secrets, or credentials.
 - Prefer not to commit local `cutover-report-*.json` unless explicitly requested.
+- PW → Loom data port: `scripts/cutover/` + UA runbook [`docs/dev/pw-to-loom-port.md`](docs/dev/pw-to-loom-port.md). Never write into `ProjectWeekend/**`; use `--dry-run --reset` then mandatory snapshot before `--reset` apply on valuable DBs.
 - Templates only: `.env.example`, `.env.production.example`.
 
 ## UI language
