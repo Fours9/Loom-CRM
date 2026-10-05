@@ -56,17 +56,20 @@ The importer:
 
 See checklist in [pw-to-loom-port.md](dev/pw-to-loom-port.md) §8 (counts, role mirror, EA manager scope, dual-import same mapping).
 
-### 4. Freeze & switch (production)
+### 4. Freeze & switch (production / same VPS)
 
-- Keep ProjectWeekend read-only.
-- Point DNS / reverse proxy to LoomCRM.
-- Monitor `/api/v1/health/ready`.
+**Canonical VPS runbook:** [docs/dev/site-cutover.md](dev/site-cutover.md) (`scripts/site-cutover.sh`).
+
+1. PW backup + stop (`hr-app`).
+2. Loom bootstrap (`snapshot` or `pw-refresh`) with full DB recreate.
+3. Acceptance on `127.0.0.1:8080` only.
+4. `go_live` publishes `:80` + public smoke — then Loom is authoritative.
 
 ### 5. Rollback
 
-1. Restore reverse-proxy to ProjectWeekend if needed.
-2. `.\scripts\db-restore.ps1` from pre-reset snapshot / bak.
-3. ProjectWeekend SQLite remains authoritative until cutover is declared done.
+1. **Before go_live:** stop Loom; start PW again — SQLite unchanged after `pw_stop`.
+2. **After go_live:** restore Loom from `backups/`; PW may be stale.
+3. Local: `.\scripts\db-restore.ps1` from pre-reset snapshot / bak.
 
 ## Non-goals
 

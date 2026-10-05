@@ -121,3 +121,12 @@ Single NestJS REST API is the only data entry point for the Angular client. One 
 Ops tooling lives in `scripts/cutover/` (not a Nest module; no Nest DI; must not import Absences/Organization services). It reads ProjectWeekend SQLite **readonly** and writes Loom Postgres.
 
 Invariants: ResetPolicy **NO CASCADE** (fail-closed if a new FK child is omitted); `users.account_role_id` AuthZ SoT + `users.role` mirror; manager scope via employment assignment SoT; deterministic uuid v5 for source-backed and synthetic rows. Runbook: [dev/pw-to-loom-port.md](dev/pw-to-loom-port.md). Hub: [cutover.md](cutover.md).
+
+### Site cutover (same VPS)
+
+Production replace of PW (`hr-app` `:80`) with Loom (`loom-crm`) is orchestrated by `scripts/site-cutover.sh` — see [dev/site-cutover.md](dev/site-cutover.md).
+
+- Compose overlays: `compose.production.yaml` (`!reset` / web `:80`), `compose.cutover-acceptance.yaml` (localhost `:8080` until `go_live`).
+- Dual `loom_db_bootstrap`: snapshot = recreate → restore → migrate; pw-refresh = recreate → migrate → cutover image importer.
+- Destructive restore always `DROP`/`CREATE` database; exact migration-set verify vs `typeorm-options.ts`.
+- Daily deploy: `scripts/deploy-vps.sh` (explicit migrate + `up --no-deps`; BC migrations or stop writers).

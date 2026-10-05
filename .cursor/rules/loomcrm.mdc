@@ -26,9 +26,10 @@ alwaysApply: true
 
 ## Database
 
-- Live Postgres is not in git. Commit shared state only via `scripts/db-snapshot.ps1` → `data/app.snapshot.sql`; restore with `scripts/db-restore.ps1`.
+- Live Postgres is not in git. Commit shared state only via `scripts/db-snapshot.ps1` / `.sh` → `data/app.snapshot.sql` (full `pg_dump --clean`); restore with `db-restore` after **recreate** on VPS (`db-recreate.sh`).
+- Never commit `backups/` (cutover-state / host dumps).
 
 ## Docs
 
-- Ops/onboarding docs live in `docs/dev/` (UA).
+- Ops/onboarding docs live in `docs/dev/` (UA), including [site-cutover.md](docs/dev/site-cutover.md).
 - Living status: `docs/README.md`, `docs/architecture.md`, `docs/product/hr-profile-roadmap.md`. Target vision: `docs/product/employee-profile-core.md` (not implementation status).

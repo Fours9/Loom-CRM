@@ -1,0 +1,37 @@
+# Production overlay for LoomCRM (Compose Merge Apply).
+# Requires Compose >= 2.24.4 (!reset / !override).
+# Usage: docker compose -p loom-crm --env-file .env.production \
+#   -f compose.yaml -f compose.production.yaml …
+#
+# Publishes web :80 + :443 (Let's Encrypt on host). Postgres/API internal only.
+# For admin acceptance before go_live, also merge compose.cutover-acceptance.yaml
+# (binds web to 127.0.0.1:8080 instead of public :80/:443).
+
+services:
+  postgres:
+    ports: !reset []
+
+  migrate:
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required for production}
+
+  api:
+    ports: !reset []
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required for production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required for production}
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required for production}
+      NODE_ENV: production
+
+  web:
+    ports: !override
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./docker/nginx.production.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ${CERTBOT_WEBROOT:-/root/ProjectWeekend/runtime/certbot}:/var/www/certbot:ro
+
+  cutover:
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required for production}

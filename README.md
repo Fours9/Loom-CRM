@@ -94,6 +94,9 @@ pnpm migration:run
 | `pnpm check:copy-source` | Fail, якщо `ProjectWeekend` має локальні зміни |
 | `.\scripts\db-snapshot.ps1` | Жива Postgres → `data/app.snapshot.sql` (у git) |
 | `.\scripts\db-restore.ps1` | Знімок → жива БД (з авто-бекапом `.bak`) |
+| `./scripts/site-cutover.sh` | VPS site cutover (Linux) |
+| `./scripts/deploy-vps.sh` | Daily VPS deploy (Linux) |
+| `./scripts/preflight-compose.sh` | Compose overlays / DATABASE_URL asserts |
 
 ## Compose (повний стек)
 
@@ -107,7 +110,7 @@ docker compose up -d --build
 
 Compose **не** підставляє `data/app.snapshot.sql` автоматично. Для демо-стану після першого підйому: `.\scripts\db-restore.ps1` (коли Postgres уже healthy).
 
-Секрети для smoke/prod: [`.env.production.example`](.env.production.example). Runbook: [docs/dev/deploy.md](docs/dev/deploy.md).
+Секрети для smoke/prod: [`.env.production.example`](.env.production.example). Runbook: [docs/dev/deploy.md](docs/dev/deploy.md). **VPS заміна PW:** [docs/dev/site-cutover.md](docs/dev/site-cutover.md) (`./scripts/site-cutover.sh`). Daily: `./scripts/deploy-vps.sh`.
 
 ## Архітектура
 
@@ -141,6 +144,7 @@ database/         Документація ownership міграцій (код у
 | --- | --- |
 | [Git sync](docs/dev/git-sync.md) | Новий ПК, pull/push, snapshot/restore БД |
 | [Deploy](docs/dev/deploy.md) | Docker Compose single-host |
+| [Site cutover](docs/dev/site-cutover.md) | VPS: PW → Loom (`site-cutover.sh`) |
 | [Operations](docs/dev/operations.md) | Env, backup/restore, checklist |
 | [Cutover](docs/cutover.md) | Імпорт з ProjectWeekend SQLite |
 | [AGENTS.md](AGENTS.md) | Правила для агентів і межі модулів |

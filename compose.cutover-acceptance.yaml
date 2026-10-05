@@ -1,0 +1,17 @@
+# Acceptance overlay: Loom web reachable only on VPS localhost until go_live.
+# Merge AFTER compose.production.yaml so !override wins over production :80/:443.
+#
+# Usage (acceptance):
+#   docker compose -p loom-crm --env-file .env.production \
+#     -f compose.yaml -f compose.production.yaml -f compose.cutover-acceptance.yaml …
+#
+# Admin access: SSH tunnel  local:8080 → vps:8080  or  curl http://127.0.0.1:8080
+# go_live: recreate web WITHOUT this file (production :80+:443).
+
+services:
+  web:
+    ports: !override
+      - '127.0.0.1:8080:80'
+    # Keep production nginx.conf mount from production overlay (HTTPS server block
+    # unused while only :80 is published on localhost). Cert volumes remain from
+    # production overlay for a clean flip at go_live without rebuild.

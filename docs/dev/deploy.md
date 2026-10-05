@@ -2,159 +2,136 @@
 
 Головний runbook для запуску LoomCRM на одному хості з Docker: **nginx (Angular static) → `/api/` → NestJS → PostgreSQL** (named volume).
 
-Пов’язане: [операції](operations.md), [git-sync](git-sync.md), [архітектура](../architecture.md).
+Пов’язане: [операції](operations.md), [site cutover](site-cutover.md), [git-sync](git-sync.md), [архітектура](../architecture.md).
 
-Файл Compose у корені репозиторію: [`compose.yaml`](../../compose.yaml). Образи: [`docker/api.Dockerfile`](../../docker/api.Dockerfile), [`docker/web.Dockerfile`](../../docker/web.Dockerfile).
+Файли Compose:
+
+| Файл | Роль |
+| --- | --- |
+| [`compose.yaml`](../../compose.yaml) | base (dev/smoke ports 5432/3000/8080) |
+| [`compose.production.yaml`](../../compose.production.yaml) | prod: без публічних 5432/3000; web `:80`; `${VAR:?}` |
+| [`compose.cutover-acceptance.yaml`](../../compose.cutover-acceptance.yaml) | до go_live: web лише `127.0.0.1:8080` |
+
+Образи: [`docker/api.Dockerfile`](../../docker/api.Dockerfile), [`docker/web.Dockerfile`](../../docker/web.Dockerfile), [`docker/cutover.Dockerfile`](../../docker/cutover.Dockerfile).
+
+Wrappers: `scripts/lib/compose-cli.sh` (`-p loom-crm`, filesets `base|production|acceptance`).
 
 ---
 
 ## 0. Модель розгортання
 
+### Dev / smoke (base)
+
 ```text
 Browser → web (:8080, nginx)
-            ├─ /        → Angular dist (static)
-            └─ /api/    → api (:3000, NestJS)
-                            └─▶ Postgres (volume postgres_data)
+            ├─ /        → Angular dist
+            └─ /api/    → api (:3000)
+                            └─▶ Postgres (:5432 published)
 ```
 
-Послідовність сервісів:
+### Production (після go_live)
 
 ```text
-postgres (healthy) → migrate (one-shot, migration:run) → api (ready) → web
+Browser → web (:80, nginx) → api (internal) → Postgres (internal)
+```
+
+### Acceptance (до go_live)
+
+```text
+Admin (SSH tunnel) → 127.0.0.1:8080 → web → api → Postgres
+Public :80 → not Loom
+```
+
+Послідовність bootstrap (cutover) — див. [site-cutover.md](site-cutover.md). Daily:
+
+```text
+explicit migrate-run.sh → up -d --no-deps api → up -d --no-deps web
 ```
 
 Інваріанти:
 
 - Схему змінюють **лише** міграції. TypeORM `synchronize` **ніколи** не вмикати.
-- Сервіс `migrate` завершується успішно **до** старту `api` (`service_completed_successfully`).
-- API сам **не** повинен бути єдиним місцем застосування міграцій у production — для Compose це окремий job.
-- Секрети й `.env*` з реальними паролями **не** в git (лише `*.example`).
-- Жива БД — у volume `postgres_data`; `git pull` її не чіпає.
+- Після explicit migrate **не** робити звичайний `up api` (подвійний `depends_on` migrate) — лише `--no-deps`.
+- migrate і api мають **identical** resolved `DATABASE_URL`.
+- Daily migrations **backward-compatible** з running API, або `LOOM_STOP_API_BEFORE_MIGRATE=1`.
+- Секрети не в git. Login smoke: `CUTOVER_SMOKE_*`, не `SEED_ADMIN_*`.
+- Жива БД — volume `postgres_data`; `git pull` її не чіпає.
 
 ---
 
 ## 1. Шлях впровадження
 
-1. **Локальний dev** — Postgres у Compose або локальний, `start.bat` / `pnpm dev` (див. [README](../../README.md), [git-sync](git-sync.md)).
-2. **Compose smoke** — повний стек з [`compose.yaml`](../../compose.yaml) на одній машині (цей runbook, §3).
-3. **VPS / single-host production** — той самий Compose + сильні секрети + backup (див. [operations](operations.md)).
+1. **Локальний dev** — Postgres у Compose або локальний, `start.bat` / `pnpm dev`.
+2. **Compose smoke** — `compose.yaml` на `:8080`.
+3. **VPS site cutover** — [site-cutover.md](site-cutover.md).
+4. **Daily updates** — `./scripts/deploy-vps.sh`.
 
 ---
 
 ## 2. Передумови на хості
 
-- Linux x64 (або Docker Desktop на Windows/macOS для smoke).
-- Docker Engine + `docker compose` v2.
-- Порти **8080** (web) і за потреби **3000** (api, якщо публікується) вільні; Postgres у Compose також публікує **5432** (для smoke; у жорсткішому проді можна прибрати publish).
+- Linux x64, Docker Engine + Compose **≥ 2.24.4**.
+- Для production: порт **80** вільний після stop PW.
+- Секрети в `.env.production` (з [`.env.production.example`](../../.env.production.example)).
 
 ```bash
 git clone https://github.com/Fours9/Loom-CRM.git
 cd Loom-CRM
 cp .env.production.example .env.production
-# відредагувати секрети (JWT_SECRET, паролі БД тощо)
+# JWT_SECRET, POSTGRES_PASSWORD, DATABASE_URL, CORS_ORIGIN, CUTOVER_SMOKE_*
+chmod +x scripts/*.sh scripts/lib/*.sh
+./scripts/preflight-compose.sh --env-file .env.production
 ```
-
-Шаблон: [`.env.production.example`](../../.env.production.example).
-
-У поточному [`compose.yaml`](../../compose.yaml) змінні для `api`/`migrate` задані inline. Для production **обов’язково** замініть `JWT_SECRET` (і паролі Postgres, якщо змінюєте) на значення з `.env.production` — через правку `environment:` у Compose або підстановку `${JWT_SECRET}` після експорту змінних:
-
-```bash
-set -a && source .env.production && set +a   # bash
-docker compose up -d --build
-```
-
-На Windows PowerShell:
-
-```powershell
-Get-Content .env.production | ForEach-Object {
-  if ($_ -match '^\s*#' -or $_ -notmatch '=') { return }
-  $k,$v = $_.Split('=',2); Set-Item -Path "Env:$k" -Value $v.Trim()
-}
-# потім оновіть compose.yaml environment або передайте -e
-docker compose up -d --build
-```
-
-Мінімум для безпечного smoke поза localhost: унікальний `JWT_SECRET` (≥32 символи), не placeholder з репозиторію.
 
 ---
 
-## 3. Перший запуск
-
-### 3.1. Bootstrap-послідовність
-
-```text
-postgres healthy (pg_isready)
-→ migrate: pnpm --filter @loom/api migration:run
-→ api: Nest bootstrap + SeedService (admin, якщо ще немає)
-→ health/ready
-→ web: nginx + static + proxy /api/
-```
-
-### 3.2. Команди
+## 3. Перший запуск (smoke, не site cutover)
 
 ```bash
-docker compose up -d --build
-docker compose ps
-docker compose logs -f migrate api
+docker compose -p loom-crm up -d --build
+docker compose -p loom-crm ps
+curl -fsS http://127.0.0.1:8080/api/v1/health/ready
 ```
 
-Дочекайтесь успішного завершення `migrate` і healthy `api`.
-
-### 3.3. Seed-адмін
-
-При першому старті API з порожньою БД `SeedService` створює адміна (якщо email ще немає):
-
-| | Default |
-| --- | --- |
-| Email | `admin@loom.local` (або `SEED_ADMIN_EMAIL`) |
-| Password | `Admin123!` (або `SEED_ADMIN_PASSWORD`) |
-
-У production одразу змініть пароль і не залишайте дефолти в публічному доступі. Змінні seed можна передати в `environment` сервісу `api`.
-
-### 3.4. Перевірка
+Для production-like без cutover window:
 
 ```bash
-curl -fsS http://<host>:3000/api/v1/health/live
-curl -fsS http://<host>:3000/api/v1/health/ready
-curl -fsS http://<host>:8080/          # Angular
-curl -fsS http://<host>:8080/api/v1/health/live   # через nginx proxy
+docker compose -p loom-crm --env-file .env.production \
+  -f compose.yaml -f compose.production.yaml up -d --build
 ```
 
-UI: http://\<host\>:8080
+Після порожньої БД дані з’являються лише після restore/cutover bootstrap — `migrate` не підвантажує snapshot.
+
+### Seed-адмін
+
+`SeedService` створює адміна лише якщо email ще немає. Після restore PW snapshot seed зазвичай **noop** — для automated smoke використовуйте `CUTOVER_SMOKE_*`.
 
 ---
 
-## 4. Оновлення
+## 4. Оновлення (daily)
 
 ```bash
-cd Loom-CRM
-git pull --ff-only
-docker compose up -d --build
+./scripts/deploy-vps.sh
+# або для breaking migrations:
+LOOM_STOP_API_BEFORE_MIGRATE=1 ./scripts/deploy-vps.sh
 ```
 
-Compose знову прожене `migrate` перед `api`. Перед оновленням зробіть backup БД ([operations](operations.md)).
-
-Перевірка після оновлення — ті самі `health/live` і `health/ready`, плюс логін у UI.
+Контракт: `git pull` → build → `migrate-run.sh` → `up -d --no-deps api` → web → smoke. **Без** restore.
 
 ---
 
 ## 5. Rollback (коротко)
 
-1. Відновіть попередній backup Postgres (якщо міграції вже застосовані й несумісні зі старим кодом — restore обов’язковий).
-2. Зачекайте / зберіть попередній коміт або тег:
-
-```bash
-git checkout <previous-sha>
-docker compose up -d --build
-```
-
-3. Не запускайте два різні покоління схеми без розуміння міграцій (`pnpm migration:show` у dev).
+1. Backup/restore Postgres ([operations](operations.md); site cutover — [site-cutover.md](site-cutover.md) §6).
+2. Попередній коміт + `deploy-vps.sh` / compose up.
+3. Не змішуйте покоління схеми без `migration:show` / exact-set verify.
 
 ---
 
 ## 6. Що цей runbook свідомо не покриває
 
-- Multi-instance API на спільну БД без окремого migrate-job у CI/CD.
-- Окремий TLS termination — додайте reverse proxy (Caddy/nginx/Traefik) перед `:8080` за потреби.
+- Multi-instance API без окремого migrate-job.
+- TLS termination перед `:80` (додайте reverse proxy за потреби).
+- Повне вікно заміни PW — це [site-cutover.md](site-cutover.md).
 
-**Демо через тунель (локальна машина + публічний HTTPS):** не Compose — див. [git-sync.md](git-sync.md) § «Демо через тунель» (`start-tunnel.bat` / ngrok). VPS/production лишається шляхом Compose нижче / вище в цьому документі.
+**Демо через тунель (локальна машина):** [git-sync.md](git-sync.md) (`start-tunnel.bat` / ngrok). Не production.

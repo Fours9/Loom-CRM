@@ -5,8 +5,15 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json apps/web/
 COPY libs/contracts/common/package.json libs/contracts/common/
 COPY libs/contracts/auth/package.json libs/contracts/auth/
+COPY libs/contracts/access-control/package.json libs/contracts/access-control/
 COPY libs/contracts/employees/package.json libs/contracts/employees/
 COPY libs/contracts/absences/package.json libs/contracts/absences/
+COPY libs/contracts/documents/package.json libs/contracts/documents/
+COPY libs/contracts/questionnaires/package.json libs/contracts/questionnaires/
+COPY libs/questionnaire-schema/package.json libs/questionnaire-schema/
+COPY libs/employee-contacts/package.json libs/employee-contacts/
+COPY libs/employee-about-catalog/package.json libs/employee-about-catalog/
+COPY libs/position-skill-catalog/package.json libs/position-skill-catalog/
 COPY libs/frontend/ui/package.json libs/frontend/ui/
 RUN pnpm install --frozen-lockfile --filter @loom/web...
 COPY apps/web apps/web

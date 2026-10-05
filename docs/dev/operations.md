@@ -50,13 +50,16 @@
 | `CORS_ORIGIN` | ні (default `http://localhost:4200`) | `https://app.example` або CSV | allowlist origin |
 | `SEED_ADMIN_EMAIL` | ні | `admin@loom.local` | email seed-адміна (якщо ще немає) |
 | `SEED_ADMIN_PASSWORD` | ні | сильний пароль | пароль seed-адміна |
+| `CUTOVER_SMOKE_EMAIL` | для site smoke | існуючий user | automated login smoke (не SEED_ADMIN) |
+| `CUTOVER_SMOKE_PASSWORD` | для site smoke | — | automated login smoke |
 
 **Практика для production**
 
 1. Скопіювати `.env.production.example` → `.env.production`, ніколи не комітити секрети.
 2. Згенерувати `JWT_SECRET`: `openssl rand -base64 48`.
-3. Змінити дефолтний пароль адміна одразу після першого входу.
-4. Якщо UI за reverse proxy на іншому origin — виставити `CORS_ORIGIN` (або same-origin через nginx на `:8080` / TLS proxy).
+3. Заповнити `CUTOVER_SMOKE_*` користувачем зі snapshot/import.
+4. Site cutover / daily deploy: [site-cutover.md](site-cutover.md), [deploy.md](deploy.md).
+5. Compose wrappers завжди `-p loom-crm` + `--env-file .env.production`.
 
 **Перший вхід і скидання пароля**
 
@@ -64,7 +67,7 @@
 - Адмінське скидання: People → Адміністрування → **Акаунт** (`POST /auth/reset-password/:userId`); інвалідовує сесію через `tokenVersion`. Наступний запит API дає 401; interceptor робить logout і веде на `/login`. Скидання собі дозволене; деактивація / видалення власного логіну / hard-delete власної анкети — заборонені.
 - Hard-delete анкети (`DELETE /api/v1/employees/:id`) — незворотне видалення **operational aggregate** (не GDPR wipe усіх згадок про людину). Audit `employee.deleted` з `employeeNumber` навмисний. Surviving actor UUID → UI **«Видалений користувач»**.
 
-У [`compose.yaml`](../../compose.yaml) частина змінних зараз задана inline у `environment:` — для продакшену замініть placeholder `JWT_SECRET` і узгодьте credentials з Postgres.
+У [`compose.yaml`](../../compose.yaml) змінні параметризовані (`${VAR:-dev}`). Production overlay вимагає `${VAR:?}`.
 
 ---
 
@@ -77,10 +80,13 @@
 | Жива БД (volume / `DATABASE_URL`) | не в git; **не** файл `data/app.sqlite` (це лише PW) |
 | `data/app.snapshot.sql` | знімок у git |
 | `pnpm migration:run` | лише схема — **не** завантажує знімок |
-| `.\scripts\db-snapshot.ps1` | жива → знімок (`scripts/lib/postgres-cli.ps1`: Compose → PATH → Program Files\PostgreSQL) |
-| `.\scripts\db-restore.ps1` | знімок → жива (+ авто-бекап `data/app.live.bak-*.sql`; той самий CLI resolver) |
+| `.\scripts\db-snapshot.ps1` / `scripts/db-snapshot.sh` | жива → знімок (full `pg_dump --clean`) |
+| `.\scripts\db-restore.ps1` | знімок → жива (+ авто-бекап `data/app.live.bak-*.sql`; Windows) |
+| `scripts/db-recreate.sh` + `db-restore.sh` | VPS/site: **обов’язковий** DROP/CREATE, потім restore (empty-enough заборонено) |
 
-Після clone / порожньої БД: **спочатку** migrate, **потім** явно `db-restore.ps1`. Інакше логін зі знімка неможливий. `start.bat` **не** робить restore сам.
+Після clone / порожньої БД (dev): **спочатку** migrate, **потім** явно `db-restore.ps1`. Інакше логін зі знімка неможливий. `start.bat` **не** робить restore сам.
+
+Site cutover на VPS: recreate → restore → migrate (або pw-refresh: recreate → migrate → importer) — [site-cutover.md](site-cutover.md).
 
 Деталі щоденної роботи: [git-sync.md](git-sync.md).
 
@@ -92,40 +98,35 @@ git commit -m "Update DB snapshot"
 
 ### 3.2. Production backup (Compose, поза git)
 
+Каталог `backups/` **gitignored** (cutover-state + host dumps).
+
 ```bash
 mkdir -p backups
-docker compose exec -T postgres pg_dump -U loom -d loom_crm --format=custom -f /tmp/loom.dump
-docker compose cp postgres:/tmp/loom.dump "./backups/loom-$(date +%Y%m%d-%H%M%S).dump"
+# Prefer wrappers (-p loom-crm):
+#   source scripts/lib/compose-cli.sh
+#   loom_compose production exec -T postgres pg_dump ...
+docker compose -p loom-crm --env-file .env.production \
+  -f compose.yaml -f compose.production.yaml \
+  exec -T postgres pg_dump -U loom -d loom_crm --clean --if-exists --no-owner --no-acl -f /tmp/loom.dump.sql
+docker compose -p loom-crm --env-file .env.production \
+  -f compose.yaml -f compose.production.yaml \
+  cp postgres:/tmp/loom.dump.sql "./backups/loom-$(date +%Y%m%d-%H%M%S).sql"
 ```
 
-Альтернатива (SQL на stdout хоста):
+Робити backup **перед** destructive recreate / `git pull` + migrate на production. Production dump **не** комітити замість `app.snapshot.sql`.
+
+### 3.3. Production restore (fail-closed recreate)
+
+Canonical path for full baseline:
 
 ```bash
-docker compose exec -T postgres pg_dump -U loom -d loom_crm --clean --if-exists > backups/loom.sql
+./scripts/db-recreate.sh --fileset production   # bak if non-empty → DROP/CREATE
+./scripts/db-restore.sh --fileset production --snapshot ./backups/loom-….sql
+./scripts/migrate-run.sh --fileset production
+# then up -d --no-deps api/web (see deploy-vps.sh / site-cutover.sh)
 ```
 
-Робити backup **перед** `git pull` + `--build` на production. Production dump **не** комітити замість `app.snapshot.sql`, якщо там є реальні персональні дані.
-
-### 3.3. Production restore
-
-Зупиніть writers (`api` / `web`), потім:
-
-```bash
-docker compose stop api web
-docker compose cp ./backups/loom-YYYYMMDD.dump postgres:/tmp/loom.dump
-docker compose exec -T postgres pg_restore -U loom -d loom_crm --clean --if-exists /tmp/loom.dump
-docker compose start api web
-```
-
-Для plain SQL:
-
-```bash
-docker compose stop api web
-cat backups/loom.sql | docker compose exec -T postgres psql -U loom -d loom_crm
-docker compose start api web
-```
-
-Після restore перевірте `health/ready` і логін.
+**Заборонено** restore у «майже порожню» БД без recreate — dump `--clean` не гарантує відсутність новіших об’єктів.
 
 ---
 

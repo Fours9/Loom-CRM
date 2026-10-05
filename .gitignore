@@ -48,5 +48,10 @@ data/**
 *.sqlite-*
 cutover-report-*.json
 
+# Site cutover operational state / host backups (never commit)
+backups/
+backups/**
+**/cutover-state.json
+
 # Docker volumes
 .docker-data/

@@ -54,6 +54,8 @@
 - [Архітектура](architecture.md)
 - [ADR](adr/) — зафіксовані рішення
 - [Деплой (Docker Compose)](dev/deploy.md)
+- [Site cutover PW → Loom (VPS)](dev/site-cutover.md)
+- [Site cutover DoD checklist](dev/site-cutover-dod.md)
 - [Експлуатація (operations)](dev/operations.md)
 - [Reset анкет (pre-prod)](dev/questionnaire-test-reset.md)
 - [Production readiness checklist](dev/production-readiness.md)

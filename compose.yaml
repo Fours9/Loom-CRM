@@ -2,11 +2,11 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: loom
-      POSTGRES_PASSWORD: loom
-      POSTGRES_DB: loom_crm
+      POSTGRES_USER: ${POSTGRES_USER:-loom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-loom}
+      POSTGRES_DB: ${POSTGRES_DB:-loom_crm}
     ports:
-      - '5432:5432'
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +20,7 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     environment:
-      DATABASE_URL: postgres://loom:loom@postgres:5432/loom_crm
+      DATABASE_URL: ${DATABASE_URL:-postgres://loom:loom@postgres:5432/loom_crm}
       NODE_ENV: production
     command: ['pnpm', '--filter', '@loom/api', 'migration:run']
     depends_on:
@@ -32,12 +32,15 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     environment:
-      DATABASE_URL: postgres://loom:loom@postgres:5432/loom_crm
+      DATABASE_URL: ${DATABASE_URL:-postgres://loom:loom@postgres:5432/loom_crm}
       NODE_ENV: production
       PORT: '3000'
-      JWT_SECRET: change-me-in-production-loom-crm-dev-secret
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-loom-crm-dev-secret}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@loom.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin123!}
     ports:
-      - '3000:3000'
+      - '${API_PORT:-3000}:3000'
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -45,22 +48,47 @@ services:
       test:
         [
           'CMD-SHELL',
-          'wget -qO- http://127.0.0.1:3000/api/v1/health/ready || exit 1',
+          'node -e "fetch(''http://127.0.0.1:3000/api/v1/health/ready'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
         ]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 12
-      start_period: 15s
+      start_period: 20s
 
   web:
     build:
       context: .
       dockerfile: docker/web.Dockerfile
     ports:
-      - '8080:80'
+      - '${WEB_PORT:-8080}:80'
     depends_on:
       api:
         condition: service_healthy
+
+  # One-shot PW→Loom importer. Opt-in: --profile cutover
+  # Requires PW sqlite bind-mounted read-only (see site-cutover.sh).
+  cutover:
+    profiles: ['cutover']
+    build:
+      context: .
+      dockerfile: docker/cutover.Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://loom:loom@postgres:5432/loom_crm}
+      NODE_ENV: production
+    volumes:
+      - ${PW_SQLITE_HOST_PATH:-./ProjectWeekend/data/app.sqlite}:/pw/app.sqlite:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app
+    command:
+      [
+        'node',
+        'scripts/cutover/import-from-projectweekend.mjs',
+        '--reset',
+        '--sqlite',
+        '/pw/app.sqlite',
+      ]
 
 volumes:
   postgres_data:

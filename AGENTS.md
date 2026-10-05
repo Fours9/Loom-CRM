@@ -35,18 +35,28 @@ Use the exact `packageManager` from root `package.json` (`pnpm@10.15.0`) via Cor
 ## Database snapshot (PW-style)
 
 - **Live** PostgreSQL is never in git (Compose volume / local `DATABASE_URL`). There is **no** `data/app.sqlite` — unlike ProjectWeekend, the live DB is a server, not a file in the repo.
-- **Tracked snapshot:** `data/app.snapshot.sql` via `scripts/db-snapshot.ps1` (live → snapshot) and `scripts/db-restore.ps1` (snapshot → live, with `data/app.live.bak-*.sql` auto-backup). Shared CLI resolver: `scripts/lib/postgres-cli.ps1` (Compose → PATH → `Program Files\PostgreSQL\<ver>\bin`).
+- **Tracked snapshot:** `data/app.snapshot.sql` — **full** `pg_dump --clean` baseline (not data-only). Windows: `scripts/db-snapshot.ps1` / `db-restore.ps1` + `scripts/lib/postgres-cli.ps1`. Linux/VPS: `scripts/db-snapshot.sh` / `db-restore.sh` / `db-recreate.sh`.
+- **Site cutover restore** is always `DROP DATABASE` + `CREATE DATABASE` then restore into the fresh DB. Forbidden: “empty-enough” restore relying only on dump `--clean` (newer target objects can survive).
 - **`pnpm migration:run` is schema only.** It does **not** load demo data. After clone / empty DB, always run `.\scripts\db-restore.ps1` explicitly (`start.bat` does **not** auto-restore).
-- Do not commit live dumps or `.bak` files; only update the snapshot when the demo/shared state should move between machines.
-- After `git pull` of a new snapshot, restore is explicit (`db-restore.ps1`) — pull alone does not overwrite the live DB.
+- Do not commit live dumps, `.bak` files, or `backups/` (gitignored cutover state). Only update the tracked snapshot when demo/shared state should move between machines.
+- After `git pull` of a new snapshot, restore is explicit — pull alone does not overwrite the live DB.
 - When onboarding a machine or debugging “empty DB / can’t log in”, check restore before inventing other fixes.
+
+## Site cutover / VPS deploy
+
+- Runbook: [`docs/dev/site-cutover.md`](docs/dev/site-cutover.md). Orchestrator: `scripts/site-cutover.sh`. Daily: `scripts/deploy-vps.sh`.
+- **Dual bootstrap:** `sourceMode=snapshot` → recreate → restore → migrate; `sourceMode=pw-refresh` → recreate → migrate → cutover importer (never importer on unmigrated DB). Importer runs in `docker/cutover.Dockerfile` one-shot image (not api production image).
+- **go_live boundary:** until go_live, web is only `127.0.0.1:8080` (`compose.cutover-acceptance.yaml`); after go_live, production `:80`. Data-safe PW rollback only before go_live.
+- After explicit migrate, start api/web with `up -d --no-deps` (do not re-trigger `depends_on` migrate).
+- Daily migrations **MUST** be backward-compatible with the running API, or stop writers first (`LOOM_STOP_API_BEFORE_MIGRATE=1`).
+- Smoke login secrets: `CUTOVER_SMOKE_EMAIL` / `CUTOVER_SMOKE_PASSWORD` (not `SEED_ADMIN_*`). Marker `backups/cutover-state.json` — no secrets.
 
 ## Documentation
 
 - Human-facing LoomCRM docs for onboarding/ops: Ukrainian, under `docs/` (hub: `docs/README.md`).
 - **Living status** (must match code): `docs/README.md`, `docs/architecture.md`, `docs/product/hr-profile-roadmap.md`, this file.
 - **Target / vision** (not implementation status): `docs/product/employee-profile-core.md`.
-- Practical runbooks: `docs/dev/git-sync.md`, `docs/dev/deploy.md`, `docs/dev/operations.md`.
+- Practical runbooks: `docs/dev/git-sync.md`, `docs/dev/deploy.md`, `docs/dev/operations.md`, `docs/dev/site-cutover.md` (VPS PW→Loom).
 - Demo tunnel tooling (exists): `start-tunnel.bat` → `scripts/start-tunnel.ps1` (ngrok reserved domain). Do **not** invent other tunnel providers (Cloudflare, etc.) without an architecture decision. DB sync uses `db-snapshot` / `db-restore` (Postgres SQL dump, not SQLite files).
 - Do not write product docs into `ProjectWeekend/docs`.
 - Keep ADRs in `docs/adr/`; architecture overview in `docs/architecture.md`.

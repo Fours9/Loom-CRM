@@ -4,7 +4,9 @@
 
 Інструмент: `scripts/cutover/` (ops tooling, **не** Nest-модуль). ProjectWeekend лишається **read-only**.
 
-Пов’язане: [cutover.md](../cutover.md), [git-sync.md](git-sync.md), [operations.md](operations.md), [architecture.md](../architecture.md).
+Пов’язане: [cutover.md](../cutover.md), [site-cutover.md](site-cutover.md) (VPS), [git-sync.md](git-sync.md), [operations.md](operations.md), [architecture.md](../architecture.md).
+
+Для production replace на тому самому VPS використовуйте **[site-cutover.md](site-cutover.md)** (`sourceMode=pw-refresh` + cutover image), не лише локальний `node scripts/cutover/...`.
 
 ---
 
