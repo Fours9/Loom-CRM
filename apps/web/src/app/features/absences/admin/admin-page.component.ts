@@ -29,7 +29,7 @@ import {
       </p>
 
       <div class="grid">
-        <article class="card card-privacy" data-help-id="absences.admin.privacy">
+        <article class="card card-privacy">
           <h2>Конфіденційність</h2>
           @if (privacy) {
             <label class="check">
@@ -46,23 +46,25 @@ import {
               <p class="muted">Індивідуальні права в анкетах працівників зараз ігноруються.</p>
             }
 
-            <h3 class="privacy-section">Налаштування анкет</h3>
-            <label>
-              Режим видимості чужих анкет
-              <select
-                [(ngModel)]="privacy.profileVisibilityMode"
-                name="profileMode"
-                [disabled]="!isAdmin"
-                (ngModelChange)="privacyMessage = ''"
-              >
-                @for (opt of profileModeOptions; track opt.value) {
-                  <option [value]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
-            </label>
+            <div class="privacy-profile-block" data-help-id="absences.admin.privacy.profile">
+              <h3 class="privacy-section">Налаштування анкет</h3>
+              <label>
+                Режим видимості чужих анкет
+                <select
+                  [(ngModel)]="privacy.profileVisibilityMode"
+                  name="profileMode"
+                  [disabled]="!isAdmin"
+                  (ngModelChange)="privacyMessage = ''"
+                >
+                  @for (opt of profileModeOptions; track opt.value) {
+                    <option [value]="opt.value">{{ opt.label }}</option>
+                  }
+                </select>
+              </label>
+            </div>
 
-            <h3 class="privacy-section">Налаштування відсутностей</h3>
-            <div class="privacy-absence-stack">
+            <div class="privacy-absence-stack" data-help-id="absences.admin.privacy.absences">
+              <h3 class="privacy-section">Налаштування відсутностей</h3>
               <label>
                 Режим видимості чужих відсутностей
                 <select
@@ -164,6 +166,7 @@ import {
         font-size: 0.95rem;
         font-weight: 600;
       }
+      .privacy-profile-block,
       .privacy-absence-stack {
         display: grid;
         gap: 0.55rem;

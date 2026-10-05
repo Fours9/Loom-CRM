@@ -11,6 +11,7 @@ import { PositionManagementFacade } from './position-management.facade';
     <loom-catalog-edit-dialog
       [headingId]="headingId"
       [title]="vm.editingDepartmentId() ? 'Редагувати відділ' : 'Новий відділ'"
+      tourId="positions.dialog.department"
       [error]="vm.error()"
       (closed)="vm.closeDepartmentDialog()"
     >
@@ -25,7 +26,11 @@ import { PositionManagementFacade } from './position-management.facade';
             Увімкнено
           </label>
         }
-        <button type="button" (click)="vm.saveDepartment()">
+        <button
+          type="button"
+          data-help-id="positions.dialog.department.save"
+          (click)="vm.saveDepartment()"
+        >
           {{ vm.editingDepartmentId() ? 'Зберегти' : 'Створити' }}
         </button>
       </div>
@@ -34,6 +39,7 @@ import { PositionManagementFacade } from './position-management.facade';
         <label>
           Назва
           <input
+            data-help-id="positions.dialog.department.name"
             [(ngModel)]="vm.newDepartment"
             name="newDepartment"
             placeholder="Назва відділу"
@@ -41,7 +47,11 @@ import { PositionManagementFacade } from './position-management.facade';
         </label>
         <label>
           Напрямок
-          <select [(ngModel)]="vm.newDepartmentDirectionId" name="newDepartmentDirectionId">
+          <select
+            data-help-id="positions.dialog.department.direction"
+            [(ngModel)]="vm.newDepartmentDirectionId"
+            name="newDepartmentDirectionId"
+          >
             <option value="">Без напрямку</option>
             @for (dir of vm.formDirectionOptions(); track dir.id) {
               <option [value]="dir.id">{{ dir.name }}</option>

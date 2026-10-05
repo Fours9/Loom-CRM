@@ -5,12 +5,13 @@ import {
   type MultiSelectItem,
 } from '../../shared/multi-select-list.component';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
+import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
 import { PositionManagementFacade } from './position-management.facade';
 
 @Component({
   selector: 'loom-position-edit-dialog',
   standalone: true,
-  imports: [FormsModule, MultiSelectListComponent],
+  imports: [FormsModule, MultiSelectListComponent, HelpTriggerComponent],
   template: `
     <div
       class="backdrop"
@@ -36,9 +37,15 @@ import { PositionManagementFacade } from './position-management.facade';
           >
             ×
           </button>
-          <h2 [id]="headingId">
-            {{ heading() }}
-          </h2>
+          <div class="head-title">
+            <h2 [id]="headingId">
+              {{ heading() }}
+            </h2>
+            <loom-help-trigger
+              tourId="positions.dialog.position"
+              ariaLabel="Підказка про цю форму"
+            />
+          </div>
           <div class="head-actions">
             @if (vm.editingId()) {
               <label class="check toggle-active">
@@ -53,6 +60,7 @@ import { PositionManagementFacade } from './position-management.facade';
             }
             <button
               type="button"
+              data-help-id="positions.dialog.position.save"
               (click)="vm.savePosition()"
               [disabled]="vm.saveLocked()"
             >
@@ -91,6 +99,7 @@ import { PositionManagementFacade } from './position-management.facade';
           <label>
             Назва
             <input
+              data-help-id="positions.dialog.position.name"
               [(ngModel)]="vm.formName"
               name="formName"
               placeholder="Назва посади"
@@ -101,6 +110,7 @@ import { PositionManagementFacade } from './position-management.facade';
             <label>
               Напрямок
               <select
+                data-help-id="positions.dialog.position.direction"
                 [(ngModel)]="vm.formDirectionId"
                 name="formDirectionId"
                 (ngModelChange)="vm.onFormDirectionChange()"
@@ -117,6 +127,7 @@ import { PositionManagementFacade } from './position-management.facade';
             <label>
               Відділ
               <select
+                data-help-id="positions.dialog.position.department"
                 [(ngModel)]="vm.formDepartmentId"
                 name="formDepartmentId"
                 (ngModelChange)="vm.onFormDepartmentChange()"
@@ -220,6 +231,12 @@ import { PositionManagementFacade } from './position-management.facade';
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
+      }
+      .head-title {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        min-width: 0;
       }
       .head-actions {
         display: flex;

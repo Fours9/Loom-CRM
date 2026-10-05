@@ -1,9 +1,12 @@
 import { Component, HostListener, OnDestroy, OnInit, inject, input, output } from '@angular/core';
+import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
+import type { HelpTourId } from '../../core/help/help-tour.models';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 
 @Component({
   selector: 'loom-catalog-edit-dialog',
   standalone: true,
+  imports: [HelpTriggerComponent],
   template: `
     <div
       class="backdrop"
@@ -28,7 +31,10 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
           >
             ×
           </button>
-          <h2 [id]="headingId()">{{ title() }}</h2>
+          <div class="head-title">
+            <h2 [id]="headingId()">{{ title() }}</h2>
+            <loom-help-trigger [tourId]="tourId()" ariaLabel="Підказка про цю форму" />
+          </div>
           <div class="head-actions">
             <ng-content select="[catalogHeadActions]" />
           </div>
@@ -71,9 +77,18 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
       }
       .head {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
+      }
+      .head-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 1 1 auto;
+        min-width: 0;
       }
       .head-actions {
         display: flex;
@@ -116,6 +131,7 @@ export class CatalogEditDialogComponent implements OnInit, OnDestroy {
   private readonly scrollLock = inject(OverlayScrollLockService);
   readonly headingId = input.required<string>();
   readonly title = input.required<string>();
+  readonly tourId = input.required<HelpTourId>();
   readonly error = input('');
   readonly closed = output<void>();
   private backdropPress = false;

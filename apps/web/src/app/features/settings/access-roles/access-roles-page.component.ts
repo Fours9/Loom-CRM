@@ -1,4 +1,11 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { catchError, of } from 'rxjs';
 import {
   AccountRolesApiService,
@@ -10,6 +17,8 @@ import { AccountRoleEditDialogComponent } from './account-role-edit-dialog.compo
 import type { PublishedQuestionnaireTemplate } from './account-role-edit-dialog.component';
 import { PERMISSION_PRESET_LABELS } from './surface-catalog';
 import { QuestionnairesApiService } from '../../questionnaires/core/questionnaires-api.service';
+import { HelpPageContextService } from '../../../core/help';
+import { resolveSettingsHelpContext } from '../help/resolve-settings-help-context';
 
 @Component({
   selector: 'loom-access-roles-page',
@@ -217,6 +226,8 @@ import { QuestionnairesApiService } from '../../questionnaires/core/questionnair
 export class AccessRolesPageComponent {
   private readonly api = inject(AccountRolesApiService);
   private readonly questionnairesApi = inject(QuestionnairesApiService);
+  private readonly helpPage = inject(HelpPageContextService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly roles = signal<AccountRole[]>([]);
   readonly surfaces = signal<AppSurface[]>([]);
@@ -236,6 +247,15 @@ export class AccessRolesPageComponent {
   });
 
   constructor() {
+    effect(() => {
+      this.helpPage.setFeatureContext(
+        'settings-access-roles',
+        resolveSettingsHelpContext(this.dialogOpen() ? 'role' : null),
+      );
+    });
+    this.destroyRef.onDestroy(() => {
+      this.helpPage.clearFeatureContext('settings-access-roles');
+    });
     this.loadSurfaces();
     this.loadPublishedTemplates();
     this.loadRoles();

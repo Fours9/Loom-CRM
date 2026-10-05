@@ -38,7 +38,7 @@ import type {
   template: `
     <div class="layout">
       <form id="create-employee" class="card" (ngSubmit)="submitted.emit()">
-        <div class="section-block section-static">
+        <div class="section-block section-static" data-help-id="people.create.general">
           <h3>Загальна інформація</h3>
           <div class="row row-3">
             <label
@@ -99,6 +99,7 @@ import type {
           }
 
           @if (canCreateAccountAtCreate) {
+            <div data-help-id="people.create.account">
             @if (!canAssignAccountRole) {
               <p class="muted hint">
                 Роль акаунта буде визначена за посадою (Працівник / Менеджер).
@@ -158,6 +159,7 @@ import type {
                 </label>
               </div>
             }
+            </div>
           }
         </div>
 
@@ -195,7 +197,7 @@ import type {
             </div>
 
             @if (canEditPersonal) {
-              <details class="nested-panel" open>
+              <details class="nested-panel" open data-help-id="people.create.personal">
                 <summary>Особисті контакти</summary>
                 <div class="nested-panel-body">
                   <div class="row row-1">
@@ -235,7 +237,7 @@ import type {
           </div>
         </details>
 
-        <details class="section-block disclose" open>
+        <details class="section-block disclose" open data-help-id="people.create.assignment">
           <summary>Посада</summary>
           <div class="disclose-body">
             <div class="row row-1">
@@ -285,7 +287,7 @@ import type {
         </details>
       </form>
 
-      <aside class="card schedule-card">
+      <aside class="card schedule-card" data-help-id="people.create.schedule">
         <h2>Робочий графік</h2>
         <app-schedule-editor [days]="draft.schedule" namePrefix="create_" />
       </aside>

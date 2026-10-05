@@ -18,6 +18,8 @@ export type PeopleAdminSubtabId = 'history' | 'account' | 'roleAccess';
 
 export type PeopleMetricsSubtabId = 'skills';
 
+export type PeopleHelpDialogKind = 'assignment' | 'document-upload' | null;
+
 export type PeopleHelpResolveInput = {
   tab: PeopleProfileTabId;
   dataSubtab: EmployeeDataTabId;
@@ -25,6 +27,17 @@ export type PeopleHelpResolveInput = {
   workSubtab: PeopleWorkSubtabId;
   metricsSubtab: PeopleMetricsSubtabId;
   adminSubtab: PeopleAdminSubtabId;
+  dialogKind: PeopleHelpDialogKind;
+};
+
+const DIALOG_LABELS: Record<Exclude<PeopleHelpDialogKind, null>, string> = {
+  assignment: 'Призначення',
+  'document-upload': 'Завантаження документів',
+};
+
+const DIALOG_TOUR_IDS: Record<Exclude<PeopleHelpDialogKind, null>, string> = {
+  assignment: 'people.dialog.assignment',
+  'document-upload': 'people.dialog.document-upload',
 };
 
 const WORK_LABELS: Record<PeopleWorkSubtabId, string> = {
@@ -52,6 +65,14 @@ function tourKey(id: string): string {
 export function resolvePeopleHelpContext(
   input: PeopleHelpResolveInput,
 ): HelpPageDescriptor {
+  if (input.dialogKind) {
+    return {
+      label: DIALOG_LABELS[input.dialogKind],
+      tourId: DIALOG_TOUR_IDS[input.dialogKind],
+      soon: false,
+    };
+  }
+
   switch (input.tab) {
     case 'data':
       return {
@@ -134,5 +155,7 @@ export function peopleHelpTourIds(): readonly string[] {
     'people.admin.roleAccess',
     'people.directory',
     'people.create',
+    'people.dialog.assignment',
+    'people.dialog.document-upload',
   ];
 }

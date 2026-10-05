@@ -1,4 +1,6 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, output, signal } from '@angular/core';
+import type { HelpTourId } from '../../core/help/help-tour.models';
+import type { PositionSettingsHelpDialogKind } from './help/resolve-positions-help-context';
 import { FormsModule } from '@angular/forms';
 import {
   type EmploymentCatalogItem,
@@ -14,6 +16,8 @@ type CatalogDialogState =
   | { kind: CatalogKind; mode: 'create' }
   | { kind: CatalogKind; mode: 'edit'; item: EmploymentCatalogItem };
 
+export type { PositionSettingsHelpDialogKind };
+
 @Component({
   selector: 'loom-position-settings-tab',
   standalone: true,
@@ -24,9 +28,10 @@ type CatalogDialogState =
         <p class="error">{{ error() }}</p>
       }
 
-      <div class="catalog-rail" data-help-id="positions.formats.list">
+      <div class="catalog-rail">
         <article
           class="card panel"
+          data-help-id="positions.formats.workFormats"
           [class.collapsed]="!panelOpen().workFormats"
           [attr.aria-expanded]="panelOpen().workFormats"
         >
@@ -56,7 +61,12 @@ type CatalogDialogState =
             }
           </button>
           <div class="panel-body">
-            <button type="button" class="btn" (click)="openCreate('workFormat')">
+            <button
+              type="button"
+              class="btn"
+              data-help-id="positions.formats.workFormats.add"
+              (click)="openCreate('workFormat')"
+            >
               Додати
             </button>
             <loom-employment-catalog-list
@@ -72,6 +82,7 @@ type CatalogDialogState =
 
         <article
           class="card panel"
+          data-help-id="positions.formats.employmentTypes"
           [class.collapsed]="!panelOpen().employmentTypes"
           [attr.aria-expanded]="panelOpen().employmentTypes"
         >
@@ -103,7 +114,12 @@ type CatalogDialogState =
             }
           </button>
           <div class="panel-body">
-            <button type="button" class="btn" (click)="openCreate('employmentType')">
+            <button
+              type="button"
+              class="btn"
+              data-help-id="positions.formats.employmentTypes.add"
+              (click)="openCreate('employmentType')"
+            >
               Додати
             </button>
             <loom-employment-catalog-list
@@ -123,6 +139,7 @@ type CatalogDialogState =
       <loom-catalog-edit-dialog
         [headingId]="dialogHeadingId"
         [title]="dialogTitle(d)"
+        [tourId]="dialogTourId(d)"
         [error]="dialogError()"
         (closed)="closeDialog()"
       >
@@ -133,7 +150,11 @@ type CatalogDialogState =
               Увімкнено
             </label>
           }
-          <button type="button" (click)="saveDialog()">
+          <button
+            type="button"
+            [attr.data-help-id]="dialogSaveHelpId(d)"
+            (click)="saveDialog()"
+          >
             {{ d.mode === 'edit' ? 'Зберегти' : 'Створити' }}
           </button>
         </div>
@@ -141,7 +162,12 @@ type CatalogDialogState =
         <form class="catalog-form" novalidate (submit)="$event.preventDefault(); saveDialog()">
           <label>
             Назва
-            <input [(ngModel)]="formName" name="catalogItemName" maxlength="64" />
+            <input
+              [attr.data-help-id]="dialogNameHelpId(d)"
+              [(ngModel)]="formName"
+              name="catalogItemName"
+              maxlength="64"
+            />
           </label>
           <label>
             Опис
@@ -352,6 +378,7 @@ type CatalogDialogState =
 })
 export class PositionSettingsTabComponent implements OnInit {
   private readonly api = inject(SettingsOrgApiService);
+  readonly helpDialogChange = output<PositionSettingsHelpDialogKind>();
 
   readonly workFormats = signal<EmploymentCatalogItem[]>([]);
   readonly employmentTypes = signal<EmploymentCatalogItem[]>([]);
@@ -387,6 +414,34 @@ export class PositionSettingsTabComponent implements OnInit {
     });
   }
 
+  dialogTourId(state: CatalogDialogState): HelpTourId {
+    return state.kind === 'workFormat'
+      ? 'positions.dialog.work-format'
+      : 'positions.dialog.employment-type';
+  }
+
+  dialogNameHelpId(state: CatalogDialogState): string {
+    return state.kind === 'workFormat'
+      ? 'positions.dialog.work-format.name'
+      : 'positions.dialog.employment-type.name';
+  }
+
+  dialogSaveHelpId(state: CatalogDialogState): string {
+    return state.kind === 'workFormat'
+      ? 'positions.dialog.work-format.save'
+      : 'positions.dialog.employment-type.save';
+  }
+
+  private emitHelpDialog(kind: CatalogKind | null): void {
+    if (kind === 'workFormat') {
+      this.helpDialogChange.emit('work-format');
+    } else if (kind === 'employmentType') {
+      this.helpDialogChange.emit('employment-type');
+    } else {
+      this.helpDialogChange.emit(null);
+    }
+  }
+
   dialogTitle(state: CatalogDialogState): string {
     const create = state.mode === 'create';
     if (state.kind === 'workFormat') {
@@ -406,6 +461,7 @@ export class PositionSettingsTabComponent implements OnInit {
       [kind === 'workFormat' ? 'workFormats' : 'employmentTypes']: true,
     }));
     this.dialog.set({ kind, mode: 'create' });
+    this.emitHelpDialog(kind);
   }
 
   openEdit(kind: CatalogKind, item: EmploymentCatalogItem): void {
@@ -415,11 +471,13 @@ export class PositionSettingsTabComponent implements OnInit {
     this.dialogError.set('');
     this.error.set('');
     this.dialog.set({ kind, mode: 'edit', item });
+    this.emitHelpDialog(kind);
   }
 
   closeDialog(): void {
     this.dialog.set(null);
     this.dialogError.set('');
+    this.helpDialogChange.emit(null);
   }
 
   saveDialog(): void {

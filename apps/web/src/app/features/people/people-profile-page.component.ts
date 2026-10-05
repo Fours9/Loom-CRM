@@ -165,6 +165,7 @@ type MetricsTabId = 'skills';
                 (historyAssignChange)="historyAssign.set($event)"
                 (errorChange)="error.set($event)"
                 (subtabChange)="onDataSubtab($event)"
+                (helpDialogChange)="onHelpDialogChange($event)"
               />
             }
             @case ('absences') {
@@ -226,6 +227,7 @@ type MetricsTabId = 'skills';
                   (profileChange)="onDataProfileChange($event)"
                   (historyAssignChange)="historyAssign.set($event)"
                   (errorChange)="error.set($event)"
+                  (helpDialogChange)="onHelpDialogChange($event)"
                 />
               } @else if (absenceTab() === 'schedule') {
                 <div data-help-id="people.work.schedule">
@@ -254,9 +256,11 @@ type MetricsTabId = 'skills';
               }
             }
             @case ('documents') {
-              <div data-help-id="people.documents">
               @defer (on immediate) {
-                <app-employee-documents-panel [employeeId]="profile()!.header.id" />
+                <app-employee-documents-panel
+                  [employeeId]="profile()!.header.id"
+                  (helpDialogChange)="onHelpDialogChange($event)"
+                />
               } @placeholder {
                 <p class="muted">Підготовка документів…</p>
               } @loading (after 100ms) {
@@ -264,7 +268,6 @@ type MetricsTabId = 'skills';
               } @error {
                 <p class="error">Не вдалося завантажити документи.</p>
               }
-              </div>
             }
             @case ('questionnaires') {
               @defer (on immediate) {
@@ -584,6 +587,9 @@ export class PeopleProfilePageComponent implements OnInit {
   readonly metricsTab = signal<MetricsTabId>('skills');
   readonly dataSubtab = signal<EmployeeDataTabId>('basics');
   readonly aboutSubtab = signal<PeopleAboutSubtabId | null>(null);
+  readonly helpDialogKind = signal<
+    'assignment' | 'document-upload' | null
+  >(null);
   readonly audit = signal<EmployeeProfileHistoryItem[]>([]);
   readonly historyAssign = signal<AssignmentHistoryItem[]>([]);
 
@@ -635,8 +641,21 @@ export class PeopleProfilePageComponent implements OnInit {
           workSubtab: this.absenceTab() as PeopleWorkSubtabId,
           metricsSubtab: this.metricsTab() as PeopleMetricsSubtabId,
           adminSubtab: this.adminTab() as PeopleAdminSubtabId,
+          dialogKind: this.helpDialogKind(),
         }),
       );
+    });
+
+    effect(() => {
+      const tab = this.tab();
+      const work = this.absenceTab();
+      const kind = this.helpDialogKind();
+      if (kind === 'document-upload' && tab !== 'documents') {
+        this.helpDialogKind.set(null);
+      }
+      if (kind === 'assignment' && (tab !== 'absences' || work !== 'position')) {
+        this.helpDialogKind.set(null);
+      }
     });
     this.destroyRef.onDestroy(() => {
       this.helpPageContext.clearFeatureContext('people-profile');
@@ -728,6 +747,10 @@ export class PeopleProfilePageComponent implements OnInit {
 
   onDataSubtab(id: EmployeeDataTabId): void {
     this.dataSubtab.set(id);
+  }
+
+  onHelpDialogChange(kind: 'assignment' | 'document-upload' | null): void {
+    this.helpDialogKind.set(kind);
   }
 
   onAboutSubtab(id: PeopleAboutSubtabId | null): void {

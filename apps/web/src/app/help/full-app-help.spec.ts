@@ -13,8 +13,10 @@ import {
 } from '../features/absences/help/resolve-absences-help-context';
 import {
   positionsHelpTourIds,
+  resolvePositionDialogKind,
   resolvePositionsHelpContext,
 } from '../features/positions/help/resolve-positions-help-context';
+import { resolveSettingsHelpContext } from '../features/settings/help/resolve-settings-help-context';
 
 const appRoot = join(__dirname, '..');
 
@@ -72,6 +74,7 @@ describe('full-app help DoD', () => {
       ...positionsHelpTourIds(),
       'settings.shell',
       'settings.access-roles',
+      'settings.dialog.role',
       'questionnaires.directory',
       'questionnaires.employee',
       'questionnaires.fill',
@@ -100,6 +103,7 @@ describe('full-app help DoD', () => {
         workSubtab: 'position',
         metricsSubtab: 'skills',
         adminSubtab: 'history',
+        dialogKind: null,
       }).tourId,
       resolvePeopleHelpContext({
         tab: 'about',
@@ -108,6 +112,7 @@ describe('full-app help DoD', () => {
         workSubtab: 'position',
         metricsSubtab: 'skills',
         adminSubtab: 'history',
+        dialogKind: null,
       }).tourId,
       resolveAbsencesDashboardHelpContext('requests', true).tourId,
       resolvePositionsHelpContext({
@@ -181,6 +186,54 @@ describe('full-app help DoD', () => {
       for (const step of tour.steps) {
         expect(`${step.title}\n${step.body}`).not.toMatch(banned);
       }
+    }
+  });
+
+  it('positions management tour anchors all five panels', () => {
+    registerAppHelp();
+    const tour = helpTourRegistry.getTour('positions.management');
+    expect(tour).toBeTruthy();
+    const anchors = new Set(
+      tour!.steps.map((s) => s.anchorId).filter(Boolean),
+    );
+    for (const id of [
+      'positions.panel.directions',
+      'positions.panel.departments',
+      'positions.panel.positions',
+      'positions.panel.skill-groups',
+      'positions.panel.org-skills',
+    ]) {
+      expect(anchors.has(id)).toBe(true);
+    }
+  });
+
+  it('dialog shells include titlebar HelpTrigger for key forms', () => {
+    const files = [
+      join(appRoot, 'features', 'positions', 'catalog-edit-dialog.component.ts'),
+      join(appRoot, 'features', 'positions', 'position-edit-dialog.component.ts'),
+      join(
+        appRoot,
+        'features',
+        'settings',
+        'access-roles',
+        'account-role-edit-dialog.component.ts',
+      ),
+      join(
+        appRoot,
+        'features',
+        'people',
+        'employment-assignment-dialog.component.ts',
+      ),
+      join(
+        appRoot,
+        'features',
+        'people',
+        'employee-document-upload-dialog.component.ts',
+      ),
+    ];
+    for (const file of files) {
+      const src = readFileSync(file, 'utf8');
+      expect(src).toContain('loom-help-trigger');
     }
   });
 
@@ -291,6 +344,40 @@ describe('resolvePositionsHelpContext precedence', () => {
       }).tourId,
     ).toBe('positions.management');
   });
+
+  it('open position dialog wins over page tab', () => {
+    const kind = resolvePositionDialogKind({
+      positionDialogOpen: true,
+      catalogDialog: null,
+      settingsDialog: null,
+    });
+    expect(
+      resolvePositionsHelpContext({
+        pageTab: 'management',
+        selectedPositionId: null,
+        catalogTab: 'skills',
+        standalone: false,
+        dialogKind: kind,
+      }).tourId,
+    ).toBe('positions.dialog.position');
+  });
+
+  it('settings work-format dialog wins over formats tab', () => {
+    const kind = resolvePositionDialogKind({
+      positionDialogOpen: false,
+      catalogDialog: null,
+      settingsDialog: 'work-format',
+    });
+    expect(
+      resolvePositionsHelpContext({
+        pageTab: 'settings',
+        selectedPositionId: 'pos-1',
+        catalogTab: 'duties',
+        standalone: false,
+        dialogKind: kind,
+      }).tourId,
+    ).toBe('positions.dialog.work-format');
+  });
 });
 
 describe('resolvePeopleHelpContext', () => {
@@ -303,6 +390,7 @@ describe('resolvePeopleHelpContext', () => {
         workSubtab: 'position',
         metricsSubtab: 'skills',
         adminSubtab: 'history',
+        dialogKind: null,
       }).tourId,
     ).toBe('people.data.dates');
 
@@ -314,6 +402,7 @@ describe('resolvePeopleHelpContext', () => {
         workSubtab: 'position',
         metricsSubtab: 'skills',
         adminSubtab: 'history',
+        dialogKind: null,
       }).tourId,
     ).toBe('people.about.life-goals');
 
@@ -325,8 +414,23 @@ describe('resolvePeopleHelpContext', () => {
         workSubtab: 'calendar',
         metricsSubtab: 'skills',
         adminSubtab: 'history',
+        dialogKind: null,
       }).tourId,
     ).toBe('people.work.calendar');
+  });
+
+  it('assignment dialog wins over data subtab', () => {
+    expect(
+      resolvePeopleHelpContext({
+        tab: 'data',
+        dataSubtab: 'contacts',
+        aboutSubtab: null,
+        workSubtab: 'position',
+        metricsSubtab: 'skills',
+        adminSubtab: 'history',
+        dialogKind: 'assignment',
+      }).tourId,
+    ).toBe('people.dialog.assignment');
   });
 
   it('about without resolved subtab stays soon fallback', () => {
@@ -337,8 +441,16 @@ describe('resolvePeopleHelpContext', () => {
       workSubtab: 'position',
       metricsSubtab: 'skills',
       adminSubtab: 'history',
+      dialogKind: null,
     });
     expect(ctx.soon).toBe(true);
     expect(ctx.tourId).toBeNull();
+  });
+});
+
+describe('resolveSettingsHelpContext', () => {
+  it('role dialog wins; close restores access-roles', () => {
+    expect(resolveSettingsHelpContext('role').tourId).toBe('settings.dialog.role');
+    expect(resolveSettingsHelpContext(null).tourId).toBe('settings.access-roles');
   });
 });

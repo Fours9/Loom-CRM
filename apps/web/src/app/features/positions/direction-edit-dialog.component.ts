@@ -11,6 +11,7 @@ import { PositionManagementFacade } from './position-management.facade';
     <loom-catalog-edit-dialog
       [headingId]="headingId"
       [title]="vm.editingDirectionId() ? 'Редагувати напрямок' : 'Новий напрямок'"
+      tourId="positions.dialog.direction"
       [error]="vm.error()"
       (closed)="vm.closeDirectionDialog()"
     >
@@ -25,7 +26,11 @@ import { PositionManagementFacade } from './position-management.facade';
             Увімкнено
           </label>
         }
-        <button type="button" (click)="vm.saveDirection()">
+        <button
+          type="button"
+          data-help-id="positions.dialog.direction.save"
+          (click)="vm.saveDirection()"
+        >
           {{ vm.editingDirectionId() ? 'Зберегти' : 'Створити' }}
         </button>
       </div>
@@ -34,6 +39,7 @@ import { PositionManagementFacade } from './position-management.facade';
         <label>
           Назва
           <input
+            data-help-id="positions.dialog.direction.name"
             [(ngModel)]="vm.newDirection"
             name="newDirection"
             placeholder="Назва напрямку"

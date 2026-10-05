@@ -27,14 +27,15 @@ export class HelpViewportAdapter {
   }
 
   onRemeasure(listener: () => void): () => void {
-    const opts: AddEventListenerOptions = { passive: true };
+    const opts: AddEventListenerOptions = { passive: true, capture: true };
     globalThis.addEventListener?.('resize', listener, opts);
-    globalThis.addEventListener?.('scroll', listener, opts);
+    // capture: element scrolls (e.g. .modal) do not bubble to window
+    globalThis.document?.addEventListener?.('scroll', listener, opts);
     globalThis.visualViewport?.addEventListener?.('resize', listener);
     globalThis.visualViewport?.addEventListener?.('scroll', listener);
     return () => {
-      globalThis.removeEventListener?.('resize', listener);
-      globalThis.removeEventListener?.('scroll', listener);
+      globalThis.removeEventListener?.('resize', listener, opts);
+      globalThis.document?.removeEventListener?.('scroll', listener, opts);
       globalThis.visualViewport?.removeEventListener?.('resize', listener);
       globalThis.visualViewport?.removeEventListener?.('scroll', listener);
     };

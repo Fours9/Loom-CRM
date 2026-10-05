@@ -52,5 +52,41 @@ export const SETTINGS_HELP_BUNDLE: HelpDomainBundle = {
         },
       ],
     ),
+    helpTour(
+      'settings.dialog.role',
+      'Роль доступу',
+      'Форма створення або редагування ролі акаунта: назва, набір прав і поверхні меню.',
+      [
+        {
+          id: 'settings.dialog.role__name',
+          title: 'Назва ролі',
+          body: 'Тут задається відображувана назва ролі. Вона зʼявиться в списку доступів і при призначенні в картці працівника.',
+          anchorId: 'settings.dialog.role.name',
+        },
+        {
+          id: 'settings.dialog.role__preset',
+          title: 'Набір прав',
+          body: 'Це поле визначає базовий набір дозволів API. Для системних ролей значення може бути зафіксоване.',
+          anchorId: 'settings.dialog.role.preset',
+        },
+        {
+          id: 'settings.dialog.role__surfaces',
+          title: 'Екрани меню',
+          body: 'Оберіть поверхні інтерфейсу, які бачать користувачі з цією роллю. Адмін-еквівалент відкриває всі екрани.',
+          anchorId: 'settings.dialog.role.surfaces',
+        },
+        {
+          id: 'settings.dialog.role__save',
+          title: 'Збереження',
+          body: 'Записує роль. Скасування закриває форму без змін у довіднику.',
+          anchorId: 'settings.dialog.role.save',
+        },
+        {
+          id: 'settings.dialog.role__tip',
+          title: 'Призначення',
+          body: 'Збережена роль зʼявляється в списку доступів і може бути призначена в картці працівника.',
+        },
+      ],
+    ),
   ],
 };

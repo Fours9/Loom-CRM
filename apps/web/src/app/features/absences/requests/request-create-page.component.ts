@@ -238,7 +238,7 @@ type EmployeeSortKey =
             </select>
           </label>
 
-          <div class="dates-block">
+          <div class="dates-block" data-help-id="absences.request-create.dates">
             <div class="row">
               <label>
                 <span>Дата початку</span>
@@ -290,7 +290,7 @@ type EmployeeSortKey =
           </div>
 
           @if (showsTimeFields) {
-            <div class="row">
+            <div class="row" data-help-id="absences.request-create.time">
               <label>
                 <span>Час з</span>
                 @if (usesShiftTimeOptions) {
@@ -363,7 +363,7 @@ type EmployeeSortKey =
             }
           }
 
-          <label>
+          <label data-help-id="absences.request-create.reason">
             <span>Причина (необовʼязково)</span>
             <textarea [(ngModel)]="reason" name="reason" rows="3"></textarea>
           </label>
@@ -380,7 +380,7 @@ type EmployeeSortKey =
             <textarea [(ngModel)]="employeeComment" name="employeeComment" rows="2"></textarea>
           </label>
 
-          <div class="attachments-block">
+          <div class="attachments-block" data-help-id="absences.request-create.attachments">
             <span class="attachments-label">Вкладення (необовʼязково)</span>
             @if (pendingFiles.length) {
               <ul class="attachments">

@@ -11,6 +11,7 @@ import { PositionManagementFacade } from './position-management.facade';
     <loom-catalog-edit-dialog
       [headingId]="headingId"
       [title]="vm.editingSkillId() ? 'Редагувати навичку' : 'Нова навичка'"
+      tourId="positions.dialog.skill"
       [error]="vm.error()"
       (closed)="vm.closeSkillDialog()"
     >
@@ -25,7 +26,11 @@ import { PositionManagementFacade } from './position-management.facade';
             Увімкнено
           </label>
         }
-        <button type="button" (click)="vm.saveCatalogSkill()">
+        <button
+          type="button"
+          data-help-id="positions.dialog.skill.save"
+          (click)="vm.saveCatalogSkill()"
+        >
           {{ vm.editingSkillId() ? 'Зберегти' : 'Створити' }}
         </button>
       </div>
@@ -34,6 +39,7 @@ import { PositionManagementFacade } from './position-management.facade';
         <label>
           Назва
           <input
+            data-help-id="positions.dialog.skill.name"
             [(ngModel)]="vm.newSkillName"
             name="newSkillName"
             placeholder="Назва навички"
@@ -41,7 +47,11 @@ import { PositionManagementFacade } from './position-management.facade';
         </label>
         <label>
           Група
-          <select [(ngModel)]="vm.newSkillGroupId" name="newSkillGroupId">
+          <select
+            data-help-id="positions.dialog.skill.group"
+            [(ngModel)]="vm.newSkillGroupId"
+            name="newSkillGroupId"
+          >
             <option [ngValue]="null">Без групи</option>
             @for (g of vm.skillFormGroupOptions(); track g.id) {
               <option [ngValue]="g.id">{{ g.name }}</option>

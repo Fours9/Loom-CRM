@@ -26,7 +26,7 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
   standalone: true,
   imports: [RouterLink, EmployeeCreateFormComponent],
   template: `
-    <section class="page" data-help-id="people.create">
+    <section class="page" data-help-id="people.create.general">
       <a routerLink="/people" class="back">← Назад</a>
       <div class="page-head">
         <h1>Новий працівник</h1>

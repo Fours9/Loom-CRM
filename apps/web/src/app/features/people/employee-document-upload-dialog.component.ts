@@ -14,6 +14,7 @@ import {
   type EmployeeDocumentType,
 } from '@loom/contracts-documents';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
+import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
 
 export type PendingUploadFile = {
   key: string;
@@ -31,7 +32,7 @@ const MAX_FILES = 20;
 @Component({
   selector: 'loom-employee-document-upload-dialog',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, HelpTriggerComponent],
   template: `
     <div
       class="backdrop"
@@ -47,7 +48,13 @@ const MAX_FILES = 20;
         [attr.aria-labelledby]="headingId"
       >
         <div class="head">
-          <h2 [id]="headingId">Нове подання документів</h2>
+          <div class="head-title">
+            <h2 [id]="headingId">Нове подання документів</h2>
+            <loom-help-trigger
+              tourId="people.dialog.document-upload"
+              ariaLabel="Підказка про цю форму"
+            />
+          </div>
           <button
             type="button"
             class="icon-close"
@@ -69,6 +76,7 @@ const MAX_FILES = 20;
             <label class="span-2">
               Заголовок
               <input
+                data-help-id="people.dialog.document-upload.title"
                 type="text"
                 name="uploadTitle"
                 [(ngModel)]="title"
@@ -79,7 +87,12 @@ const MAX_FILES = 20;
             </label>
             <label>
               Тип
-              <select name="uploadType" [(ngModel)]="documentType" [disabled]="busy">
+              <select
+                data-help-id="people.dialog.document-upload.type"
+                name="uploadType"
+                [(ngModel)]="documentType"
+                [disabled]="busy"
+              >
                 @for (t of uploadTypes; track t) {
                   <option [value]="t">{{ typeLabel(t) }}</option>
                 }
@@ -101,6 +114,7 @@ const MAX_FILES = 20;
               <input
                 type="file"
                 name="uploadFiles"
+                data-help-id="people.dialog.document-upload.files"
                 multiple
                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                 [disabled]="busy"
@@ -159,6 +173,7 @@ const MAX_FILES = 20;
           <button
             type="button"
             class="btn"
+            data-help-id="people.dialog.document-upload.submit"
             [disabled]="busy || !canSubmit"
             (click)="onSubmit()"
           >
@@ -198,6 +213,12 @@ const MAX_FILES = 20;
         gap: 0.75rem;
         padding: 1rem 3.4rem 0.85rem 1.15rem;
         border-bottom: 1px solid var(--pw-border);
+      }
+      .head-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
       }
       h2 {
         margin: 0;

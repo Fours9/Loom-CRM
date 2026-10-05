@@ -11,6 +11,7 @@ import { PositionManagementFacade } from './position-management.facade';
     <loom-catalog-edit-dialog
       [headingId]="headingId"
       [title]="vm.editingGroupId() ? 'Редагувати групу' : 'Нова група'"
+      tourId="positions.dialog.skill-group"
       [error]="vm.error()"
       (closed)="vm.closeGroupDialog()"
     >
@@ -25,7 +26,11 @@ import { PositionManagementFacade } from './position-management.facade';
             Увімкнено
           </label>
         }
-        <button type="button" (click)="vm.saveCatalogGroup()">
+        <button
+          type="button"
+          data-help-id="positions.dialog.skill-group.save"
+          (click)="vm.saveCatalogGroup()"
+        >
           {{ vm.editingGroupId() ? 'Зберегти' : 'Створити' }}
         </button>
       </div>
@@ -34,6 +39,7 @@ import { PositionManagementFacade } from './position-management.facade';
         <label>
           Назва
           <input
+            data-help-id="positions.dialog.skill-group.name"
             [(ngModel)]="vm.newGroupName"
             name="newGroupName"
             placeholder="Назва групи"

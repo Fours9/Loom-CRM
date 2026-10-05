@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
+import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
 import type {
   OrganizationCatalogDepartment,
   OrganizationCatalogPosition,
@@ -35,7 +36,7 @@ import {
 @Component({
   selector: 'loom-employment-assignment-dialog',
   standalone: true,
-  imports: [FormsModule, MultiSelectListComponent],
+  imports: [FormsModule, MultiSelectListComponent, HelpTriggerComponent],
   template: `
     <div
       class="backdrop"
@@ -51,7 +52,13 @@ import {
         [attr.aria-labelledby]="headingId"
       >
         <div class="head">
-          <h2 [id]="headingId">{{ title }}</h2>
+          <div class="head-title">
+            <h2 [id]="headingId">{{ title }}</h2>
+            <loom-help-trigger
+              tourId="people.dialog.assignment"
+              ariaLabel="Підказка про цю форму"
+            />
+          </div>
           <button
             type="button"
             class="icon-close"
@@ -71,6 +78,7 @@ import {
             <label>
               Напрямок
               <select
+                data-help-id="people.dialog.assignment.direction"
                 [(ngModel)]="form.directionId"
                 name="assignmentDirection"
                 (ngModelChange)="directionChange.emit()"
@@ -84,6 +92,7 @@ import {
             <label>
               Відділ
               <select
+                data-help-id="people.dialog.assignment.department"
                 [(ngModel)]="form.departmentId"
                 name="assignmentDepartment"
                 (ngModelChange)="departmentChange.emit()"
@@ -97,6 +106,7 @@ import {
             <label>
               Посада
               <select
+                data-help-id="people.dialog.assignment.position"
                 [(ngModel)]="form.positionId"
                 name="assignmentPosition"
                 (ngModelChange)="positionChange.emit()"
@@ -145,7 +155,12 @@ import {
             </label>
             <label>
               Дата початку призначення
-              <input type="date" [(ngModel)]="form.startDate" name="assignmentStartDate" />
+              <input
+                type="date"
+                data-help-id="people.dialog.assignment.dates"
+                [(ngModel)]="form.startDate"
+                name="assignmentStartDate"
+              />
             </label>
             @if (state.kind === 'edit') {
               <label>
@@ -204,6 +219,7 @@ import {
           <button
             type="button"
             class="btn"
+            data-help-id="people.dialog.assignment.save"
             [disabled]="busy"
             (click)="submitted.emit()"
           >
@@ -238,11 +254,17 @@ import {
       }
       .head {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 0.75rem;
         padding: 1rem 3.4rem 0.85rem 1.15rem;
         border-bottom: 1px solid var(--pw-border);
+      }
+      .head-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
       }
       h2 {
         margin: 0;

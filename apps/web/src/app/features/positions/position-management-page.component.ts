@@ -16,7 +16,11 @@ import { DepartmentEditDialogComponent } from './department-edit-dialog.componen
 import { PositionManagementFacade } from './position-management.facade';
 import { PositionSettingsTabComponent } from './position-settings-tab.component';
 import { HelpPageContextService } from '../../core/help';
-import { resolvePositionsHelpContext } from './help/resolve-positions-help-context';
+import {
+  resolvePositionDialogKind,
+  resolvePositionsHelpContext,
+  type PositionSettingsHelpDialogKind,
+} from './help/resolve-positions-help-context';
 import type { PositionPageTabId } from './position-help-context.model';
 
 @Component({
@@ -91,7 +95,7 @@ import type { PositionPageTabId } from './position-help-context.model';
           <loom-department-edit-dialog />
         }
       } @else {
-        <loom-position-settings-tab />
+        <loom-position-settings-tab (helpDialogChange)="settingsDialogKind.set($event)" />
       }
     </section>
   `,
@@ -142,6 +146,7 @@ import type { PositionPageTabId } from './position-help-context.model';
 export class PositionManagementPageComponent implements OnInit {
   readonly vm = inject(PositionManagementFacade);
   readonly tab = signal<PositionPageTabId>('management');
+  readonly settingsDialogKind = signal<PositionSettingsHelpDialogKind>(null);
   private readonly helpPage = inject(HelpPageContextService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -154,6 +159,11 @@ export class PositionManagementPageComponent implements OnInit {
           selectedPositionId: this.vm.selectedPositionId(),
           catalogTab: this.vm.catalogTab(),
           standalone: false,
+          dialogKind: resolvePositionDialogKind({
+            positionDialogOpen: this.vm.positionDialogOpen(),
+            catalogDialog: this.vm.activeCatalogDialog(),
+            settingsDialog: this.settingsDialogKind(),
+          }),
         }),
       );
     });

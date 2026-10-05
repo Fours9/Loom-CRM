@@ -170,12 +170,20 @@ export class HelpSpotlightOverlayComponent {
     });
   }
 
+  /** Tab containment only — Escape is owned by HelpTourService (capture). */
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
-    if (!this.help.session()) return;
-    if (event.key === 'Escape') {
+    if (!this.help.session() || event.key !== 'Tab') return;
+    const items = this.focusableHelpControls();
+    if (!items.length) return;
+    const first = items[0]!;
+    const last = items[items.length - 1]!;
+    if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
-      this.help.close('user');
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   }
 
@@ -191,5 +199,13 @@ export class HelpSpotlightOverlayComponent {
 
   isLast(s: { stepIndex: number; stepCount: number }): boolean {
     return s.stepIndex >= s.stepCount - 1;
+  }
+
+  private focusableHelpControls(): HTMLButtonElement[] {
+    const root = this.panel?.nativeElement;
+    if (!root) return [];
+    return Array.from(
+      root.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
+    );
   }
 }

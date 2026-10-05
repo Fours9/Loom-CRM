@@ -9,6 +9,7 @@ import { PositionManagementFacade } from './position-management.facade';
       <div class="catalog-rail">
         <article
           class="card panel"
+          data-help-id="positions.panel.directions"
           [class.collapsed]="!vm.panelOpen().directions"
           [attr.aria-expanded]="vm.panelOpen().directions"
         >
@@ -33,7 +34,13 @@ import { PositionManagementFacade } from './position-management.facade';
         </button>
         <div class="panel-body">
           @if (vm.canManageDirections()) {
-            <button type="button" (click)="vm.startCreateDirection()">Додати напрямок</button>
+            <button
+              type="button"
+              data-help-id="positions.panel.directions.add"
+              (click)="vm.startCreateDirection()"
+            >
+              Додати напрямок
+            </button>
           }
           <ul>
             @for (d of vm.directions(); track d.id) {
@@ -91,6 +98,7 @@ import { PositionManagementFacade } from './position-management.facade';
 
       <article
         class="card panel"
+        data-help-id="positions.panel.departments"
         [class.collapsed]="!vm.panelOpen().departments"
         [attr.aria-expanded]="vm.panelOpen().departments"
       >
@@ -115,7 +123,13 @@ import { PositionManagementFacade } from './position-management.facade';
         </button>
         <div class="panel-body">
           @if (vm.canManageDepartments()) {
-            <button type="button" (click)="vm.startCreateDepartment()">Додати відділ</button>
+            <button
+              type="button"
+              data-help-id="positions.panel.departments.add"
+              (click)="vm.startCreateDepartment()"
+            >
+              Додати відділ
+            </button>
           }
           <ul>
             @for (d of vm.departments(); track d.id) {
@@ -179,6 +193,7 @@ import { PositionManagementFacade } from './position-management.facade';
 
       <article
         class="card panel card-positions"
+        data-help-id="positions.panel.positions"
         [class.collapsed]="!vm.panelOpen().positions"
         [attr.aria-expanded]="vm.panelOpen().positions"
       >
@@ -203,7 +218,13 @@ import { PositionManagementFacade } from './position-management.facade';
         </button>
         <div class="panel-body">
           @if (vm.canManagePositions() && vm.canCreateGlobalPosition()) {
-            <button type="button" (click)="vm.startCreatePosition()">Додати посаду</button>
+            <button
+              type="button"
+              data-help-id="positions.panel.positions.add"
+              (click)="vm.startCreatePosition()"
+            >
+              Додати посаду
+            </button>
           }
           <ul>
             @for (p of vm.positions(); track p.id) {
@@ -284,14 +305,14 @@ import { PositionManagementFacade } from './position-management.facade';
       </article>
       </div>
 
-      <article
-        class="card skills-block"
+      <div
+        class="skills-panels-wrap"
         [class.collapsed]="!vm.panelOpen().skills"
         [attr.aria-expanded]="vm.panelOpen().skills"
       >
         <button
           type="button"
-          class="panel-toggle"
+          class="panel-toggle skills-wrap-toggle"
           [attr.title]="vm.panelOpen().skills ? 'Згорнути групи та навички' : 'Групи та навички'"
           [attr.aria-label]="
             vm.panelOpen().skills ? 'Згорнути групи та навички' : 'Розгорнути групи та навички'
@@ -309,13 +330,22 @@ import { PositionManagementFacade } from './position-management.facade';
             </svg>
           }
         </button>
-        <div class="panel-body">
-          <div class="skills-split">
-            <div class="skills-col groups-col">
+        <div class="skills-panels">
+          <article
+            class="card panel skill-groups-panel"
+            data-help-id="positions.panel.skill-groups"
+          >
+            <div class="panel-body skills-col groups-col">
               <div class="col-toolbar">
                 <h4>Групи</h4>
                 @if (vm.canManagePositions()) {
-                  <button type="button" (click)="vm.startCreateGroup()">Додати групу</button>
+                  <button
+                    type="button"
+                    data-help-id="positions.panel.skill-groups.add"
+                    (click)="vm.startCreateGroup()"
+                  >
+                    Додати групу
+                  </button>
                 }
               </div>
               <div class="groups-table">
@@ -404,11 +434,19 @@ import { PositionManagementFacade } from './position-management.facade';
                 </ul>
               </div>
             </div>
-            <div class="skills-col skills-list-col">
+          </article>
+          <article class="card panel org-skills-panel" data-help-id="positions.panel.org-skills">
+            <div class="panel-body skills-col skills-list-col">
               <div class="col-toolbar">
                 <h4>Навички</h4>
                 @if (vm.canManagePositions()) {
-                  <button type="button" (click)="vm.startCreateSkill()">Додати навичку</button>
+                  <button
+                    type="button"
+                    data-help-id="positions.panel.org-skills.add"
+                    (click)="vm.startCreateSkill()"
+                  >
+                    Додати навичку
+                  </button>
                 }
               </div>
               <div class="skills-table">
@@ -499,9 +537,9 @@ import { PositionManagementFacade } from './position-management.facade';
                 </ul>
               </div>
             </div>
-          </div>
+          </article>
         </div>
-      </article>
+      </div>
     </div>
   `,
   styles: [
@@ -619,19 +657,14 @@ import { PositionManagementFacade } from './position-management.facade';
       .card.panel.collapsed .panel-body {
         display: none;
       }
-      .skills-block {
-        min-width: 0;
-      }
-      .skills-block:not(.collapsed) {
+      .skills-panels-wrap {
+        display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: start;
         column-gap: 0.5rem;
+        min-width: 0;
       }
-      .skills-block:not(.collapsed) .panel-body {
-        grid-column: 1;
-        grid-row: 1;
-      }
-      .skills-block:not(.collapsed) .panel-toggle {
+      .skills-wrap-toggle {
         grid-column: 2;
         grid-row: 1;
         width: auto;
@@ -639,22 +672,29 @@ import { PositionManagementFacade } from './position-management.facade';
         align-self: start;
         margin-top: 0.1rem;
       }
-      .skills-block.collapsed {
+      .skills-panels-wrap.collapsed {
         padding-bottom: 0.65rem;
       }
-      .skills-block .panel-body {
-        display: grid;
-        gap: 0.75rem;
-      }
-      .skills-block.collapsed .panel-body {
+      .skills-panels-wrap.collapsed .skills-panels {
         display: none;
       }
-      .skills-split {
+      .skills-panels {
+        grid-column: 1;
+        grid-row: 1;
         display: grid;
         grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.35fr);
-        gap: 0;
+        gap: 1rem;
         align-items: stretch;
         min-width: 0;
+      }
+      .skill-groups-panel,
+      .org-skills-panel {
+        min-width: 0;
+      }
+      .skill-groups-panel .panel-body,
+      .org-skills-panel .panel-body {
+        display: grid;
+        gap: 0.75rem;
       }
       .skills-col {
         display: grid;
@@ -833,7 +873,7 @@ import { PositionManagementFacade } from './position-management.facade';
         background: color-mix(in srgb, var(--pw-muted) 8%, var(--pw-surface));
       }
       @media (max-width: 860px) {
-        .skills-split {
+        .skills-panels {
           grid-template-columns: 1fr;
         }
         .groups-col {

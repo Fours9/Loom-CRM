@@ -27,7 +27,7 @@ import {
   standalone: true,
   imports: [FormsModule, RouterLink, DatePipe],
   template: `
-    <section class="page" data-help-id="absences.request-detail">
+    <section class="page">
       <div class="sheet">
         <p class="back"><a routerLink="/absences/requests">← До списку</a></p>
 
@@ -57,7 +57,7 @@ import {
 
           <div class="grid">
             <div class="col details-col">
-              <article class="card">
+              <article class="card" data-help-id="absences.request-detail.employee">
                 <h2>Працівник</h2>
                 <div class="fields">
                   <label>
@@ -94,7 +94,7 @@ import {
                 </div>
               </article>
 
-              <article class="card">
+              <article class="card" data-help-id="absences.request-detail.details">
                 <div class="card-head">
                 <h2>Деталі заявки</h2>
                   <span class="pw-request-badge pw-request-badge--lg" [attr.data-status]="request.statusGroup">{{ requestStatusLabel(request.statusGroup) }}</span>
@@ -193,7 +193,7 @@ import {
                       </label>
                 }
 
-                    <div class="section-block">
+                    <div class="section-block" data-help-id="absences.request-detail.attachments">
                   <h3>Вкладення</h3>
                       @if (request.attachments.length) {
                   <ul class="attachments">
@@ -545,7 +545,7 @@ import {
                 }
 
                 @if (request.history.length) {
-                  <article class="card history-card">
+                  <article class="card history-card" data-help-id="absences.request-detail.history">
                     <h2>Історія</h2>
                     <div class="history-scroll">
                       <ul class="history">

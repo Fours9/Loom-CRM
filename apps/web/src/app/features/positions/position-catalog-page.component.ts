@@ -4,7 +4,10 @@ import { PositionDetailsPanelComponent } from './position-details-panel.componen
 import { PositionEditDialogComponent } from './position-edit-dialog.component';
 import { PositionManagementFacade } from './position-management.facade';
 import { HelpPageContextService } from '../../core/help';
-import { resolvePositionsHelpContext } from './help/resolve-positions-help-context';
+import {
+  resolvePositionDialogKind,
+  resolvePositionsHelpContext,
+} from './help/resolve-positions-help-context';
 
 @Component({
   selector: 'loom-position-catalog-page',
@@ -75,6 +78,11 @@ export class PositionCatalogPageComponent implements OnInit {
           selectedPositionId: this.vm.selectedPositionId(),
           catalogTab: this.vm.catalogTab(),
           standalone: true,
+          dialogKind: resolvePositionDialogKind({
+            positionDialogOpen: this.vm.positionDialogOpen(),
+            catalogDialog: this.vm.activeCatalogDialog(),
+            settingsDialog: null,
+          }),
         }),
       );
     });

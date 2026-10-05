@@ -51,7 +51,7 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
       }
 
       @if (caps().canCreateAccount) {
-        <details class="disclose" open>
+        <details class="disclose" open data-help-id="people.admin.account.create">
           <summary>Створити акаунт</summary>
           <div class="disclose-body">
             <p class="muted">Анкета без входу. Задайте логін і тимчасовий пароль.</p>

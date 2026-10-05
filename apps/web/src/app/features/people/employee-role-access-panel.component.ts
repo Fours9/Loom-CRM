@@ -39,7 +39,7 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
       }
 
       @if (caps().canEditAdminAccess) {
-        <section class="card">
+        <section class="card" data-help-id="people.admin.roleAccess.role">
           <h3>Роль акаунта</h3>
           <p class="muted hint">
             Визначає права в API та перелік екранів. Керівництво у структурі задається
@@ -89,7 +89,7 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
       }
 
       @if (caps().canEditVisibilityOverrides) {
-        <section class="card">
+        <section class="card" data-help-id="people.admin.roleAccess.overrides">
           <h3>Індивідуальні права</h3>
           <p class="muted">
             Регулює лише peer-видимість чужих даних. Не скасовує admin-, owner-

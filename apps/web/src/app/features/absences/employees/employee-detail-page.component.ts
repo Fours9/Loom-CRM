@@ -93,7 +93,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
 
         <div class="grid">
           <div class="col">
-            <article class="card">
+            <article class="card" data-help-id="absences.employee-detail.anketa">
               <div class="card-head">
                 <h2>Анкета</h2>
                 @if (!editingProfile) {
@@ -466,7 +466,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
               <div
                 class="side-tools-body"
                 [attr.data-panel]="sidePanel"
-                [attr.data-help-id]="'absences.side.' + sidePanel + '.body'"
+                [attr.data-help-id]="sidePanel !== 'requests' ? 'absences.side.' + sidePanel + '.body' : null"
               >
                 @if (sidePanel === 'schedule') {
                   @if (editingProfile && employee.permissions?.canEditSchedule) {
@@ -487,7 +487,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
                       <span class="muted char-count">{{ (edit.comment || '').length }} / 5000</span>
                     </label>
                     @if (employee.permissions?.canEditAdminComment) {
-                      <details class="disclose admin-comment-disclose">
+                      <details class="disclose admin-comment-disclose" data-help-id="absences.side.comment.admin">
                         <summary>Адмінський коментар</summary>
                         <div class="disclose-body">
                           <label>
@@ -506,7 +506,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
                     <h3>Коментар</h3>
                     <div class="value pre">{{ employee.comment || '—' }}</div>
                     @if (employee.permissions?.canViewAdminComment) {
-                      <details class="disclose admin-comment-disclose">
+                      <details class="disclose admin-comment-disclose" data-help-id="absences.side.comment.admin">
                         <summary>Адмінський коментар</summary>
                         <div class="disclose-body">
                           <div class="value pre">{{ employee.adminComment || '—' }}</div>
@@ -515,7 +515,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
                     }
                   }
                 } @else {
-                  <div class="card-head req-actions">
+                  <div class="card-head req-actions" data-help-id="absences.side.requests.new">
                     <a
                       class="btn"
                       [routerLink]="createRequestLink.routerLink"
@@ -525,9 +525,9 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
                     </a>
                   </div>
                   @if (requests.length === 0) {
-                    <p class="muted">Заявок ще немає</p>
+                    <p class="muted" data-help-id="absences.side.requests.list">Заявок ще немає</p>
                   } @else {
-                    <div class="req-scroll">
+                    <div class="req-scroll" data-help-id="absences.side.requests.list">
                       <ul class="req-list">
                         @for (r of requests; track r.id) {
                           <li

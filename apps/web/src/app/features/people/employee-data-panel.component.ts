@@ -1,10 +1,12 @@
 import {
   Component,
+  DestroyRef,
   EventEmitter,
   Input,
   OnChanges,
   Output,
   SimpleChanges,
+  effect,
   inject,
   output,
   signal,
@@ -143,7 +145,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
       </div>
     }
   </div>
-<dl class="grid">
+<dl class="grid" data-help-id="people.data.basics.core">
   <div><dt>Статус</dt><dd>{{ statusLabel(profile.header.employmentStatus) }}</dd></div>
   <div><dt>Керівник</dt><dd>{{ profile.header.manager?.displayName || '—' }}</dd></div>
     <div><dt>Ім'я для звернення</dt><dd>{{ profile.header.preferredName || '—' }}</dd></div>
@@ -151,7 +153,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
   @if (profile.capabilities.canViewPersonal) {
     <h3>Персональна інформація</h3>
-    <dl class="grid">
+    <dl class="grid" data-help-id="people.data.basics.personal">
       <div><dt>Місто</dt><dd>{{ profile.sections.personal?.city || '—' }}</dd></div>
       <div><dt>Бажана мова</dt><dd>{{ profile.sections.personal?.preferredLanguage || '—' }}</dd></div>
     </dl>
@@ -244,7 +246,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
     }
   </div>
 
-  <dl class="grid">
+  <dl class="grid" data-help-id="people.data.dates.core">
     @if (profile.capabilities.canViewPersonal) {
       <div>
         <dt>Дата народження</dt>
@@ -296,7 +298,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
   @if (!profile.capabilities.canViewPersonal) {
     <p class="muted">Немає доступу до важливих дат.</p>
   } @else {
-    <h3>Важливі дати</h3>
+    <h3 data-help-id="people.data.dates.important">Важливі дати</h3>
     @if (editingDates() && profile.capabilities.canEditPersonal) {
       <div class="dates-list">
         @for (
@@ -409,7 +411,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
   </div>
 
 @if (profile.sections.employment) {
-  <dl class="grid">
+  <dl class="grid" data-help-id="people.work.position.current">
     <div><dt>Компанія</dt><dd>{{ refName(profile.sections.employment!.company) }}</dd></div>
     <div><dt>Напрямок</dt><dd>{{ refName(profile.sections.employment!.direction) }}</dd></div>
     <div><dt>Відділ</dt><dd>{{ refName(profile.sections.employment!.department) }}</dd></div>
@@ -435,7 +437,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
 
 @if (historyAssign.length) {
   <h3>Історія призначень</h3>
-    <ul class="timeline assignments">
+    <ul class="timeline assignments" data-help-id="people.work.position.history">
     @for (h of historyAssign; track h.id) {
         <li class="history-row">
           <div class="history-top">
@@ -983,6 +985,10 @@ export class EmployeeDataPanelComponent implements OnChanges {
   @Output() readonly errorChange = new EventEmitter<string | null>();
   /** Emits on user change, employee reset, and initial (parent syncs help). */
   readonly subtabChange = output<EmployeeDataTabId>();
+  /** Parent-owned help: open assignment dialog → `assignment`, else `null`. */
+  readonly helpDialogChange = output<'assignment' | null>();
+
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly dataTab = signal<EmployeeDataTabId>('basics');
   readonly editingBasics = signal(false);
@@ -1016,6 +1022,16 @@ export class EmployeeDataPanelComponent implements OnChanges {
   assignmentForm: EmploymentAssignmentForm = emptyEmploymentAssignmentForm();
   private workLocationTouched = false;
   private departmentLocationHintApplied = false;
+
+  constructor() {
+    effect(() => {
+      const open = isAssignmentDialogOpen(this.assignmentDialog());
+      this.helpDialogChange.emit(open ? 'assignment' : null);
+    });
+    this.destroyRef.onDestroy(() => {
+      this.helpDialogChange.emit(null);
+    });
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['profile'] && this.profile && !this.isEditing()) {

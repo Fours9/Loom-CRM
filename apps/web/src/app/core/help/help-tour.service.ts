@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { NavigationStart, Router } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { resolveHelpAnchor } from './help-anchor.resolve';
@@ -15,10 +15,12 @@ import { HelpViewportAdapter } from './help-viewport.adapter';
 /**
  * Single runtime entry for guided help tours.
  * Features only call start/next/prev/close; overlay reads session().
+ * Owns Escape (capture) while a session is active so app modals do not close with the tour.
  */
 @Injectable({ providedIn: 'root' })
 export class HelpTourService {
   private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
   private readonly viewport = inject(HelpViewportAdapter);
   private readonly registry = helpTourRegistry;
@@ -28,7 +30,18 @@ export class HelpTourService {
 
   readonly session = signal<HelpTourSession | null>(null);
 
+  private readonly onCaptureKeydown = (event: KeyboardEvent): void => {
+    if (!this.session() || event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    this.close('user');
+  };
+
   constructor() {
+    this.document.addEventListener('keydown', this.onCaptureKeydown, true);
+    this.destroyRef.onDestroy(() =>
+      this.document.removeEventListener('keydown', this.onCaptureKeydown, true),
+    );
     this.router.events
       .pipe(filter((e): e is NavigationStart => e instanceof NavigationStart))
       .subscribe(() => this.close('route-change'));

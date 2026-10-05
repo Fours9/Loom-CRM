@@ -22,7 +22,7 @@ import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.ser
   standalone: true,
   imports: [FormsModule, NgTemplateOutlet],
   template: `
-    <section class="panel">
+    <section class="panel" data-help-id="people.metrics.skills.matrix">
       <h3>Матриця навичок</h3>
       @if (loading) {
         <p class="muted">Завантаження…</p>

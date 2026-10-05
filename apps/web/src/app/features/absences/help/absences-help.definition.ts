@@ -19,6 +19,12 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       'Бічна панель на дашборді робочого календаря. Зараз активна вкладка «Графік».',
       [
         {
+          id: 'absences.dashboard.schedule__anketa',
+          title: 'Анкета',
+          body: 'Основна колонка: кадрові дані, контакти й посада обраного на дашборді працівника. «Профіль Loom» відкриває повну картку в модулі People.',
+          anchorId: 'absences.dashboard.anketa',
+        },
+        {
           id: 'absences.dashboard.schedule__tab',
           title: 'Вкладка «Графік»',
           body: 'Перемикає бічну панель на тижневий розклад обраного працівника.',
@@ -43,6 +49,12 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       'Бічна панель «Коментар» — текст до працівника на дашборді. Вкладка видима лише за відповідного доступу.',
       [
         {
+          id: 'absences.dashboard.comment__anketa',
+          title: 'Анкета',
+          body: 'Ліва колонка — анкета працівника на дашборді. Бічна панель праворуч не змінює ці поля.',
+          anchorId: 'absences.dashboard.anketa',
+        },
+        {
           id: 'absences.dashboard.comment__tab',
           title: 'Вкладка «Коментар»',
           body: 'Відкриває коментар до обраного працівника. Якщо вкладки немає — у вас немає доступу до цього блоку.',
@@ -51,8 +63,14 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
         {
           id: 'absences.dashboard.comment__body',
           title: 'Текст коментаря',
-          body: 'Переглядайте коментар. Адмінський коментар (якщо є) розкривається окремим блоком нижче.',
+          body: 'Переглядайте коментар для звернень до працівника або HR.',
           anchorId: 'absences.side.comment.body',
+        },
+        {
+          id: 'absences.dashboard.comment__admin',
+          title: 'Адмінський коментар',
+          body: 'Розкрийте блок, якщо він є: внутрішні нотатки лише для адмінів, не потрапляють у PDF анкети.',
+          anchorId: 'absences.side.comment.admin',
         },
       ],
     ),
@@ -62,16 +80,28 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       'Короткий список заявок обраного працівника прямо з дашборду робочого календаря.',
       [
         {
+          id: 'absences.dashboard.requests__anketa',
+          title: 'Анкета',
+          body: 'Перевірте ПІБ, відділ і посаду в анкеті перед створенням заявки з бічної панелі.',
+          anchorId: 'absences.dashboard.anketa',
+        },
+        {
           id: 'absences.dashboard.requests__tab',
           title: 'Вкладка «Заявки»',
           body: 'Перемикає бічну панель на заявки цього працівника.',
           anchorId: 'absences.side.requests',
         },
         {
-          id: 'absences.dashboard.requests__body',
-          title: 'Список і нова заявка',
-          body: 'Відкрийте рядок для деталей. Кнопка «Нова заявка» веде до форми створення з підстановкою працівника, якщо доступна.',
-          anchorId: 'absences.side.requests.body',
+          id: 'absences.dashboard.requests__new',
+          title: 'Нова заявка',
+          body: 'Створіть заявку з уже підставленим працівником — швидше, ніж з загального списку заявок.',
+          anchorId: 'absences.side.requests.new',
+        },
+        {
+          id: 'absences.dashboard.requests__list',
+          title: 'Список заявок',
+          body: 'Натисніть рядок, щоб відкрити картку заявки зі статусом і періодом.',
+          anchorId: 'absences.side.requests.list',
         },
         {
           id: 'absences.dashboard.requests__tip',
@@ -85,6 +115,12 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       'Графік у картці календаря',
       'Сторінка працівника в модулі робочого календаря. Активна бічна вкладка — «Графік».',
       [
+        {
+          id: 'absences.employee-detail.schedule__anketa',
+          title: 'Анкета',
+          body: 'Редагуйте кадрові поля, колір календаря й контакти в основній колонці. Збереження — кнопками «Зберегти» / «Скасувати» в шапці.',
+          anchorId: 'absences.employee-detail.anketa',
+        },
         {
           id: 'absences.employee-detail.schedule__tab',
           title: 'Вкладка «Графік»',
@@ -105,6 +141,12 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       'Коментар на сторінці працівника в модулі календаря. Вкладка видима лише за доступу.',
       [
         {
+          id: 'absences.employee-detail.comment__anketa',
+          title: 'Анкета',
+          body: 'Анкета ліворуч; коментарі праворуч не дублюють поля анкети.',
+          anchorId: 'absences.employee-detail.anketa',
+        },
+        {
           id: 'absences.employee-detail.comment__tab',
           title: 'Вкладка «Коментар»',
           body: 'Відкриває коментар до працівника.',
@@ -113,8 +155,14 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
         {
           id: 'absences.employee-detail.comment__body',
           title: 'Текст',
-          body: 'Переглядайте або редагуйте коментар згідно з правами на картці.',
+          body: 'У режимі редагування збережіть зміни разом з анкетою. Перегляд — лише для читання.',
           anchorId: 'absences.side.comment.body',
+        },
+        {
+          id: 'absences.employee-detail.comment__admin',
+          title: 'Адмінський коментар',
+          body: 'Якщо блок видимий — розкрийте й заповніть внутрішню нотатку; вона не показується працівнику в PDF.',
+          anchorId: 'absences.side.comment.admin',
         },
       ],
     ),
@@ -124,16 +172,28 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       'Заявки цього працівника в модулі робочого календаря.',
       [
         {
+          id: 'absences.employee-detail.requests__anketa',
+          title: 'Анкета',
+          body: 'Переконайтеся, що обрано правильного працівника в анкеті перед подачею заявки.',
+          anchorId: 'absences.employee-detail.anketa',
+        },
+        {
           id: 'absences.employee-detail.requests__tab',
           title: 'Вкладка «Заявки»',
           body: 'Перемикає бічну панель на список заявок.',
           anchorId: 'absences.side.requests',
         },
         {
-          id: 'absences.employee-detail.requests__body',
+          id: 'absences.employee-detail.requests__new',
+          title: 'Нова заявка',
+          body: 'Відкриває форму з цим працівником уже обраним.',
+          anchorId: 'absences.side.requests.new',
+        },
+        {
+          id: 'absences.employee-detail.requests__list',
           title: 'Список',
-          body: 'Відкрийте заявку або створіть нову з кнопки в панелі, якщо вона доступна.',
-          anchorId: 'absences.side.requests.body',
+          body: 'Оберіть заявку в списку, щоб переглянути деталі та доступні дії.',
+          anchorId: 'absences.side.requests.list',
         },
       ],
     ),
@@ -205,6 +265,30 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
           anchorId: 'absences.request-create.type',
         },
         {
+          id: 'absences.request-create__dates',
+          title: 'Дати',
+          body: 'Оберіть початок і (за типом) кінець періоду. Міні-календарі показують обраний діапазон.',
+          anchorId: 'absences.request-create.dates',
+        },
+        {
+          id: 'absences.request-create__time',
+          title: 'Час',
+          body: 'Для типів з годинами оберіть інтервал у зміні або в межах дня. Якщо блоку немає — тип не потребує часу.',
+          anchorId: 'absences.request-create.time',
+        },
+        {
+          id: 'absences.request-create__reason',
+          title: 'Причина й коментар',
+          body: 'Коротко опишіть причину (за бажанням) і додайте коментар для погоджуючого.',
+          anchorId: 'absences.request-create.reason',
+        },
+        {
+          id: 'absences.request-create__attachments',
+          title: 'Вкладення',
+          body: 'Додайте PDF або зображення (до ліміту на файл і кількість). Файли можна прибрати до подання.',
+          anchorId: 'absences.request-create.attachments',
+        },
+        {
           id: 'absences.request-create__submit',
           title: 'Подати',
           body: 'Надсилає заявку. Якщо кнопка неактивна — зачекайте збереження або заповніть обовʼязкові поля.',
@@ -218,10 +302,28 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       'Деталі заявки, статус, історія та дії залежно від стану й ваших прав.',
       [
         {
-          id: 'absences.request-detail__region',
-          title: 'Деталі',
-          body: 'Переглядайте тип, період, працівника, вкладення та історію змін статусу.',
-          anchorId: 'absences.request-detail',
+          id: 'absences.request-detail__employee',
+          title: 'Працівник',
+          body: 'ПІБ, номер, колір календаря та організаційні дані на момент подання.',
+          anchorId: 'absences.request-detail.employee',
+        },
+        {
+          id: 'absences.request-detail__details',
+          title: 'Деталі заявки',
+          body: 'Тип, дати, міні-календар, причина та коментарі. У режимі редагування змініть поля й збережіть з бічної панелі «Дії».',
+          anchorId: 'absences.request-detail.details',
+        },
+        {
+          id: 'absences.request-detail__attachments',
+          title: 'Вкладення',
+          body: 'Перегляньте або завантажте файли. З правами керування — додайте або видаліть вкладення.',
+          anchorId: 'absences.request-detail.attachments',
+        },
+        {
+          id: 'absences.request-detail__history',
+          title: 'Історія',
+          body: 'Хронологія змін статусу та системних записів — корисно при погодженні й аудиті.',
+          anchorId: 'absences.request-detail.history',
         },
         {
           id: 'absences.request-detail__actions',
@@ -243,9 +345,15 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       [
         {
           id: 'absences.calendar__nav',
-          title: 'Період і режим',
-          body: 'Гортайте період стрілками та оберіть режим перегляду (місяць / тиждень / день / список).',
+          title: 'Період',
+          body: 'Стрілками змінюйте місяць, тиждень або день; «Сьогодні» повертає до поточної дати.',
           anchorId: 'absences.calendar.nav',
+        },
+        {
+          id: 'absences.calendar__modes',
+          title: 'Режим перегляду',
+          body: 'Перемкніть місяць, тиждень, день або список — сітка та фільтри підлаштуються під обраний режим.',
+          anchorId: 'absences.calendar.modes',
         },
         {
           id: 'absences.calendar__filters',
@@ -267,15 +375,21 @@ export const ABSENCES_HELP_BUNDLE: HelpDomainBundle = {
       'Адміністративні налаштування конфіденційності робочого календаря.',
       [
         {
-          id: 'absences.admin__privacy',
-          title: 'Конфіденційність',
-          body: 'Керуйте режимами видимості профілю й деталей відсутностей. Зміни доступні лише адміністратору модуля.',
-          anchorId: 'absences.admin.privacy',
+          id: 'absences.admin__privacy-profile',
+          title: 'Видимість анкет',
+          body: 'Оберіть, хто бачить чужі анкети в модулі календаря. Прапорець «глобальний пріоритет» вище перекриває індивідуальні права в картках.',
+          anchorId: 'absences.admin.privacy.profile',
+        },
+        {
+          id: 'absences.admin__privacy-absences',
+          title: 'Видимість відсутностей',
+          body: 'Налаштуйте, як колеги бачать чужі відсутності в календарі й списках, і чи показувати тип / причину.',
+          anchorId: 'absences.admin.privacy.absences',
         },
         {
           id: 'absences.admin__tip',
-          title: 'Довідники',
-          body: 'Відділи й посади редагуються в «Керуванні посадами», не на цій сторінці.',
+          title: 'Збереження',
+          body: 'Після змін натисніть «Зберегти» в картці. Довідники відділів і посад — у «Керуванні посадами».',
         },
       ],
     ),

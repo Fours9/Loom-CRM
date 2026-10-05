@@ -30,7 +30,7 @@ type EmergencyDraft = EmployeeContactsEmergencyItem & { key: string };
   template: `
     <div class="contacts-stack">
       @if (access.work.visible) {
-        <details class="section-block disclose" open>
+        <details class="section-block disclose" open data-help-id="people.data.contacts.work">
           <summary>Робочі контакти</summary>
           <div class="disclose-body">
             @if (editing && access.work.editable) {
@@ -86,7 +86,7 @@ type EmergencyDraft = EmployeeContactsEmergencyItem & { key: string };
       }
 
       @if (access.personal.visible) {
-        <details class="section-block disclose" open>
+        <details class="section-block disclose" open data-help-id="people.data.contacts.personal">
           <summary>Особисті контакти</summary>
           <div class="disclose-body">
             @if (editing && access.personal.editable) {
@@ -170,7 +170,7 @@ type EmergencyDraft = EmployeeContactsEmergencyItem & { key: string };
       }
 
       @if (access.emergency.visible) {
-        <details class="section-block disclose" open>
+        <details class="section-block disclose" open data-help-id="people.data.contacts.emergency">
           <summary>Екстрені контакти</summary>
           <div class="disclose-body">
             @if (editing && access.emergency.editable) {

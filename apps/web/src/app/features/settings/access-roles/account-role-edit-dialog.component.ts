@@ -23,6 +23,7 @@ import {
   type SurfaceGroupVm,
 } from './surface-catalog';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
+import { HelpTriggerComponent } from '../../../core/help/help-trigger.component';
 import {
   MultiSelectListComponent,
   type MultiSelectItem,
@@ -60,7 +61,7 @@ export type PublishedQuestionnaireTemplate = {
 @Component({
   selector: 'loom-account-role-edit-dialog',
   standalone: true,
-  imports: [FormsModule, MultiSelectListComponent],
+  imports: [FormsModule, MultiSelectListComponent, HelpTriggerComponent],
   template: `
     <div
       class="backdrop"
@@ -76,7 +77,13 @@ export type PublishedQuestionnaireTemplate = {
         [attr.aria-labelledby]="headingId"
       >
         <div class="head">
-          <h2 [id]="headingId">{{ heading() }}</h2>
+          <div class="head-title">
+            <h2 [id]="headingId">{{ heading() }}</h2>
+            <loom-help-trigger
+              tourId="settings.dialog.role"
+              ariaLabel="Підказка про цю форму"
+            />
+          </div>
           <div class="head-actions">
             @if (role()?.isSystem) {
               <span class="badge">Системна роль</span>
@@ -84,7 +91,12 @@ export type PublishedQuestionnaireTemplate = {
             <button type="button" class="ghost-neutral" (click)="closed.emit()" [disabled]="busy()">
               Скасувати
             </button>
-            <button type="button" (click)="submit()" [disabled]="busy() || !name.trim()">
+            <button
+              type="button"
+              data-help-id="settings.dialog.role.save"
+              (click)="submit()"
+              [disabled]="busy() || !name.trim()"
+            >
               {{ role() ? 'Зберегти' : 'Створити' }}
             </button>
           </div>
@@ -98,6 +110,7 @@ export type PublishedQuestionnaireTemplate = {
           <label>
             Назва
             <input
+              data-help-id="settings.dialog.role.name"
               [(ngModel)]="name"
               name="roleName"
               placeholder="Назва ролі"
@@ -109,6 +122,7 @@ export type PublishedQuestionnaireTemplate = {
           <label>
             Набір прав
             <select
+              data-help-id="settings.dialog.role.preset"
               [(ngModel)]="permissionPreset"
               name="rolePreset"
               [disabled]="busy() || presetLocked()"
@@ -250,7 +264,7 @@ export type PublishedQuestionnaireTemplate = {
             </p>
           }
 
-          <fieldset class="permission-group surfaces">
+          <fieldset class="permission-group surfaces" data-help-id="settings.dialog.role.surfaces">
             <legend>Доступні екрани</legend>
             @if (!surfaceGroups().length) {
               <p class="hint">Каталог екранів недоступний.</p>
@@ -306,6 +320,12 @@ export type PublishedQuestionnaireTemplate = {
         gap: 0.75rem;
         align-items: center;
         flex-wrap: wrap;
+      }
+      .head-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
       }
       .head-actions {
         display: flex;

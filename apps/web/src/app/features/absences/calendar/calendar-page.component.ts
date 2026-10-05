@@ -92,7 +92,7 @@ import {
       </header>
 
       <div class="toolbar">
-        <div class="modes" #modesEl>
+        <div class="modes" #modesEl data-help-id="absences.calendar.modes">
           @for (m of modes; track m) {
             <button type="button" [class.active]="viewMode === m" (click)="setMode(m)">
               {{ ('calendar.modes.' + m) | t }}

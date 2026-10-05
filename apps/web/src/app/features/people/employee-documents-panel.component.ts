@@ -1,9 +1,12 @@
 import {
   Component,
+  DestroyRef,
   Input,
   OnChanges,
   SimpleChanges,
+  effect,
   inject,
+  output,
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -91,7 +94,7 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         </div>
       }
 
-      <div class="filters">
+      <div class="filters" data-help-id="people.documents.filters">
         <label>
           Тип
           <select [(ngModel)]="filterType" (ngModelChange)="applyFilters()">
@@ -142,7 +145,7 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         @if (!visibleRows().length) {
           <p class="muted">Документів ще немає.</p>
         } @else {
-          <ul class="doc-list">
+          <ul class="doc-list" data-help-id="people.documents.list">
             @for (row of visibleRows(); track row.source + ':' + row.id) {
               <li class="doc-row">
                 <div class="doc-head">
@@ -319,8 +322,12 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
   private readonly documentsApi = inject(DocumentsApiService);
   private readonly absenceDocsApi = inject(EmployeeAbsenceDocumentsService);
   private readonly session = inject(SessionStore);
+  private readonly destroyRef = inject(DestroyRef);
 
   @Input({ required: true }) employeeId!: string;
+
+  /** Parent-owned help: upload dialog open → `document-upload`, else `null`. */
+  readonly helpDialogChange = output<'document-upload' | null>();
 
   readonly allFilterTypes: DocumentType[] = ['time_event', ...EMPLOYEE_DOCUMENT_TYPES];
 
@@ -349,6 +356,17 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
   filterFrom = '';
   filterTo = '';
   sortKey: SortKey = 'date_desc';
+
+  constructor() {
+    effect(() => {
+      this.helpDialogChange.emit(
+        this.uploadDialogOpen() ? 'document-upload' : null,
+      );
+    });
+    this.destroyRef.onDestroy(() => {
+      this.helpDialogChange.emit(null);
+    });
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['employeeId'] && this.employeeId) {
