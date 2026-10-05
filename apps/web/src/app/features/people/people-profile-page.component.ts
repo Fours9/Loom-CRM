@@ -92,8 +92,9 @@ type MetricsTabId = 'skills';
     } @else if (error() && !profile()) {
       <p class="error">{{ error() }}</p>
     } @else if (profile()) {
-      <article class="profile">
-        <header class="hero">
+      <article class="profile pw-stage">
+        <span class="pw-stage__glow" aria-hidden="true"></span>
+        <header class="hero pw-rise">
           <div class="hero-main">
             <div class="avatar" aria-hidden="true">
               @if (profile()!.header.photoUrl) {
@@ -136,10 +137,12 @@ type MetricsTabId = 'skills';
 
         <loom-employee-profile-completeness
           #completenessAnchor
+          class="pw-rise"
+          style="--pw-delay: 70ms"
           [completeness]="profile()!.completeness"
         />
 
-        <nav class="tabs" aria-label="Розділи профілю">
+        <nav class="tabs pw-rise" style="--pw-delay: 110ms" aria-label="Розділи профілю">
           @for (t of visibleTabs(); track t.id) {
             <button
               type="button"
@@ -153,7 +156,7 @@ type MetricsTabId = 'skills';
           }
         </nav>
 
-        <section class="panel">
+        <section class="panel pw-rise" style="--pw-delay: 160ms">
           @switch (tab()) {
             @case ('data') {
               <loom-employee-data-panel
@@ -401,35 +404,35 @@ type MetricsTabId = 'skills';
   `,
   styles: [
     `
-      .profile {
-        display: grid;
-        gap: 1rem;
-      }
       .hero {
         display: flex;
         flex-wrap: wrap;
         justify-content: space-between;
         gap: 1rem;
-        padding: 1rem;
-        border: 1px solid var(--pw-border);
-        border-radius: 12px;
-        background: var(--pw-surface);
+        padding: 0.15rem 0 0.35rem;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
       }
       .hero-main {
         display: flex;
-        gap: 1rem;
+        gap: 1.1rem;
         min-width: 0;
       }
       .avatar {
-        width: 72px;
-        height: 72px;
-        border-radius: 16px;
+        width: 80px;
+        height: 80px;
+        border-radius: 20px;
         background: color-mix(in srgb, var(--pw-accent) 15%, var(--pw-surface));
         display: grid;
         place-items: center;
         overflow: hidden;
         flex-shrink: 0;
-        font-weight: 700;
+        font-weight: 750;
+        font-size: 1.2rem;
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 22%, var(--pw-border));
+        box-shadow: 0 8px 24px var(--pw-shadow);
       }
       .avatar img {
         width: 100%;
@@ -438,7 +441,11 @@ type MetricsTabId = 'skills';
       }
       h1 {
         margin: 0;
-        font-size: 1.5rem;
+        font-size: clamp(1.7rem, 3.8vw, 2.2rem);
+        font-weight: 750;
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+        color: var(--pw-text-strong);
       }
       h2 {
         margin: 0;
@@ -446,11 +453,16 @@ type MetricsTabId = 'skills';
       .eyebrow {
         margin: 0;
         color: var(--pw-muted);
-        font-size: 0.85rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
       }
       .meta {
-        margin: 0.25rem 0;
-        color: var(--pw-muted);
+        margin: 0.35rem 0;
+        color: var(--pw-accent);
+        font-weight: 600;
+        font-size: 1.02rem;
       }
       .badges {
         display: flex;
@@ -461,14 +473,16 @@ type MetricsTabId = 'skills';
         display: inline-flex;
         align-items: center;
         border-radius: 999px;
-        padding: 0.2rem 0.65rem;
-        font-size: 0.8rem;
+        padding: 0.22rem 0.7rem;
+        font-size: 0.78rem;
+        font-weight: 600;
         border: 1px solid var(--pw-border);
-        background: var(--pw-surface);
+        background: color-mix(in srgb, var(--pw-surface) 90%, transparent);
       }
       .badge.accent {
         border-color: color-mix(in srgb, var(--pw-accent) 40%, var(--pw-border));
         color: var(--pw-accent);
+        background: var(--pw-accent-soft);
       }
       .badge[data-status='active'] {
         background: color-mix(in srgb, #1a7f37 12%, var(--pw-surface));
@@ -483,44 +497,61 @@ type MetricsTabId = 'skills';
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
-        border: 1px solid var(--pw-border);
+        border: 1px solid transparent;
         background: var(--pw-accent);
-        color: #fff;
-        border-radius: 8px;
-        padding: 0.45rem 0.8rem;
+        color: var(--pw-on-accent, #fff);
+        border-radius: 10px;
+        padding: 0.5rem 0.9rem;
         text-decoration: none;
         cursor: pointer;
+        font-weight: 700;
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--pw-accent) 22%, transparent);
       }
       .btn.ghost {
-        background: var(--pw-accent-soft, #e8eef5);
-        border: 1px solid color-mix(in srgb, var(--pw-accent) 35%, var(--pw-border));
+        background: var(--pw-surface);
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 28%, var(--pw-border));
         color: var(--pw-accent);
+        box-shadow: none;
       }
       .btn.ghost:hover {
-        background: color-mix(in srgb, var(--pw-accent) 16%, var(--pw-surface));
+        background: var(--pw-accent-soft);
         border-color: var(--pw-accent);
       }
       .tabs {
-        display: flex;
+        display: inline-flex;
         flex-wrap: wrap;
-        gap: 0.35rem;
+        gap: 0.2rem;
+        padding: 0.22rem;
+        border-radius: 999px;
+        background: var(--pw-surface-2);
+        border: 1px solid var(--pw-border);
+        width: fit-content;
+        max-width: 100%;
       }
       .tab {
-        border: 1px solid var(--pw-border);
-        background: var(--pw-surface);
+        border: 0;
+        background: transparent;
         border-radius: 999px;
-        padding: 0.35rem 0.85rem;
+        padding: 0.42rem 0.9rem;
         cursor: pointer;
+        color: var(--pw-muted);
+        font-weight: 600;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease,
+          box-shadow 0.15s ease;
       }
       .tab.active {
-        border-color: var(--pw-accent);
         color: var(--pw-accent);
+        background: var(--pw-surface);
+        box-shadow: 0 2px 8px var(--pw-shadow);
       }
       .panel {
-        padding: 1rem;
+        padding: 1.05rem;
         border: 1px solid var(--pw-border);
-        border-radius: 12px;
-        background: var(--pw-surface);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--pw-surface) 96%, transparent);
+        box-shadow: 0 3px 14px color-mix(in srgb, var(--pw-shadow) 70%, transparent);
         /* Keep header/completeness stable when tab body height changes. */
         overflow-anchor: none;
       }

@@ -44,7 +44,7 @@ import { isValidCalendarHex } from './calendar-date.util';
         width: 100%;
         overflow: hidden;
         border: 0;
-        background: color-mix(in srgb, var(--seg-color) 22%, var(--pw-surface));
+        background: color-mix(in srgb, var(--seg-color) 28%, var(--pw-surface));
       }
       :host(.band-host) .seg {
         height: 100%;
@@ -56,10 +56,17 @@ import { isValidCalendarHex } from './calendar-date.util';
         border-bottom: 0;
       }
       .seg.card {
-        height: 4.25rem;
-        min-height: 4.25rem;
-        border-radius: 10px;
-        border: 1px solid color-mix(in srgb, var(--seg-color) 45%, var(--pw-border));
+        height: 4.4rem;
+        min-height: 4.4rem;
+        border-radius: 12px;
+        border: 1px solid color-mix(in srgb, var(--seg-color) 48%, var(--pw-border));
+        box-shadow: 0 3px 12px color-mix(in srgb, var(--pw-shadow) 75%, transparent);
+        background:
+          linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--seg-color) 34%, var(--pw-surface)) 0%,
+            color-mix(in srgb, var(--seg-color) 18%, var(--pw-surface)) 100%
+          );
       }
       /* Work events: red frame on the timed fill strip */
       .seg.work .seg-fill {
@@ -159,14 +166,23 @@ import { isValidCalendarHex } from './calendar-date.util';
         right: 0.5rem;
         bottom: 0.4rem;
         font-size: 0.8rem;
-        font-weight: 600;
+        font-weight: 700;
+        letter-spacing: 0.01em;
         line-height: 1.15;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         color: #fff;
-        text-shadow: 0 1px 2px color-mix(in srgb, #000 55%, transparent);
+        text-shadow:
+          0 1px 2px color-mix(in srgb, #000 55%, transparent),
+          0 0 10px color-mix(in srgb, #000 25%, transparent);
         pointer-events: none;
+      }
+      .seg.card .seg-label {
+        left: 0.65rem;
+        right: 0.65rem;
+        bottom: 0.55rem;
+        font-size: 0.86rem;
       }
     `,
   ],

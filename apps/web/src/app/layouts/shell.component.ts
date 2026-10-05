@@ -385,9 +385,15 @@ import { HelpMenuComponent } from '../core/help';
         align-items: center;
         justify-content: space-between;
         padding: calc(0.4rem + env(safe-area-inset-top, 0px)) 1rem 0.4rem;
-        border-bottom: 1px solid var(--pw-border);
-        background: var(--pw-topbar, var(--pw-surface));
-        backdrop-filter: blur(8px);
+        border-bottom: 1px solid color-mix(in srgb, var(--pw-border) 85%, transparent);
+        background:
+          linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--pw-surface) 96%, transparent) 0%,
+            color-mix(in srgb, var(--pw-topbar, var(--pw-surface)) 92%, transparent) 100%
+          );
+        backdrop-filter: blur(14px);
+        box-shadow: 0 4px 18px color-mix(in srgb, var(--pw-shadow) 55%, transparent);
       }
       .topbar-start {
         display: flex;
@@ -406,9 +412,12 @@ import { HelpMenuComponent } from '../core/help';
       .brand-mark {
         width: 32px;
         height: 32px;
-        border-radius: 8px;
+        border-radius: 10px;
         display: block;
         flex-shrink: 0;
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--pw-accent) 18%, var(--pw-border)),
+          0 4px 12px var(--pw-shadow);
       }
       .brand-text {
         display: flex;
@@ -418,16 +427,19 @@ import { HelpMenuComponent } from '../core/help';
         line-height: 1.15;
       }
       .brand-name {
-        font-weight: 700;
+        font-weight: 750;
         font-size: 1rem;
+        letter-spacing: -0.02em;
         color: var(--pw-accent);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .brand-module {
-        font-weight: 500;
-        font-size: 0.72rem;
+        font-weight: 600;
+        font-size: 0.7rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
         color: var(--pw-muted);
         white-space: nowrap;
         overflow: hidden;
@@ -475,10 +487,14 @@ import { HelpMenuComponent } from '../core/help';
         border: 1px solid var(--pw-border-strong);
         background: var(--pw-surface);
         color: var(--pw-text);
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 0.4rem 0.75rem;
         cursor: pointer;
         min-height: 2.4rem;
+        transition:
+          border-color 0.15s ease,
+          background 0.15s ease,
+          color 0.15s ease;
       }
       .theme-toggle {
         display: inline-flex;
@@ -490,6 +506,11 @@ import { HelpMenuComponent } from '../core/help';
         min-width: 2.4rem;
         height: 2.4rem;
         padding: 0;
+      }
+      .theme-toggle:hover {
+        border-color: var(--pw-accent);
+        color: var(--pw-accent);
+        background: var(--pw-accent-soft);
       }
       .inbox {
         position: relative;
@@ -503,15 +524,21 @@ import { HelpMenuComponent } from '../core/help';
         min-width: 2.4rem;
         padding: 0;
         border: 1px solid var(--pw-border-strong);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--pw-surface);
         color: var(--pw-text);
         cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          background 0.15s ease,
+          color 0.15s ease,
+          box-shadow 0.15s ease;
       }
       .icon-btn:hover {
         border-color: var(--pw-accent);
         color: var(--pw-accent);
         background: color-mix(in srgb, var(--pw-accent) 12%, var(--pw-surface));
+        box-shadow: 0 2px 10px var(--pw-shadow);
       }
       .icon-btn svg {
         display: block;
@@ -541,10 +568,10 @@ import { HelpMenuComponent } from '../core/help';
         width: min(360px, 80vw);
         background: var(--pw-surface);
         border: 1px solid var(--pw-border);
-        border-radius: 12px;
-        box-shadow: 0 8px 24px var(--pw-shadow);
+        border-radius: 14px;
+        box-shadow: 0 12px 32px var(--pw-shadow-md, var(--pw-shadow));
         z-index: var(--pw-z-dropdown, 120);
-        padding: 0.75rem;
+        padding: 0.85rem;
       }
       .dropdown-head {
         display: flex;
@@ -656,9 +683,14 @@ import { HelpMenuComponent } from '../core/help';
         z-index: var(--pw-z-drawer, 210);
         display: flex;
         flex-direction: column;
-        background: var(--pw-surface);
+        background:
+          linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--pw-accent) 6%, var(--pw-surface)) 0%,
+            var(--pw-surface) 8rem
+          );
         border-right: 1px solid var(--pw-border);
-        box-shadow: 0 8px 24px var(--pw-shadow);
+        box-shadow: 8px 0 28px var(--pw-shadow);
         padding: 1rem 0 calc(1rem + env(safe-area-inset-bottom, 0px));
         transform: translateX(-105%);
         transition: transform 0.2s ease;
@@ -698,15 +730,18 @@ import { HelpMenuComponent } from '../core/help';
       }
       .side-nav-links a.side-link {
         padding: 0.85rem 1rem;
-        border-radius: 8px;
+        border-radius: 12px;
         min-height: 2.75rem;
         display: flex;
         align-items: center;
         gap: 0.75rem;
+        font-weight: 600;
+        transition: background 0.15s ease, color 0.15s ease;
       }
       .side-nav-links a.side-link:hover,
       .side-nav-links a.side-link.active {
-        background: color-mix(in srgb, var(--pw-accent) 10%, var(--pw-surface));
+        background: color-mix(in srgb, var(--pw-accent) 12%, var(--pw-surface));
+        color: var(--pw-accent);
       }
       .nav-icon {
         flex-shrink: 0;
@@ -823,7 +858,7 @@ import { HelpMenuComponent } from '../core/help';
       .content {
         flex: 1;
         min-width: 0;
-        padding: 1rem;
+        padding: 1.1rem;
       }
       .shell.app-chrome-hidden {
         --shell-topbar-h: 0px;
@@ -862,10 +897,34 @@ import { HelpMenuComponent } from '../core/help';
         }
         .desktop-nav {
           display: flex;
-          gap: 1rem;
+          gap: 0.35rem;
           flex-wrap: wrap;
           justify-content: center;
           justify-self: center;
+          padding: 0.2rem;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--pw-surface-2) 88%, transparent);
+          border: 1px solid color-mix(in srgb, var(--pw-border) 80%, transparent);
+        }
+        .desktop-nav a {
+          padding: 0.4rem 0.85rem;
+          border-radius: 999px;
+          font-weight: 600;
+          font-size: 0.9rem;
+          color: var(--pw-muted);
+          transition:
+            background 0.15s ease,
+            color 0.15s ease,
+            box-shadow 0.15s ease;
+        }
+        .desktop-nav a:hover {
+          color: var(--pw-accent);
+          background: color-mix(in srgb, var(--pw-surface) 80%, transparent);
+        }
+        .desktop-nav a.active {
+          color: var(--pw-accent);
+          background: var(--pw-surface);
+          box-shadow: 0 2px 8px var(--pw-shadow);
         }
         .user-email {
           display: inline;
@@ -888,7 +947,7 @@ import { HelpMenuComponent } from '../core/help';
           gap: 0.75rem;
         }
         .content {
-          padding: 1.5rem;
+          padding: 1.65rem 1.75rem;
         }
       }
     `,

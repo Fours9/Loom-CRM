@@ -144,10 +144,30 @@ import {
         gap: 0.75rem;
       }
       .employee-card {
-        border: 1px solid var(--pw-border);
-        border-radius: 12px;
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 12%, var(--pw-border));
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--pw-surface) 94%, transparent);
+        padding: 1rem 1.1rem;
+        box-shadow: 0 2px 10px var(--pw-shadow);
+        transition:
+          border-color 0.18s ease,
+          box-shadow 0.18s ease,
+          transform 0.18s ease,
+          background 0.18s ease;
+        animation: pw-rise 0.5s ease both;
+      }
+      .employee-card:nth-child(1) { animation-delay: 40ms; }
+      .employee-card:nth-child(2) { animation-delay: 80ms; }
+      .employee-card:nth-child(3) { animation-delay: 120ms; }
+      .employee-card:nth-child(4) { animation-delay: 160ms; }
+      .employee-card:nth-child(5) { animation-delay: 200ms; }
+      .employee-card:nth-child(6) { animation-delay: 240ms; }
+      .employee-card:nth-child(n + 7) { animation-delay: 280ms; }
+      .employee-card:hover {
+        border-color: var(--pw-accent);
+        box-shadow: 0 10px 28px var(--pw-shadow);
+        transform: translateY(-2px);
         background: var(--pw-surface);
-        padding: 0.85rem 1rem;
       }
       .card-link {
         text-decoration: none;
@@ -160,14 +180,17 @@ import {
       }
       .card-title {
         color: var(--pw-text-strong);
+        font-size: 1.02rem;
       }
       .card-meta {
         color: var(--pw-muted);
-        font-size: 0.9rem;
+        font-size: 0.88rem;
         overflow-wrap: anywhere;
       }
       .table-wrap {
         display: none;
+        position: relative;
+        z-index: 0;
       }
       table {
         width: 100%;
@@ -177,8 +200,15 @@ import {
       th,
       td {
         text-align: left;
-        padding: 0.75rem;
+        padding: 0.85rem 0.8rem;
         border-bottom: 1px solid var(--pw-border);
+      }
+      thead th {
+        background: color-mix(in srgb, var(--pw-surface-2) 88%, var(--pw-accent-soft));
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--pw-muted);
       }
       .sort-btn {
         display: inline-flex;
@@ -190,7 +220,7 @@ import {
         background: transparent;
         color: inherit;
         font: inherit;
-        font-weight: 600;
+        font-weight: 700;
         cursor: pointer;
         min-height: auto;
       }
@@ -208,25 +238,32 @@ import {
       }
       .row-link {
         cursor: pointer;
+        transition: background 0.14s ease;
       }
       .row-link:hover {
-        background: var(--pw-surface-2);
+        background: color-mix(in srgb, var(--pw-accent-soft) 70%, transparent);
       }
       .row-name {
         color: inherit;
         text-decoration: none;
-        font-weight: 600;
+        font-weight: 700;
       }
       .row-name:hover {
         color: var(--pw-accent);
         text-decoration: underline;
       }
       .empty {
-        padding: 1rem;
+        padding: 1.15rem 1rem;
         color: var(--pw-muted);
-        border: 1px dashed var(--pw-border);
-        border-radius: 12px;
-        background: var(--pw-surface-2);
+        border: 1px dashed color-mix(in srgb, var(--pw-border) 90%, var(--pw-accent));
+        border-radius: 14px;
+        background:
+          repeating-linear-gradient(
+            -45deg,
+            color-mix(in srgb, var(--pw-border) 35%, transparent) 0 8px,
+            transparent 8px 16px
+          ),
+          var(--pw-surface-2);
       }
       @media (min-width: 641px) {
         .card-list {
@@ -234,10 +271,24 @@ import {
         }
         .table-wrap {
           display: block;
-          border: 1px solid var(--pw-border);
-          border-radius: 12px;
+          border: 1px solid color-mix(in srgb, var(--pw-accent) 12%, var(--pw-border));
+          border-radius: 16px;
           overflow: hidden;
-          background: var(--pw-surface);
+          background: color-mix(in srgb, var(--pw-surface) 94%, transparent);
+          box-shadow: 0 8px 28px var(--pw-shadow);
+          animation: pw-rise 0.55s ease both;
+          animation-delay: 120ms;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .employee-card,
+        .table-wrap,
+        .row-link {
+          animation: none !important;
+          transition: none !important;
+        }
+        .employee-card:hover {
+          transform: none;
         }
       }
     `,

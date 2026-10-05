@@ -17,7 +17,7 @@ import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { QuestionnaireEmployeeTypeaheadComponent } from './questionnaire-employee-typeahead.component';
 import {
-  questionnaireTypeDescription,
+  questionnaireTemplateDescription,
 } from '../questionnaire-labels';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
 import { firstValueFrom } from 'rxjs';
@@ -109,10 +109,14 @@ import { firstValueFrom } from 'rxjs';
   `,
   styles: [
     `
+      :host {
+        /* Compete with stage siblings (.pw-page-head etc.); inner backdrop alone is not enough. */
+        z-index: var(--pw-z-modal, 250);
+      }
       .backdrop {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: var(--pw-z-modal, 250);
         display: grid;
         place-items: center;
         background: color-mix(in srgb, #0f172a 45%, transparent);
@@ -213,8 +217,9 @@ export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
 
   readonly selectedTypeDescription = computed(() => {
     const code = this.selectedTemplateCode();
-    const type = this.templates().find((t) => t.code === code)?.type;
-    return type ? questionnaireTypeDescription(type) : '';
+    const tpl = this.templates().find((t) => t.code === code);
+    if (!tpl) return '';
+    return questionnaireTemplateDescription(tpl.code, tpl.type);
   });
 
   private backdropPress = false;

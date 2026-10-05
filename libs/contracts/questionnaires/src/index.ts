@@ -39,7 +39,7 @@ export const QUESTIONNAIRE_TYPE_CATALOG: Record<
     code: 'full',
     labelUa: 'Повна',
     descriptionUa:
-      '360 для нових, майбутніх або вже працевлаштованих співробітників',
+      'повні анкети профілю: первинна (старт) або 360° для співробітників',
   },
   managing: {
     code: 'managing',
@@ -51,6 +51,24 @@ export const QUESTIONNAIRE_TYPE_CATALOG: Record<
     labelUa: 'Docs',
     descriptionUa: 'які документи, дозволи та інформацію потрібно оформити',
   },
+};
+
+/**
+ * Built-in template blurbs for create/picker UI.
+ * Prefer these over {@link QUESTIONNAIRE_TYPE_CATALOG} when a concrete
+ * `templateCode` is known (several templates share type `full`).
+ */
+export const QUESTIONNAIRE_BUILTIN_TEMPLATE_DESCRIPTIONS: Record<
+  string,
+  string
+> = {
+  'employee-starter':
+    'стартова анкета: особисті дані, контакти, сімʼя, освіта, досвід, робота в компанії та згоди',
+  'employee-360':
+    'повна 360° анкета для нових, майбутніх або вже працевлаштованих співробітників',
+  'employee-managing': 'статистика, навички, грейди робітника',
+  'employee-docs':
+    'які документи, дозволи та інформацію потрібно оформити',
 };
 
 /**
@@ -492,13 +510,19 @@ export type QuestionnaireAssignmentDetail = {
 export type QuestionnaireDirectoryQuery = {
   departmentId?: EntityId;
   positionId?: EntityId;
+  /** Inclusive multi-select (OR). Prefer over singular when both present. */
+  departmentIds?: EntityId[];
+  positionIds?: EntityId[];
+  templateType?: QuestionnaireType;
+  templateTypes?: QuestionnaireType[];
+  attachmentState?: QuestionnaireAttachmentState;
+  attachmentStates?: QuestionnaireAttachmentState[];
   createdFrom?: string;
   createdTo?: string;
-  attachmentState?: QuestionnaireAttachmentState;
-  templateType?: QuestionnaireType;
   /** Prefix search on assignment.code (ILIKE, wildcards escaped). */
   code?: string;
   status?: QuestionnaireAssignmentStatus;
+  statuses?: QuestionnaireAssignmentStatus[];
   sortBy?: QuestionnaireDirectorySortBy;
   sortDir?: 'asc' | 'desc';
   limit?: number;

@@ -296,7 +296,7 @@ export type PublishedQuestionnaireTemplate = {
       .backdrop {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: var(--pw-z-modal, 250);
         display: grid;
         place-items: start center;
         background: color-mix(in srgb, #0f172a 45%, transparent);

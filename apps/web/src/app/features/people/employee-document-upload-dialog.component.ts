@@ -188,7 +188,7 @@ const MAX_FILES = 20;
       .backdrop {
         position: fixed;
         inset: 0;
-        z-index: var(--pw-z-modal, 300);
+        z-index: var(--pw-z-modal, 250);
         display: grid;
         place-items: center;
         padding: 1rem;

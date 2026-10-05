@@ -39,13 +39,19 @@ import type { PositionPageTabId } from './position-help-context.model';
   ],
   template: `
     <section
-      class="section"
+      class="section pw-stage"
       [attr.data-help-id]="tab() === 'settings' ? 'positions.formats' : 'positions.management'"
     >
-      <h1>Керування посадами</h1>
-      <p class="lead">Напрямки, відділи, посади та навички організації</p>
+      <span class="pw-stage__glow" aria-hidden="true"></span>
+      <header class="pw-page-head pw-rise">
+        <div>
+          <p class="pw-eyebrow">Організація</p>
+          <h1>Керування посадами</h1>
+          <p class="pw-lead">Напрямки, відділи, посади та навички</p>
+        </div>
+      </header>
 
-      <nav class="tabs" aria-label="Вкладки каталогу посад">
+      <nav class="tabs pw-rise" style="--pw-delay: 70ms" aria-label="Вкладки каталогу посад">
         <button
           type="button"
           class="tab"
@@ -64,6 +70,7 @@ import type { PositionPageTabId } from './position-help-context.model';
         </button>
       </nav>
 
+      <div class="body pw-rise" style="--pw-delay: 130ms">
       @if (tab() === 'management') {
         @if (
           vm.error() &&
@@ -97,48 +104,58 @@ import type { PositionPageTabId } from './position-help-context.model';
       } @else {
         <loom-position-settings-tab (helpDialogChange)="settingsDialogKind.set($event)" />
       }
+      </div>
     </section>
   `,
   styles: [
     `
       .section {
-        display: grid;
-        gap: 1rem;
         max-width: 1400px;
         margin-inline: auto;
         width: 100%;
       }
-      h1 {
-        margin: 0;
-        font-size: 1.75rem;
-        color: var(--pw-text-strong);
-      }
-      .lead,
-      .muted {
-        color: var(--pw-muted);
-        margin: 0;
+      .body {
+        display: grid;
+        gap: 1rem;
+        min-width: 0;
       }
       .error {
         color: var(--pw-danger);
         margin: 0;
+        font-weight: 600;
+      }
+      .muted {
+        color: var(--pw-muted);
+        margin: 0;
       }
       .tabs {
-        display: flex;
-        gap: 0.5rem;
+        display: inline-flex;
+        gap: 0.25rem;
         flex-wrap: wrap;
+        padding: 0.22rem;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--pw-surface) 88%, transparent);
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 14%, var(--pw-border));
+        width: fit-content;
+        box-shadow: 0 2px 10px var(--pw-shadow);
       }
       .tab {
-        border: 1px solid var(--pw-border);
-        background: var(--pw-surface);
+        border: 0;
+        background: transparent;
         border-radius: 999px;
-        padding: 0.45rem 0.9rem;
+        padding: 0.45rem 0.95rem;
         cursor: pointer;
+        color: var(--pw-muted);
+        font-weight: 700;
+        transition:
+          background 0.16s ease,
+          color 0.16s ease,
+          box-shadow 0.16s ease;
       }
       .tab.active {
-        border-color: var(--pw-accent);
-        background: var(--pw-accent-soft);
         color: var(--pw-accent);
-        font-weight: 700;
+        background: var(--pw-surface);
+        box-shadow: 0 2px 8px var(--pw-shadow);
       }
     `,
   ],

@@ -1,6 +1,10 @@
 import {
   Component,
+  ElementRef,
+  HostListener,
+  OnDestroy,
   OnInit,
+  ViewChild,
   inject,
   signal,
 } from '@angular/core';
@@ -35,9 +39,25 @@ import {
 import {
   QUESTIONNAIRE_LIFECYCLE_CALLOUT,
 } from '../help/questionnaire-help.definition';
-
+import {
+  claimPwOverlay,
+  releasePwOverlay,
+  type PwOverlayHandle,
+} from '../../../shared/ui/pw-overlay-session';
 type Dept = { id: string; name: string };
 type Pos = { id: string; name: string };
+
+function parseIdListParam(raw: string | null): string[] {
+  if (!raw?.trim()) return [];
+  return [
+    ...new Set(
+      raw
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
 
 @Component({
   selector: 'loom-questionnaire-directory-page',
@@ -50,24 +70,28 @@ type Pos = { id: string; name: string };
     HelpCalloutComponent,
   ],
   template: `
-    <div class="page">
-      <header class="header">
+    <div class="page pw-stage">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
+      <header class="header pw-page-head" [class.overlay-open]="showBlankPicker()">
         <div class="header-titles">
+          <p class="pw-eyebrow">Оцінка й розвиток</p>
           <h1>Анкети</h1>
-          <p class="muted">Усі призначення анкет у вашому доступі</p>
+          <p class="pw-lead">Усі призначення анкет у вашому доступі</p>
         </div>
         <div class="header-actions">
-          <div class="blank-print-wrap">
+          <div class="blank-print-wrap" #blankPrintWrap>
             <button
               type="button"
               class="btn"
               [disabled]="blankPrintBusy()"
-              (click)="toggleBlankPicker()"
+              [attr.aria-expanded]="showBlankPicker()"
+              aria-haspopup="menu"
+              (click)="toggleBlankPicker($event)"
             >
               {{ blankPrintBusy() ? 'Формування…' : 'Роздрукувати заготовку' }}
             </button>
             @if (showBlankPicker()) {
-              <div class="blank-picker" role="menu">
+              <div class="blank-picker pw-menu" role="menu" (click)="$event.stopPropagation()">
                 @if (printableLoading()) {
                   <p class="muted">Завантаження…</p>
                 } @else if (!printableTemplates().length) {
@@ -89,7 +113,7 @@ type Pos = { id: string; name: string };
           @if (canCreate()) {
             <button
               type="button"
-              class="btn primary"
+              class="btn primary pw-btn"
               data-help-id="q.create"
               (click)="showCreate.set(true)"
             >
@@ -99,34 +123,38 @@ type Pos = { id: string; name: string };
         </div>
       </header>
 
-      <loom-help-callout
-        [calloutId]="lifecycleCallout.id"
-        [version]="lifecycleCallout.version"
-        [body]="lifecycleCallout.body"
-      />
+      <div class="callout-wrap pw-rise" style="--pw-delay: 70ms">
+        <loom-help-callout
+          [calloutId]="lifecycleCallout.id"
+          [version]="lifecycleCallout.version"
+          [body]="lifecycleCallout.body"
+        />
+      </div>
 
-      <loom-questionnaire-filter-toolbar
-        [value]="filterValue()"
-        [availableFilters]="directoryFilterFields"
-        [typeOptions]="typeOptions"
-        [departments]="departments()"
-        [positions]="positions()"
-        (filterChange)="onFilters($event)"
-      />
+      <div class="filters-shell pw-panel pw-filters pw-rise" style="--pw-delay: 110ms">
+        <loom-questionnaire-filter-toolbar
+          [value]="filterValue()"
+          [availableFilters]="directoryFilterFields"
+          [typeOptions]="typeOptions"
+          [departments]="departments()"
+          [positions]="positions()"
+          (filterChange)="onFilters($event)"
+        />
+      </div>
 
       @if (error()) {
-        <p class="error">{{ error() }}</p>
+        <p class="error pw-rise" style="--pw-delay: 130ms">{{ error() }}</p>
       }
 
       @if (loading()) {
-        <p class="muted">Завантаження…</p>
+        <p class="muted pw-rise" style="--pw-delay: 150ms">Завантаження…</p>
       } @else if (!items().length) {
-        <div class="empty">
+        <div class="empty pw-empty pw-rise" style="--pw-delay: 150ms">
           <p class="muted">Анкет не знайдено.</p>
           @if (canCreate()) {
             <button
               type="button"
-              class="btn primary"
+              class="btn primary pw-btn"
               data-help-id="q.create"
               (click)="showCreate.set(true)"
             >
@@ -135,7 +163,7 @@ type Pos = { id: string; name: string };
           }
         </div>
       } @else {
-        <div class="table-wrap">
+        <div class="table-wrap pw-table-shell pw-rise" style="--pw-delay: 160ms">
           <table>
             <thead>
               <tr>
@@ -344,66 +372,63 @@ type Pos = { id: string; name: string };
   styles: [
     `
       .page {
-        display: grid;
-        gap: 1rem;
-        padding: 1rem 1.25rem 2rem;
+        padding: clamp(1.15rem, 2.8vw, 1.85rem);
         max-width: 1200px;
         margin: 0 auto;
+        width: 100%;
       }
       .header {
         display: flex;
         flex-wrap: wrap;
         justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.85rem;
+        position: relative;
+        z-index: 2;
+      }
+      /* Chrome menus (blank print) must clear filter stacking context. */
+      .header.overlay-open {
+        z-index: 7;
+      }
+      .header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
         align-items: center;
-        gap: 0.75rem;
+      }
+      .callout-wrap,
+      .table-wrap,
+      .empty {
+        position: relative;
+        z-index: 0;
+        isolation: isolate;
+      }
+      .filters-shell {
+        position: relative;
+        z-index: 6;
+        isolation: isolate;
+        padding: 0.95rem 1rem;
+        overflow: visible;
       }
       .header-titles h1 {
-        margin: 0;
-        font-size: 1.4rem;
+        margin: 0.25rem 0 0;
       }
       .title-row {
         display: flex;
         align-items: center;
         gap: 0.5rem;
       }
-      .header-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-      }
       .empty {
         display: grid;
-        gap: 0.75rem;
+        gap: 0.85rem;
         justify-items: start;
       }
       .muted {
         color: var(--pw-muted);
         margin: 0.25rem 0 0;
       }
-      .filters {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem 1rem;
-        align-items: end;
-      }
-      label {
-        display: grid;
-        gap: 0.25rem;
-        font-size: 0.8rem;
-        color: var(--pw-muted);
-      }
-      select,
-      input {
-        border: 1px solid var(--pw-border);
-        border-radius: 8px;
-        padding: 0.35rem 0.5rem;
-        background: var(--pw-surface);
-        min-width: 8rem;
-      }
       .table-wrap {
         overflow-x: auto;
-        border: 1px solid var(--pw-border);
-        border-radius: 10px;
       }
       table {
         width: 100%;
@@ -429,8 +454,12 @@ type Pos = { id: string; name: string };
         vertical-align: middle;
       }
       th {
-        background: color-mix(in srgb, var(--pw-bg, #f6f8fb) 80%, transparent);
-        font-weight: 600;
+        background: color-mix(in srgb, var(--pw-accent-soft) 55%, var(--pw-surface-2));
+        font-weight: 700;
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--pw-muted);
         white-space: nowrap;
       }
       .th-sort {
@@ -526,70 +555,97 @@ type Pos = { id: string; name: string };
         height: 1.35rem;
       }
       .btn {
-        border-radius: 8px;
-        border: 1px solid var(--pw-border);
-        padding: 0.3rem 0.55rem;
-        background: var(--pw-surface);
+        border-radius: 14px;
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 22%, var(--pw-border));
+        padding: 0.55rem 0.95rem;
+        background: color-mix(in srgb, var(--pw-surface) 92%, transparent);
+        color: var(--pw-text);
         cursor: pointer;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
+        font-weight: 700;
+        min-height: 2.75rem;
+        transition:
+          transform 0.16s ease,
+          border-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+      .btn:hover {
+        border-color: var(--pw-accent);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px var(--pw-shadow);
       }
       .btn.primary {
         background: var(--pw-accent);
-        border-color: var(--pw-accent);
-        color: #fff;
+        border-color: transparent;
+        color: var(--pw-on-accent, #fff);
+        box-shadow: 0 8px 22px color-mix(in srgb, var(--pw-accent) 28%, transparent);
       }
       .btn:disabled {
         opacity: 0.55;
         cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
       }
       .pager {
         display: flex;
         gap: 0.75rem;
         align-items: center;
+        margin-top: 0.35rem;
       }
       .error {
-        color: #b42318;
+        color: var(--pw-danger);
+        font-weight: 600;
+        margin: 0;
       }
       .blank-print-wrap {
         position: relative;
+        z-index: 1;
       }
       .blank-picker {
         position: absolute;
         right: 0;
-        top: calc(100% + 4px);
-        z-index: 20;
-        min-width: 220px;
-        max-height: 280px;
-        overflow: auto;
-        padding: 0.35rem;
-        border: 1px solid var(--pw-border-strong, #ccc);
-        border-radius: 8px;
-        background: var(--pw-surface, #fff);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-        display: flex;
-        flex-direction: column;
-        gap: 0.15rem;
+        top: calc(100% + 6px);
+        z-index: 40;
+        min-width: 240px;
+        max-height: min(280px, 50vh);
+        /* .pw-menu supplies panel chrome + themed scrollbar */
+      }
+      .blank-picker .muted {
+        margin: 0;
+        padding: 0.55rem 0.65rem;
+        color: var(--pw-muted);
+        font-weight: 500;
       }
       .blank-picker button {
         text-align: left;
         border: 0;
         background: transparent;
-        padding: 0.45rem 0.55rem;
-        border-radius: 6px;
+        width: 100%;
+        padding: 0.5rem 0.65rem;
+        border-radius: 10px;
         cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+        color: var(--pw-text);
       }
       .blank-picker button:hover {
-        background: color-mix(in srgb, var(--pw-accent, #2563eb) 12%, transparent);
+        background: var(--pw-accent-soft);
+        color: var(--pw-accent);
       }
     `,
   ],
 })
-export class QuestionnaireDirectoryPageComponent implements OnInit {
+export class QuestionnaireDirectoryPageComponent
+  implements OnInit, OnDestroy, PwOverlayHandle
+{
   readonly lifecycleCallout = QUESTIONNAIRE_LIFECYCLE_CALLOUT;
   private readonly api = inject(QuestionnairesApiService);
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+
+  @ViewChild('blankPrintWrap')
+  private blankPrintWrap?: ElementRef<HTMLElement>;
 
   readonly Math = Math;
   readonly typeOptions = Object.entries(QUESTIONNAIRE_TYPE_LABELS).map(
@@ -614,26 +670,26 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
 
   readonly directoryFilterFields: Array<
     | 'code'
-    | 'departmentId'
-    | 'positionId'
-    | 'templateType'
-    | 'attachmentState'
+    | 'departmentIds'
+    | 'positionIds'
+    | 'templateTypes'
+    | 'attachmentStates'
     | 'createdFrom'
     | 'createdTo'
   > = [
     'code',
-    'departmentId',
-    'positionId',
-    'templateType',
-    'attachmentState',
+    'departmentIds',
+    'positionIds',
+    'templateTypes',
+    'attachmentStates',
     'createdFrom',
     'createdTo',
   ];
 
-  readonly departmentId = signal('');
-  readonly positionId = signal('');
-  readonly templateType = signal('');
-  readonly attachmentState = signal('');
+  readonly departmentIds = signal<string[]>([]);
+  readonly positionIds = signal<string[]>([]);
+  readonly templateTypes = signal<string[]>([]);
+  readonly attachmentStates = signal<string[]>([]);
   readonly code = signal('');
   readonly createdFrom = signal('');
   readonly createdTo = signal('');
@@ -649,39 +705,71 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
   filterValue(): QuestionnaireFilterToolbarValue {
     return {
       code: this.code() || undefined,
-      departmentId: this.departmentId() || undefined,
-      positionId: this.positionId() || undefined,
-      templateType: this.templateType() || undefined,
-      attachmentState: this.attachmentState() || undefined,
+      departmentIds: this.departmentIds().length ? this.departmentIds() : undefined,
+      positionIds: this.positionIds().length ? this.positionIds() : undefined,
+      templateTypes: this.templateTypes().length ? this.templateTypes() : undefined,
+      attachmentStates: this.attachmentStates().length
+        ? this.attachmentStates()
+        : undefined,
       createdFrom: this.createdFrom() || undefined,
       createdTo: this.createdTo() || undefined,
     };
   }
 
-  toggleBlankPicker(): void {
+  toggleBlankPicker(event?: Event): void {
+    event?.stopPropagation();
     if (this.blankPrintBusy()) return;
-    const next = !this.showBlankPicker();
-    this.showBlankPicker.set(next);
-    if (next && !this.printableTemplates().length) {
-      this.printableLoading.set(true);
-      this.api.listPrintableTemplates().subscribe({
-        next: (res) => {
-          this.printableTemplates.set(res.items);
-          this.printableLoading.set(false);
-        },
-        error: () => {
-          this.printableLoading.set(false);
-          this.showBlankPicker.set(false);
-          this.error.set('Не вдалося завантажити шаблони для друку');
-        },
-      });
+    if (this.showBlankPicker()) {
+      this.closeBlankPicker();
+      return;
     }
+    this.openBlankPicker();
+  }
+
+  closeFromOverlaySession(): void {
+    this.showBlankPicker.set(false);
+  }
+
+  ngOnDestroy(): void {
+    releasePwOverlay(this);
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.showBlankPicker()) return;
+    const root = this.blankPrintWrap?.nativeElement;
+    if (root && !root.contains(event.target as Node)) {
+      this.closeBlankPicker();
+    }
+  }
+
+  private openBlankPicker(): void {
+    claimPwOverlay(this);
+    this.showBlankPicker.set(true);
+    if (this.printableTemplates().length) return;
+    this.printableLoading.set(true);
+    this.api.listPrintableTemplates().subscribe({
+      next: (res) => {
+        this.printableTemplates.set(res.items);
+        this.printableLoading.set(false);
+      },
+      error: () => {
+        this.printableLoading.set(false);
+        this.closeBlankPicker();
+        this.error.set('Не вдалося завантажити шаблони для друку');
+      },
+    });
+  }
+
+  private closeBlankPicker(): void {
+    this.showBlankPicker.set(false);
+    releasePwOverlay(this);
   }
 
   printBlank(templateCode: string): void {
     if (this.blankPrintBusy()) return;
     this.blankPrintBusy.set(true);
-    this.showBlankPicker.set(false);
+    this.closeBlankPicker();
     this.error.set(null);
     this.api.exportBlankPdf(templateCode).subscribe({
       next: ({ blob, filename }) => {
@@ -706,10 +794,14 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
       .subscribe((p) => this.positions.set(p));
 
     this.route.queryParamMap.subscribe((q) => {
-      this.departmentId.set(q.get('departmentId') ?? '');
-      this.positionId.set(q.get('positionId') ?? '');
-      this.templateType.set(q.get('templateType') ?? '');
-      this.attachmentState.set(q.get('attachmentState') ?? '');
+      this.departmentIds.set(parseIdListParam(q.get('departmentIds') ?? q.get('departmentId')));
+      this.positionIds.set(parseIdListParam(q.get('positionIds') ?? q.get('positionId')));
+      this.templateTypes.set(
+        parseIdListParam(q.get('templateTypes') ?? q.get('templateType')),
+      );
+      this.attachmentStates.set(
+        parseIdListParam(q.get('attachmentStates') ?? q.get('attachmentState')),
+      );
       this.code.set(q.get('code') ?? '');
       this.createdFrom.set(q.get('createdFrom') ?? '');
       this.createdTo.set(q.get('createdTo') ?? '');
@@ -756,10 +848,22 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
       queryParams: {
         ...this.currentQuery(),
         code: next.code || null,
-        departmentId: next.departmentId || null,
-        positionId: next.positionId || null,
-        templateType: next.templateType || null,
-        attachmentState: next.attachmentState || null,
+        departmentIds: next.departmentIds?.length
+          ? next.departmentIds.join(',')
+          : null,
+        positionIds: next.positionIds?.length
+          ? next.positionIds.join(',')
+          : null,
+        templateTypes: next.templateTypes?.length
+          ? next.templateTypes.join(',')
+          : null,
+        attachmentStates: next.attachmentStates?.length
+          ? next.attachmentStates.join(',')
+          : null,
+        departmentId: null,
+        positionId: null,
+        templateType: null,
+        attachmentState: null,
         createdFrom: next.createdFrom || null,
         createdTo: next.createdTo || null,
         offset: '0',
@@ -846,10 +950,18 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
 
   private currentQuery(): Record<string, string | null> {
     return {
-      departmentId: this.departmentId() || null,
-      positionId: this.positionId() || null,
-      templateType: this.templateType() || null,
-      attachmentState: this.attachmentState() || null,
+      departmentIds: this.departmentIds().length
+        ? this.departmentIds().join(',')
+        : null,
+      positionIds: this.positionIds().length
+        ? this.positionIds().join(',')
+        : null,
+      templateTypes: this.templateTypes().length
+        ? this.templateTypes().join(',')
+        : null,
+      attachmentStates: this.attachmentStates().length
+        ? this.attachmentStates().join(',')
+        : null,
       code: this.code() || null,
       createdFrom: this.createdFrom() || null,
       createdTo: this.createdTo() || null,
@@ -864,10 +976,16 @@ export class QuestionnaireDirectoryPageComponent implements OnInit {
     this.error.set(null);
     this.api
       .listDirectory({
-        departmentId: this.departmentId() || undefined,
-        positionId: this.positionId() || undefined,
-        templateType: this.templateType() || undefined,
-        attachmentState: this.attachmentState() || undefined,
+        departmentIds: this.departmentIds().length
+          ? this.departmentIds()
+          : undefined,
+        positionIds: this.positionIds().length ? this.positionIds() : undefined,
+        templateTypes: this.templateTypes().length
+          ? this.templateTypes()
+          : undefined,
+        attachmentStates: this.attachmentStates().length
+          ? this.attachmentStates()
+          : undefined,
         code: this.code() || undefined,
         createdFrom: this.createdFrom() || undefined,
         createdTo: this.createdTo() || undefined,

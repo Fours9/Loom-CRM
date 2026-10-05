@@ -43,48 +43,50 @@ import { PeopleEmployeesApiService } from './people-employees-api.service';
     EmployeeDirectoryTableComponent,
   ],
   template: `
-    <section class="page" data-help-id="people.directory">
-      <header class="page-head">
+    <section class="page pw-stage" data-help-id="people.directory">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
+      <header class="page-head pw-page-head pw-rise">
         <div>
+          <p class="pw-eyebrow">Організація</p>
           <h1>Працівники</h1>
-          <p>Кадровий список Loom CRM · профіль: /people/:id</p>
+          <p class="pw-lead">Кадровий список і профілі команди</p>
         </div>
         @if (canCreate()) {
-          <a routerLink="/people/new" class="btn" data-help-id="people.directory.add">Додати</a>
+          <a routerLink="/people/new" class="btn pw-btn" data-help-id="people.directory.add">Додати</a>
         }
       </header>
 
       @if (error()) {
-        <p class="error">{{ error() }}</p>
+        <p class="error pw-rise" style="--pw-delay: 60ms">{{ error() }}</p>
       }
 
-      <loom-employee-directory-filters
-        data-help-id="people.directory.filters"
-        [filters]="filters()"
-        [options]="filterOptions()"
-        [sortBy]="sortBy()"
-        [sortDir]="sortDir()"
-        (filtersChange)="onFiltersChange($event)"
-        (sortByChange)="onPhoneSortBy($event)"
-        (toggleSortDir)="onToggleSortDir()"
-      />
+      <div class="filters-shell pw-panel pw-filters pw-rise" style="--pw-delay: 80ms">
+        <loom-employee-directory-filters
+          data-help-id="people.directory.filters"
+          [filters]="filters()"
+          [options]="filterOptions()"
+          [sortBy]="sortBy()"
+          [sortDir]="sortDir()"
+          (filtersChange)="onFiltersChange($event)"
+          (sortByChange)="onPhoneSortBy($event)"
+          (toggleSortDir)="onToggleSortDir()"
+        />
+      </div>
 
-      <loom-employee-directory-table
-        data-help-id="people.directory.table"
-        [items]="items()"
-        [loading]="loading()"
-        [sortBy]="sortBy()"
-        [sortDir]="sortDir()"
-        (sortToggle)="onSortToggle($event)"
-      />
+      <div class="list-shell pw-rise" style="--pw-delay: 140ms">
+        <loom-employee-directory-table
+          data-help-id="people.directory.table"
+          [items]="items()"
+          [loading]="loading()"
+          [sortBy]="sortBy()"
+          [sortDir]="sortDir()"
+          (sortToggle)="onSortToggle($event)"
+        />
+      </div>
     </section>
   `,
   styles: [
     `
-      .page {
-        display: grid;
-        gap: 1rem;
-      }
       .page-head {
         display: flex;
         flex-wrap: wrap;
@@ -92,32 +94,23 @@ import { PeopleEmployeesApiService } from './people-employees-api.service';
         gap: 1rem;
         align-items: start;
       }
-      .page-head h1 {
-        margin: 0;
-        font-size: 1.75rem;
-        color: var(--pw-text-strong);
+      .filters-shell {
+        position: relative;
+        z-index: 4;
+        isolation: isolate;
+        padding: 1rem 1.05rem;
+        overflow: visible;
       }
-      .page-head p {
-        margin: 0.25rem 0 0;
-        color: var(--pw-muted);
-      }
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: 0;
-        border-radius: 8px;
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        padding: 0.65rem 1rem;
-        min-height: 2.75rem;
-        font-weight: 600;
-        text-decoration: none;
-        cursor: pointer;
+      .list-shell {
+        position: relative;
+        z-index: 0;
+        isolation: isolate;
+        min-width: 0;
       }
       .error {
         color: var(--pw-danger);
         margin: 0;
+        font-weight: 600;
       }
     `,
   ],

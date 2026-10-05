@@ -1036,7 +1036,7 @@ import {
         position: fixed;
         right: 1rem;
         bottom: 1rem;
-        z-index: 50;
+        z-index: var(--pw-z-modal, 250);
         display: flex;
         align-items: flex-start;
         gap: 0.75rem;

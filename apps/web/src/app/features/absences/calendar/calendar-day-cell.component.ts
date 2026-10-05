@@ -47,59 +47,71 @@ import { parseIsoParts, todayIsoLocal } from './calendar-date.util';
         display: flex;
         flex-direction: column;
         width: 100%;
-        min-height: 3.5rem;
+        min-height: 3.75rem;
         height: 100%;
         padding: 0;
         border: 1px solid var(--pw-border);
-        border-radius: 6px;
-        background: var(--pw-surface);
+        border-radius: 10px;
+        background:
+          linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--pw-surface) 100%, transparent) 0%,
+            color-mix(in srgb, var(--pw-surface-2) 70%, var(--pw-surface)) 100%
+          );
         cursor: pointer;
         text-align: left;
         color: inherit;
         overflow: hidden;
+        box-shadow: 0 1px 3px color-mix(in srgb, var(--pw-shadow) 55%, transparent);
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease,
+          transform 0.15s ease;
       }
       .cell:hover {
-        border-color: var(--pw-accent);
+        border-color: color-mix(in srgb, var(--pw-accent) 50%, var(--pw-border));
+        box-shadow: 0 6px 16px var(--pw-shadow);
+        transform: translateY(-1px);
+      }
+      .cell:focus-visible {
+        outline: 2px solid var(--pw-accent);
+        outline-offset: 2px;
       }
       .cell.empty {
-        background: var(--pw-surface);
+        background: color-mix(in srgb, var(--pw-surface) 92%, var(--pw-surface-2));
       }
       .cell.today {
-        border-color: #2563eb;
-        border-width: 3px;
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, #2563eb 35%, transparent);
+        border-color: var(--pw-accent);
+        border-width: 2px;
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--pw-accent) 25%, transparent),
+          0 6px 16px var(--pw-shadow);
       }
       .cell.today .dom {
-        background: #2563eb;
-        color: #ffffff;
-      }
-      :host-context(html[data-theme='dark']) .cell.today {
-        border-color: #eab308;
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, #eab308 45%, transparent);
-      }
-      :host-context(html[data-theme='dark']) .cell.today .dom {
-        background: #eab308;
-        color: #422006;
+        background: var(--pw-accent);
+        color: var(--pw-on-accent, #fff);
       }
       .dom {
         position: absolute;
-        top: 0.15rem;
-        left: 0.2rem;
+        top: 0.2rem;
+        left: 0.22rem;
         z-index: 3;
-        font-size: 0.65rem;
-        font-weight: 700;
+        font-size: 0.68rem;
+        font-weight: 750;
         line-height: 1;
-        padding: 0.1rem 0.22rem;
-        border-radius: 3px;
-        background: color-mix(in srgb, var(--pw-surface) 82%, transparent);
+        padding: 0.18rem 0.32rem;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--pw-surface) 88%, transparent);
         color: var(--pw-text-strong, inherit);
+        border: 1px solid color-mix(in srgb, var(--pw-border) 70%, transparent);
         pointer-events: none;
+        backdrop-filter: blur(4px);
       }
       .bands {
         flex: 1;
         display: flex;
         flex-direction: column;
-        min-height: 3.5rem;
+        min-height: 3.75rem;
         width: 100%;
       }
       .bands > .band,
@@ -115,24 +127,25 @@ import { parseIsoParts, todayIsoLocal } from './calendar-date.util';
       }
       .more {
         position: absolute;
-        right: 0.12rem;
-        bottom: 0.12rem;
+        right: 0.18rem;
+        bottom: 0.16rem;
         z-index: 3;
-        font-size: 0.58rem;
-        font-weight: 700;
-        padding: 0.05rem 0.22rem;
+        font-size: 0.6rem;
+        font-weight: 750;
+        padding: 0.12rem 0.35rem;
         border-radius: 999px;
-        background: color-mix(in srgb, var(--pw-surface) 88%, transparent);
-        color: var(--pw-muted);
+        background: var(--pw-accent-soft);
+        color: var(--pw-accent);
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 22%, transparent);
         pointer-events: none;
       }
       @media (min-width: 641px) {
         .cell {
-          min-height: 7rem;
-          border-radius: 8px;
+          min-height: 7.25rem;
+          border-radius: 12px;
         }
         .bands {
-          min-height: 7rem;
+          min-height: 7.25rem;
         }
         .bands > .band,
         .bands > app-calendar-segment {
@@ -142,17 +155,21 @@ import { parseIsoParts, todayIsoLocal } from './calendar-date.util';
           display: block;
         }
         .dom {
-          top: 0.28rem;
-          left: 0.35rem;
-          font-size: 0.78rem;
-          padding: 0.12rem 0.3rem;
-          border-radius: 4px;
+          top: 0.35rem;
+          left: 0.4rem;
+          font-size: 0.8rem;
+          padding: 0.2rem 0.42rem;
         }
         .more {
-          right: 0.3rem;
-          bottom: 0.25rem;
+          right: 0.35rem;
+          bottom: 0.3rem;
           font-size: 0.7rem;
-          padding: 0.1rem 0.35rem;
+          padding: 0.14rem 0.42rem;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cell {
+          transition: none;
         }
       }
     `,

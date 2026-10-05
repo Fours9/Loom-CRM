@@ -704,14 +704,14 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   readonly moreMenuAssignmentId = signal<string | null>(null);
 
   readonly filterCode = signal('');
-  readonly filterTemplateType = signal('');
-  readonly filterStatus = signal('');
+  readonly filterTemplateTypes = signal<string[]>([]);
+  readonly filterStatuses = signal<string[]>([]);
   readonly filterCreatedFrom = signal('');
   readonly filterCreatedTo = signal('');
 
   readonly profileFilterFields: Array<
-    'code' | 'templateType' | 'status' | 'createdFrom' | 'createdTo'
-  > = ['code', 'templateType', 'status', 'createdFrom', 'createdTo'];
+    'code' | 'templateTypes' | 'statuses' | 'createdFrom' | 'createdTo'
+  > = ['code', 'templateTypes', 'statuses', 'createdFrom', 'createdTo'];
 
   readonly typeOptions = Object.entries(QUESTIONNAIRE_TYPE_LABELS).map(
     ([value, label]) => ({ value, label }),
@@ -723,8 +723,10 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   filterValue(): QuestionnaireFilterToolbarValue {
     return {
       code: this.filterCode() || undefined,
-      templateType: this.filterTemplateType() || undefined,
-      status: this.filterStatus() || undefined,
+      templateTypes: this.filterTemplateTypes().length
+        ? this.filterTemplateTypes()
+        : undefined,
+      statuses: this.filterStatuses().length ? this.filterStatuses() : undefined,
       createdFrom: this.filterCreatedFrom() || undefined,
       createdTo: this.filterCreatedTo() || undefined,
     };
@@ -738,8 +740,8 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
 
   onFilters(next: QuestionnaireFilterToolbarValue): void {
     this.filterCode.set(next.code ?? '');
-    this.filterTemplateType.set(next.templateType ?? '');
-    this.filterStatus.set(next.status ?? '');
+    this.filterTemplateTypes.set(next.templateTypes ?? []);
+    this.filterStatuses.set(next.statuses ?? []);
     this.filterCreatedFrom.set(next.createdFrom ?? '');
     this.filterCreatedTo.set(next.createdTo ?? '');
     this.reload();
@@ -987,8 +989,12 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
       list: this.api
         .listAssignments(this.employeeId, {
           code: this.filterCode() || undefined,
-          templateType: this.filterTemplateType() || undefined,
-          status: this.filterStatus() || undefined,
+          templateTypes: this.filterTemplateTypes().length
+            ? this.filterTemplateTypes()
+            : undefined,
+          statuses: this.filterStatuses().length
+            ? this.filterStatuses()
+            : undefined,
           createdFrom: this.filterCreatedFrom() || undefined,
           createdTo: this.filterCreatedTo() || undefined,
         })

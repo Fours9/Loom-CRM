@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   IsArray,
   IsDateString,
   IsIn,
@@ -24,6 +25,19 @@ import {
   type QuestionnaireType,
 } from '@loom/contracts-questionnaires';
 
+/** Normalize id lists from comma-separated string or repeated query params. */
+function parseIdList(value: unknown): string[] | undefined {
+  if (value == null || value === '') return undefined;
+  const raw = Array.isArray(value) ? value : String(value).split(',');
+  const ids = [
+    ...new Set(
+      raw
+        .map((id) => String(id).trim())
+        .filter(Boolean),
+    ),
+  ];
+  return ids.length ? ids : undefined;
+}
 export class CreateQuestionnaireAssignmentDto {
   @IsOptional()
   @IsUUID()
@@ -112,8 +126,20 @@ export class QuestionnaireDirectoryQueryDto {
   departmentId?: string;
 
   @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
+  departmentIds?: string[];
+
+  @IsOptional()
   @IsUUID()
   positionId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(100)
+  positionIds?: string[];
 
   @IsOptional()
   @IsDateString()
@@ -128,8 +154,20 @@ export class QuestionnaireDirectoryQueryDto {
   attachmentState?: QuestionnaireAttachmentState;
 
   @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsIn(['new', 'attached', 'detached', 'closed'], { each: true })
+  @ArrayMaxSize(8)
+  attachmentStates?: QuestionnaireAttachmentState[];
+
+  @IsOptional()
   @IsIn([...QUESTIONNAIRE_TYPES])
   templateType?: QuestionnaireType;
+
+  @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsIn([...QUESTIONNAIRE_TYPES], { each: true })
+  @ArrayMaxSize(8)
+  templateTypes?: QuestionnaireType[];
 
   @IsOptional()
   @Transform(trimString)
@@ -140,6 +178,12 @@ export class QuestionnaireDirectoryQueryDto {
   @IsOptional()
   @IsIn([...QUESTIONNAIRE_ASSIGNMENT_STATUSES])
   status?: QuestionnaireAssignmentStatus;
+
+  @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsIn([...QUESTIONNAIRE_ASSIGNMENT_STATUSES], { each: true })
+  @ArrayMaxSize(16)
+  statuses?: QuestionnaireAssignmentStatus[];
 
   @IsOptional()
   @IsIn([...QUESTIONNAIRE_DIRECTORY_SORT_BY])
@@ -178,8 +222,20 @@ export class QuestionnaireEmployeeListQueryDto {
   templateType?: QuestionnaireType;
 
   @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsIn([...QUESTIONNAIRE_TYPES], { each: true })
+  @ArrayMaxSize(8)
+  templateTypes?: QuestionnaireType[];
+
+  @IsOptional()
   @IsIn([...QUESTIONNAIRE_ASSIGNMENT_STATUSES])
   status?: QuestionnaireAssignmentStatus;
+
+  @IsOptional()
+  @Transform(({ value }) => parseIdList(value))
+  @IsIn([...QUESTIONNAIRE_ASSIGNMENT_STATUSES], { each: true })
+  @ArrayMaxSize(16)
+  statuses?: QuestionnaireAssignmentStatus[];
 
   @IsOptional()
   @IsDateString()

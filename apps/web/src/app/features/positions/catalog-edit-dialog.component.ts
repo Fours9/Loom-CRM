@@ -53,7 +53,7 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
       .backdrop {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: var(--pw-z-modal, 250);
         display: grid;
         place-items: center;
         align-items: start;

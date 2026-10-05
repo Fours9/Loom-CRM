@@ -27,8 +27,11 @@ export type QuestionnaireDirectoryScope =
 export type QuestionnaireAssignmentCommonFilters = {
   code?: string;
   templateType?: QuestionnaireType;
+  templateTypes?: QuestionnaireType[];
   status?: QuestionnaireAssignmentStatus;
+  statuses?: QuestionnaireAssignmentStatus[];
   attachmentState?: QuestionnaireAttachmentState;
+  attachmentStates?: QuestionnaireAttachmentState[];
   createdFrom?: string;
   createdTo?: string;
 };
@@ -36,6 +39,8 @@ export type QuestionnaireAssignmentCommonFilters = {
 export type QuestionnaireDirectoryFilters = QuestionnaireAssignmentCommonFilters & {
   departmentId?: string;
   positionId?: string;
+  departmentIds?: string[];
+  positionIds?: string[];
   sortBy?: QuestionnaireDirectorySortBy;
   sortDir?: 'asc' | 'desc';
   limit: number;
@@ -121,13 +126,37 @@ export function applyAssignmentFilters(
       codePattern: `${escapeIlikePattern(code)}%`,
     });
   }
-  if (filters.templateType) {
+
+  const templateTypes = [
+    ...new Set(
+      [
+        ...(filters.templateTypes ?? []),
+        ...(filters.templateType ? [filters.templateType] : []),
+      ].filter(Boolean),
+    ),
+  ] as QuestionnaireType[];
+  if (templateTypes.length === 1) {
     qb.andWhere('tmpl.type = :templateType', {
-      templateType: filters.templateType,
+      templateType: templateTypes[0],
     });
+  } else if (templateTypes.length > 1) {
+    qb.andWhere('tmpl.type IN (:...templateTypes)', { templateTypes });
   }
-  if (filters.status) {
-    qb.andWhere('a.status = :filterStatus', { filterStatus: filters.status });
+
+  const statuses = [
+    ...new Set(
+      [
+        ...(filters.statuses ?? []),
+        ...(filters.status ? [filters.status] : []),
+      ].filter(Boolean),
+    ),
+  ] as QuestionnaireAssignmentStatus[];
+  if (statuses.length === 1) {
+    qb.andWhere('a.status = :filterStatus', { filterStatus: statuses[0] });
+  } else if (statuses.length > 1) {
+    qb.andWhere('a.status IN (:...filterStatuses)', {
+      filterStatuses: statuses,
+    });
   }
 
   const range = createdAtRangeBounds(filters);
@@ -142,18 +171,40 @@ export function applyAssignmentFilters(
     });
   }
 
-  if (!includeAttachmentState || !filters.attachmentState) return;
+  if (!includeAttachmentState) return;
 
-  if (filters.attachmentState === 'closed') {
-    qb.andWhere('a.status = :closedStatus', { closedStatus: 'closed' });
-  } else if (filters.attachmentState === 'detached') {
-    qb.andWhere('a.status = :cancelledStatus', { cancelledStatus: 'cancelled' });
-  } else if (filters.attachmentState === 'new') {
-    qb.andWhere('a.status = :newStatus', { newStatus: 'new' });
-  } else if (filters.attachmentState === 'attached') {
-    qb.andWhere('a.status IN (:...attachedStatuses)', {
-      attachedStatuses: [...ATTACHED_STATUSES],
-    });
+  const attachmentStates = [
+    ...new Set(
+      [
+        ...(filters.attachmentStates ?? []),
+        ...(filters.attachmentState ? [filters.attachmentState] : []),
+      ].filter(Boolean),
+    ),
+  ] as QuestionnaireAttachmentState[];
+  if (!attachmentStates.length) return;
+
+  const parts: string[] = [];
+  const params: Record<string, unknown> = {};
+  if (attachmentStates.includes('closed')) {
+    parts.push(`a.status = :attClosed`);
+    params.attClosed = 'closed';
+  }
+  if (attachmentStates.includes('detached')) {
+    parts.push(`a.status = :attDetached`);
+    params.attDetached = 'cancelled';
+  }
+  if (attachmentStates.includes('new')) {
+    parts.push(`a.status = :attNew`);
+    params.attNew = 'new';
+  }
+  if (attachmentStates.includes('attached')) {
+    parts.push(`a.status IN (:...attAttached)`);
+    params.attAttached = [...ATTACHED_STATUSES];
+  }
+  if (parts.length === 1) {
+    qb.andWhere(parts[0], params);
+  } else if (parts.length > 1) {
+    qb.andWhere(`(${parts.join(' OR ')})`, params);
   }
 }
 
@@ -162,16 +213,39 @@ export function applyDirectoryFilters(
   qb: SelectQueryBuilder<QuestionnaireAssignment>,
   filters: QuestionnaireDirectoryFilters,
 ): void {
-  if (filters.departmentId) {
+  const departmentIds = [
+    ...new Set(
+      [
+        ...(filters.departmentIds ?? []),
+        ...(filters.departmentId ? [filters.departmentId] : []),
+      ].filter(Boolean),
+    ),
+  ];
+  const positionIds = [
+    ...new Set(
+      [
+        ...(filters.positionIds ?? []),
+        ...(filters.positionId ? [filters.positionId] : []),
+      ].filter(Boolean),
+    ),
+  ];
+
+  if (departmentIds.length === 1) {
     qb.andWhere('emp.department_id = :departmentId', {
-      departmentId: filters.departmentId,
+      departmentId: departmentIds[0],
     });
+  } else if (departmentIds.length > 1) {
+    qb.andWhere('emp.department_id IN (:...departmentIds)', { departmentIds });
   }
-  if (filters.positionId) {
+
+  if (positionIds.length === 1) {
     qb.andWhere('emp.position_id = :positionId', {
-      positionId: filters.positionId,
+      positionId: positionIds[0],
     });
+  } else if (positionIds.length > 1) {
+    qb.andWhere('emp.position_id IN (:...positionIds)', { positionIds });
   }
+
   applyAssignmentFilters(qb, filters, { includeAttachmentState: true });
 }
 

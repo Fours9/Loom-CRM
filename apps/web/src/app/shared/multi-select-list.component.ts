@@ -5,10 +5,16 @@ import {
   HostListener,
   Input,
   OnChanges,
+  OnDestroy,
   Output,
   SimpleChanges,
   inject,
 } from '@angular/core';
+import {
+  claimPwOverlay,
+  releasePwOverlay,
+  type PwOverlayHandle,
+} from './ui/pw-overlay-session';
 
 export interface MultiSelectItem {
   id: string;
@@ -80,7 +86,12 @@ export interface MultiSelectItem {
       </div>
 
       @if (open) {
-        <ul class="dropdown" role="listbox" aria-multiselectable="true" (click)="$event.stopPropagation()">
+        <ul
+          class="pw-menu dropdown"
+          role="listbox"
+          aria-multiselectable="true"
+          (click)="$event.stopPropagation()"
+        >
           @if (showSelectAll && visibleItems.length > 0 && !query.trim()) {
             <li
               role="option"
@@ -120,29 +131,57 @@ export interface MultiSelectItem {
       }
     </div>
   `,
+  host: {
+    '[class.open]': 'open',
+  },
   styles: [
     `
+      :host {
+        display: block;
+        position: relative;
+        z-index: 1;
+        overflow: visible;
+      }
+      :host(.open) {
+        z-index: 30;
+      }
       .ms {
         position: relative;
         width: 100%;
+        z-index: 1;
+        overflow: visible;
+      }
+      .ms.open {
+        z-index: 30;
       }
       .trigger {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 0.5rem;
         box-sizing: border-box;
         width: 100%;
-        height: var(--ms-trigger-height, 2.75rem);
-        padding: 0.35rem 0.55rem 0.35rem 0.65rem;
-        border: 1px solid var(--pw-border-strong);
-        border-radius: 8px;
-        background: var(--pw-surface);
+        min-height: var(--pw-control-h, 2.6rem);
+        height: var(--ms-trigger-height, var(--pw-control-h, 2.6rem));
+        padding: 0.35rem 0.7rem;
+        border: 1px solid var(--pw-border-strong, var(--pw-border));
+        border-radius: var(--pw-radius, 12px);
+        background: var(--pw-input-bg, var(--pw-surface));
         text-align: left;
         cursor: pointer;
+        font-weight: 600;
+        transition:
+          border-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+      .trigger:hover {
+        border-color: color-mix(in srgb, var(--pw-accent) 40%, var(--pw-border));
       }
       .ms.open .trigger {
         border-color: var(--pw-accent);
-        box-shadow: 0 0 0 2px rgba(31, 75, 122, 0.12);
+        box-shadow: var(
+          --pw-focus-ring,
+          0 0 0 3px color-mix(in srgb, var(--pw-accent) 28%, transparent)
+        );
       }
       .ms.disabled .trigger {
         opacity: 0.45;
@@ -157,14 +196,17 @@ export interface MultiSelectItem {
         height: 100%;
         overflow-x: hidden;
         overflow-y: auto;
-        align-content: flex-start;
+        align-content: center;
+        align-items: center;
         scrollbar-gutter: stable;
         scrollbar-width: thin;
+        scrollbar-color: var(--pw-scrollbar-thumb) var(--pw-scrollbar-track);
       }
       .placeholder {
         color: var(--pw-muted);
         font-size: 0.95rem;
-        line-height: 1.9rem;
+        font-weight: 500;
+        line-height: 1.4;
       }
       .filter {
         flex: 1 1 7rem;
@@ -176,10 +218,12 @@ export interface MultiSelectItem {
         background: transparent;
         color: var(--pw-text);
         font: inherit;
+        font-weight: 600;
         outline: none;
       }
       .filter::placeholder {
         color: var(--pw-muted);
+        font-weight: 500;
       }
       .chip {
         display: inline-flex;
@@ -215,43 +259,24 @@ export interface MultiSelectItem {
         color: var(--pw-muted);
         flex-shrink: 0;
         font-size: 0.75rem;
-        margin-top: 0.4rem;
+        line-height: 1;
+        transition: transform 0.18s ease;
+      }
+      .ms.open .caret {
+        transform: rotate(180deg);
+        color: var(--pw-accent);
       }
       .dropdown {
         position: absolute;
-        z-index: 20;
-        top: calc(100% + 4px);
+        z-index: 40;
+        top: calc(100% + 6px);
         bottom: auto;
         left: 0;
         right: 0;
-        margin: 0;
-        padding: 0.35rem;
-        list-style: none;
-        max-height: 14rem;
-        overflow: auto;
-        border: 1px solid var(--pw-border-strong);
-        border-radius: 8px;
-        background: var(--pw-surface);
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
       }
       .ms.drop-up .dropdown {
         top: auto;
-        bottom: calc(100% + 4px);
-      }
-      .dropdown li {
-        display: flex;
-        align-items: center;
-        gap: 0.55rem;
-        padding: 0.55rem 0.65rem;
-        border-radius: 6px;
-        cursor: pointer;
-        color: var(--pw-text);
-      }
-      .dropdown li:hover {
-        background: var(--pw-hover);
-      }
-      .dropdown li.selected {
-        background: var(--pw-accent-soft);
+        bottom: calc(100% + 6px);
       }
       .check {
         display: inline-flex;
@@ -259,7 +284,7 @@ export interface MultiSelectItem {
         justify-content: center;
         width: 1.1rem;
         height: 1.1rem;
-        border: 1px solid var(--pw-muted);
+        border: 1px solid color-mix(in srgb, var(--pw-muted) 70%, transparent);
         border-radius: 4px;
         font-size: 0.75rem;
         color: var(--pw-accent);
@@ -267,23 +292,22 @@ export interface MultiSelectItem {
         background: var(--pw-surface);
       }
       .dropdown li.selected .check {
-        border-color: var(--pw-accent);
-        background: var(--pw-accent);
+        border-color: color-mix(in srgb, var(--pw-on-accent) 55%, transparent);
+        background: color-mix(in srgb, var(--pw-on-accent) 18%, transparent);
         color: var(--pw-on-accent);
       }
-      .empty {
-        color: var(--pw-muted);
-        cursor: default;
-      }
-      .empty:hover {
-        background: transparent;
+      @media (prefers-reduced-motion: reduce) {
+        .caret,
+        .trigger {
+          transition: none !important;
+        }
       }
     `,
   ],
 })
-export class MultiSelectListComponent implements OnChanges {
+export class MultiSelectListComponent implements OnChanges, OnDestroy, PwOverlayHandle {
   private readonly host = inject(ElementRef<HTMLElement>);
-  private readonly dropdownMaxPx = 14 * 16;
+  private readonly dropdownMaxPx = 16 * 16;
   private readonly dropdownGapPx = 4;
 
   @Input() items: MultiSelectItem[] = [];
@@ -331,10 +355,18 @@ export class MultiSelectListComponent implements OnChanges {
       this.localSelectedIds = Array.isArray(this.selectedIds) ? [...this.selectedIds] : [];
     }
     if (this.disabled) {
-      this.open = false;
-      this.openUp = false;
-      this.query = '';
+      this.close();
     }
+  }
+
+  ngOnDestroy(): void {
+    releasePwOverlay(this);
+  }
+
+  closeFromOverlaySession(): void {
+    this.open = false;
+    this.openUp = false;
+    this.query = '';
   }
 
   @HostListener('document:click', ['$event'])
@@ -356,23 +388,16 @@ export class MultiSelectListComponent implements OnChanges {
     event.preventDefault();
     event.stopPropagation();
     if (this.disabled) return;
-    this.open = !this.open;
     if (this.open) {
-      this.openUp = this.shouldOpenUp(this.estimatedDropdownHeight());
-      setTimeout(() => {
-        this.updatePlacement();
-        this.focusFilter();
-      });
-    } else {
       this.close();
+      return;
     }
+    this.openDropdown();
   }
 
   openFromFilter(): void {
     if (this.disabled || this.open) return;
-    this.open = true;
-    this.openUp = this.shouldOpenUp(this.estimatedDropdownHeight());
-    setTimeout(() => this.updatePlacement());
+    this.openDropdown();
   }
 
   onQuery(event: Event): void {
@@ -399,17 +424,6 @@ export class MultiSelectListComponent implements OnChanges {
     if (this.searchable) return;
     event.preventDefault();
     this.onTriggerClick(event);
-  }
-
-  private close(): void {
-    this.open = false;
-    this.openUp = false;
-    this.query = '';
-  }
-
-  private focusFilter(): void {
-    const input = this.host.nativeElement.querySelector('.filter') as HTMLInputElement | null;
-    input?.focus();
   }
 
   isSelected(id: string): boolean {
@@ -451,6 +465,28 @@ export class MultiSelectListComponent implements OnChanges {
     const next = this.localSelectedIds.filter((x) => x !== id);
     this.localSelectedIds = next;
     this.selectedIdsChange.emit([...next]);
+  }
+
+  private openDropdown(): void {
+    claimPwOverlay(this);
+    this.open = true;
+    this.openUp = this.shouldOpenUp(this.estimatedDropdownHeight());
+    setTimeout(() => {
+      this.updatePlacement();
+      this.focusFilter();
+    });
+  }
+
+  private close(): void {
+    this.open = false;
+    this.openUp = false;
+    this.query = '';
+    releasePwOverlay(this);
+  }
+
+  private focusFilter(): void {
+    const input = this.host.nativeElement.querySelector('.filter') as HTMLInputElement | null;
+    input?.focus();
   }
 
   private estimatedDropdownHeight(): number {

@@ -22,7 +22,7 @@ import { PasswordVisibilityToggleComponent } from '../../shared/password-visibil
     <div class="login app-shell">
       <button
         type="button"
-        class="theme-toggle"
+        class="theme-toggle pw-rise"
         (click)="theme.toggle()"
         [attr.aria-label]="
           theme.mode() === 'dark' ? 'Увімкнути світлу тему' : 'Увімкнути темну тему'
@@ -36,13 +36,14 @@ import { PasswordVisibilityToggleComponent } from '../../shared/password-visibil
         }
       </button>
 
-      <section class="card">
-        <div class="brand">
+      <section class="card pw-stage">
+        <span class="pw-stage__glow" aria-hidden="true"></span>
+        <div class="brand pw-rise">
           <img
             class="brand-mark"
             src="assets/loom-mark.png"
-            width="44"
-            height="44"
+            width="56"
+            height="56"
             alt=""
           />
           <span class="brand-text">
@@ -50,14 +51,14 @@ import { PasswordVisibilityToggleComponent } from '../../shared/password-visibil
             <span class="brand-module">{{ moduleName }}</span>
           </span>
         </div>
-        <blockquote class="tagline">
+        <blockquote class="tagline pw-rise" style="--pw-delay: 70ms">
           <p>{{ tagline }}</p>
         </blockquote>
-        <h1>Вхід</h1>
+        <h1 class="pw-rise" style="--pw-delay: 110ms">Вхід</h1>
         @if (error()) {
           <p class="error">{{ error() }}</p>
         }
-        <form class="login-form" (ngSubmit)="submit()">
+        <form class="login-form pw-rise" style="--pw-delay: 150ms" (ngSubmit)="submit()">
           <label>
             Email
             <input [(ngModel)]="email" name="email" type="email" autocomplete="username" />
@@ -79,15 +80,10 @@ import { PasswordVisibilityToggleComponent } from '../../shared/password-visibil
               />
             </div>
           </label>
-          <button type="submit" class="btn" [disabled]="busy()">
+          <button type="submit" class="btn pw-btn" [disabled]="busy()">
             Увійти
           </button>
         </form>
-        @if (showGuest()) {
-          <button type="button" class="link" (click)="guest()">
-            Продовжити як гість (dev)
-          </button>
-        }
       </section>
     </div>
   `,
@@ -116,81 +112,99 @@ import { PasswordVisibilityToggleComponent } from '../../shared/password-visibil
         align-items: center;
         gap: 0.35rem;
         border: 1px solid var(--pw-border-strong);
-        background: var(--pw-surface);
+        background: color-mix(in srgb, var(--pw-surface) 92%, transparent);
         color: var(--pw-text);
-        border-radius: 8px;
-        padding: 0.4rem 0.75rem;
+        border-radius: 12px;
+        padding: 0.45rem 0.85rem;
         cursor: pointer;
-        font-weight: 600;
+        font-weight: 700;
         z-index: 5;
         min-height: 2.75rem;
+        box-shadow: 0 4px 16px var(--pw-shadow);
+        backdrop-filter: blur(8px);
+        transition:
+          border-color 0.16s ease,
+          color 0.16s ease,
+          background 0.16s ease;
+      }
+      .theme-toggle:hover {
+        border-color: var(--pw-accent);
+        color: var(--pw-accent);
+        background: var(--pw-accent-soft);
       }
       .card {
-        width: min(420px, 100%);
-        background: var(--pw-surface);
-        border: 1px solid var(--pw-border);
-        border-radius: 12px;
-        padding: 2rem;
+        width: min(440px, 100%);
+        padding: clamp(1.5rem, 4vw, 2.15rem);
         display: grid;
-        gap: 1rem;
-        box-shadow: 0 8px 24px var(--pw-shadow);
+        gap: 1.05rem;
       }
       .brand {
         display: inline-flex;
         align-items: center;
-        gap: 0.65rem;
+        gap: 0.75rem;
         width: fit-content;
       }
       .brand-mark {
-        width: 44px;
-        height: 44px;
-        border-radius: 10px;
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
         display: block;
         flex-shrink: 0;
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--pw-accent) 18%, var(--pw-border)),
+          0 8px 22px var(--pw-shadow);
       }
       .brand-text {
         display: grid;
         gap: 0.15rem;
       }
       .brand-name {
-        font-size: 1.5rem;
-        font-weight: 700;
+        font-size: clamp(1.55rem, 4vw, 1.85rem);
+        font-weight: 750;
+        letter-spacing: -0.03em;
         color: var(--pw-accent);
-        line-height: 1.1;
+        line-height: 1.05;
       }
       .brand-module {
-        font-size: 0.9rem;
-        font-weight: 500;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
         color: var(--pw-muted);
       }
       .tagline {
         margin: 0;
-        padding: 0.85rem 1rem;
-        border: 1px solid var(--pw-border);
+        padding: 0.95rem 1.05rem;
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 18%, var(--pw-border));
         border-left: 3px solid var(--pw-accent);
-        border-radius: 10px;
-        background: var(--pw-surface-2);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--pw-surface) 88%, transparent);
+        box-shadow: 0 2px 12px var(--pw-shadow);
       }
       .tagline p {
         margin: 0;
-        font-size: 0.95rem;
-        font-weight: 600;
+        font-size: 1rem;
+        font-weight: 650;
+        line-height: 1.4;
         color: var(--pw-accent);
       }
       h1 {
-        margin: 0.25rem 0 0;
-        font-size: 1.15rem;
-        font-weight: 600;
+        margin: 0.1rem 0 0;
+        font-size: clamp(1.35rem, 3vw, 1.55rem);
+        font-weight: 750;
+        letter-spacing: -0.02em;
         color: var(--pw-text-strong);
       }
       .error {
         margin: 0;
         color: var(--pw-danger);
+        font-weight: 600;
       }
       label {
         display: grid;
         gap: 0.35rem;
-        font-size: 0.9rem;
+        font-size: 0.82rem;
+        font-weight: 700;
         color: var(--pw-muted);
       }
       .login-form {
@@ -210,34 +224,27 @@ import { PasswordVisibilityToggleComponent } from '../../shared/password-visibil
         border: 1px solid var(--pw-border-strong);
         background: var(--pw-input-bg);
         color: var(--pw-text);
-        border-radius: 8px;
-        padding: 0.65rem 0.75rem;
-        min-height: 2.75rem;
+        border-radius: 12px;
+        padding: 0.7rem 0.85rem;
+        min-height: 2.85rem;
+        transition:
+          border-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+      input:focus-visible {
+        outline: none;
+        border-color: var(--pw-accent);
+        box-shadow: var(--pw-focus-ring, 0 0 0 3px color-mix(in srgb, var(--pw-accent) 28%, transparent));
       }
       .btn {
-        margin-top: 0.25rem;
-        padding: 0.75rem 1rem;
-        border: 0;
-        border-radius: 8px;
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        font-weight: 600;
-        min-height: 2.75rem;
-        cursor: pointer;
+        margin-top: 0.2rem;
+        width: 100%;
       }
       .btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
-      }
-      .link {
-        background: transparent;
-        border: 0;
-        color: var(--pw-muted);
-        font-size: 0.9rem;
-        text-align: center;
-        cursor: pointer;
-        min-height: auto;
-        padding: 0.25rem;
+        transform: none;
+        box-shadow: none;
       }
     `,
   ],
@@ -260,14 +267,6 @@ export class LoginPageComponent {
 
   togglePassword(): void {
     this.showPassword.update((v) => !v);
-  }
-
-  showGuest(): boolean {
-    return environment.allowGuestMode;
-  }
-
-  guest(): void {
-    void this.router.navigate(['/'], { queryParams: { guest: '1' } });
   }
 
   submit(): void {

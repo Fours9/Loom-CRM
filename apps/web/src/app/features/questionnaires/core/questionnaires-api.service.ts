@@ -34,7 +34,9 @@ export class QuestionnairesApiService {
     filters?: {
       code?: string;
       templateType?: string;
+      templateTypes?: string[];
       status?: string;
+      statuses?: string[];
       createdFrom?: string;
       createdTo?: string;
     },
@@ -42,7 +44,12 @@ export class QuestionnairesApiService {
     const params: Record<string, string> = { employeeId };
     if (filters) {
       for (const [k, v] of Object.entries(filters)) {
-        if (v !== undefined && v !== null && v !== '') params[k] = String(v);
+        if (v === undefined || v === null || v === '') continue;
+        if (Array.isArray(v)) {
+          if (v.length) params[k] = v.join(',');
+          continue;
+        }
+        params[k] = String(v);
       }
     }
     return this.http.get<QuestionnaireAssignmentListResponse>(
@@ -75,12 +82,17 @@ export class QuestionnairesApiService {
   listDirectory(params: {
     departmentId?: string;
     positionId?: string;
+    departmentIds?: string[];
+    positionIds?: string[];
+    templateType?: string;
+    templateTypes?: string[];
+    attachmentState?: QuestionnaireAttachmentState | string;
+    attachmentStates?: string[];
     createdFrom?: string;
     createdTo?: string;
-    attachmentState?: QuestionnaireAttachmentState | string;
-    templateType?: QuestionnaireType | string;
     code?: string;
     status?: string;
+    statuses?: string[];
     sortBy?: QuestionnaireDirectorySortBy | string;
     sortDir?: string;
     limit?: number;
@@ -88,7 +100,12 @@ export class QuestionnairesApiService {
   }): Observable<QuestionnaireDirectoryResponse> {
     const q: Record<string, string> = {};
     for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null && v !== '') q[k] = String(v);
+      if (v === undefined || v === null || v === '') continue;
+      if (Array.isArray(v)) {
+        if (v.length) q[k] = v.join(',');
+        continue;
+      }
+      q[k] = String(v);
     }
     return this.http.get<QuestionnaireDirectoryResponse>(
       `/api/v1/questionnaires/directory`,

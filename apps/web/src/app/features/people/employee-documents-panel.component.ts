@@ -79,10 +79,10 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
   template: `
     <div class="panel">
       @if (canUpload()) {
-        <div class="toolbar">
+        <div class="toolbar pw-rise">
           <button
             type="button"
-            class="btn primary"
+            class="btn primary pw-btn"
             data-help-id="people.documents.upload"
             (click)="openUploadDialog()"
           >
@@ -94,7 +94,7 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         </div>
       }
 
-      <div class="filters" data-help-id="people.documents.filters">
+      <div class="filters pw-rise" style="--pw-delay: 60ms" data-help-id="people.documents.filters">
         <label>
           Тип
           <select [(ngModel)]="filterType" (ngModelChange)="applyFilters()">
@@ -133,7 +133,7 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
       </div>
 
       @if (loading()) {
-        <p class="muted">Завантаження документів…</p>
+        <p class="muted pw-rise" style="--pw-delay: 100ms">Завантаження документів…</p>
       } @else {
         @if (documentsFailed()) {
           <p class="warn">Не вдалося завантажити документи профілю.</p>
@@ -143,9 +143,9 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         }
 
         @if (!visibleRows().length) {
-          <p class="muted">Документів ще немає.</p>
+          <p class="muted empty-state pw-rise" style="--pw-delay: 110ms">Документів ще немає.</p>
         } @else {
-          <ul class="doc-list" data-help-id="people.documents.list">
+          <ul class="doc-list pw-rise" style="--pw-delay: 120ms" data-help-id="people.documents.list">
             @for (row of visibleRows(); track row.source + ':' + row.id) {
               <li class="doc-row">
                 <div class="doc-head">
@@ -257,27 +257,59 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         justify-content: flex-end;
       }
       .filters, .doc-row {
-        display: grid; gap: 0.6rem;
-        padding: 0.85rem; border: 1px solid var(--pw-border);
-        border-radius: 10px; background: var(--pw-surface);
+        display: grid; gap: 0.65rem;
+        padding: 0.95rem 1rem;
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 12%, var(--pw-border));
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--pw-surface) 94%, transparent);
+        box-shadow: 0 2px 10px var(--pw-shadow);
+        transition:
+          border-color 0.18s ease,
+          box-shadow 0.18s ease,
+          transform 0.18s ease;
       }
+      .doc-row:hover {
+        border-color: var(--pw-accent);
+        box-shadow: 0 10px 28px var(--pw-shadow);
+        transform: translateY(-2px);
+      }
+      .doc-row:nth-child(1) { animation: pw-rise 0.5s ease both; animation-delay: 40ms; }
+      .doc-row:nth-child(2) { animation: pw-rise 0.5s ease both; animation-delay: 80ms; }
+      .doc-row:nth-child(3) { animation: pw-rise 0.5s ease both; animation-delay: 120ms; }
+      .doc-row:nth-child(4) { animation: pw-rise 0.5s ease both; animation-delay: 160ms; }
+      .doc-row:nth-child(5) { animation: pw-rise 0.5s ease both; animation-delay: 200ms; }
+      .doc-row:nth-child(n + 6) { animation: pw-rise 0.5s ease both; animation-delay: 240ms; }
       .filters {
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         align-items: end;
+        position: relative;
+        z-index: 4;
+        overflow: visible;
       }
-      label { display: grid; gap: 0.25rem; font-size: 0.85rem; }
+      label {
+        display: grid;
+        gap: 0.3rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--pw-muted);
+      }
       input, select {
-        padding: 0.45rem 0.55rem; border: 1px solid var(--pw-border);
-        border-radius: 8px; background: var(--pw-bg); color: inherit;
+        padding: 0.5rem 0.65rem;
+        border: 1px solid var(--pw-border-strong);
+        border-radius: 10px;
+        background: var(--pw-input-bg, var(--pw-bg));
+        color: inherit;
+        min-height: 2.6rem;
       }
       .doc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
       .doc-head { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
       .doc-head-actions { display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0; }
       .doc-title { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; min-width: 0; }
       .badge {
-        display: inline-block; padding: 0.1rem 0.45rem;
-        border-radius: 999px; font-size: 0.75rem;
+        display: inline-block; padding: 0.14rem 0.55rem;
+        border-radius: 999px; font-size: 0.75rem; font-weight: 700;
         background: color-mix(in srgb, var(--pw-accent) 15%, transparent);
+        color: var(--pw-accent);
       }
       .badge.confidential {
         background: color-mix(in srgb, #b42318 18%, transparent);
@@ -293,28 +325,44 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
       .file-actions { display: flex; gap: 0.25rem; align-items: center; flex-shrink: 0; }
       .icon-btn {
         display: inline-grid; place-items: center;
-        width: 2rem; height: 2rem; padding: 0;
-        border: 1px solid var(--pw-border); border-radius: 8px;
-        background: var(--pw-bg); color: var(--pw-accent);
+        width: 2.15rem; height: 2.15rem; padding: 0;
+        border: 1px solid var(--pw-border); border-radius: 10px;
+        background: var(--pw-surface); color: var(--pw-accent);
         cursor: pointer; text-decoration: none;
+        transition: background 0.15s ease, border-color 0.15s ease;
       }
-      .icon-btn:hover { background: color-mix(in srgb, var(--pw-accent) 12%, var(--pw-bg)); }
+      .icon-btn:hover {
+        background: color-mix(in srgb, var(--pw-accent) 12%, var(--pw-surface));
+        border-color: var(--pw-accent);
+      }
       .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .icon-btn.danger { color: #b42318; }
       .icon-btn svg { width: 1.05rem; height: 1.05rem; }
       .btn {
-        border: 1px solid var(--pw-border); border-radius: 8px; padding: 0.4rem 0.75rem;
-        background: var(--pw-bg); color: var(--pw-text); cursor: pointer; width: fit-content;
+        border: 1px solid var(--pw-border); border-radius: 14px; padding: 0.5rem 0.9rem;
+        background: var(--pw-surface); color: var(--pw-text); cursor: pointer; width: fit-content;
+        font-weight: 700;
       }
       .btn.primary {
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        border-color: transparent;
-        font-weight: 600;
+        /* shared .pw-btn */
       }
       .muted { color: var(--pw-muted); margin: 0; }
-      .warn { color: #b54708; margin: 0; }
-      .ok { color: #067647; }
+      .empty-state {
+        padding: 1.15rem 1rem;
+        border: 1px dashed color-mix(in srgb, var(--pw-accent) 28%, var(--pw-border));
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--pw-accent) 5%, var(--pw-surface-2));
+        font-weight: 600;
+      }
+      .warn { color: #b54708; margin: 0; font-weight: 600; }
+      .ok { color: #067647; font-weight: 700; }
+      @media (prefers-reduced-motion: reduce) {
+        .doc-row {
+          animation: none !important;
+          transition: none !important;
+        }
+        .doc-row:hover { transform: none; }
+      }
     `,
   ],
 })

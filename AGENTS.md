@@ -74,3 +74,4 @@ Use the exact `packageManager` from root `package.json` (`pnpm@10.15.0`) via Cor
 
 - Absences / employee-facing UI strings: Ukrainian (i18n), matching ProjectWeekend copy where ported.
 - Agent-facing files (`AGENTS.md`, `.cursor/rules`) may stay English.
+- Filter / dropdown overlays: follow [`.cursor/rules/web-filters-overlays.mdc`](.cursor/rules/web-filters-overlays.mdc) — stacking, exclusive open, shared `pw-menu`, inclusive multi-select. Overlap with titles/tables is not acceptable.

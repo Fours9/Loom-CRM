@@ -83,20 +83,32 @@ import type {
   `,
   styles: [
     `
+      :host {
+        display: block;
+        position: relative;
+        z-index: 1;
+        overflow: visible;
+      }
       .filters {
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem;
         align-items: end;
+        position: relative;
+        z-index: 1;
+        overflow: visible;
       }
       .filter-block {
         display: grid;
         gap: 0.35rem;
-        font-size: 0.9rem;
-        color: var(--pw-text);
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--pw-muted);
         width: 100%;
         flex: 1 1 100%;
         min-width: 0;
+        overflow: visible;
+        position: relative;
       }
       .filter-block.narrow {
         width: 100%;
@@ -106,13 +118,19 @@ import type {
         width: 100%;
         flex: 1 1 100%;
         align-self: end;
-        padding: 0.55rem 0.7rem;
+        padding: 0.55rem 0.75rem;
         border: 1px solid var(--pw-border-strong);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--pw-input-bg);
         color: var(--pw-text);
         min-height: 2.75rem;
         box-sizing: border-box;
+        font-weight: 500;
+      }
+      .filters > input:focus-visible {
+        outline: none;
+        box-shadow: var(--pw-focus-ring, 0 0 0 3px color-mix(in srgb, var(--pw-accent) 28%, transparent));
+        border-color: var(--pw-accent);
       }
       .phone-sort {
         grid-template-columns: 1fr auto;
@@ -125,14 +143,14 @@ import type {
         min-width: 2.75rem;
         min-height: 2.75rem;
         border: 1px solid var(--pw-border-strong);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--pw-surface);
         cursor: pointer;
       }
       select {
         padding: 0.55rem 0.7rem;
         border: 1px solid var(--pw-border-strong);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--pw-input-bg);
         color: var(--pw-text);
         min-height: 2.75rem;

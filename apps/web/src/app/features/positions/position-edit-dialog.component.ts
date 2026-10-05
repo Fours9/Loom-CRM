@@ -205,7 +205,7 @@ import { PositionManagementFacade } from './position-management.facade';
       .backdrop {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: var(--pw-z-modal, 250);
         display: grid;
         place-items: center;
         align-items: start;

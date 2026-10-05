@@ -1,0 +1,41 @@
+---
+description: CRM filter dropdowns, overlay stacking, and shared select styling — prevent z-index / overlap / inconsistent list bugs
+globs: apps/web/**/*.{ts,css}
+alwaysApply: false
+---
+
+# Web filters & overlays (hard)
+
+Dropdown / multi-select / date popovers overlapping titles, tables, or each other is a **P0 UX bug**. Do not ship filter UI that can regress this.
+
+## Stacking (stage)
+
+Inside `.pw-stage`:
+
+| Layer | z-index | Role |
+|-------|---------|------|
+| lists / tables (`.list-shell`, `.table-wrap`, `.pw-table-shell`) | `0` | stay under menus |
+| `.pw-page-head` | `2` | title chrome (idle) |
+| `.pw-filters` | `6` | filter bars + open menus (incl. drop-up) |
+| `.pw-page-head.overlay-open` | `7` | header chrome menus (e.g. blank print) while open |
+| dialog hosts | `--pw-z-modal` (~250) | modals above page chrome |
+
+- Filter shells **must** use `pw-filters`, `position: relative`, `overflow: visible`, `isolation: isolate`.
+- Open **filter** menus must paint above page titles (drop-up is normal near the top). Default: filters (`6`) > idle page-head (`2`).
+- Open **header** menus (blank print, etc.) must temporarily raise the head to `overlay-open` (`7`) so they are not buried under `.pw-filters`. Never leave a header absolute menu trapped under filters.
+- Prefer shared controls: `app-multi-select-list`, `loom-pw-select`, `loom-pw-date-input` + class `pw-menu`.
+- Opening one overlay **must** close others via `claimPwOverlay` / `releasePwOverlay` (`pw-overlay-session.ts`) — including header chrome pickers. `stopPropagation` on triggers alone is not enough.
+- Site scrollbars: use global `--pw-scrollbar-*` / `.pw-menu` theming — do not leave native OS chrome on menus.
+
+## Inclusive filters
+
+Directory / list filters for catalog enums and org refs (тип, стан, відділ, посада, …) are **multi-select (inclusive OR)**, not single `<select>` / `loom-pw-select`, unless the product explicitly requires exactly one value.
+API: accept `*Ids` / plural query lists (comma-separated); keep singular params only as backward-compat aliases.
+
+## Checklist before finishing filter / chrome menu UI
+
+1. Open each filter: menu clears titles **and** table headers.
+2. Open A, then B: A closes (shared `pw-overlay-session`).
+3. Open header chrome menu (blank print): list is visible above filters; loads via the feature API service (single entry).
+4. Same look as other directory pages (trigger height, `pw-menu`, themed scrollbar).
+5. Multi filters actually send plural query params and backend `IN` / OR logic works.

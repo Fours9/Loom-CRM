@@ -27,20 +27,22 @@ type EmployeeSortKey =
   standalone: true,
   imports: [FormsModule, RouterLink, MultiSelectListComponent],
   template: `
-    <section class="page" data-help-id="absences.employees">
-      <header class="page-head">
+    <section class="page pw-stage" data-help-id="absences.employees">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
+      <header class="page-head pw-page-head pw-rise">
         <div>
+          <p class="pw-eyebrow">Час і відсутність</p>
           <h1>Працівники</h1>
-          <p>Список анкет і пошук</p>
+          <p class="pw-lead">Список анкет і пошук</p>
         </div>
         @if (canOpenCreate()) {
-          <a class="btn" routerLink="/people/new" data-help-id="absences.employees.add">
+          <a class="btn pw-btn" routerLink="/people/new" data-help-id="absences.employees.add">
             Додати працівника
           </a>
         }
       </header>
 
-      <div class="filters" data-help-id="absences.employees.filters">
+      <div class="filters pw-panel pw-filters pw-rise" style="--pw-delay: 80ms" data-help-id="absences.employees.filters">
         <input [(ngModel)]="q" (ngModelChange)="load()" placeholder="Пошук ПІБ / номер / email" />
         <label class="filter-block">
           <span>Відділи</span>
@@ -96,7 +98,7 @@ type EmployeeSortKey =
         }
       </ul>
 
-      <div class="table-wrap">
+      <div class="table-wrap list-shell pw-rise" style="--pw-delay: 140ms">
         <table>
           <thead>
             <tr>
@@ -182,6 +184,10 @@ type EmployeeSortKey =
         flex-wrap: wrap;
         gap: 0.75rem;
         align-items: end;
+        position: relative;
+        z-index: 4;
+        isolation: isolate;
+        overflow: visible;
       }
       .filter-block {
         display: grid;
@@ -191,6 +197,8 @@ type EmployeeSortKey =
         width: 100%;
         flex: 1 1 100%;
         min-width: 0;
+        overflow: visible;
+        position: relative;
       }
       .filter-block.narrow { width: 100%; flex: 1 1 100%; }
       .filters > input {
@@ -328,6 +336,9 @@ type EmployeeSortKey =
         .card-list { display: none; }
         .table-wrap {
           display: block;
+          position: relative;
+          z-index: 0;
+          isolation: isolate;
           border: 1px solid var(--pw-border);
           border-radius: 12px;
           overflow: hidden;

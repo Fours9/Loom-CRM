@@ -1,5 +1,6 @@
 import {
   EMPLOYEE_OWNER_VISIBLE_QUESTIONNAIRE_TYPES,
+  QUESTIONNAIRE_BUILTIN_TEMPLATE_DESCRIPTIONS,
   QUESTIONNAIRE_TYPE_CATALOG,
   type QuestionnaireAssignmentStatus,
   type QuestionnaireAttachmentState,
@@ -39,6 +40,16 @@ export function questionnaireTypeLabel(type: string): string {
 export function questionnaireTypeDescription(type: string): string {
   const entry = QUESTIONNAIRE_TYPE_CATALOG[type as QuestionnaireType];
   return entry?.descriptionUa ?? '';
+}
+
+/** Prefer template-code blurb; fall back to type catalog (shared `full` etc.). */
+export function questionnaireTemplateDescription(
+  templateCode: string,
+  type?: string,
+): string {
+  const byCode = QUESTIONNAIRE_BUILTIN_TEMPLATE_DESCRIPTIONS[templateCode];
+  if (byCode) return byCode;
+  return type ? questionnaireTypeDescription(type) : '';
 }
 
 /** @deprecated Prefer template-code grants from /auth/me / role Settings. */

@@ -10,10 +10,14 @@
   --loom-accent-soft: rgba(61, 139, 253, 0.15);
   --loom-sidebar-width: 5.75rem;
   --font-sans: 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --pw-scrollbar-thumb: color-mix(in srgb, #64748b 50%, transparent);
+  --pw-scrollbar-track: color-mix(in srgb, #e8eef6 70%, transparent);
 }
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pw-scrollbar-thumb) var(--pw-scrollbar-track);
 }
 
 html,
@@ -28,6 +32,45 @@ body {
 html {
   /* Avoid horizontal reflow of profile completeness when scrollbar appears. */
   scrollbar-gutter: stable;
+}
+
+/* Site-wide themed scrollbars (page + overflow panels). */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--pw-scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--pw-scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--loom-accent, #3d8bfd) 45%, #64748b);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html[data-theme='dark'] {
+  --pw-scrollbar-thumb: color-mix(in srgb, #94a3b8 42%, transparent);
+  --pw-scrollbar-track: color-mix(in srgb, #0b1220 70%, #1e293b);
+}
+
+html[data-theme='dark'] *::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, #7eb6e8 50%, #64748b);
+  background-clip: padding-box;
+  border: 2px solid transparent;
 }
 
 html.overlay-scroll-locked,
@@ -173,15 +216,17 @@ html[data-theme='dark'] .app-shell .pw-request-badge[data-status='cancelled'] {
   --pw-z-dropdown: 120;
   --pw-z-scrim: 200;
   --pw-z-drawer: 210;
+  /* Above sticky shell topbar (drawer+20 ≈ 230) so dialogs aren't under chrome labels */
+  --pw-z-modal: 250;
   --pw-z-toast: 300;
   color-scheme: light;
-  --pw-bg: #f7f9fc;
-  --pw-bg-grad-top: #eef3f8;
-  --pw-bg-grad-mid: #f7f9fc;
-  --pw-bg-grad-bot: #ffffff;
+  --pw-bg: #f4f7fb;
+  --pw-bg-grad-top: #e8eef6;
+  --pw-bg-grad-mid: #f4f7fb;
+  --pw-bg-grad-bot: #fbfcfe;
   --pw-surface: #ffffff;
-  --pw-surface-2: #f8fafc;
-  --pw-topbar: rgba(255, 255, 255, 0.92);
+  --pw-surface-2: #f5f8fc;
+  --pw-topbar: rgba(255, 255, 255, 0.88);
   --pw-text: #1e293b;
   --pw-text-strong: #0f172a;
   --pw-muted: #64748b;
@@ -194,9 +239,26 @@ html[data-theme='dark'] .app-shell .pw-request-badge[data-status='cancelled'] {
   --pw-success: #15803d;
   --pw-success-soft: #e8f6ee;
   --pw-shadow: rgba(15, 23, 42, 0.08);
+  --pw-shadow-md: rgba(15, 23, 42, 0.12);
+  --pw-shadow-lg: rgba(15, 23, 42, 0.16);
   --pw-input-bg: #ffffff;
   --pw-hover: #f1f5f9;
   --pw-on-accent: #ffffff;
+  --pw-control-h: 2.6rem;
+  --pw-menu-radius: 14px;
+  --pw-scrollbar-thumb: color-mix(in srgb, var(--pw-muted) 55%, transparent);
+  --pw-scrollbar-track: color-mix(in srgb, var(--pw-surface-2) 80%, transparent);
+  --pw-radius-sm: 8px;
+  --pw-radius: 12px;
+  --pw-radius-lg: 16px;
+  --pw-radius-xl: 20px;
+  --pw-focus-ring: 0 0 0 3px color-mix(in srgb, var(--pw-accent) 28%, transparent);
+  --pw-space-1: 0.25rem;
+  --pw-space-2: 0.5rem;
+  --pw-space-3: 0.75rem;
+  --pw-space-4: 1rem;
+  --pw-space-5: 1.25rem;
+  --pw-space-6: 1.5rem;
   font-family: Manrope, 'Segoe UI', sans-serif;
 }
 .loom-absence-module {
@@ -222,6 +284,19 @@ html[data-theme='dark'] .app-shell .pw-request-badge[data-status='cancelled'] {
 .loom-absence-module textarea {
   background: var(--pw-input-bg);
   color: var(--pw-text);
+  color-scheme: inherit;
+  accent-color: var(--pw-accent);
+}
+
+.app-shell select,
+.loom-absence-module select {
+  border-radius: 12px;
+}
+
+.app-shell input[type='date'],
+.loom-absence-module input[type='date'] {
+  border-radius: 12px;
+  min-height: 2.6rem;
 }
 html[data-theme='dark'] .app-shell,
 html[data-theme='dark'] .loom-absence-module {
@@ -245,7 +320,449 @@ html[data-theme='dark'] .loom-absence-module {
   --pw-success: #4ade80;
   --pw-success-soft: #143524;
   --pw-shadow: rgba(0, 0, 0, 0.4);
+  --pw-shadow-md: rgba(0, 0, 0, 0.48);
+  --pw-shadow-lg: rgba(0, 0, 0, 0.55);
   --pw-input-bg: #0f172a;
   --pw-hover: #243247;
   --pw-on-accent: #0b1220;
+}
+
+/* Shared CRM stage — match home/calendar presence */
+@keyframes pw-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pw-soft-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.app-shell .pw-stage,
+.loom-absence-module .pw-stage {
+  position: relative;
+  isolation: isolate;
+  /* visible: dropdowns/menus from the stage chrome must not be clipped */
+  overflow: visible;
+  display: grid;
+  gap: clamp(1.15rem, 2.5vw, 1.65rem);
+  padding: clamp(1.15rem, 2.8vw, 1.85rem);
+  border-radius: 20px;
+  border: 1px solid var(--pw-border);
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--pw-accent) 10%, var(--pw-surface)) 0%,
+      var(--pw-surface) 42%,
+      var(--pw-surface-2) 100%
+    );
+  box-shadow: 0 12px 40px var(--pw-shadow);
+}
+
+.app-shell .pw-stage__glow,
+.loom-absence-module .pw-stage__glow {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  z-index: 0;
+  animation: none;
+}
+
+.app-shell .pw-stage__glow::before,
+.loom-absence-module .pw-stage__glow::before {
+  content: '';
+  position: absolute;
+  inset: -22% auto auto -8%;
+  width: min(70vw, 26rem);
+  height: min(70vw, 26rem);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--pw-accent) 22%, transparent) 0%,
+    transparent 68%
+  );
+  animation: pw-soft-pulse 7s ease-in-out infinite;
+}
+
+.app-shell .pw-stage > *:not(.pw-stage__glow),
+.loom-absence-module .pw-stage > *:not(.pw-stage__glow) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Page head stays above static content, but below filter bars so drop-up menus win. */
+.app-shell .pw-stage > .pw-page-head,
+.loom-absence-module .pw-stage > .pw-page-head {
+  z-index: 2;
+}
+
+/* Filter bars open dropdowns over tables/lists and page titles above. */
+.app-shell .pw-stage > .pw-filters,
+.loom-absence-module .pw-stage > .pw-filters {
+  position: relative;
+  z-index: 6;
+  isolation: isolate;
+  overflow: visible;
+}
+
+/* Keep list/table shells below filter dropdowns even when they animate. */
+.app-shell .pw-stage > .list-shell,
+.app-shell .pw-stage > .table-wrap,
+.app-shell .pw-stage > .pw-table-shell,
+.loom-absence-module .pw-stage > .list-shell,
+.loom-absence-module .pw-stage > .table-wrap,
+.loom-absence-module .pw-stage > .pw-table-shell {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+/*
+  Dialog hosts are stage children with default z-index:1, so an inner
+  .backdrop { z-index: 250 } cannot escape above .pw-page-head.
+  Elevate the host itself above page chrome.
+*/
+.app-shell loom-questionnaire-create-dialog,
+.app-shell loom-questionnaire-attach-picker,
+.app-shell loom-employment-assignment-dialog,
+.app-shell loom-employee-document-upload-dialog,
+.app-shell loom-position-edit-dialog,
+.app-shell loom-catalog-edit-dialog,
+.app-shell loom-skill-edit-dialog,
+.app-shell loom-skill-group-edit-dialog,
+.app-shell loom-direction-edit-dialog,
+.app-shell loom-department-edit-dialog,
+.app-shell loom-account-role-edit-dialog,
+.loom-absence-module loom-questionnaire-create-dialog,
+.loom-absence-module loom-questionnaire-attach-picker,
+.loom-absence-module loom-employment-assignment-dialog,
+.loom-absence-module loom-employee-document-upload-dialog,
+.loom-absence-module loom-position-edit-dialog,
+.loom-absence-module loom-catalog-edit-dialog,
+.loom-absence-module loom-skill-edit-dialog,
+.loom-absence-module loom-skill-group-edit-dialog,
+.loom-absence-module loom-direction-edit-dialog,
+.loom-absence-module loom-department-edit-dialog,
+.loom-absence-module loom-account-role-edit-dialog {
+  z-index: var(--pw-z-modal, 250) !important;
+}
+
+.app-shell .pw-page,
+.loom-absence-module .pw-page {
+  display: grid;
+  gap: var(--pw-space-4);
+}
+
+.app-shell .pw-rise,
+.loom-absence-module .pw-rise {
+  --pw-delay: 0ms;
+  animation: pw-rise 0.55s ease both;
+  animation-delay: var(--pw-delay);
+}
+
+.app-shell .pw-page-head,
+.loom-absence-module .pw-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--pw-space-4);
+  align-items: flex-start;
+}
+
+.app-shell .pw-eyebrow,
+.loom-absence-module .pw-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pw-muted);
+}
+
+.app-shell .pw-page-head h1,
+.loom-absence-module .pw-page-head h1 {
+  margin: 0.25rem 0 0;
+  font-size: clamp(1.85rem, 4.2vw, 2.45rem);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--pw-text-strong);
+}
+
+.app-shell .pw-page-head .pw-lead,
+.loom-absence-module .pw-page-head .pw-lead {
+  margin: 0.45rem 0 0;
+  max-width: 28rem;
+  font-size: clamp(1rem, 2.2vw, 1.12rem);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--pw-accent);
+}
+
+.app-shell .pw-btn,
+.loom-absence-module .pw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--pw-accent);
+  color: var(--pw-on-accent);
+  padding: 0.65rem 1.15rem;
+  min-height: 2.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--pw-accent) 28%, transparent);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.app-shell .pw-btn:hover,
+.loom-absence-module .pw-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--pw-accent) 36%, transparent);
+}
+
+.app-shell .pw-btn:focus-visible,
+.loom-absence-module .pw-btn:focus-visible {
+  outline: 2px solid var(--pw-accent);
+  outline-offset: 3px;
+}
+
+.app-shell .pw-btn--ghost,
+.loom-absence-module .pw-btn--ghost {
+  background: color-mix(in srgb, var(--pw-surface) 88%, transparent);
+  color: var(--pw-accent);
+  border-color: color-mix(in srgb, var(--pw-accent) 28%, var(--pw-border));
+  box-shadow: 0 2px 10px var(--pw-shadow);
+}
+
+.app-shell .pw-btn--ghost:hover,
+.loom-absence-module .pw-btn--ghost:hover {
+  background: var(--pw-accent-soft);
+  border-color: var(--pw-accent);
+  box-shadow: 0 8px 20px var(--pw-shadow);
+}
+
+.app-shell .pw-panel,
+.loom-absence-module .pw-panel {
+  padding: 1rem 1.05rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--pw-accent) 14%, var(--pw-border));
+  background: color-mix(in srgb, var(--pw-surface) 92%, transparent);
+  box-shadow: 0 4px 18px var(--pw-shadow);
+  backdrop-filter: blur(6px);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.app-shell .pw-panel:hover,
+.loom-absence-module .pw-panel:hover {
+  border-color: color-mix(in srgb, var(--pw-accent) 32%, var(--pw-border));
+  box-shadow: 0 10px 28px var(--pw-shadow-md, var(--pw-shadow));
+}
+
+.app-shell .pw-card,
+.loom-absence-module .pw-card {
+  border: 1px solid var(--pw-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--pw-surface) 94%, transparent);
+  box-shadow: 0 2px 10px var(--pw-shadow);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+
+.app-shell .pw-card:hover,
+.loom-absence-module .pw-card:hover {
+  border-color: var(--pw-accent);
+  box-shadow: 0 10px 28px var(--pw-shadow);
+  transform: translateY(-2px);
+}
+
+.app-shell .pw-table-shell,
+.loom-absence-module .pw-table-shell {
+  border: 1px solid color-mix(in srgb, var(--pw-accent) 12%, var(--pw-border));
+  border-radius: 16px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--pw-surface) 94%, transparent);
+  box-shadow: 0 8px 28px var(--pw-shadow);
+}
+
+.app-shell .pw-table-shell thead th,
+.loom-absence-module .pw-table-shell thead th {
+  background: color-mix(in srgb, var(--pw-accent-soft) 55%, var(--pw-surface-2));
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pw-muted);
+}
+
+.app-shell .pw-empty,
+.loom-absence-module .pw-empty {
+  margin: 0;
+  padding: 1.35rem 1.15rem;
+  color: var(--pw-muted);
+  border: 1px dashed color-mix(in srgb, var(--pw-accent) 28%, var(--pw-border));
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--pw-accent) 6%, var(--pw-surface)) 0%,
+      var(--pw-surface-2) 100%
+    );
+  font-weight: 600;
+}
+
+/* Shared popover menu — single look for pw-select / multi-select / date. */
+.app-shell .pw-menu,
+.loom-absence-module .pw-menu {
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  border: 1px solid color-mix(in srgb, var(--pw-accent) 16%, var(--pw-border));
+  border-radius: var(--pw-menu-radius, 14px);
+  background: var(--pw-surface);
+  box-shadow: 0 12px 32px var(--pw-shadow-md, var(--pw-shadow));
+  max-height: min(16rem, 50vh);
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pw-scrollbar-thumb) var(--pw-scrollbar-track);
+  animation: pw-menu-rise 0.2s ease both;
+}
+
+.app-shell .pw-menu::-webkit-scrollbar,
+.loom-absence-module .pw-menu::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.app-shell .pw-menu::-webkit-scrollbar-track,
+.loom-absence-module .pw-menu::-webkit-scrollbar-track {
+  margin: 4px 0;
+  background: var(--pw-scrollbar-track);
+  border-radius: 999px;
+}
+
+.app-shell .pw-menu::-webkit-scrollbar-thumb,
+.loom-absence-module .pw-menu::-webkit-scrollbar-thumb {
+  background: var(--pw-scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.app-shell .pw-menu::-webkit-scrollbar-thumb:hover,
+.loom-absence-module .pw-menu::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--pw-accent) 55%, var(--pw-muted));
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+.app-shell .pw-menu > li,
+.loom-absence-module .pw-menu > li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--pw-text);
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+}
+
+.app-shell .pw-menu > li:hover,
+.loom-absence-module .pw-menu > li:hover {
+  background: var(--pw-accent-soft);
+  color: var(--pw-accent);
+}
+
+.app-shell .pw-menu > li.active,
+.app-shell .pw-menu > li.selected,
+.loom-absence-module .pw-menu > li.active,
+.loom-absence-module .pw-menu > li.selected {
+  background: var(--pw-accent);
+  color: var(--pw-on-accent, #fff);
+}
+
+.app-shell .pw-menu > li.empty,
+.loom-absence-module .pw-menu > li.empty {
+  color: var(--pw-muted);
+  cursor: default;
+  font-weight: 500;
+}
+
+.app-shell .pw-menu > li.empty:hover,
+.loom-absence-module .pw-menu > li.empty:hover {
+  background: transparent;
+  color: var(--pw-muted);
+}
+
+@keyframes pw-menu-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .pw-menu,
+  .loom-absence-module .pw-menu {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .pw-stage__glow::before,
+  .loom-absence-module .pw-stage__glow::before {
+    animation: none;
+  }
+  .app-shell .pw-rise,
+  .loom-absence-module .pw-rise,
+  .app-shell .pw-btn,
+  .app-shell .pw-card,
+  .app-shell .pw-panel,
+  .loom-absence-module .pw-btn,
+  .loom-absence-module .pw-card,
+  .loom-absence-module .pw-panel {
+    animation: none !important;
+    transition: none !important;
+  }
+  .app-shell .pw-btn:hover,
+  .app-shell .pw-card:hover,
+  .loom-absence-module .pw-btn:hover,
+  .loom-absence-module .pw-card:hover {
+    transform: none;
+  }
 }

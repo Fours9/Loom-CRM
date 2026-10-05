@@ -37,7 +37,7 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
     <div class="login app-shell">
       <button
         type="button"
-        class="theme-toggle"
+        class="theme-toggle pw-rise"
         (click)="theme.toggle()"
         [attr.aria-label]="
           theme.mode() === 'dark' ? 'Увімкнути світлу тему' : 'Увімкнути темну тему'
@@ -51,13 +51,14 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
         }
       </button>
 
-      <section class="card">
-        <div class="brand">
+      <section class="card pw-stage">
+        <span class="pw-stage__glow" aria-hidden="true"></span>
+        <div class="brand pw-rise">
           <img
             class="brand-mark"
             src="assets/loom-mark.png"
-            width="44"
-            height="44"
+            width="56"
+            height="56"
             alt=""
           />
           <span class="brand-text">
@@ -65,14 +66,14 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
             <span class="brand-module">{{ moduleName }}</span>
           </span>
         </div>
-        <h1>Зміна пароля</h1>
-        <p class="hint">
+        <h1 class="pw-rise" style="--pw-delay: 70ms">Зміна пароля</h1>
+        <p class="hint pw-rise" style="--pw-delay: 100ms">
           Після першого входу потрібно змінити тимчасовий пароль.
         </p>
         @if (error()) {
           <p class="error">{{ error() }}</p>
         }
-        <form class="login-form" [formGroup]="form" (ngSubmit)="submit()">
+        <form class="login-form pw-rise" style="--pw-delay: 140ms" [formGroup]="form" (ngSubmit)="submit()">
           <label>
             Поточний пароль
             <div class="password-row">
@@ -132,11 +133,11 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
           @if (form.hasError('passwordsMismatch') && form.get('confirmPassword')?.touched) {
             <p class="error">Паролі не збігаються</p>
           }
-          <button type="submit" class="btn" [disabled]="busy()">
+          <button type="submit" class="btn pw-btn" [disabled]="busy()">
             {{ busy() ? 'Збереження…' : 'Зберегти' }}
           </button>
         </form>
-        <button type="button" class="link" (click)="logout()">Вийти</button>
+        <button type="button" class="link pw-rise" style="--pw-delay: 190ms" (click)="logout()">Вийти</button>
       </section>
     </div>
   `,
@@ -165,68 +166,90 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
         align-items: center;
         gap: 0.35rem;
         border: 1px solid var(--pw-border-strong);
-        background: var(--pw-surface);
+        background: color-mix(in srgb, var(--pw-surface) 92%, transparent);
         color: var(--pw-text);
-        border-radius: 8px;
-        padding: 0.4rem 0.7rem;
+        border-radius: 12px;
+        padding: 0.45rem 0.85rem;
         cursor: pointer;
+        font-weight: 700;
+        box-shadow: 0 4px 16px var(--pw-shadow);
+        backdrop-filter: blur(8px);
       }
       .card {
-        width: min(420px, 100%);
-        padding: 2rem;
-        border: 1px solid var(--pw-border);
-        border-radius: 12px;
-        background: var(--pw-surface);
+        width: min(440px, 100%);
+        padding: clamp(1.5rem, 4vw, 2.15rem);
         display: grid;
-        gap: 1rem;
+        gap: 1.05rem;
       }
       .brand {
         display: flex;
         align-items: center;
         gap: 0.75rem;
       }
+      .brand-mark {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--pw-accent) 18%, var(--pw-border)),
+          0 8px 22px var(--pw-shadow);
+      }
       .brand-text {
         display: grid;
+        gap: 0.12rem;
       }
       .brand-name {
-        font-weight: 700;
+        font-weight: 750;
+        font-size: 1.55rem;
+        letter-spacing: -0.03em;
+        color: var(--pw-accent);
       }
       .brand-module {
-        font-size: 0.85rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
         color: var(--pw-muted);
       }
       h1 {
         margin: 0;
-        font-size: 1.35rem;
+        font-size: clamp(1.45rem, 3vw, 1.7rem);
+        font-weight: 750;
+        letter-spacing: -0.02em;
       }
       .hint {
         margin: 0;
-        color: var(--pw-muted);
-        font-size: 0.9rem;
+        color: var(--pw-accent);
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.35;
       }
       .reqs {
         list-style: none;
         margin: 0;
-        padding: 0.5rem 0.75rem;
+        padding: 0.65rem 0.85rem;
         display: grid;
         gap: 0.35rem;
-        border-radius: 8px;
-        border: 1px solid var(--pw-border);
-        background: var(--pw-surface-2, var(--pw-input-bg));
+        border-radius: 14px;
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 14%, var(--pw-border));
+        background: color-mix(in srgb, var(--pw-surface) 88%, transparent);
         font-size: 0.85rem;
         color: var(--pw-muted);
       }
       .reqs li.ok {
         color: var(--pw-success, #15803d);
+        font-weight: 600;
       }
       .error {
         margin: 0;
         color: var(--pw-danger);
+        font-weight: 600;
       }
       label {
         display: grid;
         gap: 0.35rem;
-        font-size: 0.9rem;
+        font-size: 0.82rem;
+        font-weight: 700;
         color: var(--pw-muted);
       }
       .login-form {
@@ -246,34 +269,42 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
         border: 1px solid var(--pw-border-strong);
         background: var(--pw-input-bg);
         color: var(--pw-text);
-        border-radius: 8px;
-        padding: 0.65rem 0.75rem;
-        min-height: 2.75rem;
+        border-radius: 12px;
+        padding: 0.7rem 0.85rem;
+        min-height: 2.85rem;
+      }
+      input:focus-visible {
+        outline: none;
+        border-color: var(--pw-accent);
+        box-shadow: var(--pw-focus-ring, 0 0 0 3px color-mix(in srgb, var(--pw-accent) 28%, transparent));
       }
       .btn {
-        margin-top: 0.25rem;
-        padding: 0.75rem 1rem;
-        border: 0;
-        border-radius: 8px;
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        font-weight: 600;
-        min-height: 2.75rem;
-        cursor: pointer;
+        margin-top: 0.2rem;
+        width: 100%;
       }
       .btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
       }
       .link {
-        background: transparent;
-        border: 1px solid var(--pw-border-strong);
+        background: color-mix(in srgb, var(--pw-surface) 88%, transparent);
+        border: 1px solid color-mix(in srgb, var(--pw-accent) 28%, var(--pw-border));
         color: var(--pw-accent);
         font-size: 0.9rem;
+        font-weight: 700;
         text-align: center;
         cursor: pointer;
-        border-radius: 8px;
+        border-radius: 14px;
         padding: 0.75rem 1rem;
+        transition:
+          background 0.16s ease,
+          border-color 0.16s ease;
+      }
+      .link:hover {
+        background: var(--pw-accent-soft);
+        border-color: var(--pw-accent);
       }
     `,
   ],

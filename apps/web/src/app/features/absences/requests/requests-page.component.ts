@@ -37,14 +37,16 @@ type RequestSortKey =
     RequestStatusBadgeComponent,
   ],
   template: `
-    <section class="page" data-help-id="absences.requests">
-      <header class="page-head">
+    <section class="page pw-stage" data-help-id="absences.requests">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
+      <header class="page-head pw-page-head pw-rise">
         <div>
+          <p class="pw-eyebrow">Час і відсутність</p>
           <h1>Заявки</h1>
-          <p>Список заявок на відсутність</p>
+          <p class="pw-lead">Рішення по відсутністях команди</p>
         </div>
         <a
-          class="btn"
+          class="btn pw-btn"
           data-help-id="absences.requests.new"
           [routerLink]="createRequestLink.routerLink"
           [queryParams]="createRequestLink.queryParams"
@@ -53,7 +55,7 @@ type RequestSortKey =
         </a>
       </header>
 
-      <div class="filters" data-help-id="absences.requests.filters">
+      <div class="filters pw-panel pw-filters pw-rise" style="--pw-delay: 80ms" data-help-id="absences.requests.filters">
         <label class="filter-block narrow">
           <span>Статус</span>
           <select [(ngModel)]="statusGroup" (ngModelChange)="onFilterChange()">
@@ -111,12 +113,13 @@ type RequestSortKey =
       </div>
 
       @if (error) {
-        <p class="error">{{ error }}</p>
+        <p class="error pw-rise" style="--pw-delay: 60ms">{{ error }}</p>
       }
       @if (info) {
-        <p class="ok">{{ info }}</p>
+        <p class="ok pw-rise" style="--pw-delay: 60ms">{{ info }}</p>
       }
 
+      <div class="results pw-rise" style="--pw-delay: 140ms">
       <ul class="card-list" aria-label="Заявки">
         @for (r of items; track r.id) {
           <li class="request-card pw-request-frame" [attr.data-frame]="r.frameTone">
@@ -143,7 +146,7 @@ type RequestSortKey =
         }
       </ul>
 
-      <div class="table-wrap">
+      <div class="table-wrap list-shell pw-rise" style="--pw-delay: 140ms">
         <table>
           <thead>
             <tr>
@@ -227,11 +230,15 @@ type RequestSortKey =
         <span>Стор. {{ page }} / {{ totalPages }}</span>
         <button type="button" [disabled]="page >= totalPages" (click)="next()">Далі</button>
       </div>
+      </div>
     </section>
   `,
   styles: [
     `
-      .page { display: grid; gap: 1rem; }
+      .results {
+        display: grid;
+        gap: 1rem;
+      }
       .page-head {
         display: flex;
         flex-wrap: wrap;
@@ -239,21 +246,27 @@ type RequestSortKey =
         gap: 1rem;
         align-items: start;
       }
-      .page-head p { margin: 0.25rem 0 0; color: var(--pw-muted); }
       .filters {
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem;
         align-items: end;
+        position: relative;
+        z-index: 4;
+        isolation: isolate;
+        overflow: visible;
       }
       .filter-block {
         display: grid;
         gap: 0.35rem;
-        font-size: 0.9rem;
-        color: var(--pw-text);
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--pw-muted);
         width: 100%;
         flex: 1 1 100%;
         min-width: 0;
+        overflow: visible;
+        position: relative;
       }
       .filter-block.narrow { width: 100%; flex: 1 1 100%; }
       .phone-sort {
@@ -265,27 +278,18 @@ type RequestSortKey =
         min-width: 2.75rem;
         min-height: 2.75rem;
         border: 1px solid var(--pw-border-strong);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--pw-surface);
         cursor: pointer;
       }
       select {
         padding: 0.55rem 0.7rem;
         border: 1px solid var(--pw-border-strong);
-        border-radius: 8px;
+        border-radius: 10px;
         width: 100%;
         box-sizing: border-box;
         min-height: 2.75rem;
-      }
-      .btn {
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        text-decoration: none;
-        padding: 0.65rem 1rem;
-        border-radius: 8px;
-        min-height: 2.75rem;
-        display: inline-flex;
-        align-items: center;
+        background: var(--pw-input-bg);
       }
       .card-list {
         list-style: none;
@@ -298,6 +302,22 @@ type RequestSortKey =
         display: grid;
         gap: 0;
         overflow: hidden;
+        border-radius: 16px;
+        box-shadow: 0 2px 10px var(--pw-shadow);
+        transition:
+          transform 0.18s ease,
+          box-shadow 0.18s ease;
+        animation: pw-rise 0.5s ease both;
+      }
+      .request-card:nth-child(1) { animation-delay: 40ms; }
+      .request-card:nth-child(2) { animation-delay: 80ms; }
+      .request-card:nth-child(3) { animation-delay: 120ms; }
+      .request-card:nth-child(4) { animation-delay: 160ms; }
+      .request-card:nth-child(5) { animation-delay: 200ms; }
+      .request-card:nth-child(n + 6) { animation-delay: 240ms; }
+      .request-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px var(--pw-shadow);
       }
       .card-link {
         display: flex;
@@ -385,16 +405,30 @@ type RequestSortKey =
         background: var(--pw-accent);
         color: var(--pw-on-accent);
         text-decoration: none;
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 0.5rem 0.75rem;
         font: inherit;
+        font-weight: 700;
         line-height: 1.2;
         min-height: 2.75rem;
+        box-shadow: 0 3px 10px color-mix(in srgb, var(--pw-accent) 20%, transparent);
       }
-      .error { color: var(--pw-danger); }
+      .error { color: var(--pw-danger); font-weight: 600; }
       .ok { color: #027a48; margin: 0; }
       html[data-theme='dark'] .ok { color: #6ee7b7; }
-      .empty { padding: 1rem; color: var(--pw-muted); }
+      .empty {
+        padding: 1.15rem 1rem;
+        color: var(--pw-muted);
+        border: 1px dashed color-mix(in srgb, var(--pw-border) 90%, var(--pw-accent));
+        border-radius: 14px;
+        background:
+          repeating-linear-gradient(
+            -45deg,
+            color-mix(in srgb, var(--pw-border) 35%, transparent) 0 8px,
+            transparent 8px 16px
+          ),
+          var(--pw-surface-2);
+      }
       .pager {
         display: flex;
         flex-wrap: wrap;
@@ -404,10 +438,11 @@ type RequestSortKey =
       .pager button {
         border: 1px solid var(--pw-border-strong);
         background: var(--pw-surface);
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 0.5rem 0.75rem;
         cursor: pointer;
         min-height: 2.75rem;
+        font-weight: 600;
       }
       .pager button:disabled { opacity: 0.5; cursor: default; }
       @media (min-width: 641px) {
@@ -423,9 +458,21 @@ type RequestSortKey =
         .card-list { display: none; }
         .table-wrap {
           display: block;
+          position: relative;
+          z-index: 0;
+          isolation: isolate;
           border: 0;
           overflow: visible;
           background: transparent;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .request-card {
+          animation: none !important;
+          transition: none !important;
+        }
+        .request-card:hover {
+          transform: none;
         }
       }
     `,

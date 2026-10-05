@@ -543,6 +543,10 @@ type EmployeeSortKey =
         flex-wrap: wrap;
         gap: 0.75rem;
         align-items: end;
+        position: relative;
+        z-index: 4;
+        isolation: isolate;
+        overflow: visible;
       }
       .filters > input {
         width: 100%;
