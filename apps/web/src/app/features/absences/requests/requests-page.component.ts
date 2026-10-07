@@ -4,27 +4,27 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
 import { Department, Position } from '../core/api/models';
-import { ABSENCE_TYPE_LABELS } from '../core/api/labels';
 import { requestTypeLabel } from '../core/api/request-view.util';
 import {
   MultiSelectItem,
   MultiSelectListComponent,
 } from '../shared/multi-select-list.component';
+import { PwSelectComponent } from '../../../shared/ui/pw-select.component';
+import {
+  positionSelectOptions,
+  requestSortSelectOptions,
+  requestStatusMultiSelectItems,
+  requestTypeMultiSelectItems,
+} from '../shared/absences-list-filter-options';
 import { RequestStatusBadgeComponent } from '../shared/request-status-badge.component';
 import {
   RequestListItemViewModel,
   toRequestListItemVm,
 } from './request-list-item.vm';
 import { buildCreateAbsenceRequestLink } from './create-request-navigation';
+import { buildRequestsListQuery, RequestsListSortKey } from './requests-list-query';
 
-type RequestSortKey =
-  | 'createdAt'
-  | 'startDate'
-  | 'employeeName'
-  | 'departmentName'
-  | 'positionName'
-  | 'type'
-  | 'status';
+type RequestSortKey = RequestsListSortKey;
 
 @Component({
   selector: 'app-requests-page',
@@ -34,6 +34,7 @@ type RequestSortKey =
     RouterLink,
     DatePipe,
     MultiSelectListComponent,
+    PwSelectComponent,
     RequestStatusBadgeComponent,
   ],
   template: `
@@ -56,26 +57,23 @@ type RequestSortKey =
       </header>
 
       <div class="filters pw-panel pw-filters pw-rise" style="--pw-delay: 80ms" data-help-id="absences.requests.filters">
-        <label class="filter-block narrow">
+        <label class="filter-block">
           <span>Статус</span>
-          <select [(ngModel)]="statusGroup" (ngModelChange)="onFilterChange()">
-            <option value="">Усі</option>
-            <option value="pending">Подана</option>
-            <option value="approved">Затверджена</option>
-            <option value="completed">Завершена</option>
-            <option value="rejected">Відхилена</option>
-            <option value="cancelled">Скасована</option>
-            <option value="deletion_requested">Запит на видалення</option>
-          </select>
+          <app-multi-select-list
+            [items]="statusMultiSelectItems"
+            [selectedIds]="statusGroups"
+            placeholder="Усі"
+            (selectedIdsChange)="onStatusGroupsChange($event)"
+          />
         </label>
-        <label class="filter-block narrow">
+        <label class="filter-block">
           <span>Тип</span>
-          <select [(ngModel)]="type" (ngModelChange)="onFilterChange()">
-            <option value="">Усі типи</option>
-            @for (t of typeKeys; track t) {
-              <option [value]="t">{{ requestTypeLabel(t) }}</option>
-            }
-          </select>
+          <app-multi-select-list
+            [items]="typeMultiSelectItems"
+            [selectedIds]="types"
+            placeholder="Усі типи"
+            (selectedIdsChange)="onTypesChange($event)"
+          />
         </label>
         <label class="filter-block">
           <span>Відділи</span>
@@ -88,24 +86,22 @@ type RequestSortKey =
         </label>
         <label class="filter-block narrow">
           <span>Посада</span>
-          <select [(ngModel)]="positionId" (ngModelChange)="onFilterChange()">
-            <option value="">Усі посади</option>
-            @for (p of positions; track p.id) {
-              <option [value]="p.id">{{ p.name }}</option>
-            }
-          </select>
+          <loom-pw-select
+            [value]="positionId"
+            [options]="positionOptions"
+            placeholder="Усі посади"
+            (valueChange)="onPositionSelected($event)"
+          />
         </label>
         <label class="filter-block narrow phone-sort">
           <span>Сортування</span>
-          <select [ngModel]="sortBy" (ngModelChange)="onPhoneSortKey($event)">
-            <option value="createdAt">Створено</option>
-            <option value="startDate">Період</option>
-            <option value="employeeName">Працівник</option>
-            <option value="departmentName">Відділ</option>
-            <option value="positionName">Посада</option>
-            <option value="type">Тип</option>
-            <option value="status">Статус</option>
-          </select>
+          <loom-pw-select
+            [(ngModel)]="sortBy"
+            [ngModelOptions]="{ standalone: true }"
+            [options]="sortSelectOptions"
+            placeholder="Сортування"
+            (ngModelChange)="onPhoneSortKeySelected($event)"
+          />
           <button type="button" class="sort-dir-btn" (click)="toggleSortDir()" [attr.aria-label]="'Напрямок: ' + sortDir">
             {{ sortDir === 'asc' ? '↑' : '↓' }}
           </button>
@@ -252,7 +248,7 @@ type RequestSortKey =
         gap: 0.75rem;
         align-items: end;
         position: relative;
-        z-index: 4;
+        z-index: 6;
         isolation: isolate;
         overflow: visible;
       }
@@ -487,8 +483,10 @@ export class RequestsPageComponent implements OnInit {
   items: RequestListItemViewModel[] = [];
   departments: Department[] = [];
   positions: Position[] = [];
-  statusGroup = '';
-  type = '';
+  /** [] = all (inclusive OR via plural `statusGroups` query param). */
+  statusGroups: string[] = [];
+  /** [] = all (inclusive OR via plural `types` query param). */
+  types: string[] = [];
   departmentIds: string[] = [];
   positionId = '';
   page = 1;
@@ -499,7 +497,9 @@ export class RequestsPageComponent implements OnInit {
   info = '';
   sortBy: RequestSortKey = 'createdAt';
   sortDir: 'asc' | 'desc' = 'desc';
-  readonly typeKeys = Object.keys(ABSENCE_TYPE_LABELS);
+  readonly statusMultiSelectItems = requestStatusMultiSelectItems();
+  readonly typeMultiSelectItems = requestTypeMultiSelectItems();
+  readonly sortSelectOptions = requestSortSelectOptions();
 
   get totalPages(): number {
     return Math.max(1, Math.ceil(this.total / this.pageSize));
@@ -507,6 +507,10 @@ export class RequestsPageComponent implements OnInit {
 
   get departmentItems(): MultiSelectItem[] {
     return this.departments.map((d) => ({ id: d.id, label: d.name }));
+  }
+
+  get positionOptions() {
+    return positionSelectOptions(this.positions);
   }
 
   ngOnInit(): void {
@@ -523,6 +527,25 @@ export class RequestsPageComponent implements OnInit {
     this.departmentIds = ids;
     this.page = 1;
     this.reloadPositions(() => this.load());
+  }
+
+  onStatusGroupsChange(ids: string[]): void {
+    this.statusGroups = ids;
+    this.onFilterChange();
+  }
+
+  onTypesChange(ids: string[]): void {
+    this.types = ids;
+    this.onFilterChange();
+  }
+
+  onPositionSelected(next: string): void {
+    this.positionId = next;
+    this.onFilterChange();
+  }
+
+  onPhoneSortKeySelected(next: string): void {
+    this.onPhoneSortKey(next as RequestSortKey);
   }
 
   onFilterChange(): void {
@@ -576,17 +599,18 @@ export class RequestsPageComponent implements OnInit {
   load(): void {
     this.loading = true;
     this.error = '';
+    const query = buildRequestsListQuery({
+      statusGroups: this.statusGroups,
+      types: this.types,
+      departmentIds: this.departmentIds,
+      positionId: this.positionId,
+      page: this.page,
+      pageSize: this.pageSize,
+      sortBy: this.sortBy,
+      sortDir: this.sortDir,
+    });
     this.api
-      .getRequests({
-        page: this.page,
-        pageSize: this.pageSize,
-        statusGroup: this.statusGroup || undefined,
-        type: this.type || undefined,
-        departmentIds: this.departmentIds.length ? this.departmentIds : undefined,
-        positionId: this.positionId || undefined,
-        sortBy: this.sortBy,
-        sortDir: this.sortDir,
-      })
+      .getRequests(query)
       .subscribe({
         next: (res) => {
           this.items = res.items.map((r) => toRequestListItemVm(r));

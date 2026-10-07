@@ -26,6 +26,10 @@ import type {
   OrganizationCatalogDirection,
   OrganizationCatalogPosition,
 } from '../../core/api/organization-catalog-api.service';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../ui/pw-select.component';
 
 @Component({
   selector: 'loom-employee-create-form',
@@ -34,6 +38,7 @@ import type {
     FormsModule,
     ScheduleEditorComponent,
     PasswordVisibilityToggleComponent,
+    PwSelectComponent,
   ],
   template: `
     <div class="layout">
@@ -77,17 +82,11 @@ import type {
             <div class="row row-1">
               <label>
                 Роль
-                <select
-                  [(ngModel)]="draft.accountRoleId"
-                  name="accountRoleId"
-                >
-                  <option value="">{{ autoAccountRoleLabel }}</option>
-                  @for (role of accountRoles; track role.id) {
-                    <option [value]="role.id">
-                      {{ roleOptionLabel(role) }}
-                    </option>
-                  }
-                </select>
+                <loom-pw-select
+                  [value]="draft.accountRoleId"
+                  [options]="accountRoleSelectOptions"
+                  (valueChange)="onAccountRoleSelected($event)"
+                />
               </label>
             </div>
             @if (!canCreateAccountAtCreate) {
@@ -243,44 +242,29 @@ import type {
             <div class="row row-1">
               <label>
                 Напрямок
-                <select
-                  [(ngModel)]="draft.directionId"
-                  name="directionId"
-                  (ngModelChange)="onDirectionChange()"
-                >
-                  <option value="">Не вказано</option>
-                  @for (d of directions; track d.id) {
-                    <option [value]="d.id">{{ d.name }}</option>
-                  }
-                </select>
+                <loom-pw-select
+                  [value]="draft.directionId"
+                  [options]="directionSelectOptions"
+                  (valueChange)="onDirectionSelected($event)"
+                />
               </label>
             </div>
             <div class="row row-2">
               <label>
                 Відділ
-                <select
-                  [(ngModel)]="draft.departmentId"
-                  name="departmentId"
-                  (ngModelChange)="onDepartmentChange()"
-                >
-                  <option value="">Не вказано</option>
-                  @for (d of filteredDepartments; track d.id) {
-                    <option [value]="d.id">{{ d.name }}</option>
-                  }
-                </select>
+                <loom-pw-select
+                  [value]="draft.departmentId"
+                  [options]="departmentSelectOptions"
+                  (valueChange)="onDepartmentSelected($event)"
+                />
               </label>
               <label>
                 Посада
-                <select
-                  [(ngModel)]="draft.positionId"
-                  name="positionId"
-                  (ngModelChange)="onPositionChange()"
-                >
-                  <option value="">Не вказано</option>
-                  @for (p of filteredPositions; track p.id) {
-                    <option [value]="p.id">{{ p.name }}</option>
-                  }
-                </select>
+                <loom-pw-select
+                  [value]="draft.positionId"
+                  [options]="positionSelectOptions"
+                  (valueChange)="onPositionSelected($event)"
+                />
               </label>
             </div>
           </div>
@@ -522,6 +506,37 @@ export class EmployeeCreateFormComponent {
     return `Автоматично за посадою → ${ACCOUNT_ROLE_LABELS[autoCode]} (номер ${prefix}-…)`;
   }
 
+  get accountRoleSelectOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: this.autoAccountRoleLabel },
+      ...this.accountRoles.map((role) => ({
+        value: role.id,
+        label: this.roleOptionLabel(role),
+      })),
+    ];
+  }
+
+  get directionSelectOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: 'Не вказано' },
+      ...this.directions.map((d) => ({ value: d.id, label: d.name })),
+    ];
+  }
+
+  get departmentSelectOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: 'Не вказано' },
+      ...this.filteredDepartments.map((d) => ({ value: d.id, label: d.name })),
+    ];
+  }
+
+  get positionSelectOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: 'Не вказано' },
+      ...this.filteredPositions.map((p) => ({ value: p.id, label: p.name })),
+    ];
+  }
+
   roleOptionLabel(role: AssignableAccountRoleOption): string {
     const prefix = resolveEmployeeNumberPrefixFromAccountRole({
       code: role.code,
@@ -542,6 +557,25 @@ export class EmployeeCreateFormComponent {
   fillGeneratedPassword(): void {
     this.draft.temporaryPassword = generateTemporaryPassword();
     this.showTemporaryPassword = true;
+  }
+
+  onAccountRoleSelected(next: string): void {
+    this.draft.accountRoleId = next;
+  }
+
+  onDirectionSelected(next: string): void {
+    this.draft.directionId = next;
+    this.onDirectionChange();
+  }
+
+  onDepartmentSelected(next: string): void {
+    this.draft.departmentId = next;
+    this.onDepartmentChange();
+  }
+
+  onPositionSelected(next: string): void {
+    this.draft.positionId = next;
+    this.onPositionChange();
   }
 
   onDirectionChange(): void {

@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   HostListener,
   Input,
   OnDestroy,
@@ -10,6 +11,11 @@ import {
 import { FormsModule } from '@angular/forms';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
+import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../shared/ui/pw-select.component';
 import type {
   OrganizationCatalogDepartment,
   OrganizationCatalogPosition,
@@ -36,7 +42,12 @@ import {
 @Component({
   selector: 'loom-employment-assignment-dialog',
   standalone: true,
-  imports: [FormsModule, MultiSelectListComponent, HelpTriggerComponent],
+  imports: [
+    FormsModule,
+    MultiSelectListComponent,
+    HelpTriggerComponent,
+    PwSelectComponent,
+  ],
   template: `
     <div
       class="backdrop"
@@ -77,59 +88,38 @@ import {
           <div class="fields">
             <label>
               Напрямок
-              <select
+              <loom-pw-select
                 data-help-id="people.dialog.assignment.direction"
-                [(ngModel)]="form.directionId"
-                name="assignmentDirection"
-                (ngModelChange)="directionChange.emit()"
-              >
-                <option value="">—</option>
-                @for (dir of catalog?.directions ?? []; track dir.id) {
-                  <option [value]="dir.id">{{ dir.name }}</option>
-                }
-              </select>
+                [value]="form.directionId"
+                [options]="directionOptions"
+                (valueChange)="onDirectionSelected($event)"
+              />
             </label>
             <label>
               Відділ
-              <select
+              <loom-pw-select
                 data-help-id="people.dialog.assignment.department"
-                [(ngModel)]="form.departmentId"
-                name="assignmentDepartment"
-                (ngModelChange)="departmentChange.emit()"
-              >
-                <option value="">—</option>
-                @for (dept of departments; track dept.id) {
-                  <option [value]="dept.id">{{ dept.label || dept.name }}</option>
-                }
-              </select>
+                [value]="form.departmentId"
+                [options]="departmentOptions"
+                (valueChange)="onDepartmentSelected($event)"
+              />
             </label>
             <label>
               Посада
-              <select
+              <loom-pw-select
                 data-help-id="people.dialog.assignment.position"
-                [(ngModel)]="form.positionId"
-                name="assignmentPosition"
-                (ngModelChange)="positionChange.emit()"
-              >
-                <option value="">—</option>
-                @for (pos of positions; track pos.id) {
-                  <option [value]="pos.id">{{ pos.label || pos.name }}</option>
-                }
-              </select>
+                [value]="form.positionId"
+                [options]="positionOptions"
+                (valueChange)="onPositionSelected($event)"
+              />
             </label>
             <label>
               Формат роботи
-              <select [(ngModel)]="form.workFormat" name="assignmentWorkFormat">
-                <option value="">—</option>
-                @if (isArchivalWorkFormat) {
-                  <option [value]="form.workFormat">
-                    {{ form.workFormat }} (архівне)
-                  </option>
-                }
-                @for (item of catalog?.workFormats ?? []; track item.id) {
-                  <option [value]="item.name">{{ item.name }}</option>
-                }
-              </select>
+              <loom-pw-select
+                [value]="form.workFormat"
+                [options]="workFormatOptions"
+                (valueChange)="onWorkFormatSelected($event)"
+              />
             </label>
             <label>
               Локація
@@ -141,17 +131,11 @@ import {
             </label>
             <label>
               Тип зайнятості
-              <select [(ngModel)]="form.employmentType" name="assignmentEmploymentType">
-                <option value="">—</option>
-                @if (isArchivalEmploymentType) {
-                  <option [value]="form.employmentType">
-                    {{ form.employmentType }} (архівне)
-                  </option>
-                }
-                @for (item of catalog?.employmentTypes ?? []; track item.id) {
-                  <option [value]="item.name">{{ item.name }}</option>
-                }
-              </select>
+              <loom-pw-select
+                [value]="form.employmentType"
+                [options]="employmentTypeOptions"
+                (valueChange)="onEmploymentTypeSelected($event)"
+              />
             </label>
             <label>
               Дата початку призначення
@@ -190,15 +174,11 @@ import {
             </label>
             <label class="span-2">
               Керівництво
-              <select
-                [ngModel]="form.managementKind"
-                name="assignmentManagementKind"
-                (ngModelChange)="onManagementKindChange($event)"
-              >
-                @for (opt of managementKindOptions; track opt.value) {
-                  <option [ngValue]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
+              <loom-pw-select
+                [value]="form.managementKind"
+                [options]="managementKindSelectOptions"
+                (valueChange)="onManagementKindSelected($event)"
+              />
             </label>
             @if (usesManagedDepartments) {
               <label class="span-2 managed-field">
@@ -218,7 +198,15 @@ import {
         <div class="foot">
           <button
             type="button"
-            class="btn"
+            class="btn pw-btn pw-btn--ghost"
+            [disabled]="busy"
+            (click)="closed.emit()"
+          >
+            Скасувати
+          </button>
+          <button
+            type="button"
+            class="btn pw-btn"
             data-help-id="people.dialog.assignment.save"
             [disabled]="busy"
             (click)="submitted.emit()"
@@ -231,6 +219,9 @@ import {
   `,
   styles: [
     `
+      :host {
+        display: block;
+      }
       .backdrop {
         position: fixed;
         inset: 0;
@@ -247,10 +238,12 @@ import {
         max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.5rem);
         position: relative;
         border-radius: 12px;
-        background: var(--pw-surface);
-        border: 1px solid var(--pw-border);
+        background: var(--pw-surface, #1e293b);
+        border: 1px solid var(--pw-border, #334155);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
-        overflow: hidden;
+        /* Shell stays open so loom-pw-select menus (direction/dept/position/…)
+           are not clipped by the rounded corners; .body is the only scroller. */
+        overflow: visible;
       }
       .head {
         display: flex;
@@ -333,8 +326,7 @@ import {
       .managed-field {
         --ms-trigger-height: 4.75rem;
       }
-      input,
-      select {
+      input {
         border: 1px solid var(--pw-border);
         border-radius: 8px;
         padding: 0.5rem 0.65rem;
@@ -352,16 +344,6 @@ import {
         padding: 0.85rem 1.15rem 1rem;
         border-top: 1px solid var(--pw-border);
       }
-      .btn {
-        border: 0;
-        background: var(--pw-accent);
-        color: #fff;
-        border-radius: 8px;
-        padding: 0.45rem 0.9rem;
-        min-height: 2.4rem;
-        font: inherit;
-        cursor: pointer;
-      }
       .btn:disabled {
         opacity: 0.65;
         cursor: default;
@@ -370,6 +352,7 @@ import {
   ],
 })
 export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   private backdropPress = false;
 
@@ -432,6 +415,109 @@ export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
     return managementKindUsesDepartments(this.form.managementKind);
   }
 
+  // --- loom-pw-select option lists (empty value '' == "—" / null on submit) ---
+
+  get directionOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: '—' },
+      ...(this.catalog?.directions ?? []).map((dir) => ({
+        value: dir.id,
+        label: dir.name,
+      })),
+    ];
+  }
+
+  get departmentOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: '—' },
+      ...this.departments.map((dept) => ({
+        value: dept.id,
+        label: dept.label || dept.name,
+      })),
+    ];
+  }
+
+  get positionOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: '—' },
+      ...this.positions.map((pos) => ({
+        value: pos.id,
+        label: pos.label || pos.name,
+      })),
+    ];
+  }
+
+  get workFormatOptions(): PwSelectOption[] {
+    const options: PwSelectOption[] = [{ value: '', label: '—' }];
+    if (this.isArchivalWorkFormat) {
+      options.push({
+        value: this.form.workFormat,
+        label: `${this.form.workFormat} (архівне)`,
+      });
+    }
+    options.push(
+      ...(this.catalog?.workFormats ?? []).map((item) => ({
+        value: item.name,
+        label: item.name,
+      })),
+    );
+    return options;
+  }
+
+  get employmentTypeOptions(): PwSelectOption[] {
+    const options: PwSelectOption[] = [{ value: '', label: '—' }];
+    if (this.isArchivalEmploymentType) {
+      options.push({
+        value: this.form.employmentType,
+        label: `${this.form.employmentType} (архівне)`,
+      });
+    }
+    options.push(
+      ...(this.catalog?.employmentTypes ?? []).map((item) => ({
+        value: item.name,
+        label: item.name,
+      })),
+    );
+    return options;
+  }
+
+  get managementKindSelectOptions(): PwSelectOption[] {
+    return this.managementKindOptions.map((opt) => ({
+      value: opt.value,
+      label: opt.label,
+    }));
+  }
+
+  // --- loom-pw-select handlers (assign-then-handler: model is set before any
+  // cascade/orphan side-effect runs) ---
+
+  onDirectionSelected(next: string): void {
+    this.form.directionId = next;
+    this.directionChange.emit();
+  }
+
+  onDepartmentSelected(next: string): void {
+    this.form.departmentId = next;
+    this.departmentChange.emit();
+  }
+
+  onPositionSelected(next: string): void {
+    this.form.positionId = next;
+    this.positionChange.emit();
+  }
+
+  onWorkFormatSelected(next: string): void {
+    this.form.workFormat = next;
+  }
+
+  onEmploymentTypeSelected(next: string): void {
+    this.form.employmentType = next;
+  }
+
+  onManagementKindSelected(next: string): void {
+    this.onManagementKindChange(next as ManagementKind);
+  }
+
   onManagementKindChange(kind: ManagementKind): void {
     this.form.managementKind = kind;
     if (!managementKindUsesDepartments(kind)) {
@@ -445,6 +531,7 @@ export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

@@ -19,7 +19,7 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
     <div class="panel">
       <div class="card-head req-actions">
         <a
-          class="btn"
+          class="btn pw-btn"
           [routerLink]="createRequestLink.routerLink"
           [queryParams]="createRequestLink.queryParams"
         >
@@ -68,17 +68,6 @@ import { buildCreateAbsenceRequestLink } from '../requests/create-request-naviga
         justify-content: flex-end;
         gap: 0.75rem;
         align-items: center;
-      }
-      .btn {
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        text-decoration: none;
-        padding: 0.65rem 1rem;
-        border-radius: 8px;
-        min-height: 2.75rem;
-        display: inline-flex;
-        align-items: center;
-        font-weight: 600;
       }
       .req-scroll {
         min-height: 0;

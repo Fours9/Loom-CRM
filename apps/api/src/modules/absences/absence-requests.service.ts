@@ -20,6 +20,7 @@ import { AbsenceRequestHistory } from './absence-request-history.entity';
 import { AbsenceAttachment } from './absence-attachment.entity';
 import { AbsenceRequestStatus, AbsenceType } from './absence.enums';
 import { pwPermissions, statusGroupOf } from './pw-permissions';
+import { matchesRequestTypeAndStatusGroup } from './absence-request-list-filters';
 import type { Employee } from '../../organization/employees/employee.entity';
 import { normalizeUploadedFileName } from '../../platform/http/normalize-uploaded-file-name';
 import { absenceHistoryActionLabel } from './absence-history-labels';
@@ -40,7 +41,9 @@ export type ListQuery = {
   scope?: 'mine' | 'managed' | 'all';
   status?: string;
   statusGroup?: string;
+  statusGroups?: string[];
   type?: string;
+  types?: string[];
   employeeId?: string;
   departmentId?: string;
   departmentIds?: string[];
@@ -121,11 +124,18 @@ export class AbsenceRequestsService {
     if (query.employeeId) {
       rows = rows.filter((r) => r.employeeId === query.employeeId);
     }
-    if (query.type) rows = rows.filter((r) => r.type === query.type);
     if (query.status) rows = rows.filter((r) => r.status === query.status);
-    if (query.statusGroup) {
-      rows = rows.filter((r) => statusGroupOf(r) === query.statusGroup);
-    }
+    rows = rows.filter((r) =>
+      matchesRequestTypeAndStatusGroup(
+        { type: r.type, statusGroup: statusGroupOf(r) },
+        {
+          type: query.type,
+          types: query.types,
+          statusGroup: query.statusGroup,
+          statusGroups: query.statusGroups,
+        },
+      ),
+    );
     if (query.departmentIds?.length) {
       const set = new Set(query.departmentIds);
       rows = rows.filter(

@@ -23,6 +23,16 @@ import { EmployeeAbsenceDocumentsService } from '../absences/public-api';
 import { EmployeeDocumentUploadDialogComponent } from './employee-document-upload-dialog.component';
 import { SessionStore } from '../../core/auth/session.store';
 import { Permission } from '@loom/contracts-auth';
+import {
+  MultiSelectItem,
+  MultiSelectListComponent,
+} from '../../shared/multi-select-list.component';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../shared/ui/pw-select.component';
+import { PwDateInputComponent } from '../../shared/ui/pw-date-input.component';
+import { matchesDocumentTypeFilter } from './employee-documents-filter.util';
 
 type DocumentType = 'time_event' | EmployeeDocumentType;
 
@@ -75,34 +85,48 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
 @Component({
   selector: 'app-employee-documents-panel',
   standalone: true,
-  imports: [FormsModule, RouterLink, EmployeeDocumentUploadDialogComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    EmployeeDocumentUploadDialogComponent,
+    MultiSelectListComponent,
+    PwSelectComponent,
+    PwDateInputComponent,
+  ],
   template: `
     <div class="panel">
-      @if (canUpload()) {
-        <div class="toolbar pw-rise">
-          <button
-            type="button"
-            class="btn primary pw-btn"
-            data-help-id="people.documents.upload"
-            (click)="openUploadDialog()"
-          >
-            Додати документи
-          </button>
+      <div class="section-head pw-rise">
+        <h2>Документи</h2>
+        <div class="section-actions">
           @if (uploadSuccess()) {
             <span class="ok">Завантажено</span>
           }
+          @if (canUpload()) {
+            <button
+              type="button"
+              class="btn pw-btn"
+              data-help-id="people.documents.upload"
+              (click)="openUploadDialog()"
+            >
+              Додати документи
+            </button>
+          }
         </div>
-      }
+      </div>
 
-      <div class="filters pw-rise" style="--pw-delay: 60ms" data-help-id="people.documents.filters">
+      <div
+        class="filters pw-filters pw-rise"
+        style="--pw-delay: 60ms"
+        data-help-id="people.documents.filters"
+      >
         <label>
           Тип
-          <select [(ngModel)]="filterType" (ngModelChange)="applyFilters()">
-            <option value="">Усі типи</option>
-            @for (t of allFilterTypes; track t) {
-              <option [value]="t">{{ typeLabel(t) }}</option>
-            }
-          </select>
+          <app-multi-select-list
+            [items]="documentTypeItems"
+            [selectedIds]="filterTypes"
+            placeholder="Усі типи"
+            (selectedIdsChange)="onFilterTypesChange($event)"
+          />
         </label>
         <label>
           Пошук
@@ -115,20 +139,26 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         </label>
         <label>
           Від
-          <input type="date" [(ngModel)]="filterFrom" (ngModelChange)="applyFilters()" />
+          <loom-pw-date-input
+            [value]="filterFrom"
+            (valueChange)="onFilterFromSelected($event)"
+          />
         </label>
         <label>
           До
-          <input type="date" [(ngModel)]="filterTo" (ngModelChange)="applyFilters()" />
+          <loom-pw-date-input
+            [value]="filterTo"
+            (valueChange)="onFilterToSelected($event)"
+          />
         </label>
         <label>
           Сортування
-          <select [(ngModel)]="sortKey" (ngModelChange)="applyFilters()">
-            <option value="date_desc">Дата (новіші)</option>
-            <option value="date_asc">Дата (старіші)</option>
-            <option value="title_asc">Заголовок А→Я</option>
-            <option value="title_desc">Заголовок Я→А</option>
-          </select>
+          <loom-pw-select
+            [value]="sortKey"
+            [options]="sortSelectOptions"
+            placeholder="Сортування"
+            (valueChange)="onSortKeySelected($event)"
+          />
         </label>
       </div>
 
@@ -145,7 +175,7 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         @if (!visibleRows().length) {
           <p class="muted empty-state pw-rise" style="--pw-delay: 110ms">Документів ще немає.</p>
         } @else {
-          <ul class="doc-list pw-rise" style="--pw-delay: 120ms" data-help-id="people.documents.list">
+          <ul class="doc-list list-host pw-rise" style="--pw-delay: 120ms" data-help-id="people.documents.list">
             @for (row of visibleRows(); track row.source + ':' + row.id) {
               <li class="doc-row">
                 <div class="doc-head">
@@ -252,9 +282,22 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
   styles: [
     `
       .panel { display: grid; gap: 1rem; }
-      .toolbar {
-        display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;
-        justify-content: flex-end;
+      .section-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 0.15rem;
+      }
+      .section-head h2 {
+        margin: 0;
+      }
+      .section-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
       }
       .filters, .doc-row {
         display: grid; gap: 0.65rem;
@@ -283,8 +326,14 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         align-items: end;
         position: relative;
-        z-index: 4;
+        z-index: 6;
+        isolation: isolate;
         overflow: visible;
+      }
+      .list-host {
+        position: relative;
+        z-index: 0;
+        isolation: isolate;
       }
       label {
         display: grid;
@@ -338,14 +387,6 @@ const TIME_EVENT_TYPE_LABELS: Record<AbsenceType, string> = {
       .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .icon-btn.danger { color: #b42318; }
       .icon-btn svg { width: 1.05rem; height: 1.05rem; }
-      .btn {
-        border: 1px solid var(--pw-border); border-radius: 14px; padding: 0.5rem 0.9rem;
-        background: var(--pw-surface); color: var(--pw-text); cursor: pointer; width: fit-content;
-        font-weight: 700;
-      }
-      .btn.primary {
-        /* shared .pw-btn */
-      }
       .muted { color: var(--pw-muted); margin: 0; }
       .empty-state {
         padding: 1.15rem 1rem;
@@ -399,11 +440,22 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
 
   private allRows: DocumentListRow[] = [];
 
-  filterType = '';
+  filterTypes: DocumentType[] = [];
   filterQuery = '';
   filterFrom = '';
   filterTo = '';
   sortKey: SortKey = 'date_desc';
+
+  readonly sortSelectOptions: PwSelectOption[] = [
+    { value: 'date_desc', label: 'Дата (новіші)' },
+    { value: 'date_asc', label: 'Дата (старіші)' },
+    { value: 'title_asc', label: 'Заголовок А→Я' },
+    { value: 'title_desc', label: 'Заголовок Я→А' },
+  ];
+
+  get documentTypeItems(): MultiSelectItem[] {
+    return this.allFilterTypes.map((t) => ({ id: t, label: this.typeLabel(t) }));
+  }
 
   constructor() {
     effect(() => {
@@ -526,10 +578,32 @@ export class EmployeeDocumentsPanelComponent implements OnChanges {
     });
   }
 
+  onFilterTypesChange(ids: string[]): void {
+    this.filterTypes = ids as DocumentType[];
+    this.applyFilters();
+  }
+
+  onFilterFromSelected(next: string): void {
+    this.filterFrom = next;
+    this.applyFilters();
+  }
+
+  onFilterToSelected(next: string): void {
+    this.filterTo = next;
+    this.applyFilters();
+  }
+
+  onSortKeySelected(next: string): void {
+    this.sortKey = next as SortKey;
+    this.applyFilters();
+  }
+
   applyFilters(): void {
     const q = this.filterQuery.trim().toLocaleLowerCase('uk-UA');
     let rows = this.allRows.filter((row) => {
-      if (this.filterType && row.documentType !== this.filterType) return false;
+      if (!matchesDocumentTypeFilter(this.filterTypes, row.documentType)) {
+        return false;
+      }
       if (q) {
         const haystack = [row.title, ...row.files.map((f) => f.fileName)]
           .join(' ')

@@ -9,7 +9,6 @@ import {
   SimpleChanges,
   inject,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import type {
   OrganizationEntityKind,
   QuestionnaireSchemaField,
@@ -19,6 +18,10 @@ import {
   type OrganizationCatalogNamedItem,
   type OrganizationCatalogSnapshot,
 } from '../../../../core/api/organization-catalog-api.service';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../../../shared/ui/pw-select.component';
 import {
   filterDepartmentsForSelection,
   filterPositionsForSelection,
@@ -31,7 +34,7 @@ const DIRECTION_KEY = 'company_work.direction_id';
 const DEPARTMENT_KEY = 'company_work.department_id';
 const POSITION_KEY = 'company_work.position_id';
 
-type SelectOption = { value: string; label: string };
+type SelectOption = PwSelectOption;
 
 /**
  * Managing company_work organization_ref select.
@@ -41,30 +44,23 @@ type SelectOption = { value: string; label: string };
 @Component({
   selector: 'loom-questionnaire-organization-ref-field',
   standalone: true,
-  imports: [FormsModule],
+  imports: [PwSelectComponent],
   template: `
     <div class="field" [attr.data-field-key]="field.key">
-      <label [attr.for]="inputId">{{ field.label }}</label>
+      <label>{{ field.label }}</label>
       @if (field.helpText) {
         <p class="help">{{ field.helpText }}</p>
       }
       @if (loadError) {
         <p class="field-error" role="alert">{{ loadError }}</p>
       }
-      <select
-        [id]="inputId"
+      <loom-pw-select
+        [value]="selectModel"
+        [options]="selectOptions"
         [disabled]="disabled || !catalog"
-        [ngModel]="selectModel"
-        (ngModelChange)="onSelect($event)"
-      >
-        <option value="">—</option>
-        @if (orphanOption; as orphan) {
-          <option [value]="orphan.value">{{ orphan.label }}</option>
-        }
-        @for (opt of options; track opt.value) {
-          <option [value]="opt.value">{{ opt.label }}</option>
-        }
-      </select>
+        placeholder="—"
+        (valueChange)="onSelect($event)"
+      />
     </div>
   `,
   styles: [
@@ -81,16 +77,6 @@ type SelectOption = { value: string; label: string };
         color: var(--pw-muted);
         font-size: 0.85rem;
         font-weight: 400;
-      }
-      select {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 0.55rem 0.65rem;
-        border-radius: 8px;
-        border: var(--q-input-border, 1px solid var(--pw-border));
-        background: var(--q-input-bg, var(--pw-surface));
-        color: inherit;
-        min-height: 44px;
       }
       .field-error {
         margin: 0;
@@ -121,12 +107,10 @@ export class QuestionnaireOrganizationRefFieldComponent
   options: SelectOption[] = [];
   orphanOption: SelectOption | null = null;
   selectModel = '';
+  /** Empty→null row first, then orphan (if any), then catalog options. */
+  selectOptions: SelectOption[] = [{ value: '', label: '—' }];
 
   private sub: Subscription | null = null;
-
-  get inputId(): string {
-    return `q-org-ref-${this.field.key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-  }
 
   ngOnInit(): void {
     this.sub = this.orgCatalogApi.getSnapshot().subscribe({
@@ -222,17 +206,20 @@ export class QuestionnaireOrganizationRefFieldComponent
     if (!entity || !this.catalog) {
       this.options = [];
       this.orphanOption = null;
+      this.syncSelectOptions();
       return;
     }
 
     if (entity === 'work_format') {
       this.options = namedOptions(this.catalog.workFormats);
       this.orphanOption = orphanNamed(current, this.options);
+      this.syncSelectOptions();
       return;
     }
     if (entity === 'employment_type') {
       this.options = namedOptions(this.catalog.employmentTypes);
       this.orphanOption = orphanNamed(current, this.options);
+      this.syncSelectOptions();
       return;
     }
 
@@ -256,6 +243,16 @@ export class QuestionnaireOrganizationRefFieldComponent
       this.options = [];
     }
     this.orphanOption = orphanId(current, this.options, this.catalog, entity);
+    this.syncSelectOptions();
+  }
+
+  /** Empty→null row first, then orphan (if present), then catalog options. */
+  private syncSelectOptions(): void {
+    this.selectOptions = [
+      { value: '', label: '—' },
+      ...(this.orphanOption ? [this.orphanOption] : []),
+      ...this.options,
+    ];
   }
 
   private readOrgFilterState(): EmploymentOrgFilterState {

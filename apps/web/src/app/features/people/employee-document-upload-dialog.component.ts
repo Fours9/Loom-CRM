@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   HostListener,
   Input,
   OnDestroy,
@@ -15,6 +16,11 @@ import {
 } from '@loom/contracts-documents';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
+import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../shared/ui/pw-select.component';
 
 export type PendingUploadFile = {
   key: string;
@@ -32,7 +38,7 @@ const MAX_FILES = 20;
 @Component({
   selector: 'loom-employee-document-upload-dialog',
   standalone: true,
-  imports: [FormsModule, HelpTriggerComponent],
+  imports: [FormsModule, HelpTriggerComponent, PwSelectComponent],
   template: `
     <div
       class="backdrop"
@@ -85,18 +91,16 @@ const MAX_FILES = 20;
                 [disabled]="busy"
               />
             </label>
-            <label>
+            <label class="type-field">
               Тип
-              <select
+              <loom-pw-select
                 data-help-id="people.dialog.document-upload.type"
-                name="uploadType"
-                [(ngModel)]="documentType"
+                [value]="documentType"
+                [options]="uploadTypeOptions"
+                placeholder="Оберіть тип"
                 [disabled]="busy"
-              >
-                @for (t of uploadTypes; track t) {
-                  <option [value]="t">{{ typeLabel(t) }}</option>
-                }
-              </select>
+                (valueChange)="onDocumentTypeSelected($event)"
+              />
             </label>
             @if (canMarkConfidential) {
               <label class="check span-2">
@@ -167,12 +171,12 @@ const MAX_FILES = 20;
         </div>
 
         <div class="foot">
-          <button type="button" class="btn ghost" [disabled]="busy" (click)="closed.emit()">
+          <button type="button" class="btn pw-btn pw-btn--ghost" [disabled]="busy" (click)="closed.emit()">
             Скасувати
           </button>
           <button
             type="button"
-            class="btn"
+            class="btn pw-btn"
             data-help-id="people.dialog.document-upload.submit"
             [disabled]="busy || !canSubmit"
             (click)="onSubmit()"
@@ -185,14 +189,18 @@ const MAX_FILES = 20;
   `,
   styles: [
     `
+      :host {
+        display: block;
+      }
       .backdrop {
         position: fixed;
         inset: 0;
         z-index: var(--pw-z-modal, 250);
         display: grid;
         place-items: center;
-        padding: 1rem;
-        background: color-mix(in srgb, var(--pw-text-strong, #000) 45%, transparent);
+        padding: calc(var(--shell-topbar-h, 0px) + 0.75rem) 1rem 0.75rem;
+        /* Opaque scrim (not washed white over surface) — match assignment dialog. */
+        background: color-mix(in srgb, #0f172a 45%, transparent);
       }
       .modal {
         position: relative;
@@ -201,10 +209,10 @@ const MAX_FILES = 20;
         display: grid;
         grid-template-rows: auto minmax(0, 1fr) auto;
         border-radius: 12px;
-        background: var(--pw-surface);
-        border: 1px solid var(--pw-border);
+        background: var(--pw-surface, #1e293b);
+        border: 1px solid var(--pw-border, #334155);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
-        overflow: hidden;
+        overflow: visible;
       }
       .head {
         display: flex;
@@ -247,11 +255,15 @@ const MAX_FILES = 20;
       }
       .body {
         min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior: contain;
+        overflow: visible;
         padding: 1rem 1.15rem;
         display: grid;
         gap: 0.85rem;
+      }
+      .type-field {
+        position: relative;
+        z-index: 2;
+        overflow: visible;
       }
       .error {
         margin: 0;
@@ -309,6 +321,9 @@ const MAX_FILES = 20;
         padding: 0;
         display: grid;
         gap: 0.4rem;
+        max-height: min(12rem, 30vh);
+        overflow-y: auto;
+        overscroll-behavior: contain;
       }
       .pending li {
         display: flex;
@@ -380,21 +395,6 @@ const MAX_FILES = 20;
         padding: 0.85rem 1.15rem 1rem;
         border-top: 1px solid var(--pw-border);
       }
-      .btn {
-        border: 0;
-        background: var(--pw-accent);
-        color: #fff;
-        border-radius: 8px;
-        padding: 0.45rem 0.9rem;
-        min-height: 2.4rem;
-        font: inherit;
-        cursor: pointer;
-      }
-      .btn.ghost {
-        background: var(--pw-accent-soft, #e8eef5);
-        border: 1px solid color-mix(in srgb, var(--pw-accent) 35%, var(--pw-border));
-        color: var(--pw-accent);
-      }
       .btn:disabled {
         opacity: 0.65;
         cursor: default;
@@ -403,6 +403,7 @@ const MAX_FILES = 20;
   ],
 })
 export class EmployeeDocumentUploadDialogComponent implements OnInit, OnDestroy {
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   private backdropPress = false;
   private keySeq = 0;
@@ -420,6 +421,14 @@ export class EmployeeDocumentUploadDialogComponent implements OnInit, OnDestroy 
   documentType: EmployeeDocumentType = 'employment';
   isConfidential = false;
   readonly localError = signal<string | null>(null);
+
+  get uploadTypeOptions(): PwSelectOption[] {
+    return this.uploadTypes.map((t) => ({ value: t, label: this.typeLabel(t) }));
+  }
+
+  onDocumentTypeSelected(next: string): void {
+    this.documentType = next as EmployeeDocumentType;
+  }
 
   readonly closed = output<void>();
   readonly submitted = output<{
@@ -451,6 +460,7 @@ export class EmployeeDocumentUploadDialogComponent implements OnInit, OnDestroy 
   }
 
   ngOnInit(): void {
+    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

@@ -126,16 +126,16 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
     @if (profile.capabilities.canEditBasic || profile.capabilities.canEditPersonal) {
       <div class="section-actions">
         @if (editingBasics()) {
-          <button type="button" class="btn" (click)="saveBasics()" [disabled]="busy()">
+          <button type="button" class="btn pw-btn" (click)="saveBasics()" [disabled]="busy()">
             Зберегти
           </button>
-          <button type="button" class="btn ghost" (click)="cancelBasicsEditing()">
+          <button type="button" class="pw-link-action" (click)="cancelBasicsEditing()">
             Скасувати
           </button>
         } @else {
           <button
             type="button"
-            class="btn ghost"
+            class="pw-link-action"
             data-help-id="people.data.basics.edit"
             (click)="startBasicsEditing()"
           >
@@ -187,16 +187,16 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
     ) {
       <div class="section-actions">
         @if (editingContacts()) {
-          <button type="button" class="btn" (click)="saveContacts()" [disabled]="busy()">
+          <button type="button" class="btn pw-btn" (click)="saveContacts()" [disabled]="busy()">
             Зберегти
           </button>
-          <button type="button" class="btn ghost" (click)="cancelContactsEditing()">
+          <button type="button" class="pw-link-action" (click)="cancelContactsEditing()">
             Скасувати
           </button>
         } @else {
           <button
             type="button"
-            class="btn ghost"
+            class="pw-link-action"
             data-help-id="people.data.contacts.edit"
             (click)="startContactsEditing()"
           >
@@ -226,16 +226,16 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
     ) {
       <div class="section-actions">
         @if (editingDates()) {
-          <button type="button" class="btn" (click)="saveDates()" [disabled]="busy()">
+          <button type="button" class="btn pw-btn" (click)="saveDates()" [disabled]="busy()">
             Зберегти
           </button>
-          <button type="button" class="btn ghost" (click)="cancelDatesEditing()">
+          <button type="button" class="pw-link-action" (click)="cancelDatesEditing()">
             Скасувати
           </button>
         } @else {
           <button
             type="button"
-            class="btn ghost"
+            class="pw-link-action"
             data-help-id="people.data.dates.edit"
             (click)="startDatesEditing()"
           >
@@ -356,7 +356,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
       <div class="dates-actions">
         <button
           type="button"
-          class="btn ghost"
+          class="pw-link-action"
           [disabled]="importantDateForms.length >= 20"
           (click)="addImportantDate()"
         >
@@ -400,7 +400,7 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
       <div class="section-actions">
         <button
           type="button"
-          class="btn ghost"
+          class="btn pw-btn"
           data-help-id="people.work.position.new"
           (click)="startCreatingAssignment()"
         >
@@ -454,13 +454,13 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
             </div>
             @if (profile.capabilities.canEditEmployment) {
               <div class="history-actions">
-                <button type="button" class="btn ghost sm" (click)="startEditAssignment(h)">
+                <button type="button" class="pw-link-action" (click)="startEditAssignment(h)">
                   Редагувати
                 </button>
                 @if (h.status !== 'active') {
                   <button
                     type="button"
-                    class="btn ghost sm danger"
+                    class="pw-link-action danger"
                     (click)="deleteAssignment(h)"
                     [disabled]="busy() || deletingAssignmentId() === h.id"
                   >
@@ -556,7 +556,13 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
       }
       .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: start; }
       .section-head {
-        display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: center;
+        /* Push field grid / body down so title + primary CTA read as a clear header band. */
+        margin-bottom: 1.15rem;
       }
       .section-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
       .contacts-stack {
@@ -826,25 +832,8 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
-      .btn {
-        border: 0; border-radius: 8px; background: var(--pw-accent); color: var(--pw-on-accent, #fff);
-        padding: 0.55rem 0.9rem; min-height: 2.5rem; font-weight: 600; cursor: pointer; text-decoration: none;
-        display: inline-flex; align-items: center;
-      }
-      .btn.ghost {
-        background: var(--pw-accent-soft, #e8eef5);
-        border: 1px solid color-mix(in srgb, var(--pw-accent) 35%, var(--pw-border));
-        color: var(--pw-accent);
-      }
-      .btn.ghost:hover {
-        background: color-mix(in srgb, var(--pw-accent) 16%, var(--pw-surface));
-        border-color: var(--pw-accent);
-      }
-      .btn.sm { min-height: 2.1rem; padding: 0.35rem 0.65rem; font-size: 0.85rem; }
-      .btn.danger {
+      .pw-link-action.danger {
         color: var(--pw-danger, #a32d2d);
-        background: color-mix(in srgb, var(--pw-danger, #a32d2d) 8%, var(--pw-surface));
-        border-color: color-mix(in srgb, var(--pw-danger, #a32d2d) 40%, var(--pw-border));
       }
       .completeness { display: grid; gap: 0.35rem; }
       .bar { height: 8px; background: var(--pw-border); border-radius: 99px; overflow: hidden; }
@@ -962,7 +951,6 @@ export type AssignmentHistoryItem = EmploymentAssignmentHistoryItem;
       @media (max-width: 640px) {
         .hero { padding: 0.85rem; }
         .actions { width: 100%; }
-        .btn { flex: 1 1 auto; justify-content: center; }
       }
     `,
   

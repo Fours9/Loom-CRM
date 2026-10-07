@@ -53,7 +53,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
     QuestionnaireProfileMirrorService,
   ],
   template: `
-    <div class="page">
+    <div class="page" [class.pw-stage]="store.loadState() === 'ready'">
       @switch (store.loadState()) {
         @case ('loading') {
           <p class="muted">Завантаження анкети…</p>
@@ -73,6 +73,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           </article>
         }
         @case ('ready') {
+          <span class="pw-stage__glow" aria-hidden="true"></span>
           <loom-questionnaire-fill-chrome
             [actionBusy]="actionBusy()"
             (back)="goBack()"

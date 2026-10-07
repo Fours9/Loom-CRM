@@ -4,16 +4,20 @@ import {
   HostListener,
   OnDestroy,
   computed,
+  forwardRef,
   inject,
   input,
+  linkedSignal,
   output,
   signal,
 } from '@angular/core';
+import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import {
   parseIsoParts,
   toIsoDate,
   todayIsoLocal,
 } from './date-iso.util';
+import { commitPwControlValue } from './pw-cva-commit';
 import {
   claimPwOverlay,
   releasePwOverlay,
@@ -38,12 +42,21 @@ const MONTHS_UA = [
 @Component({
   selector: 'loom-pw-date-input',
   standalone: true,
+  providers: [
+    {
+      provide: NG_VALUE_ACCESSOR,
+      useExisting: forwardRef(() => PwDateInputComponent),
+      multi: true,
+    },
+  ],
   template: `
-    <div class="wrap" [class.open]="open()">
+    <div class="wrap" [class.open]="open()" [class.disabled]="isDisabled()">
       <button
         type="button"
         class="trigger"
         [attr.aria-expanded]="open()"
+        [attr.aria-disabled]="isDisabled()"
+        [disabled]="isDisabled()"
         aria-haspopup="dialog"
         (click)="toggle($event)"
       >
@@ -84,7 +97,7 @@ const MONTHS_UA = [
                 type="button"
                 class="day"
                 [class.outside]="cell.outside"
-                [class.selected]="cell.iso === value()"
+                [class.selected]="cell.iso === currentValue()"
                 [class.today]="cell.iso === today"
                 (click)="choose(cell.iso)"
               >
@@ -102,6 +115,7 @@ const MONTHS_UA = [
   `,
   host: {
     '[class.open]': 'open()',
+    '[class.disabled]': 'isDisabled()',
   },
   styles: [
     `
@@ -115,6 +129,10 @@ const MONTHS_UA = [
       :host(.open) {
         z-index: 30;
       }
+      :host(.disabled) {
+        opacity: 0.55;
+        pointer-events: none;
+      }
       .wrap {
         position: relative;
         z-index: 1;
@@ -122,6 +140,9 @@ const MONTHS_UA = [
       }
       .wrap.open {
         z-index: 30;
+      }
+      .wrap.disabled .trigger {
+        cursor: not-allowed;
       }
       .trigger {
         width: 100%;
@@ -143,7 +164,7 @@ const MONTHS_UA = [
           border-color 0.16s ease,
           box-shadow 0.16s ease;
       }
-      .trigger:hover {
+      .trigger:hover:not(:disabled) {
         border-color: color-mix(in srgb, var(--pw-accent) 40%, var(--pw-border));
       }
       .wrap.open .trigger {
@@ -298,12 +319,22 @@ const MONTHS_UA = [
     `,
   ],
 })
-export class PwDateInputComponent implements OnDestroy, PwOverlayHandle {
+export class PwDateInputComponent
+  implements ControlValueAccessor, OnDestroy, PwOverlayHandle
+{
   private readonly host = inject(ElementRef<HTMLElement>);
 
+  /** Prefer either `[value]`+`(valueChange)` or `ngModel`/`formControlName` — not both. */
   readonly value = input('');
   readonly placeholder = input('дд.мм.рррр');
+  readonly disabled = input(false);
   readonly valueChange = output<string>();
+
+  /** Syncs from `[value]` when bound; `writeValue` / choose may override until next input change. */
+  private readonly internalValue = linkedSignal(() => this.value());
+  private readonly cvaDisabled = signal(false);
+  private onChange: (value: string) => void = () => undefined;
+  private onTouched: () => void = () => undefined;
 
   readonly open = signal(false);
   readonly viewYear = signal(new Date().getFullYear());
@@ -311,8 +342,11 @@ export class PwDateInputComponent implements OnDestroy, PwOverlayHandle {
   readonly today = todayIsoLocal();
   readonly weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
 
+  readonly currentValue = computed(() => this.internalValue());
+  readonly isDisabled = computed(() => this.disabled() || this.cvaDisabled());
+
   readonly displayValue = computed(() => {
-    const iso = this.value();
+    const iso = this.currentValue();
     if (!iso) return '';
     const { y, m, d } = parseIsoParts(iso);
     if (!y || !m || !d) return iso;
@@ -345,6 +379,22 @@ export class PwDateInputComponent implements OnDestroy, PwOverlayHandle {
     return out;
   });
 
+  writeValue(value: string | null): void {
+    this.internalValue.set(value ?? '');
+  }
+
+  registerOnChange(fn: (value: string) => void): void {
+    this.onChange = fn;
+  }
+
+  registerOnTouched(fn: () => void): void {
+    this.onTouched = fn;
+  }
+
+  setDisabledState(isDisabled: boolean): void {
+    this.cvaDisabled.set(isDisabled);
+  }
+
   ngOnDestroy(): void {
     releasePwOverlay(this);
   }
@@ -355,6 +405,7 @@ export class PwDateInputComponent implements OnDestroy, PwOverlayHandle {
 
   toggle(event: MouseEvent): void {
     event.stopPropagation();
+    if (this.isDisabled()) return;
     if (this.open()) {
       this.closeMenu();
       return;
@@ -378,12 +429,14 @@ export class PwDateInputComponent implements OnDestroy, PwOverlayHandle {
   }
 
   choose(iso: string): void {
-    this.valueChange.emit(iso);
+    if (this.isDisabled()) return;
+    this.commit(iso);
     this.closeMenu();
   }
 
   clear(): void {
-    this.valueChange.emit('');
+    if (this.isDisabled()) return;
+    this.commit('');
     this.closeMenu();
   }
 
@@ -393,6 +446,15 @@ export class PwDateInputComponent implements OnDestroy, PwOverlayHandle {
     if (!this.host.nativeElement.contains(event.target as Node)) {
       this.closeMenu();
     }
+  }
+
+  private commit(iso: string): void {
+    commitPwControlValue(iso, {
+      setValue: (v) => this.internalValue.set(v),
+      emitValueChange: (v) => this.valueChange.emit(v),
+      cvaOnChange: this.onChange,
+      cvaOnTouched: this.onTouched,
+    });
   }
 
   private openMenu(): void {
@@ -406,7 +468,7 @@ export class PwDateInputComponent implements OnDestroy, PwOverlayHandle {
   }
 
   private syncViewToValue(): void {
-    const iso = this.value() || this.today;
+    const iso = this.currentValue() || this.today;
     const { y, m } = parseIsoParts(iso);
     if (y && m) {
       this.viewYear.set(y);

@@ -36,6 +36,10 @@ import {
   type AbsenceSidePanelId,
 } from '../absence-side-panel.model';
 import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absences-help-context';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../../shared/ui/pw-select.component';
 
 @Component({
   selector: 'app-employee-detail-page',
@@ -45,12 +49,13 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
     RouterLink,
     ScheduleEditorComponent,
     RequestStatusBadgeComponent,
+    PwSelectComponent,
   ],
   template: `
     @if (employee) {
-      <section class="page">
-        <a routerLink="/absences/employees" class="back">← До списку</a>
-        <header class="hero">
+      <section class="page pw-stage">
+        <span class="pw-stage__glow" aria-hidden="true"></span>
+        <header class="hero pw-page-head pw-rise">
           <div class="avatar" aria-hidden="true">
             @if (employee.photoUrl) {
               <img [src]="employee.photoUrl" alt="" />
@@ -61,10 +66,16 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
             }
           </div>
           <div class="hero-main">
+            <p class="pw-eyebrow"><a routerLink="/absences/employees">← До списку</a></p>
             <div class="hero-row">
               <h1>{{ employee.fullName }}</h1>
               @if (employee.permissions?.canExportProfilePdf) {
-                <button type="button" class="ghost-btn" (click)="downloadPdf()" [disabled]="pdfLoading">
+                <button
+                  type="button"
+                  class="pw-link-action"
+                  (click)="downloadPdf()"
+                  [disabled]="pdfLoading"
+                >
                   {{ pdfLoading ? 'Формування…' : 'Завантажити PDF' }}
                 </button>
               }
@@ -72,12 +83,16 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
             <div class="hero-row hero-meta">
               <p>#{{ employee.employeeNumber }} · {{ heroOrgMeta }}</p>
               @if (!editingProfile && employee.permissions?.canEditProfile) {
-                <button type="button" class="ghost-btn" (click)="startEdit()">Редагувати</button>
+                <button type="button" class="pw-link-action" (click)="startEdit()">
+                  Редагувати
+                </button>
               }
               @if (editingProfile) {
                 <div class="edit-actions">
-                  <button type="button" (click)="save()">Зберегти</button>
-                  <button type="button" class="secondary" (click)="cancelEdit()">Скасувати</button>
+                  <button type="button" class="btn pw-btn" (click)="save()">Зберегти</button>
+                  <button type="button" class="btn pw-btn pw-btn--ghost" (click)="cancelEdit()">
+                    Скасувати
+                  </button>
                 </div>
               }
             </div>
@@ -93,11 +108,13 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
 
         <div class="grid">
           <div class="col">
-            <article class="card" data-help-id="absences.employee-detail.anketa">
+            <article class="card pw-panel" data-help-id="absences.employee-detail.anketa">
               <div class="card-head">
                 <h2>Анкета</h2>
                 @if (!editingProfile) {
-                  <a class="ghost-btn" [routerLink]="['/people', employee.id]">Профіль Loom</a>
+                  <a class="pw-link-action" [routerLink]="['/people', employee.id]">
+                    Профіль Loom
+                  </a>
                 }
               </div>
 
@@ -336,7 +353,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
             </article>
 
             @if (showAccessOverridesCard) {
-              <article class="card">
+              <article class="card pw-panel">
                 <h2>Індивідуальні права</h2>
                 @if (globalPrivacyPriority) {
                   <p class="muted">
@@ -351,44 +368,34 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
                 @if (editingProfile) {
                   <label>
                     Чужі анкети
-                    <select
-                      name="profileOverride"
-                      [(ngModel)]="profileOverride"
+                    <loom-pw-select
+                      [value]="profileOverride"
+                      [options]="profileOverridePwOptions"
                       [disabled]="globalPrivacyPriority"
-                    >
-                      @for (opt of profileOverrideOptions; track opt.value) {
-                        <option [value]="opt.value">{{ opt.label }}</option>
-                      }
-                    </select>
+                      (valueChange)="onProfileOverrideSelected($event)"
+                    />
                   </label>
                   <div class="rights-absence-stack">
                     <label>
                       Чужі відсутності
-                      <select
-                        name="absencesOverride"
-                        [(ngModel)]="absencesOverride"
+                      <loom-pw-select
+                        [value]="absencesOverride"
+                        [options]="absenceOverridePwOptions"
                         [disabled]="globalPrivacyPriority"
-                        (ngModelChange)="onAbsencesOverrideChange()"
-                      >
-                        @for (opt of absenceOverrideOptions; track opt.value) {
-                          <option [value]="opt.value">{{ opt.label }}</option>
-                        }
-                      </select>
+                        (valueChange)="onAbsencesOverrideSelected($event)"
+                      />
                     </label>
                     @if (absencesOverride !== 'deny') {
                       <div class="rights-subsetting">
                         <p class="nested-caption">Підрежим режиму видимості відсутностей</p>
                         <label>
                           Деталі (тип / причина)
-                          <select
-                            name="absenceTypeDetailOverride"
-                            [(ngModel)]="absenceTypeDetailOverride"
+                          <loom-pw-select
+                            [value]="absenceTypeDetailOverride"
+                            [options]="absenceTypeDetailPwOptions"
                             [disabled]="globalPrivacyPriority"
-                          >
-                            @for (opt of absenceTypeDetailOptions; track opt.value) {
-                              <option [value]="opt.value">{{ opt.label }}</option>
-                            }
-                          </select>
+                            (valueChange)="onAbsenceTypeDetailOverrideSelected($event)"
+                          />
                         </label>
                       </div>
                     }
@@ -413,7 +420,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
                   @if (employee.permissions?.canEditProfile) {
                     <button
                       type="button"
-                      class="ghost-btn"
+                      class="pw-link-action"
                       (click)="startEdit()"
                       [disabled]="globalPrivacyPriority"
                     >
@@ -426,7 +433,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
           </div>
 
           <div class="col side-col">
-            <details class="card side-tools" open>
+            <details class="card pw-panel side-tools" open>
               <summary class="side-tools-summary">
                 <div class="panel-tabs" role="tablist">
                   <button
@@ -587,8 +594,10 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
         color: var(--pw-muted);
         min-width: 0;
       }
-      .hero-row .ghost-btn {
+      .hero-row .pw-link-action,
+      .card-head .pw-link-action {
         flex: 0 0 auto;
+        width: auto;
       }
       .banner-msg {
         margin: 0 0 0.75rem;
@@ -860,7 +869,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
         font-size: 0.9rem;
         min-width: 0;
       }
-      input, select, button {
+      input, select {
         width: 100%;
         max-width: 100%;
         min-width: 0;
@@ -868,6 +877,12 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
         padding: 0.55rem 0.7rem;
         border-radius: 8px;
         border: 1px solid var(--pw-border-strong);
+      }
+      button.pw-btn,
+      a.pw-btn {
+        width: auto;
+        max-width: none;
+        flex: 0 0 auto;
       }
       input[type='color'] {
         width: 3rem;
@@ -914,7 +929,7 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
         flex-wrap: wrap;
       }
       .card-head h2 { margin: 0; }
-      .card-head .ghost-btn {
+      .card-head .pw-link-action {
         flex: 0 0 auto;
         margin-left: auto;
       }
@@ -942,18 +957,6 @@ import { resolveAbsencesEmployeeDetailHelpContext } from '../help/resolve-absenc
         border-color: var(--pw-accent);
         background: color-mix(in srgb, var(--pw-accent) 16%, transparent);
       }
-      .ghost-btn {
-        width: auto;
-        background: transparent;
-        color: var(--pw-accent);
-        border: 0;
-        padding: 0;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 0.9rem;
-        text-decoration: none;
-      }
-      .ghost-btn:hover { text-decoration: underline; }
       .section-block > label.check-row,
       .edit label.check-row,
       .check-row {
@@ -1160,6 +1163,10 @@ export class EmployeeDetailPageComponent implements OnInit, OnDestroy {
     label: ABSENCE_TYPE_DETAIL_OVERRIDE_UI[value],
   }));
 
+  readonly profileOverridePwOptions: PwSelectOption[] = this.profileOverrideOptions;
+  readonly absenceOverridePwOptions: PwSelectOption[] = this.absenceOverrideOptions;
+  readonly absenceTypeDetailPwOptions: PwSelectOption[] = this.absenceTypeDetailOptions;
+
   employee: EmployeeProfile | null = null;
   edit = {
     lastName: '',
@@ -1355,6 +1362,19 @@ export class EmployeeDetailPageComponent implements OnInit, OnDestroy {
     }
     this.editingProfile = false;
     this.error = '';
+  }
+
+  onProfileOverrideSelected(next: string): void {
+    this.profileOverride = next as VisibilityOverrideUi;
+  }
+
+  onAbsencesOverrideSelected(next: string): void {
+    this.absencesOverride = next as VisibilityOverrideUi;
+    this.onAbsencesOverrideChange();
+  }
+
+  onAbsenceTypeDetailOverrideSelected(next: string): void {
+    this.absenceTypeDetailOverride = next as AbsenceTypeDetailOverrideUi;
   }
 
   onAbsencesOverrideChange(): void {

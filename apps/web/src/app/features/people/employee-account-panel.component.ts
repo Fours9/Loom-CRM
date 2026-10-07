@@ -41,7 +41,7 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
                 autocomplete="off"
               />
             </label>
-            <button type="button" (click)="saveAccountEmail()" [disabled]="busy()">
+            <button type="button" class="btn pw-btn" (click)="saveAccountEmail()" [disabled]="busy()">
               Зберегти email
             </button>
           } @else {
@@ -82,7 +82,7 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
                 />
               </div>
             </label>
-            <button type="button" (click)="attachAccount()" [disabled]="busy()">
+            <button type="button" class="btn pw-btn" (click)="attachAccount()" [disabled]="busy()">
               Створити акаунт
             </button>
             @if (shownOneShotPassword()) {
@@ -119,7 +119,7 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
                 />
               </div>
             </label>
-            <button type="button" (click)="resetPassword()" [disabled]="busy()">
+            <button type="button" class="btn pw-btn" (click)="resetPassword()" [disabled]="busy()">
               Скинути пароль
             </button>
             @if (shownOneShotPassword()) {
@@ -139,20 +139,20 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
           @if (header().accountStatus === 'active') {
             <button
               type="button"
-              class="danger"
+              class="btn pw-btn pw-btn--ghost danger"
               (click)="setStatus('deactivated')"
               [disabled]="busy()"
             >
               Деактивувати
             </button>
           } @else if (header().accountStatus === 'deactivated') {
-            <button type="button" (click)="setStatus('active')" [disabled]="busy()">
+            <button type="button" class="btn pw-btn" (click)="setStatus('active')" [disabled]="busy()">
               Активувати
             </button>
           }
           <button
             type="button"
-            class="danger"
+            class="btn pw-btn pw-btn--ghost danger"
             (click)="deleteAccount()"
             [disabled]="busy()"
           >
@@ -184,7 +184,7 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
           </label>
           <button
             type="button"
-            class="danger"
+            class="btn pw-btn pw-btn--ghost danger"
             (click)="hardDeleteEmployee()"
             [disabled]="busy() || !confirmMatches()"
           >
@@ -235,23 +235,12 @@ import { EmployeeAccountApiService } from './employee-account-api.service';
       .password-row input {
         flex: 1 1 auto;
       }
-      button {
+      .pw-btn {
         justify-self: start;
-        padding: 0.55rem 0.9rem;
-        border-radius: 8px;
-        border: 1px solid var(--pw-border-strong, var(--pw-border));
-        background: var(--pw-accent-soft, color-mix(in srgb, var(--pw-accent) 18%, transparent));
-        color: var(--pw-text);
-        cursor: pointer;
       }
-      button:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
-      }
-      button.danger {
-        border-color: color-mix(in srgb, var(--pw-danger, #a32d2d) 55%, var(--pw-border));
-        background: color-mix(in srgb, var(--pw-danger, #a32d2d) 12%, var(--pw-surface));
+      .pw-btn.danger {
         color: var(--pw-danger, #a32d2d);
+        border-color: color-mix(in srgb, var(--pw-danger, #a32d2d) 40%, var(--pw-border));
       }
       .status-block,
       .danger-zone {

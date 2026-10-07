@@ -218,7 +218,9 @@ export class ApiService {
     page?: number;
     pageSize?: number;
     statusGroup?: string;
+    statusGroups?: string[];
     type?: string;
+    types?: string[];
     employeeId?: string;
     departmentId?: string;
     departmentIds?: string[];
@@ -231,8 +233,16 @@ export class ApiService {
     let params = new HttpParams();
     if (filters?.page) params = params.set('page', String(filters.page));
     if (filters?.pageSize) params = params.set('pageSize', String(filters.pageSize));
-    if (filters?.statusGroup) params = params.set('statusGroup', filters.statusGroup);
-    if (filters?.type) params = params.set('type', filters.type);
+    if (filters?.statusGroups?.length) {
+      params = params.set('statusGroups', [...filters.statusGroups].sort().join(','));
+    } else if (filters?.statusGroup) {
+      params = params.set('statusGroup', filters.statusGroup);
+    }
+    if (filters?.types?.length) {
+      params = params.set('types', [...filters.types].sort().join(','));
+    } else if (filters?.type) {
+      params = params.set('type', filters.type);
+    }
     if (filters?.employeeId) params = params.set('employeeId', filters.employeeId);
     if (filters?.departmentIds?.length) {
       params = params.set('departmentIds', filters.departmentIds.join(','));

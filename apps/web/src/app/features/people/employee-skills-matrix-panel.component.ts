@@ -16,11 +16,15 @@ import {
 } from '../settings/settings-org-api.service';
 import { Subscription } from 'rxjs';
 import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.service';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../shared/ui/pw-select.component';
 
 @Component({
   selector: 'loom-employee-skills-matrix-panel',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet],
+  imports: [FormsModule, NgTemplateOutlet, PwSelectComponent],
   template: `
     <section class="panel" data-help-id="people.metrics.skills.matrix">
       <h3>Матриця навичок</h3>
@@ -82,7 +86,7 @@ import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.ser
               @if (!pickerOpen) {
                 <button
                   type="button"
-                  class="link"
+                  class="pw-link-action"
                   data-help-id="people.metrics.skills.add"
                   (click)="openPicker()"
                 >
@@ -90,30 +94,26 @@ import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.ser
                 </button>
               } @else {
                 <div class="picker">
-                  <select [(ngModel)]="pickerSkillId" [disabled]="pickerLoading">
-                    <option value="">
-                      {{ pickerLoading ? 'Завантаження…' : '— оберіть —' }}
-                    </option>
-                    @for (skill of pickerSkills; track skill.id) {
-                      <option [value]="skill.id">
-                        {{ skill.name
-                        }}{{ skill.group?.name ? ' · ' + skill.group?.name : '' }}
-                      </option>
-                    }
-                  </select>
+                  <loom-pw-select
+                    [value]="pickerSkillId"
+                    [options]="pickerSkillOptions()"
+                    [disabled]="pickerLoading"
+                    [placeholder]="pickerLoading ? 'Завантаження…' : '— оберіть —'"
+                    (valueChange)="onPickerSkillSelected($event)"
+                  />
                   @if (pickerError) {
                     <p class="error">{{ pickerError }}</p>
                   }
                   <div class="picker-actions">
                     <button
                       type="button"
-                      class="link"
+                      class="pw-link-action"
                       [disabled]="!pickerSkillId || saving"
                       (click)="confirmAdd()"
                     >
                       Додати
                     </button>
-                    <button type="button" class="link" (click)="closePicker()">
+                    <button type="button" class="pw-link-action" (click)="closePicker()">
                       Скасувати
                     </button>
                   </div>
@@ -160,7 +160,7 @@ import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.ser
           @if (currentLevel(row) != null) {
             <button
               type="button"
-              class="link"
+              class="pw-link-action"
               [disabled]="saving"
               (click)="setLevel(row, null)"
             >
@@ -170,7 +170,7 @@ import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.ser
           @if (removable && row.assessment) {
             <button
               type="button"
-              class="link danger"
+              class="pw-link-action danger"
               [disabled]="saving"
               (click)="removeExtra(row)"
             >
@@ -268,15 +268,7 @@ import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.ser
         font-size: 0.9rem;
         opacity: 0.85;
       }
-      .link {
-        border: none;
-        background: transparent;
-        text-decoration: underline;
-        cursor: pointer;
-        font: inherit;
-        color: inherit;
-      }
-      .link.danger {
+      .pw-link-action.danger {
         color: var(--pw-danger, #b42318);
       }
       .muted {
@@ -291,23 +283,6 @@ import { EmployeeSkillsMatrixApiService } from './employee-skills-matrix-api.ser
         display: grid;
         gap: 0.5rem;
         max-width: 28rem;
-      }
-      .picker select {
-        width: 100%;
-        min-height: 44px;
-        padding: 0.45rem 0.55rem;
-        border-radius: 8px;
-        border: 1px solid var(--pw-border, color-mix(in srgb, currentColor 25%, transparent));
-        background: var(--pw-input-bg, var(--pw-surface, #fff));
-        color: var(--pw-text, #1e293b);
-        color-scheme: inherit;
-      }
-      .picker select option {
-        background: var(--pw-input-bg, var(--pw-surface, #fff));
-        color: var(--pw-text, #1e293b);
-      }
-      :host-context(html[data-theme='dark']) .picker select {
-        color-scheme: dark;
       }
       .picker-actions {
         display: flex;
@@ -438,6 +413,17 @@ export class EmployeeSkillsMatrixPanelComponent implements OnChanges, OnDestroy 
         this.error = 'Не вдалося видалити навичку';
       },
     });
+  }
+
+  pickerSkillOptions(): PwSelectOption[] {
+    return this.pickerSkills.map((skill) => ({
+      value: skill.id,
+      label: skill.group?.name ? `${skill.name} · ${skill.group.name}` : skill.name,
+    }));
+  }
+
+  onPickerSkillSelected(value: string): void {
+    this.pickerSkillId = value;
   }
 
   openPicker(): void {

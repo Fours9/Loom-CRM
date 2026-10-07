@@ -33,13 +33,13 @@ import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
       @if (!loading && !loadError && canEditSchedule) {
         <div class="card-head actions">
           @if (!editing) {
-            <button type="button" class="btn" (click)="startEdit()">
+            <button type="button" class="pw-link-action" (click)="startEdit()">
               {{ persistedSchedule.length === 0 ? 'Налаштувати графік' : 'Редагувати' }}
             </button>
           } @else {
             <button
               type="button"
-              class="btn"
+              class="btn pw-btn"
               [disabled]="saving"
               (click)="save()"
             >
@@ -47,7 +47,7 @@ import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
             </button>
             <button
               type="button"
-              class="ghost-btn"
+              class="pw-link-action"
               [disabled]="saving"
               (click)="cancelEdit()"
             >
@@ -88,38 +88,6 @@ import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
         align-items: center;
         flex-wrap: wrap;
         min-height: 2.75rem;
-      }
-      .btn {
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        border: 0;
-        padding: 0.65rem 1rem;
-        border-radius: 8px;
-        min-height: 2.75rem;
-        display: inline-flex;
-        align-items: center;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .btn:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
-      }
-      .ghost-btn {
-        background: transparent;
-        border: 0;
-        color: var(--pw-accent);
-        padding: 0.65rem 0.5rem;
-        min-height: 2.75rem;
-        cursor: pointer;
-        font: inherit;
-      }
-      .ghost-btn:hover:not(:disabled) {
-        text-decoration: underline;
-      }
-      .ghost-btn:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
       }
       .muted {
         color: var(--pw-muted);

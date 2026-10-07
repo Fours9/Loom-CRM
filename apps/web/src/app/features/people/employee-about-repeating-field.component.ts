@@ -4,6 +4,11 @@ import type {
   EmployeeAboutChildFieldView,
   EmployeeAboutFieldView,
 } from '@loom/contracts-employees';
+import { PwDateInputComponent } from '../../shared/ui/pw-date-input.component';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../shared/ui/pw-select.component';
 
 type AboutGoalRow = Record<string, unknown> & { __uiId: string };
 
@@ -14,7 +19,7 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
 @Component({
   selector: 'loom-employee-about-repeating-field',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, PwSelectComponent, PwDateInputComponent],
   template: `
     <div class="rg" [attr.aria-label]="field.labelUa">
       @if (!editable) {
@@ -37,7 +42,7 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
               <strong>#{{ i + 1 }}</strong>
               <button
                 type="button"
-                class="danger"
+                class="pw-link-action danger"
                 title="Видалити"
                 aria-label="Видалити запис"
                 (click)="removeRow(i)"
@@ -50,15 +55,12 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
                 <span>{{ child.labelUa }}</span>
                 @switch (child.valueType) {
                   @case ('single_choice') {
-                    <select
-                      [ngModel]="row[child.key] ?? null"
-                      (ngModelChange)="onChildChange(i, child.key, $event)"
-                    >
-                      <option [ngValue]="null">— не вказано —</option>
-                      @for (opt of child.options ?? []; track opt.value) {
-                        <option [ngValue]="opt.value">{{ opt.labelUa }}</option>
-                      }
-                    </select>
+                    <loom-pw-select
+                      [value]="asSelectValue(row[child.key])"
+                      [options]="choiceOptions(child)"
+                      placeholder="— не вказано —"
+                      (valueChange)="onChoiceSelected(i, child.key, $event)"
+                    />
                   }
                   @case ('textarea') {
                     <textarea
@@ -68,10 +70,9 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
                     ></textarea>
                   }
                   @case ('date') {
-                    <input
-                      type="date"
-                      [ngModel]="asString(row[child.key])"
-                      (ngModelChange)="onChildChange(i, child.key, $event || null)"
+                    <loom-pw-date-input
+                      [value]="asString(row[child.key])"
+                      (valueChange)="onChildChange(i, child.key, $event || null)"
                     />
                   }
                   @default {
@@ -88,7 +89,7 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
         }
         <button
           type="button"
-          class="add"
+          class="pw-link-action"
           [disabled]="!canAdd"
           (click)="addRow()"
         >
@@ -139,28 +140,13 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
         color: var(--pw-muted, #667085);
       }
       textarea,
-      input,
-      select {
+      input {
         width: 100%;
         box-sizing: border-box;
         font-weight: 400;
       }
-      .add,
-      .danger {
-        border: 1px solid var(--pw-border, #d0d7e2);
-        background: var(--pw-surface, #fff);
-        border-radius: 8px;
-        padding: 0.35rem 0.7rem;
-        cursor: pointer;
-        width: fit-content;
-      }
-      .danger {
-        color: #b91c1c;
-        border-color: color-mix(in srgb, #b91c1c 35%, var(--pw-border, #d0d7e2));
-      }
-      .add:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+      .pw-link-action.danger {
+        color: var(--pw-danger, #b91c1c);
       }
     `,
   ],
@@ -211,6 +197,24 @@ export class EmployeeAboutRepeatingFieldComponent {
     );
     this.rows = copy;
     this.emit();
+  }
+
+  onChoiceSelected(index: number, key: string, next: string): void {
+    this.onChildChange(index, key, next === '' ? null : next);
+  }
+
+  asSelectValue(value: unknown): string {
+    return value == null ? '' : String(value);
+  }
+
+  choiceOptions(child: EmployeeAboutChildFieldView): PwSelectOption[] {
+    return [
+      { value: '', label: '— не вказано —' },
+      ...(child.options ?? []).map((opt) => ({
+        value: String(opt.value),
+        label: opt.labelUa,
+      })),
+    ];
   }
 
   asString(value: unknown): string {

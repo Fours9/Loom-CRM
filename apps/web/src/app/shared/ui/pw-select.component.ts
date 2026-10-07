@@ -4,11 +4,15 @@ import {
   HostListener,
   OnDestroy,
   computed,
+  forwardRef,
   inject,
   input,
+  linkedSignal,
   output,
   signal,
 } from '@angular/core';
+import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { commitPwControlValue } from './pw-cva-commit';
 import {
   claimPwOverlay,
   releasePwOverlay,
@@ -20,12 +24,26 @@ export type PwSelectOption = { value: string; label: string };
 @Component({
   selector: 'loom-pw-select',
   standalone: true,
+  providers: [
+    {
+      provide: NG_VALUE_ACCESSOR,
+      useExisting: forwardRef(() => PwSelectComponent),
+      multi: true,
+    },
+  ],
   template: `
-    <div class="wrap" [class.open]="open()">
+    <div
+      class="wrap"
+      [class.open]="open()"
+      [class.drop-up]="openUp()"
+      [class.disabled]="isDisabled()"
+    >
       <button
         type="button"
         class="trigger"
         [attr.aria-expanded]="open()"
+        [attr.aria-disabled]="isDisabled()"
+        [disabled]="isDisabled()"
         aria-haspopup="listbox"
         (click)="toggle($event)"
       >
@@ -40,8 +58,8 @@ export type PwSelectOption = { value: string; label: string };
           @for (opt of options(); track opt.value) {
             <li
               role="option"
-              [attr.aria-selected]="opt.value === value()"
-              [class.active]="opt.value === value()"
+              [attr.aria-selected]="opt.value === currentValue()"
+              [class.active]="opt.value === currentValue()"
               (click)="choose(opt.value)"
             >
               {{ opt.label }}
@@ -53,6 +71,7 @@ export type PwSelectOption = { value: string; label: string };
   `,
   host: {
     '[class.open]': 'open()',
+    '[class.disabled]': 'isDisabled()',
   },
   styles: [
     `
@@ -66,6 +85,10 @@ export type PwSelectOption = { value: string; label: string };
       :host(.open) {
         z-index: 30;
       }
+      :host(.disabled) {
+        opacity: 0.55;
+        pointer-events: none;
+      }
       .wrap {
         position: relative;
         z-index: 1;
@@ -73,6 +96,9 @@ export type PwSelectOption = { value: string; label: string };
       }
       .wrap.open {
         z-index: 30;
+      }
+      .wrap.disabled .trigger {
+        cursor: not-allowed;
       }
       .trigger {
         width: 100%;
@@ -94,7 +120,7 @@ export type PwSelectOption = { value: string; label: string };
           border-color 0.16s ease,
           box-shadow 0.16s ease;
       }
-      .trigger:hover {
+      .trigger:hover:not(:disabled) {
         border-color: color-mix(in srgb, var(--pw-accent) 40%, var(--pw-border));
       }
       .wrap.open .trigger {
@@ -130,7 +156,12 @@ export type PwSelectOption = { value: string; label: string };
         left: 0;
         right: 0;
         top: calc(100% + 6px);
+        bottom: auto;
         z-index: 40;
+      }
+      .wrap.drop-up .menu {
+        top: auto;
+        bottom: calc(100% + 6px);
       }
       @media (prefers-reduced-motion: reduce) {
         .caret,
@@ -141,20 +172,52 @@ export type PwSelectOption = { value: string; label: string };
     `,
   ],
 })
-export class PwSelectComponent implements OnDestroy, PwOverlayHandle {
+export class PwSelectComponent
+  implements ControlValueAccessor, OnDestroy, PwOverlayHandle
+{
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly dropdownGapPx = 6;
+  private readonly estimatedMenuMaxPx = 280;
 
+  /** Prefer either `[value]`+`(valueChange)` or `ngModel`/`formControlName` — not both. */
   readonly value = input('');
   readonly options = input<PwSelectOption[]>([]);
   readonly placeholder = input('Усі');
+  readonly disabled = input(false);
   readonly valueChange = output<string>();
 
+  /** Syncs from `[value]` when bound; `writeValue` / choose may override until next input change. */
+  private readonly internalValue = linkedSignal(() => this.value());
+  private readonly cvaDisabled = signal(false);
+  private onChange: (value: string) => void = () => undefined;
+  private onTouched: () => void = () => undefined;
+
   readonly open = signal(false);
+  readonly openUp = signal(false);
+
+  readonly currentValue = computed(() => this.internalValue());
+  readonly isDisabled = computed(() => this.disabled() || this.cvaDisabled());
 
   readonly selectedLabel = computed(() => {
-    const v = this.value();
+    const v = this.currentValue();
     return this.options().find((o) => o.value === v)?.label ?? '';
   });
+
+  writeValue(value: string | null): void {
+    this.internalValue.set(value ?? '');
+  }
+
+  registerOnChange(fn: (value: string) => void): void {
+    this.onChange = fn;
+  }
+
+  registerOnTouched(fn: () => void): void {
+    this.onTouched = fn;
+  }
+
+  setDisabledState(isDisabled: boolean): void {
+    this.cvaDisabled.set(isDisabled);
+  }
 
   ngOnDestroy(): void {
     releasePwOverlay(this);
@@ -162,10 +225,12 @@ export class PwSelectComponent implements OnDestroy, PwOverlayHandle {
 
   closeFromOverlaySession(): void {
     this.open.set(false);
+    this.openUp.set(false);
   }
 
   toggle(event: MouseEvent): void {
     event.stopPropagation();
+    if (this.isDisabled()) return;
     if (this.open()) {
       this.closeMenu();
       return;
@@ -174,7 +239,13 @@ export class PwSelectComponent implements OnDestroy, PwOverlayHandle {
   }
 
   choose(value: string): void {
-    this.valueChange.emit(value);
+    if (this.isDisabled()) return;
+    commitPwControlValue(value, {
+      setValue: (v) => this.internalValue.set(v),
+      emitValueChange: (v) => this.valueChange.emit(v),
+      cvaOnChange: this.onChange,
+      cvaOnTouched: this.onTouched,
+    });
     this.closeMenu();
   }
 
@@ -186,13 +257,42 @@ export class PwSelectComponent implements OnDestroy, PwOverlayHandle {
     }
   }
 
+  @HostListener('window:resize')
+  onResize(): void {
+    if (this.open()) this.updatePlacement();
+  }
+
   private openMenu(): void {
     claimPwOverlay(this);
+    this.openUp.set(false);
     this.open.set(true);
+    setTimeout(() => this.updatePlacement());
   }
 
   private closeMenu(): void {
     this.open.set(false);
+    this.openUp.set(false);
     releasePwOverlay(this);
+  }
+
+  private estimatedMenuHeight(): number {
+    const rows = Math.max(this.options().length, 1);
+    return Math.min(this.estimatedMenuMaxPx, 12 + rows * 40);
+  }
+
+  private shouldOpenUp(neededPx: number): boolean {
+    const trigger = this.host.nativeElement.querySelector('.trigger') as HTMLElement | null;
+    if (!trigger) return false;
+    const rect = trigger.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom - this.dropdownGapPx;
+    const spaceAbove = rect.top - this.dropdownGapPx;
+    return spaceBelow < neededPx && spaceAbove > spaceBelow;
+  }
+
+  private updatePlacement(): void {
+    if (!this.open()) return;
+    const menu = this.host.nativeElement.querySelector('.menu') as HTMLElement | null;
+    const needed = menu?.offsetHeight || this.estimatedMenuHeight();
+    this.openUp.set(this.shouldOpenUp(needed));
   }
 }

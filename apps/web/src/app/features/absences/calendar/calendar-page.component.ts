@@ -8,7 +8,6 @@
   ViewChild,
   inject,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { Subject, Subscription, debounceTime, switchMap, of, catchError } from 'rxjs';
 import { ApiService } from '../core/api/api.service';
 import { TranslatePipe } from '../core/i18n/translate.pipe';
@@ -19,13 +18,20 @@ import {
   CalendarDayItem,
   CalendarDaySummary,
   CalendarLegendItem,
-  CalendarQueryFilters,
   CalendarStatusGroup,
   CalendarViewMode,
   Department,
   EmployeeListItem,
 } from '../core/api/models';
 import { ABSENCE_TYPE_LABELS } from '../core/api/labels';
+import {
+  MultiSelectItem,
+  MultiSelectListComponent,
+} from '../shared/multi-select-list.component';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../../shared/ui/pw-select.component';
 import { CalendarDayCellComponent } from './calendar-day-cell.component';
 import { CalendarDayDrawerComponent } from './calendar-day-drawer.component';
 import { CalendarListEventsComponent } from './calendar-list-events.component';
@@ -41,33 +47,34 @@ import {
   startOfWeekIso,
   todayIsoLocal,
 } from './calendar-date.util';
+import { buildCalendarQueryFilters } from './calendar-query-filters';
 
 @Component({
   selector: 'app-calendar-page',
   standalone: true,
   imports: [
-    FormsModule,
     TranslatePipe,
     CalendarDayCellComponent,
     CalendarDayDrawerComponent,
     CalendarListEventsComponent,
     CalendarSegmentComponent,
+    MultiSelectListComponent,
+    PwSelectComponent,
   ],
   template: `
-    <section class="page" [class.embedded]="embedded" data-help-id="absences.calendar">
-      <div class="stage">
-        <span class="stage__glow" aria-hidden="true"></span>
-        <header class="top" [class.embedded]="embedded">
+    <section class="page pw-stage" [class.embedded]="embedded" data-help-id="absences.calendar">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
+        <header class="top pw-page-head pw-rise" [class.embedded]="embedded">
           @if (!embedded) {
             <div class="hero">
-              <p class="eyebrow">Час і відсутність</p>
+              <p class="pw-eyebrow">Час і відсутність</p>
               <h1>Робочий календар</h1>
             </div>
           }
           <div class="nav-row" data-help-id="absences.calendar.nav">
             <button
               type="button"
-              class="ghost nav-btn"
+              class="pw-link-action pw-link-action--compact nav-btn"
               [attr.aria-label]="'calendar.prev' | t"
               (click)="shift(-1)"
             >
@@ -76,13 +83,17 @@ import {
             <strong class="period">{{ periodTitle }}</strong>
             <button
               type="button"
-              class="ghost nav-btn"
+              class="pw-link-action pw-link-action--compact nav-btn"
               [attr.aria-label]="'calendar.next' | t"
               (click)="shift(1)"
             >
               →
             </button>
-            <button type="button" class="ghost today-btn" (click)="goToday()">
+            <button
+              type="button"
+              class="pw-link-action pw-link-action--compact today-btn"
+              (click)="goToday()"
+            >
               {{ 'calendar.today' | t }}
             </button>
           </div>
@@ -98,7 +109,7 @@ import {
           }
         </header>
 
-        <div class="toolbar">
+        <div class="toolbar pw-panel pw-filters pw-rise" style="--pw-delay: 60ms">
           <div class="modes" #modesEl data-help-id="absences.calendar.modes" role="tablist">
             @for (m of modes; track m) {
               <button
@@ -116,39 +127,40 @@ import {
             @if (!isEmployeeOnly) {
               <label>
                 {{ 'calendar.filters.department' | t }}
-                <select [(ngModel)]="filterDepartmentId" (ngModelChange)="onDepartmentFilterChanged()">
-                  <option value="">{{ 'calendar.filters.all' | t }}</option>
-                  @for (d of departments; track d.id) {
-                    <option [value]="d.id">{{ d.name }}</option>
-                  }
-                </select>
+                <app-multi-select-list
+                  [items]="departmentItems"
+                  [selectedIds]="filterDepartmentIds"
+                  [placeholder]="'calendar.filters.all' | t"
+                  (selectedIdsChange)="onDepartmentsSelected($event)"
+                />
               </label>
               <label>
                 {{ 'calendar.filters.employee' | t }}
-                <select [(ngModel)]="filterEmployeeId" (ngModelChange)="onFiltersChanged()">
-                  <option value="">{{ 'calendar.filters.all' | t }}</option>
-                  @for (e of employees; track e.id) {
-                    <option [value]="e.id">{{ e.lastName }} {{ e.firstName }}</option>
-                  }
-                </select>
+                <loom-pw-select
+                  [value]="filterEmployeeId"
+                  [options]="employeeSelectOptions"
+                  [placeholder]="'calendar.filters.all' | t"
+                  (valueChange)="onEmployeeSelected($event)"
+                />
               </label>
             }
             <label>
               {{ 'calendar.filters.type' | t }}
-              <select [(ngModel)]="filterType" (ngModelChange)="onFiltersChanged()">
-                <option value="">{{ 'calendar.filters.all' | t }}</option>
-                @for (t of typeFilterOptions; track t.value) {
-                  <option [value]="t.value">{{ t.label }}</option>
-                }
-              </select>
+              <app-multi-select-list
+                [items]="typeFilterItems"
+                [selectedIds]="filterTypes"
+                [placeholder]="'calendar.filters.all' | t"
+                (selectedIdsChange)="onTypesSelected($event)"
+              />
             </label>
             <label>
               {{ 'calendar.filters.status' | t }}
-              <select [(ngModel)]="filterStatus" (ngModelChange)="onFiltersChanged()">
-                <option value="">{{ 'calendar.filters.allVisible' | t }}</option>
-                <option value="approved">Підтверджено</option>
-                <option value="pending">Очікує</option>
-              </select>
+              <app-multi-select-list
+                [items]="statusFilterItems"
+                [selectedIds]="filterStatusGroups"
+                [placeholder]="'calendar.filters.allVisible' | t"
+                (selectedIdsChange)="onStatusGroupsSelected($event)"
+              />
             </label>
           </div>
         </div>
@@ -161,7 +173,7 @@ import {
         }
 
         @if (viewMode === 'month' || viewMode === 'week') {
-          <div class="board">
+          <div class="board content-shell">
             <div class="weekdays">
               @for (w of weekdays; track w) {
                 <span>{{ w }}</span>
@@ -179,7 +191,7 @@ import {
         }
 
       @if (viewMode === 'day') {
-        <div class="day-view">
+        <div class="day-view content-shell">
           @for (day of visibleDays; track day.date) {
             <article
               class="day-card"
@@ -215,7 +227,7 @@ import {
 
       @if (viewMode === 'list') {
         @if (isTabletUp) {
-          <table class="list-table">
+          <table class="list-table content-shell">
             <thead>
               <tr>
                 <th>Дата</th>
@@ -250,7 +262,7 @@ import {
             </tbody>
           </table>
         } @else {
-          <div class="list-cards">
+          <div class="list-cards content-shell">
             @for (day of listDaysWithEvents; track day.date) {
               <article
                 class="day-card"
@@ -283,7 +295,6 @@ import {
           <p class="muted">{{ 'calendar.empty.range' | t }}</p>
         }
       }
-      </div>
 
       @if (drawerDate) {
         <app-calendar-day-drawer
@@ -301,44 +312,12 @@ import {
     `
       .page {
         display: grid;
-        gap: 0;
-      }
-      .stage {
-        position: relative;
-        isolation: isolate;
-        overflow: hidden;
-        display: grid;
         gap: 1.15rem;
+        position: relative;
         padding: clamp(1rem, 2.5vw, 1.5rem);
-        border-radius: 18px;
-        border: 1px solid var(--pw-border);
-        background:
-          linear-gradient(
-            165deg,
-            color-mix(in srgb, var(--pw-accent) 9%, var(--pw-surface)) 0%,
-            var(--pw-surface) 40%,
-            var(--pw-surface-2) 100%
-          );
-        box-shadow: 0 10px 32px var(--pw-shadow);
       }
-      .page.embedded .stage {
+      .page.embedded {
         padding: 0.85rem;
-        border-radius: 14px;
-        box-shadow: 0 4px 18px var(--pw-shadow);
-      }
-      .stage__glow {
-        pointer-events: none;
-        position: absolute;
-        inset: -30% auto auto 55%;
-        width: min(55vw, 22rem);
-        height: min(55vw, 22rem);
-        border-radius: 50%;
-        background: radial-gradient(
-          circle,
-          color-mix(in srgb, var(--pw-accent) 18%, transparent) 0%,
-          transparent 70%
-        );
-        z-index: 0;
       }
       .top,
       .toolbar,
@@ -349,7 +328,17 @@ import {
       .status-line,
       .error {
         position: relative;
-        z-index: 1;
+      }
+      .toolbar.pw-filters {
+        position: relative;
+        z-index: 6;
+        isolation: isolate;
+        overflow: visible;
+      }
+      .content-shell {
+        position: relative;
+        z-index: 0;
+        isolation: isolate;
       }
       .top {
         display: flex;
@@ -365,14 +354,6 @@ import {
       .hero {
         display: grid;
         gap: 0.2rem;
-      }
-      .eyebrow {
-        margin: 0;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--pw-muted);
       }
       h1 {
         margin: 0;
@@ -438,7 +419,6 @@ import {
         color: var(--pw-accent);
         box-shadow: 0 2px 8px var(--pw-shadow);
       }
-      .ghost,
       .linkish {
         width: auto;
         border: 1px solid var(--pw-border);
@@ -462,7 +442,6 @@ import {
         background: var(--pw-accent-soft);
         color: var(--pw-accent);
       }
-      .ghost:hover,
       .linkish:hover {
         border-color: var(--pw-accent);
         background: var(--pw-accent-soft);
@@ -472,7 +451,8 @@ import {
         grid-template-columns: 1fr;
         gap: 0.65rem;
         position: relative;
-        z-index: 4;
+        z-index: 6;
+        isolation: isolate;
         overflow: visible;
       }
       label {
@@ -782,7 +762,7 @@ import {
       @media (prefers-reduced-motion: reduce) {
         .grid > app-calendar-day-cell,
         .day-card,
-        .ghost,
+        .pw-link-action--compact,
         .modes button {
           animation: none !important;
           transition: none !important;
@@ -807,9 +787,13 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
 
   readonly modes: CalendarViewMode[] = ['month', 'week', 'day', 'list'];
   readonly weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
-  readonly typeFilterOptions = Object.entries(ABSENCE_TYPE_LABELS).map(
-    ([value, label]) => ({ value, label }),
+  readonly typeFilterItems: MultiSelectItem[] = Object.entries(ABSENCE_TYPE_LABELS).map(
+    ([id, label]) => ({ id, label }),
   );
+  readonly statusFilterItems: MultiSelectItem[] = [
+    { id: 'approved', label: 'Підтверджено' },
+    { id: 'pending', label: 'Очікує' },
+  ];
 
   viewMode: CalendarViewMode = 'month';
   anchor = todayIsoLocal();
@@ -820,10 +804,10 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
 
   departments: Department[] = [];
   employees: EmployeeListItem[] = [];
-  filterDepartmentId = '';
+  filterDepartmentIds: string[] = [];
   filterEmployeeId = '';
-  filterType = '';
-  filterStatus = '';
+  filterTypes: AbsenceType[] = [];
+  filterStatusGroups: CalendarStatusGroup[] = [];
 
   drawerDate: string | null = null;
   drawerItems: CalendarDayItem[] = [];
@@ -876,6 +860,20 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
 
   get listDaysWithEvents(): CalendarDaySummary[] {
     return this.visibleDays.filter((d) => d.segments.length + d.overflowCount > 0);
+  }
+
+  get departmentItems(): MultiSelectItem[] {
+    return this.departments.map((d) => ({ id: d.id, label: d.name }));
+  }
+
+  get employeeSelectOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: this.i18n.t('calendar.filters.all') },
+      ...this.employees.map((e) => ({
+        value: e.id,
+        label: `${e.lastName} ${e.firstName}`.trim(),
+      })),
+    ];
   }
 
   ngOnInit(): void {
@@ -976,8 +974,24 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
     this.reloadRange();
   }
 
-  onDepartmentFilterChanged(): void {
+  onDepartmentsSelected(ids: string[]): void {
+    this.filterDepartmentIds = ids;
     this.reloadEmployees(() => this.onFiltersChanged());
+  }
+
+  onEmployeeSelected(next: string): void {
+    this.filterEmployeeId = next;
+    this.onFiltersChanged();
+  }
+
+  onTypesSelected(ids: string[]): void {
+    this.filterTypes = ids as AbsenceType[];
+    this.onFiltersChanged();
+  }
+
+  onStatusGroupsSelected(ids: string[]): void {
+    this.filterStatusGroups = ids as CalendarStatusGroup[];
+    this.onFiltersChanged();
   }
 
   onFiltersChanged(): void {
@@ -987,15 +1001,16 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Reload employee options for the employee filter; scoped to selected department. */
+  /** Reload employee options for the employee filter; scoped to selected departments. */
   private reloadEmployees(after?: () => void): void {
     this.subs.add(
       this.api
         .getEmployees({
           status: 'active',
-          departmentId: this.isEmployeeOnly
-            ? undefined
-            : this.filterDepartmentId || undefined,
+          departmentIds:
+            this.isEmployeeOnly || !this.filterDepartmentIds.length
+              ? undefined
+              : this.filterDepartmentIds,
           sortBy: 'fullName',
           sortDir: 'asc',
         })
@@ -1092,23 +1107,15 @@ export class CalendarPageComponent implements OnInit, OnDestroy {
     this.range$.next();
   }
 
-  private filters(): CalendarQueryFilters {
-    const f: CalendarQueryFilters = {};
-    const employeeId = this.presetEmployeeId || this.filterEmployeeId;
-
-    if (!this.isEmployeeOnly && this.filterDepartmentId) {
-      f.departmentIds = [this.filterDepartmentId];
-    }
-    if (employeeId) {
-      f.employeeIds = [employeeId];
-    }
-    if (this.filterType) {
-      f.types = [this.filterType as AbsenceType];
-    }
-    if (this.filterStatus) {
-      f.statusGroups = [this.filterStatus as CalendarStatusGroup];
-    }
-    return f;
+  private filters() {
+    return buildCalendarQueryFilters({
+      departmentIds: this.filterDepartmentIds,
+      types: this.filterTypes,
+      statusGroups: this.filterStatusGroups,
+      employeeId: this.filterEmployeeId,
+      presetEmployeeId: this.presetEmployeeId,
+      isEmployeeOnly: this.isEmployeeOnly,
+    });
   }
 
   private queryKey(): string {

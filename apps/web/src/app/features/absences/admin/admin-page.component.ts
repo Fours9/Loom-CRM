@@ -9,15 +9,24 @@ import {
   EMPLOYEE_ABSENCE_DETAIL_OPTIONS,
   PROFILE_VISIBILITY_MODE_OPTIONS,
 } from '../core/api/labels';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../../shared/ui/pw-select.component';
 
 @Component({
   selector: 'app-admin-page',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, PwSelectComponent],
   template: `
-    <section class="page" data-help-id="absences.admin">
-      <h1>Адміністрування</h1>
-      <p class="lead">Налаштування конфіденційності</p>
+    <section class="page pw-stage" data-help-id="absences.admin">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
+      <header class="page-head pw-page-head pw-rise">
+        <div>
+          <h1>Адміністрування</h1>
+          <p class="pw-lead">Налаштування конфіденційності</p>
+        </div>
+      </header>
 
       @if (!isAdmin) {
         <p class="muted">Керувати налаштуваннями може лише адміністратор.</p>
@@ -29,7 +38,7 @@ import {
       </p>
 
       <div class="grid">
-        <article class="card card-privacy">
+        <article class="card card-privacy pw-panel pw-rise" style="--pw-delay: 60ms">
           <h2>Конфіденційність</h2>
           @if (privacy) {
             <label class="check">
@@ -50,16 +59,12 @@ import {
               <h3 class="privacy-section">Налаштування анкет</h3>
               <label>
                 Режим видимості чужих анкет
-                <select
-                  [(ngModel)]="privacy.profileVisibilityMode"
-                  name="profileMode"
+                <loom-pw-select
+                  [value]="privacy.profileVisibilityMode"
+                  [options]="profileModePwOptions"
                   [disabled]="!isAdmin"
-                  (ngModelChange)="privacyMessage = ''"
-                >
-                  @for (opt of profileModeOptions; track opt.value) {
-                    <option [value]="opt.value">{{ opt.label }}</option>
-                  }
-                </select>
+                  (valueChange)="onProfileModeSelected($event)"
+                />
               </label>
             </div>
 
@@ -67,32 +72,24 @@ import {
               <h3 class="privacy-section">Налаштування відсутностей</h3>
               <label>
                 Режим видимості чужих відсутностей
-                <select
-                  [(ngModel)]="privacy.absenceVisibilityMode"
-                  name="mode"
+                <loom-pw-select
+                  [value]="privacy.absenceVisibilityMode"
+                  [options]="absenceModePwOptions"
                   [disabled]="!isAdmin"
-                  (ngModelChange)="privacyMessage = ''"
-                >
-                  @for (opt of absenceModeOptions; track opt.value) {
-                    <option [value]="opt.value">{{ opt.label }}</option>
-                  }
-                </select>
+                  (valueChange)="onAbsenceModeSelected($event)"
+                />
               </label>
               @if (privacy.absenceVisibilityMode !== 'none') {
                 <div class="privacy-subsetting">
                   <p class="subsetting-caption">Підрежим режиму видимості відсутностей</p>
                   <label>
                     Деталі (тип / причина)
-                    <select
-                      [ngModel]="employeeAbsenceDetail"
-                      name="employeeAbsenceDetail"
+                    <loom-pw-select
+                      [value]="employeeAbsenceDetail"
+                      [options]="employeeAbsenceDetailPwOptions"
                       [disabled]="!isAdmin"
-                      (ngModelChange)="onEmployeeAbsenceDetailChange($event)"
-                    >
-                      @for (opt of employeeAbsenceDetailOptions; track opt.value) {
-                        <option [value]="opt.value">{{ opt.label }}</option>
-                      }
-                    </select>
+                      (valueChange)="onEmployeeAbsenceDetailSelected($event)"
+                    />
                   </label>
                   <p class="muted detail-hint">
                     Лише чужі peer-відсутності в календарі й списках заявок (працівник і менеджер
@@ -102,7 +99,7 @@ import {
               }
             </div>
             @if (isAdmin) {
-              <button type="button" (click)="savePrivacy()">Зберегти</button>
+              <button type="button" class="btn pw-btn" (click)="savePrivacy()">Зберегти</button>
             }
             @if (privacyMessage) {
               <p class="ok">{{ privacyMessage }}</p>
@@ -200,6 +197,11 @@ export class AdminPageComponent implements OnInit {
   readonly absenceModeOptions = ABSENCE_VISIBILITY_MODE_OPTIONS;
   readonly profileModeOptions = PROFILE_VISIBILITY_MODE_OPTIONS;
   readonly employeeAbsenceDetailOptions = EMPLOYEE_ABSENCE_DETAIL_OPTIONS;
+  readonly profileModePwOptions: PwSelectOption[] = [...PROFILE_VISIBILITY_MODE_OPTIONS];
+  readonly absenceModePwOptions: PwSelectOption[] = [...ABSENCE_VISIBILITY_MODE_OPTIONS];
+  readonly employeeAbsenceDetailPwOptions: PwSelectOption[] = [
+    ...EMPLOYEE_ABSENCE_DETAIL_OPTIONS,
+  ];
 
   get isAdmin(): boolean {
     return this.auth.isAdmin();
@@ -207,6 +209,22 @@ export class AdminPageComponent implements OnInit {
 
   get employeeAbsenceDetail(): 'full' | 'hide_type' {
     return this.privacy?.showAbsenceTypeToPeers === false ? 'hide_type' : 'full';
+  }
+
+  onProfileModeSelected(next: string): void {
+    if (!this.privacy) return;
+    this.privacy.profileVisibilityMode = next as PrivacySettings['profileVisibilityMode'];
+    this.privacyMessage = '';
+  }
+
+  onAbsenceModeSelected(next: string): void {
+    if (!this.privacy) return;
+    this.privacy.absenceVisibilityMode = next as PrivacySettings['absenceVisibilityMode'];
+    this.privacyMessage = '';
+  }
+
+  onEmployeeAbsenceDetailSelected(next: string): void {
+    this.onEmployeeAbsenceDetailChange(next as 'full' | 'hide_type');
   }
 
   onEmployeeAbsenceDetailChange(value: 'full' | 'hide_type'): void {

@@ -14,28 +14,125 @@ Inside `.pw-stage`:
 
 | Layer | z-index | Role |
 |-------|---------|------|
-| lists / tables (`.list-shell`, `.table-wrap`, `.pw-table-shell`) | `0` | stay under menus |
+| lists / tables / calendar board (`.list-shell`, `.table-wrap`, `.pw-table-shell`, `.content-shell`) | `0` | stay under menus |
 | `.pw-page-head` | `2` | title chrome (idle) |
 | `.pw-filters` | `6` | filter bars + open menus (incl. drop-up) |
 | `.pw-page-head.overlay-open` | `7` | header chrome menus (e.g. blank print) while open |
-| dialog hosts | `--pw-z-modal` (~250) | modals above page chrome |
+| dialog hosts | `--pw-z-modal` (~250) | modals / calendar day drawer above page chrome |
 
 - Filter shells **must** use `pw-filters`, `position: relative`, `overflow: visible`, `isolation: isolate`.
 - Open **filter** menus must paint above page titles (drop-up is normal near the top). Default: filters (`6`) > idle page-head (`2`).
-- Open **header** menus (blank print, etc.) must temporarily raise the head to `overlay-open` (`7`) so they are not buried under `.pw-filters`. Never leave a header absolute menu trapped under filters.
+- Open **header** menus (blank print, etc.) must temporarily raise the head to `overlay-open` (`7`) so they are not buried under `.pw-filters`. Never leave a header absolute menu trapped under filters. After raising filters to `6`, re-check any page-owned header menus still claim overlay session and toggle `overlay-open`.
 - Prefer shared controls: `app-multi-select-list`, `loom-pw-select`, `loom-pw-date-input` + class `pw-menu`.
 - Opening one overlay **must** close others via `claimPwOverlay` / `releasePwOverlay` (`pw-overlay-session.ts`) — including header chrome pickers. `stopPropagation` on triggers alone is not enough.
 - Site scrollbars: use global `--pw-scrollbar-*` / `.pw-menu` theming — do not leave native OS chrome on menus.
 
-## Inclusive filters
+## Nested panels / embedded calendar / people profile
 
-Directory / list filters for catalog enums and org refs (тип, стан, відділ, посада, …) are **multi-select (inclusive OR)**, not single `<select>` / `loom-pw-select`, unless the product explicitly requires exactly one value.
+Global `.pw-stage > .pw-filters` does **not** apply inside nested profile panels (documents, questionnaires, **embedded absences calendar**). Those hosts need **local** stacking:
+
+- filters host: `pw-filters` + `position: relative; z-index: 6; isolation: isolate; overflow: visible`
+- list / board host: `position: relative; z-index: 0; isolation: isolate`
+- avoid ancestor `overflow: hidden` that clips open `pw-menu`
+- Profile ⋮ menus (questionnaires): `pw-menu` + `claimPwOverlay`; raise host with `overlay-open` if buried
+
+### People profile button recipe (SoT)
+
+| Action | Class |
+|--------|--------|
+| Primary CTA (Save, Assign, Upload, Create, **Нове призначення**, **Додати документи**) | `btn pw-btn` |
+| Dialog Cancel / secondary | `btn pw-btn pw-btn--ghost` |
+| Hero / section Edit / Cancel / compact links | `pw-link-action` |
+| Destructive compact | `pw-link-action danger` (color override only) |
+
+**Do not** keep component-scoped `.btn { border… background… }` next to `pw-btn` — that doubles chrome and flattens primary CTAs. Layout-only overrides (e.g. `justify-self`) may target `.pw-btn`.
+
+Exactly-one fields on profile (assignment org, about single_choice, skills picker, role/visibility, questionnaire template) → `loom-pw-select`. Inclusive filters → `app-multi-select-list`.
+
+## Fill wizard (immersive)
+
+Fill is **not** a filter page, but sticky chrome still needs local stacking:
+
+- Ready shell may use `pw-stage` + glow; keep immersive `hideAppChrome` layout.
+- Chrome **⋮** menu: `pw-menu` + `claimPwOverlay`; raise sticky topbar with `overlay-open` while open so menus clear footer/rail.
+- Date/select fields: `loom-pw-date-input` / `loom-pw-select`; wizard panels `overflow: visible` where pickers open.
+- Drop-up near sticky footer must clear the footer; Escape closes overlays without breaking draft.
+- Do **not** change draft/autosave/revision/submit domain stores for chrome-only work.
+
+## Forms vs list filters
+
+| Case | Control |
+|------|---------|
+| Exactly one value (role, sort, time, privacy, upload type, position filter, calendar employee) | `loom-pw-select` |
+| Inclusive OR catalog filter (dept multi, document types, **requests status/type**, calendar type/status/dept when API plurals exist) | `app-multi-select-list` |
+| Dates | `loom-pw-date-input` |
+
+**Absences requests list:** status/type are inclusive multi via API `statusGroups`/`types` (comma lists, same as `departmentIds`). `[]` = all; nonempty = server OR. Keep singular `statusGroup`/`type` as aliases only.
+
+**Absences calendar query DTO:** build only via `buildCalendarQueryFilters` (single entry for range + day loads).
+
+**Requests list query DTO:** prefer `buildRequestsListQuery` (omit empty plurals; sort before join).
+
+### Binding (additive CVA)
+
+`loom-pw-select` / `loom-pw-date-input` implement `ControlValueAccessor` **and** keep `[value]` / `(valueChange)`.
+
+Pick **either**:
+
+- `[value]` + `(valueChange)`, **or**
+- `[(ngModel)]` / `formControlName`
+
+**Forbidden:** simultaneous `[value]` + `[(ngModel)]` on the same host.
+
+User commit emits both CVA `onChange` and `valueChange` via `commitPwControlValue`. `disabled` input and CVA `setDisabledState` both gate open/emit.
+
+**Assign-then-handler** remains mandatory on the `[value]` path — otherwise the handler reads stale state:
+
+```ts
+onTypeSelected(next: string): void {
+  this.type = next as AbsenceType;
+  this.onTypeChange();
+}
+```
+
+Forbidden: `(valueChange)="onTypeChange()"` without assigning the model first.
+
+With `ngModel`, the model updates before `(ngModelChange)` side-effect handlers. After replacing native `required` fields, add **explicit submit validation**.
+
+### Inclusive multi empty semantics
+
+`selectedIds: []` / `filterTypes: []` / `statusGroups: []` means **no constraint** (show all). Non-empty means inclusive OR (`includes` / plural query params). Omit empty plural keys from the request.
+
+### Inline actions vs buttons
+
+| Class | Use |
+|-------|-----|
+| `.pw-link-action` | Compact hero/nav text links (Edit, PDF, «Профіль Loom») — global SoT; do **not** replace with full `pw-btn--ghost` |
+| `.pw-link-action--compact` | Calendar prev/next/today bordered chips |
+| `.pw-btn--ghost` | Dialog secondary / cancel — full control height |
+| `.pw-btn` | Primary CTAs («Нова заявка») |
+
+Avoid oversized buttons + accidental `button { width: 100% }` stretch on hero actions.
+
+## Modals must not clip menus
+
+Modal chrome must not use `overflow: hidden` in a way that clips open `pw-menu`. Prefer `overflow: visible` on the dialog shell; scroll a dedicated list region below the select if needed. Rely on `loom-pw-select` drop-up near the bottom. Host stays `--pw-z-modal`.
+
+Dialog hosts are globally `position: fixed; inset: 0; z-index: var(--pw-z-modal)`. Do **not** leave a residual `transform` on ancestors (`.pw-rise` must end at `transform: none`, not `translateY(0)`). Profile / nested tab dialogs must call `attachPwDialogHostToBody` (reparents under `.app-shell` / `.loom-absence-module` / `[data-pw-app]` only — **never** bare `body`) so fixed backdrops escape panel stacking **and** keep `--pw-surface` / `.pw-btn` tokens. Dialog recipe: head (title [+ help] + ×) · scrollable `.body` · foot Cancel ghost + primary; shell `overflow: visible`.
+
+## Inclusive filters (directories)
+
+Directory / list filters for catalog enums and org refs (тип, стан, відділ, посада, …) are **multi-select (inclusive OR)**, not single `<select>` / `loom-pw-select`, unless the product explicitly requires exactly one value **or** the API is still singular.
 API: accept `*Ids` / plural query lists (comma-separated); keep singular params only as backward-compat aliases.
 
 ## Checklist before finishing filter / chrome menu UI
 
-1. Open each filter: menu clears titles **and** table headers.
-2. Open A, then B: A closes (shared `pw-overlay-session`).
-3. Open header chrome menu (blank print): list is visible above filters; loads via the feature API service (single entry).
-4. Same look as other directory pages (trigger height, `pw-menu`, themed scrollbar).
-5. Multi filters actually send plural query params and backend `IN` / OR logic works.
+1. Open each filter: menu clears titles **and** table headers / calendar board / nested lists.
+2. Open A, then B: A closes (shared `pw-overlay-session`); date vs select mutual exclusivity.
+3. Open header chrome menu (blank print / fill ⋮): list is visible above filters/sticky chrome; loads via the feature API service (single entry).
+4. Same look as other directory pages (trigger height `--pw-control-h`, `pw-menu`, themed scrollbar).
+5. Multi filters actually send plural query params and backend `IN` / OR logic works (list pages / calendar / requests status+type).
+6. Nested / embedded menus clear profile tabs/header; upload type menu not clipped by modal.
+7. Dialogs sit above topbar (`--pw-z-modal`).
+8. No leftover `.stage` z-index CSS after migrating to `pw-stage`.
+9. No `[value]` + `ngModel` dual-bind on loom-pw-*; no hero `pw-btn--ghost` where `pw-link-action` belongs.

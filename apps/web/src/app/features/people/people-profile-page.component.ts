@@ -125,7 +125,7 @@ type MetricsTabId = 'skills';
             </div>
           </div>
           <div class="actions">
-            <a class="btn ghost" [routerLink]="['/absences/employees', profile()!.header.id]">
+            <a class="pw-link-action" [routerLink]="['/absences/employees', profile()!.header.id]">
               Анкета Absences
             </a>
           </div>
@@ -493,30 +493,6 @@ type MetricsTabId = 'skills';
         gap: 0.5rem;
         align-items: flex-start;
       }
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        border: 1px solid transparent;
-        background: var(--pw-accent);
-        color: var(--pw-on-accent, #fff);
-        border-radius: 10px;
-        padding: 0.5rem 0.9rem;
-        text-decoration: none;
-        cursor: pointer;
-        font-weight: 700;
-        box-shadow: 0 4px 12px color-mix(in srgb, var(--pw-accent) 22%, transparent);
-      }
-      .btn.ghost {
-        background: var(--pw-surface);
-        border: 1px solid color-mix(in srgb, var(--pw-accent) 28%, var(--pw-border));
-        color: var(--pw-accent);
-        box-shadow: none;
-      }
-      .btn.ghost:hover {
-        background: var(--pw-accent-soft);
-        border-color: var(--pw-accent);
-      }
       .tabs {
         display: inline-flex;
         flex-wrap: wrap;
@@ -592,10 +568,6 @@ type MetricsTabId = 'skills';
         }
         .actions {
           width: 100%;
-        }
-        .btn {
-          flex: 1 1 auto;
-          justify-content: center;
         }
       }
     `,

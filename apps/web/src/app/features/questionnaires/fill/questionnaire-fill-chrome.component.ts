@@ -1,6 +1,7 @@
 import {
   Component,
   HostListener,
+  OnDestroy,
   ViewChild,
   computed,
   inject,
@@ -9,6 +10,11 @@ import {
   signal,
 } from '@angular/core';
 import { ThemeService } from '../../../core/theme/theme.service';
+import {
+  claimPwOverlay,
+  releasePwOverlay,
+  type PwOverlayHandle,
+} from '../../../shared/ui/pw-overlay-session';
 import { canBrowseQuestionnaireStep } from '../navigation/questionnaire-step-browse';
 import { questionnaireTypeLabel } from '../questionnaire-labels';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
@@ -35,7 +41,7 @@ import { HelpMenuComponent } from '../../../core/help';
     HelpMenuComponent,
   ],
   template: `
-    <header class="step-topbar">
+    <header class="step-topbar" [class.overlay-open]="moreMenuOpen()">
       <button
         type="button"
         class="icon-back"
@@ -139,7 +145,11 @@ import { HelpMenuComponent } from '../../../core/help';
             <span class="more-icon" aria-hidden="true">⋮</span>
           </button>
           @if (moreMenuOpen()) {
-            <div class="more-menu" role="menu">
+            <div
+              class="more-menu pw-menu"
+              role="menu"
+              (click)="$event.stopPropagation()"
+            >
               <button
                 type="button"
                 role="menuitem"
@@ -254,6 +264,10 @@ import { HelpMenuComponent } from '../../../core/help';
           color-mix(in srgb, var(--pw-border) 80%, #64748b);
         background: var(--pw-bg, #f6f8fb);
       }
+      /* More-actions menu must clear anything below the sticky topbar. */
+      .step-topbar.overlay-open {
+        z-index: 25;
+      }
       .step-topbar-actions {
         display: flex;
         flex-wrap: wrap;
@@ -279,11 +293,7 @@ import { HelpMenuComponent } from '../../../core/help';
         top: calc(100% + 0.25rem);
         z-index: 20;
         min-width: 11rem;
-        padding: 0.35rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--pw-border, #d0d7e2);
-        background: var(--pw-surface, #fff);
-        box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+        /* .pw-menu supplies panel chrome (border/radius/background/shadow/scrollbar). */
       }
       .more-menu button {
         display: block;
@@ -512,7 +522,9 @@ import { HelpMenuComponent } from '../../../core/help';
     `,
   ],
 })
-export class QuestionnaireFillChromeComponent {
+export class QuestionnaireFillChromeComponent
+  implements OnDestroy, PwOverlayHandle
+{
   readonly store = inject(QuestionnaireDraftStore);
   readonly revision = inject(QuestionnaireRevisionCoordinator);
   readonly theme = inject(ThemeService);
@@ -541,22 +553,44 @@ export class QuestionnaireFillChromeComponent {
 
   @HostListener('document:click')
   onDocumentClick(): void {
+    this.closeMoreMenu();
+  }
+
+  ngOnDestroy(): void {
+    releasePwOverlay(this);
+  }
+
+  closeFromOverlaySession(): void {
     this.moreMenuOpen.set(false);
   }
 
   toggleMoreMenu(event: Event): void {
     event.stopPropagation();
-    this.moreMenuOpen.update((open) => !open);
+    if (this.moreMenuOpen()) {
+      this.closeMoreMenu();
+      return;
+    }
+    this.openMoreMenu();
   }
 
   onDeleteFromMenu(): void {
-    this.moreMenuOpen.set(false);
+    this.closeMoreMenu();
     this.deleteAssignment.emit();
   }
 
   onPrintFromMenu(): void {
-    this.moreMenuOpen.set(false);
+    this.closeMoreMenu();
     void this.onPrint();
+  }
+
+  private openMoreMenu(): void {
+    claimPwOverlay(this);
+    this.moreMenuOpen.set(true);
+  }
+
+  private closeMoreMenu(): void {
+    this.moreMenuOpen.set(false);
+    releasePwOverlay(this);
   }
 
   onRequestChangesSubmit(comment: string): void {

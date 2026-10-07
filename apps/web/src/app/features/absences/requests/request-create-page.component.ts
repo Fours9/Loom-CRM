@@ -12,6 +12,11 @@ import {
   MultiSelectListComponent,
 } from '../shared/multi-select-list.component';
 import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../../shared/ui/pw-select.component';
+import { PwDateInputComponent } from '../../../shared/ui/pw-date-input.component';
+import {
   shiftBoundsForDate,
   timeOptionsInShift,
 } from '../core/schedule/work-time.util';
@@ -19,6 +24,7 @@ import {
   parseCreateAbsenceRequestPrefill,
   type CreateAbsenceRequestPrefill,
 } from './create-request-navigation';
+import { clearInvalidEndTime } from './request-create-binding.util';
 
 const MAX_PENDING_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -35,16 +41,26 @@ type EmployeeSortKey =
 @Component({
   selector: 'app-request-create-page',
   standalone: true,
-  imports: [FormsModule, RouterLink, MultiSelectListComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    MultiSelectListComponent,
+    PwSelectComponent,
+    PwDateInputComponent,
+  ],
   template: `
-    <section class="page" data-help-id="absences.request-create">
+    <section class="page pw-stage" data-help-id="absences.request-create">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
       <div class="sheet">
-        <header class="page-head">
-          <p><a routerLink="/absences/requests">← До списку</a></p>
-          <h1>Нова заявка</h1>
+        <header class="page-head pw-page-head pw-rise">
+          <div>
+            <p class="pw-eyebrow"><a routerLink="/absences/requests">← До списку</a></p>
+            <h1>Нова заявка</h1>
+            <p class="pw-lead">Подання заявки на відсутність або робочий час</p>
+          </div>
         </header>
 
-        <form class="form" (ngSubmit)="submit()">
+        <form class="form pw-panel pw-rise" style="--pw-delay: 60ms" (ngSubmit)="submit()">
           @if (canPickEmployee) {
             <fieldset class="target" data-help-id="absences.request-create.target">
               <legend>За кого подати</legend>
@@ -72,7 +88,7 @@ type EmployeeSortKey =
 
             @if (targetMode === 'other') {
               <div class="picker">
-                <div class="filters">
+                <div class="filters pw-filters">
                   <input
                     [(ngModel)]="q"
                     name="q"
@@ -90,12 +106,12 @@ type EmployeeSortKey =
                   </label>
                   <label class="filter-block narrow">
                     <span>Посада</span>
-                    <select [(ngModel)]="positionId" name="positionId" (ngModelChange)="loadEmployees()">
-                      <option value="">Усі посади</option>
-                      @for (p of positions; track p.id) {
-                        <option [value]="p.id">{{ p.name }}</option>
-                      }
-                    </select>
+                    <loom-pw-select
+                      [value]="positionId"
+                      [options]="positionSelectOptions"
+                      placeholder="Усі посади"
+                      (valueChange)="onPositionSelected($event)"
+                    />
                   </label>
                 </div>
 
@@ -126,7 +142,7 @@ type EmployeeSortKey =
                   }
                 </div>
 
-                <div class="table-wrap">
+                <div class="table-wrap picker-table">
                   <table>
                     <thead>
                       <tr>
@@ -227,33 +243,32 @@ type EmployeeSortKey =
 
           <label data-help-id="absences.request-create.type">
             <span>Тип</span>
-            <select [(ngModel)]="type" name="type" (ngModelChange)="onTypeChange()">
-              @for (group of typeGroups; track group.category) {
-                <optgroup [label]="group.label">
-                  @for (t of group.types; track t.value) {
-                    <option [value]="t.value">{{ t.label }}</option>
-                  }
-                </optgroup>
-              }
-            </select>
+            <loom-pw-select
+              [value]="type"
+              [options]="typeSelectOptions"
+              placeholder="Оберіть тип"
+              (valueChange)="onTypeSelected($event)"
+            />
           </label>
 
           <div class="dates-block" data-help-id="absences.request-create.dates">
             <div class="row">
               <label>
                 <span>Дата початку</span>
-                <input
-                  type="date"
-                  [(ngModel)]="startDate"
-                  name="startDate"
-                  required
-                  (ngModelChange)="onStartDateChange()"
+                <loom-pw-date-input
+                  [value]="startDate"
+                  placeholder="дд.мм.рррр"
+                  (valueChange)="onStartDateSelected($event)"
                 />
               </label>
               @if (showsEndDate) {
                 <label>
                   <span>Дата кінця</span>
-                  <input type="date" [(ngModel)]="endDate" name="endDate" required />
+                  <loom-pw-date-input
+                    [value]="endDate"
+                    placeholder="дд.мм.рррр"
+                    (valueChange)="onEndDateSelected($event)"
+                  />
                 </label>
               }
             </div>
@@ -293,60 +308,27 @@ type EmployeeSortKey =
             <div class="row" data-help-id="absences.request-create.time">
               <label>
                 <span>Час з</span>
-                @if (usesShiftTimeOptions) {
-                  <select
-                    [(ngModel)]="absenceStartTime"
-                    name="absenceStartTime"
-                    [required]="timeRequired"
-                    [disabled]="!shiftBounds"
-                    (ngModelChange)="onStartTimeChange()"
-                  >
-                    <option value="">Оберіть</option>
-                    @for (t of startTimeOptions; track t) {
-                      <option [value]="t">{{ t }}</option>
-                    }
-                  </select>
-                } @else {
-                  <select
-                    [(ngModel)]="absenceStartTime"
-                    name="absenceStartTime"
-                    [required]="timeRequired"
-                    (ngModelChange)="onStartTimeChange()"
-                  >
-                    <option value="">Оберіть</option>
-                    @for (t of freeTimeOptions; track t) {
-                      <option [value]="t">{{ t }}</option>
-                    }
-                  </select>
-                }
+                <loom-pw-select
+                  [value]="absenceStartTime"
+                  [options]="startTimeSelectOptions"
+                  placeholder="Оберіть"
+                  [disabled]="usesShiftTimeOptions && !shiftBounds"
+                  (valueChange)="onStartTimeSelected($event)"
+                />
               </label>
               <label>
                 <span>Час по</span>
-                @if (usesShiftTimeOptions) {
-                  <select
-                    [(ngModel)]="absenceEndTime"
-                    name="absenceEndTime"
-                    [required]="timeRequired"
-                    [disabled]="!shiftBounds || !absenceStartTime"
-                  >
-                    <option value="">Оберіть</option>
-                    @for (t of endTimeOptions; track t) {
-                      <option [value]="t">{{ t }}</option>
-                    }
-                  </select>
-                } @else {
-                  <select
-                    [(ngModel)]="absenceEndTime"
-                    name="absenceEndTime"
-                    [required]="timeRequired"
-                    [disabled]="!absenceStartTime"
-                  >
-                    <option value="">Оберіть</option>
-                    @for (t of freeEndTimeOptions; track t) {
-                      <option [value]="t">{{ t }}</option>
-                    }
-                  </select>
-                }
+                <loom-pw-select
+                  [value]="absenceEndTime"
+                  [options]="endTimeSelectOptions"
+                  placeholder="Оберіть"
+                  [disabled]="
+                    usesShiftTimeOptions
+                      ? !shiftBounds || !absenceStartTime
+                      : !absenceStartTime
+                  "
+                  (valueChange)="onEndTimeSelected($event)"
+                />
               </label>
             </div>
             @if (usesShiftTimeOptions && startDate && !scheduleLoading && !shiftBounds) {
@@ -420,7 +402,7 @@ type EmployeeSortKey =
 
           <div class="pw-form-actions">
             <button
-              class="btn"
+              class="btn pw-btn"
               type="submit"
               [disabled]="saving"
               data-help-id="absences.request-create.submit"
@@ -443,16 +425,13 @@ type EmployeeSortKey =
         width: min(100%, 920px);
         display: grid;
         gap: 1rem;
+        position: relative;
+        z-index: 1;
       }
-      .page-head h1 { margin: 0.25rem 0 0; }
-      .page-head p { margin: 0; }
       .page-head a { color: var(--pw-accent); text-decoration: none; }
       .form {
         display: grid;
         gap: 0.85rem;
-        background: var(--pw-surface);
-        border: 1px solid var(--pw-border);
-        border-radius: 12px;
         padding: 1.25rem;
       }
       label { display: grid; gap: 0.35rem; font-size: 0.9rem; color: var(--pw-text); }
@@ -481,17 +460,8 @@ type EmployeeSortKey =
         flex-shrink: 0;
         accent-color: var(--pw-accent);
       }
-      .btn {
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        border: 0;
-        border-radius: 8px;
-        padding: 0.7rem 1rem;
-        cursor: pointer;
-      }
-      .btn:disabled { opacity: 0.6; }
       @media (min-width: 641px) {
-        .pw-form-actions .btn {
+        .pw-form-actions .pw-btn {
           width: auto;
         }
       }
@@ -544,9 +514,14 @@ type EmployeeSortKey =
         gap: 0.75rem;
         align-items: end;
         position: relative;
-        z-index: 4;
+        z-index: 6;
         isolation: isolate;
         overflow: visible;
+      }
+      .picker-table {
+        position: relative;
+        z-index: 0;
+        isolation: isolate;
       }
       .filters > input {
         width: 100%;
@@ -816,6 +791,32 @@ export class RequestCreatePageComponent implements OnInit {
     ].filter((g) => g.types.length > 0);
   }
 
+  get typeSelectOptions(): PwSelectOption[] {
+    return this.typeGroups.flatMap((group) =>
+      group.types.map((t) => ({
+        value: t.value,
+        label: `${group.label}: ${t.label}`,
+      })),
+    );
+  }
+
+  get positionSelectOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: 'Усі посади' },
+      ...this.positions.map((p) => ({ value: p.id, label: p.name })),
+    ];
+  }
+
+  get startTimeSelectOptions(): PwSelectOption[] {
+    const times = this.usesShiftTimeOptions ? this.startTimeOptions : this.freeTimeOptions;
+    return [{ value: '', label: 'Оберіть' }, ...times.map((t) => ({ value: t, label: t }))];
+  }
+
+  get endTimeSelectOptions(): PwSelectOption[] {
+    const times = this.usesShiftTimeOptions ? this.endTimeOptions : this.freeEndTimeOptions;
+    return [{ value: '', label: 'Оберіть' }, ...times.map((t) => ({ value: t, label: t }))];
+  }
+
   get selectedTypeMeta(): TimeEventTypeMetadata | null {
     const types =
       this.typeMetadata.length > 0
@@ -1015,6 +1016,16 @@ export class RequestCreatePageComponent implements OnInit {
     this.reloadSchedule();
   }
 
+  onPositionSelected(next: string): void {
+    this.positionId = next;
+    this.loadEmployees();
+  }
+
+  onTypeSelected(next: string): void {
+    this.type = next as AbsenceType;
+    this.onTypeChange();
+  }
+
   onTypeChange(): void {
     if (!this.showsEndDate) {
       this.endDate = this.startDate;
@@ -1027,6 +1038,15 @@ export class RequestCreatePageComponent implements OnInit {
     }
   }
 
+  onStartDateSelected(next: string): void {
+    this.startDate = next;
+    this.onStartDateChange();
+  }
+
+  onEndDateSelected(next: string): void {
+    this.endDate = next;
+  }
+
   onStartDateChange(): void {
     if (!this.showsEndDate) {
       this.endDate = this.startDate;
@@ -1034,10 +1054,20 @@ export class RequestCreatePageComponent implements OnInit {
     this.sanitizeTimesForShift();
   }
 
+  onStartTimeSelected(next: string): void {
+    this.absenceStartTime = next;
+    this.onStartTimeChange();
+  }
+
+  onEndTimeSelected(next: string): void {
+    this.absenceEndTime = next;
+  }
+
   onStartTimeChange(): void {
-    if (this.absenceEndTime && this.absenceEndTime <= this.absenceStartTime) {
-      this.absenceEndTime = '';
-    }
+    this.absenceEndTime = clearInvalidEndTime(
+      this.absenceStartTime,
+      this.absenceEndTime,
+    );
   }
 
   private reloadSchedule(): void {
@@ -1220,6 +1250,14 @@ export class RequestCreatePageComponent implements OnInit {
     }
     if (this.canPickEmployee && this.targetMode === 'self' && !this.auth.user()?.employeeId) {
       this.error = 'У вашого акаунта немає анкети — оберіть іншого працівника';
+      return;
+    }
+    if (!this.startDate) {
+      this.error = 'Оберіть дату початку';
+      return;
+    }
+    if (this.showsEndDate && !this.endDate) {
+      this.error = 'Оберіть дату кінця';
       return;
     }
     if (this.type === 'part_time') {

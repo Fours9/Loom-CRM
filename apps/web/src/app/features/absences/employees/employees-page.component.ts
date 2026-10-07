@@ -9,6 +9,11 @@ import {
   MultiSelectItem,
   MultiSelectListComponent,
 } from '../shared/multi-select-list.component';
+import { PwSelectComponent } from '../../../shared/ui/pw-select.component';
+import {
+  employeeSortSelectOptions,
+  positionSelectOptions,
+} from '../shared/absences-list-filter-options';
 import {
   EmployeeListItemViewModel,
   toEmployeeListItemVm,
@@ -25,7 +30,7 @@ type EmployeeSortKey =
 @Component({
   selector: 'app-employees-page',
   standalone: true,
-  imports: [FormsModule, RouterLink, MultiSelectListComponent],
+  imports: [FormsModule, RouterLink, MultiSelectListComponent, PwSelectComponent],
   template: `
     <section class="page pw-stage" data-help-id="absences.employees">
       <span class="pw-stage__glow" aria-hidden="true"></span>
@@ -55,23 +60,21 @@ type EmployeeSortKey =
         </label>
         <label class="filter-block narrow">
           <span>Посада</span>
-          <select [(ngModel)]="positionId" (ngModelChange)="load()">
-            <option value="">Усі посади</option>
-            @for (p of positions; track p.id) {
-              <option [value]="p.id">{{ p.name }}</option>
-            }
-          </select>
+          <loom-pw-select
+            [value]="positionId"
+            [options]="positionOptions"
+            placeholder="Усі посади"
+            (valueChange)="onPositionSelected($event)"
+          />
         </label>
         <label class="filter-block narrow phone-sort">
           <span>Сортування</span>
-          <select [ngModel]="sortBy" (ngModelChange)="onPhoneSortKey($event)">
-            <option value="fullName">ПІБ</option>
-            <option value="employeeNumber">Номер</option>
-            <option value="department">Відділ</option>
-            <option value="position">Посада</option>
-            <option value="role">Роль</option>
-            <option value="status">Статус</option>
-          </select>
+          <loom-pw-select
+            [value]="sortBy"
+            [options]="sortSelectOptions"
+            placeholder="Сортування"
+            (valueChange)="onPhoneSortKeySelected($event)"
+          />
           <button type="button" class="sort-dir-btn" (click)="toggleSortDir()" [attr.aria-label]="'Напрямок: ' + sortDir">
             {{ sortDir === 'asc' ? '↑' : '↓' }}
           </button>
@@ -365,9 +368,14 @@ export class EmployeesPageComponent implements OnInit {
   error = '';
 
   readonly canOpenCreate = computed(() => canOpenEmployeeCreate(this.session));
+  readonly sortSelectOptions = employeeSortSelectOptions();
 
   get departmentItems(): MultiSelectItem[] {
     return this.departments.map((d) => ({ id: d.id, label: d.name }));
+  }
+
+  get positionOptions() {
+    return positionSelectOptions(this.positions);
   }
 
   open(e: EmployeeListItemViewModel): void {
@@ -383,6 +391,15 @@ export class EmployeesPageComponent implements OnInit {
   onDepartmentsChange(ids: string[]): void {
     this.departmentIds = ids;
     this.reloadPositions(() => this.load());
+  }
+
+  onPositionSelected(next: string): void {
+    this.positionId = next;
+    this.load();
+  }
+
+  onPhoneSortKeySelected(next: string): void {
+    this.onPhoneSortKey(next as EmployeeSortKey);
   }
 
   onPhoneSortKey(key: EmployeeSortKey): void {

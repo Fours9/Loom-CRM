@@ -1,5 +1,4 @@
 import { Component, effect, inject, input, output, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import type {
   EmployeeAccessSection,
   EmployeeAccountRoleRef,
@@ -24,11 +23,15 @@ import {
 } from './employee-role-access-api.service';
 import { AccountRolesApiService } from '../settings/access-roles/account-roles-api.service';
 import type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../shared/ui/pw-select.component';
 
 @Component({
   selector: 'loom-employee-role-access-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [PwSelectComponent],
   template: `
     <div class="role-access-panel">
       @if (message()) {
@@ -52,16 +55,13 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
 
           <label>
             Роль
-            <select
-              name="accountRoleId"
-              [(ngModel)]="accountRoleId"
+            <loom-pw-select
+              [value]="accountRoleId"
+              [options]="roleSelectOptions()"
               [disabled]="busy() || rolesLoading() || !roles().length"
-            >
-              <option value="">Не призначено</option>
-              @for (role of roles(); track role.id) {
-                <option [value]="role.id">{{ role.name }}</option>
-              }
-            </select>
+              placeholder="Не призначено"
+              (valueChange)="onAccountRoleSelected($event)"
+            />
           </label>
 
           @if (requestedRole(); as requested) {
@@ -98,43 +98,33 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
 
           <label>
             Чужі анкети
-            <select
-              name="profileOverride"
-              [(ngModel)]="profileOverride"
+            <loom-pw-select
+              [value]="profileOverride"
+              [options]="profileOverrideOptions"
               [disabled]="busy()"
-            >
-              @for (opt of profileOverrideOptions; track opt.value) {
-                <option [value]="opt.value">{{ opt.label }}</option>
-              }
-            </select>
+              (valueChange)="onProfileOverrideSelected($event)"
+            />
           </label>
 
           <label>
             Чужі відсутності
-            <select
-              name="absencesOverride"
-              [(ngModel)]="absencesOverride"
+            <loom-pw-select
+              [value]="absencesOverride"
+              [options]="absenceOverrideOptions"
               [disabled]="busy()"
-              (ngModelChange)="onAbsencesOverrideChange()"
-            >
-              @for (opt of absenceOverrideOptions; track opt.value) {
-                <option [value]="opt.value">{{ opt.label }}</option>
-              }
-            </select>
+              (valueChange)="onAbsencesOverrideSelected($event)"
+            />
           </label>
 
           @if (absencesOverride !== 'deny') {
             <label>
               Деталі (тип / причина)
-              <select
-                name="absenceTypeDetailOverride"
-                [(ngModel)]="absenceTypeDetailOverride"
+              <loom-pw-select
+                [value]="absenceTypeDetailOverride"
+                [options]="absenceTypeDetailOptions"
                 [disabled]="busy()"
-              >
-                @for (opt of absenceTypeDetailOptions; track opt.value) {
-                  <option [value]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
+                (valueChange)="onAbsenceTypeDetailOverrideSelected($event)"
+              />
             </label>
           }
         </section>
@@ -143,6 +133,7 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
       @if (caps().canEditAdminAccess || caps().canEditVisibilityOverrides) {
         <button
           type="button"
+          class="btn pw-btn"
           data-help-id="people.admin.roleAccess.save"
           (click)="save()"
           [disabled]="busy()"
@@ -175,13 +166,6 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
         gap: 0.35rem;
         font-size: 0.9rem;
       }
-      select {
-        padding: 0.55rem 0.7rem;
-        border: 1px solid var(--pw-border);
-        border-radius: 8px;
-        background: var(--pw-surface-2, var(--pw-surface));
-        color: var(--pw-text);
-      }
       .role-resolution {
         display: grid;
         gap: 0.2rem;
@@ -197,18 +181,8 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
       .hint {
         font-size: 0.85rem;
       }
-      button {
+      .pw-btn {
         justify-self: start;
-        padding: 0.55rem 0.9rem;
-        border-radius: 8px;
-        border: 1px solid var(--pw-border-strong, var(--pw-border));
-        background: var(--pw-accent-soft, color-mix(in srgb, var(--pw-accent) 18%, transparent));
-        color: var(--pw-text);
-        cursor: pointer;
-      }
-      button:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
       }
       .ok {
         color: var(--pw-success, #1f6b3a);
@@ -287,6 +261,27 @@ export class EmployeeRoleAccessPanelComponent {
       if (!this.caps().canEditAdminAccess || this.roles().length) return;
       this.loadRoles();
     });
+  }
+
+  roleSelectOptions(): PwSelectOption[] {
+    return this.roles().map((role) => ({ value: role.id, label: role.name }));
+  }
+
+  onAccountRoleSelected(next: string): void {
+    this.accountRoleId = next;
+  }
+
+  onProfileOverrideSelected(next: string): void {
+    this.profileOverride = next as VisibilityOverrideUi;
+  }
+
+  onAbsencesOverrideSelected(next: string): void {
+    this.absencesOverride = next as VisibilityOverrideUi;
+    this.onAbsencesOverrideChange();
+  }
+
+  onAbsenceTypeDetailOverrideSelected(next: string): void {
+    this.absenceTypeDetailOverride = next as AbsenceTypeDetailOverrideUi;
   }
 
   requestedRole(): EmployeeAccountRoleRef | null {

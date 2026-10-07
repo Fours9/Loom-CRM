@@ -3,6 +3,7 @@ import {
   HostListener,
   Input,
   OnChanges,
+  OnDestroy,
   SimpleChanges,
   inject,
   signal,
@@ -29,6 +30,11 @@ import {
   questionnaireTypeLabel,
 } from './questionnaire-labels';
 import { hasActiveReviewerRequest } from './core/questionnaire-active-change-request';
+import {
+  claimPwOverlay,
+  releasePwOverlay,
+  type PwOverlayHandle,
+} from '../../shared/ui/pw-overlay-session';
 import { QuestionnaireCreateDialogComponent } from './shared/questionnaire-create-dialog.component';
 import {
   QuestionnaireFilterToolbarComponent,
@@ -72,7 +78,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         @if (canAssign()) {
           <button
             type="button"
-            class="btn primary"
+            class="btn pw-btn"
             (click)="showCreate.set(true)"
           >
             Призначити анкету
@@ -109,7 +115,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           @if (canAssign()) {
             <button
               type="button"
-              class="btn primary"
+              class="btn pw-btn"
               (click)="showCreate.set(true)"
             >
               Призначити анкету
@@ -117,7 +123,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
           }
         </div>
       } @else {
-        <ul class="list">
+        <ul class="list list-host">
           @for (item of items(); track item.id) {
             <li class="card">
               <div class="card-row">
@@ -152,7 +158,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                 <div class="card-actions">
                   <button
                     type="button"
-                    class="btn view"
+                    class="pw-btn pw-btn--ghost view"
                     data-help-id="q.open"
                     (click)="openAssignment(item)"
                   >
@@ -161,7 +167,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                   <div class="more-menu-wrap">
                     <button
                       type="button"
-                      class="btn ghost more-btn"
+                      class="more-btn"
                       title="Додаткові дії"
                       aria-label="Додаткові дії"
                       data-help-id="q.more"
@@ -173,7 +179,11 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                       <span class="more-icon" aria-hidden="true">⋮</span>
                     </button>
                     @if (moreMenuAssignmentId() === item.id) {
-                      <div class="more-menu" role="menu">
+                      <div
+                        class="more-menu pw-menu"
+                        role="menu"
+                        (click)="$event.stopPropagation()"
+                      >
                         <button
                           type="button"
                           role="menuitem"
@@ -307,7 +317,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                                     @if (canAcceptProposal(p)) {
                                       <button
                                         type="button"
-                                        class="btn primary"
+                                        class="btn pw-btn"
                                         (click)="accept(p.id)"
                                       >
                                         Прийняти
@@ -316,7 +326,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                                     @if (canRejectProposal(p)) {
                                       <button
                                         type="button"
-                                        class="btn ghost"
+                                        class="btn pw-btn pw-btn--ghost"
                                         (click)="reject(p.id)"
                                       >
                                         Відхилити
@@ -410,6 +420,11 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         display: grid;
         gap: 0.85rem;
       }
+      .list-host {
+        position: relative;
+        z-index: 0;
+        isolation: isolate;
+      }
       .card {
         border: 2px solid color-mix(in srgb, var(--pw-border) 85%, #64748b);
         border-radius: 12px;
@@ -481,13 +496,9 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         align-items: center;
         justify-content: flex-end;
       }
-      .btn.view {
+      .view {
         flex: 0 0 auto;
         white-space: nowrap;
-      }
-      .btn.danger {
-        color: #b42318;
-        border-color: color-mix(in srgb, #b42318 35%, var(--pw-border));
       }
       .more-menu-wrap {
         position: relative;
@@ -495,8 +506,22 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
       }
       .more-btn {
         min-width: 2.4rem;
+        min-height: 2.4rem;
         padding: 0.35rem 0.45rem;
         line-height: 1;
+        border: 1px solid var(--pw-border);
+        border-radius: 10px;
+        background: transparent;
+        color: var(--pw-text);
+        cursor: pointer;
+      }
+      .more-btn:hover:not(:disabled) {
+        border-color: var(--pw-accent);
+        color: var(--pw-accent);
+      }
+      .more-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
       .more-icon {
         display: block;
@@ -510,12 +535,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
         right: 0;
         z-index: 30;
         min-width: 11rem;
-        display: grid;
-        padding: 0.3rem;
-        background: var(--pw-surface, #fff);
-        border: 1.5px solid var(--pw-border-strong, var(--pw-border));
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+        /* .pw-menu supplies panel chrome (border/radius/background/shadow/scrollbar). */
       }
       .more-menu button {
         width: 100%;
@@ -561,25 +581,6 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
       .actions {
         display: flex;
         gap: 0.5rem;
-      }
-      .btn {
-        border-radius: 8px;
-        border: 1.5px solid var(--pw-border);
-        padding: 0.4rem 0.75rem;
-        background: var(--pw-surface);
-        cursor: pointer;
-      }
-      .btn.primary {
-        background: var(--pw-accent);
-        border-color: var(--pw-accent);
-        color: #fff;
-      }
-      .btn.ghost {
-        background: transparent;
-      }
-      .btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
       }
       .muted {
         color: var(--pw-muted);
@@ -682,7 +683,9 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
     `,
   ],
 })
-export class EmployeeQuestionnairesPanelComponent implements OnChanges {
+export class EmployeeQuestionnairesPanelComponent
+  implements OnChanges, OnDestroy, PwOverlayHandle
+{
   readonly lifecycleCallout = QUESTIONNAIRE_LIFECYCLE_CALLOUT;
   readonly proposalsHint = QUESTIONNAIRE_PROPOSALS_HINT;
   private readonly api = inject(QuestionnairesApiService);
@@ -756,41 +759,57 @@ export class EmployeeQuestionnairesPanelComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['employeeId'] && this.employeeId) {
       this.summaryExpandedIds.set(new Set());
-      this.moreMenuAssignmentId.set(null);
+      this.closeMoreMenu();
       this.reload();
     }
   }
 
   @HostListener('document:click')
   onDocumentClick(): void {
+    this.closeMoreMenu();
+  }
+
+  ngOnDestroy(): void {
+    releasePwOverlay(this);
+  }
+
+  closeFromOverlaySession(): void {
     this.moreMenuAssignmentId.set(null);
   }
 
   toggleMoreMenu(assignmentId: string, event: Event): void {
     event.stopPropagation();
-    this.moreMenuAssignmentId.update((openId) =>
-      openId === assignmentId ? null : assignmentId,
-    );
+    if (this.moreMenuAssignmentId() === assignmentId) {
+      this.closeMoreMenu();
+      return;
+    }
+    claimPwOverlay(this);
+    this.moreMenuAssignmentId.set(assignmentId);
   }
 
   printAssignmentFromMenu(id: string): void {
-    this.moreMenuAssignmentId.set(null);
+    this.closeMoreMenu();
     this.printAssignment(id);
   }
 
   cancelAssignmentFromMenu(id: string): void {
-    this.moreMenuAssignmentId.set(null);
+    this.closeMoreMenu();
     this.cancelAssignment(id);
   }
 
   closeAssignmentFromMenu(id: string): void {
-    this.moreMenuAssignmentId.set(null);
+    this.closeMoreMenu();
     this.closeAssignment(id);
   }
 
   deleteAssignmentFromMenu(id: string): void {
-    this.moreMenuAssignmentId.set(null);
+    this.closeMoreMenu();
     this.deleteAssignment(id);
+  }
+
+  private closeMoreMenu(): void {
+    this.moreMenuAssignmentId.set(null);
+    releasePwOverlay(this);
   }
 
   statusLabel(status: string): string {

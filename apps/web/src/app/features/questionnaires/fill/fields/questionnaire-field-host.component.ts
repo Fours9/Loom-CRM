@@ -10,13 +10,18 @@ import { FormsModule } from '@angular/forms';
 import type { QuestionnaireSchemaField } from '@loom/contracts-questionnaires';
 import { parseNumberInput } from '../validation/questionnaire-validation';
 import { QuestionnaireOrganizationRefFieldComponent } from './questionnaire-organization-ref-field.component';
+import { PwDateInputComponent } from '../../../../shared/ui/pw-date-input.component';
 
 let rowUiSeq = 0;
 
 @Component({
   selector: 'loom-questionnaire-field-host',
   standalone: true,
-  imports: [FormsModule, QuestionnaireOrganizationRefFieldComponent],
+  imports: [
+    FormsModule,
+    QuestionnaireOrganizationRefFieldComponent,
+    PwDateInputComponent,
+  ],
   template: `
     <div class="field" [attr.data-field-key]="field.key">
       @switch (field.valueType) {
@@ -45,16 +50,14 @@ let rowUiSeq = 0;
           ></textarea>
         }
         @case ('date') {
-          <label [attr.for]="inputId">{{ field.label }}</label>
+          <label>{{ field.label }}</label>
           @if (field.helpText) {
             <p class="help">{{ field.helpText }}</p>
           }
-          <input
-            [id]="inputId"
-            type="date"
+          <loom-pw-date-input
+            [value]="asString(value)"
             [disabled]="disabled"
-            [ngModel]="asString(value)"
-            (ngModelChange)="onText($event)"
+            (valueChange)="onText($event)"
           />
         }
         @case ('number') {
@@ -201,12 +204,10 @@ let rowUiSeq = 0;
                         }
                       </fieldset>
                     } @else if (child.valueType === 'date') {
-                      <input
-                        [id]="childInputId(child.key, i)"
-                        type="date"
+                      <loom-pw-date-input
+                        [value]="asString(row[child.key])"
                         [disabled]="disabled"
-                        [ngModel]="asString(row[child.key])"
-                        (ngModelChange)="onChildChange(i, child.key, $event)"
+                        (valueChange)="onChildChange(i, child.key, $event)"
                       />
                     } @else if (child.valueType === 'boolean') {
                       <input

@@ -31,7 +31,7 @@ export type QuestionnaireFilterToolbarValue = {
   standalone: true,
   imports: [PwDateInputComponent, MultiSelectListComponent],
   template: `
-    <div class="filters">
+    <div class="filters pw-filters">
       <div class="filters-row">
         @if (has('code')) {
           <label>
@@ -131,7 +131,8 @@ export type QuestionnaireFilterToolbarValue = {
         display: grid;
         gap: 0.75rem;
         position: relative;
-        z-index: 1;
+        z-index: 6;
+        isolation: isolate;
         overflow: visible;
       }
       .filters-row {

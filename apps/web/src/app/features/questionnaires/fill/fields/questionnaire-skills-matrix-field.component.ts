@@ -11,6 +11,10 @@ import {
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../../../shared/ui/pw-select.component';
+import {
   SKILL_DEFINITIONS,
   SKILL_GROUP_CODES,
   SKILL_GROUP_LABELS_UA,
@@ -65,7 +69,7 @@ type RatingUiMode = 'percent' | 'digits' | 'slider';
 @Component({
   selector: 'loom-questionnaire-skills-matrix-field',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet],
+  imports: [FormsModule, NgTemplateOutlet, PwSelectComponent],
   template: `
     <div class="matrix" [class.disabled]="disabled">
       <p class="hint">Оцініть навички за шкалою навички.</p>
@@ -153,20 +157,15 @@ type RatingUiMode = 'percent' | 'digits' | 'slider';
               <div class="picker">
                 <label>
                   Навичка
-                  <select
+                  <loom-pw-select
+                    [value]="pickerSkillCode"
+                    [options]="pickerSelectOptions"
                     [disabled]="disabled || pickerLoading"
-                    [(ngModel)]="pickerSkillCode"
-                  >
-                    <option value="">
-                      {{ pickerLoading ? 'Завантаження…' : '— оберіть —' }}
-                    </option>
-                    @for (skill of pickerSkills; track skill.code) {
-                      <option [value]="skill.code">
-                        {{ skill.name
-                        }}{{ skill.group?.name ? ' · ' + skill.group?.name : '' }}
-                      </option>
-                    }
-                  </select>
+                    [placeholder]="
+                      pickerLoading ? 'Завантаження…' : '— оберіть —'
+                    "
+                    (valueChange)="onPickerSkillSelected($event)"
+                  />
                 </label>
                 @if (pickerError) {
                   <p class="picker-error">{{ pickerError }}</p>
@@ -423,23 +422,6 @@ type RatingUiMode = 'percent' | 'digits' | 'slider';
         display: grid;
         gap: 0.25rem;
         font-weight: 600;
-      }
-      .picker select {
-        width: 100%;
-        min-height: 44px;
-        padding: 0.45rem 0.55rem;
-        border-radius: 8px;
-        border: var(--q-input-border, 1px solid var(--pw-border, color-mix(in srgb, currentColor 25%, transparent)));
-        background: var(--q-input-bg, var(--pw-input-bg, var(--pw-surface, #fff)));
-        color: var(--pw-text, #1e293b);
-        color-scheme: inherit;
-      }
-      .picker select option {
-        background: var(--q-input-bg, var(--pw-input-bg, var(--pw-surface, #fff)));
-        color: var(--pw-text, #1e293b);
-      }
-      :host-context(html[data-theme='dark']) .picker select {
-        color-scheme: dark;
       }
       .picker-actions {
         display: flex;
@@ -744,6 +726,19 @@ export class QuestionnaireSkillsMatrixFieldComponent
     this.desiredExtraCodesChange.emit(nextDesired);
     this.desiredExtraCodes = nextDesired;
     this.rebuildGroups();
+  }
+
+  get pickerSelectOptions(): PwSelectOption[] {
+    return this.pickerSkills.map((skill) => ({
+      value: skill.code,
+      label: skill.group?.name
+        ? `${skill.name} · ${skill.group.name}`
+        : skill.name,
+    }));
+  }
+
+  onPickerSkillSelected(code: string): void {
+    this.pickerSkillCode = code;
   }
 
   openPicker(): void {

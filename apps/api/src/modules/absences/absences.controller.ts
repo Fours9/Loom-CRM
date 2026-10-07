@@ -208,7 +208,9 @@ export class AbsencesController {
     @Query('scope') scope?: 'mine' | 'managed' | 'all',
     @Query('status') status?: string,
     @Query('statusGroup') statusGroup?: string,
+    @Query('statusGroups') statusGroups?: string,
     @Query('type') type?: string,
+    @Query('types') types?: string,
     @Query('employeeId') employeeId?: string,
     @Query('departmentId') departmentId?: string,
     @Query('departmentIds') departmentIds?: string,
@@ -222,7 +224,11 @@ export class AbsencesController {
       scope,
       status,
       statusGroup,
+      statusGroups: statusGroups
+        ? statusGroups.split(',').filter(Boolean)
+        : undefined,
       type,
+      types: types ? types.split(',').filter(Boolean) : undefined,
       employeeId,
       departmentId,
       departmentIds: departmentIds

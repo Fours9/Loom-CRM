@@ -1,9 +1,19 @@
-import { Component, OnDestroy, OnInit, computed, inject, input, output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import type { QuestionnaireAttachConstraint } from '@loom/contracts-questionnaires';
 import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnaireEmployeeTypeaheadComponent } from '../shared/questionnaire-employee-typeahead.component';
-import { signal } from '@angular/core';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
+import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
 
 /**
  * Modal for attaching an unattached/detached assignment to any employee.
@@ -24,8 +34,21 @@ import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-l
         (click)="$event.stopPropagation()"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="questionnaire-attach-picker-title"
       >
-        <h2>Прикріпити анкету</h2>
+        <div class="head">
+          <h2 id="questionnaire-attach-picker-title">Прикріпити анкету</h2>
+          <button
+            type="button"
+            class="icon-close"
+            aria-label="Закрити"
+            title="Закрити"
+            [disabled]="busy()"
+            (click)="close.emit()"
+          >
+            ×
+          </button>
+        </div>
 
         @if (constraint()?.kind === 'any_employee') {
           <loom-questionnaire-employee-typeahead
@@ -42,7 +65,7 @@ import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-l
         <div class="actions">
           <button
             type="button"
-            class="btn"
+            class="btn pw-btn pw-btn--ghost"
             [disabled]="busy()"
             (click)="close.emit()"
           >
@@ -50,7 +73,7 @@ import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-l
           </button>
           <button
             type="button"
-            class="btn primary"
+            class="btn pw-btn"
             [disabled]="busy() || !canConfirm()"
             (click)="onConfirm()"
           >
@@ -62,6 +85,9 @@ import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-l
   `,
   styles: [
     `
+      :host {
+        display: block;
+      }
       .backdrop {
         position: fixed;
         inset: 0;
@@ -69,24 +95,53 @@ import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-l
         display: grid;
         place-items: center;
         background: color-mix(in srgb, #0f172a 45%, transparent);
-        padding: 1rem;
+        padding: calc(var(--shell-topbar-h, 0px) + 0.75rem) 1rem 0.75rem;
         overflow-y: auto;
       }
       .modal {
+        position: relative;
         display: grid;
         gap: 0.75rem;
         width: min(28rem, 100%);
         margin: auto;
         padding: 1.1rem 1.2rem 1.25rem;
         border-radius: 12px;
-        background: var(--pw-surface);
-        border: 1px solid var(--pw-border);
+        background: var(--pw-surface, #1e293b);
+        border: 1px solid var(--pw-border, #334155);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
         overflow: visible;
+      }
+      .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding-right: 2.5rem;
       }
       h2 {
         margin: 0;
         font-size: 1.1rem;
+      }
+      .icon-close {
+        position: absolute;
+        top: 0.7rem;
+        right: 0.75rem;
+        display: inline-grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        font-size: 1.35rem;
+        line-height: 1;
+        background: transparent;
+        color: var(--pw-text);
+        border: 1px solid var(--pw-border-strong, var(--pw-border));
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .icon-close:disabled {
+        opacity: 0.55;
+        cursor: default;
       }
       .muted {
         margin: 0;
@@ -104,18 +159,6 @@ import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-l
         gap: 0.5rem;
         margin-top: 0.25rem;
       }
-      .btn {
-        border-radius: 8px;
-        border: 1px solid var(--pw-border);
-        padding: 0.4rem 0.85rem;
-        background: var(--pw-surface);
-        cursor: pointer;
-      }
-      .btn.primary {
-        background: var(--pw-accent);
-        border-color: var(--pw-accent);
-        color: #fff;
-      }
       .btn:disabled {
         opacity: 0.55;
         cursor: not-allowed;
@@ -124,6 +167,7 @@ import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-l
   ],
 })
 export class QuestionnaireAttachPickerComponent implements OnInit, OnDestroy {
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   readonly constraint = input<QuestionnaireAttachConstraint>(null);
   readonly busy = input(false);
@@ -142,6 +186,7 @@ export class QuestionnaireAttachPickerComponent implements OnInit, OnDestroy {
   private backdropPress = false;
 
   ngOnInit(): void {
+    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

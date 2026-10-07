@@ -26,11 +26,12 @@ import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-he
   standalone: true,
   imports: [RouterLink, RequestStatusBadgeComponent, ScheduleEditorComponent],
   template: `
-    <section class="page">
+    <section class="page pw-stage">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
       @if (loading) {
         <p>Завантаження…</p>
       } @else if (!employeeId) {
-        <article class="card">
+        <article class="card pw-panel">
           <h2>Анкета не створена</h2>
           <p class="muted">
             Для акаунта {{ auth.user()?.email }} ({{
@@ -42,7 +43,7 @@ import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-he
       } @else if (error) {
         <p class="error">{{ error }}</p>
       } @else if (employee) {
-        <header class="hero">
+        <header class="hero pw-page-head pw-rise">
           <div class="avatar" aria-hidden="true">
             @if (employee.photoUrl) {
               <img [src]="employee.photoUrl" alt="" />
@@ -56,7 +57,7 @@ import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-he
             <div class="hero-row">
               <h1>{{ employee.fullName }}</h1>
               @if (employee.permissions?.canExportProfilePdf) {
-                <button type="button" class="ghost-btn" (click)="downloadPdf()" [disabled]="pdfLoading">
+                <button type="button" class="pw-link-action" (click)="downloadPdf()" [disabled]="pdfLoading">
                   {{ pdfLoading ? 'Формування…' : 'Завантажити PDF' }}
                 </button>
               }
@@ -65,7 +66,7 @@ import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-he
               <p>#{{ employee.employeeNumber }} · {{ heroOrgMeta }}</p>
               @if (employee.permissions?.canEditProfile) {
                 <a
-                  class="ghost-btn"
+                  class="pw-link-action"
                   [routerLink]="['/absences/employees', employee.id]"
                   [queryParams]="{ edit: '1' }"
                 >Редагувати</a>
@@ -76,10 +77,10 @@ import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-he
 
         <div class="grid">
           <div class="col">
-            <article class="card" data-help-id="absences.dashboard.anketa">
+            <article class="card pw-panel" data-help-id="absences.dashboard.anketa">
               <div class="card-head">
                 <h2>Анкета</h2>
-                <a class="ghost-btn" [routerLink]="['/people', employee.id]">Профіль Loom</a>
+                <a class="pw-link-action" [routerLink]="['/people', employee.id]">Профіль Loom</a>
               </div>
 
               <div class="fields">
@@ -183,7 +184,7 @@ import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-he
           </div>
 
           <div class="col side-col">
-            <details class="card side-tools" open>
+            <details class="card pw-panel side-tools" open>
               <summary class="side-tools-summary">
                 <div class="panel-tabs" role="tablist">
                   <button
@@ -291,12 +292,18 @@ import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-he
         max-width: 56rem;
         margin-inline: auto;
         width: 100%;
+        position: relative;
       }
       .hero {
         display: flex;
         flex-direction: column;
         gap: 1rem;
         align-items: flex-start;
+      }
+      .hero-row .pw-link-action,
+      .card-head .pw-link-action {
+        flex: 0 0 auto;
+        width: auto;
       }
       @media (min-width: 641px) {
         .hero {
@@ -327,27 +334,8 @@ import { resolveAbsencesDashboardHelpContext } from '../help/resolve-absences-he
         color: var(--pw-muted);
         min-width: 0;
       }
-      .hero-row .ghost-btn {
+      .hero-row .pw-link-action {
         flex: 0 0 auto;
-      }
-      .ghost-btn {
-        width: auto;
-        background: transparent;
-        color: var(--pw-accent);
-        border: 0;
-        padding: 0;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 0.9rem;
-        text-decoration: none;
-      }
-      .ghost-btn:hover {
-        text-decoration: underline;
-      }
-      .ghost-btn:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
-        text-decoration: none;
       }
       .swatch {
         width: 28px;

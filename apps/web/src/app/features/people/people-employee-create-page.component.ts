@@ -26,19 +26,23 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
   standalone: true,
   imports: [RouterLink, EmployeeCreateFormComponent],
   template: `
-    <section class="page" data-help-id="people.create.general">
-      <a routerLink="/people" class="back">← Назад</a>
-      <div class="page-head">
-        <h1>Новий працівник</h1>
+    <section class="page pw-stage" data-help-id="people.create.general">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
+      <header class="page-head pw-page-head pw-rise">
+        <div>
+          <p class="pw-eyebrow"><a routerLink="/people">← Назад</a></p>
+          <h1>Новий працівник</h1>
+        </div>
         <button
           type="submit"
+          class="btn pw-btn"
           form="create-employee"
           [disabled]="loading()"
           data-help-id="people.create.submit"
         >
           Створити
         </button>
-      </div>
+      </header>
       @if (error()) {
         <p class="error">{{ error() }}</p>
       }
@@ -64,33 +68,12 @@ import type { AssignableAccountRoleOption } from '@loom/contracts-access-control
         margin-inline: auto;
         width: 100%;
       }
-      .back {
-        color: var(--pw-accent, #2a6fdb);
-        text-decoration: none;
-      }
-      .page-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        flex-wrap: wrap;
-      }
       .page-head h1 {
         margin: 0;
       }
-      .page-head button {
+      .page-head .pw-btn {
         width: auto;
         min-width: 10rem;
-        padding: 0.55rem 0.9rem;
-        border: 0;
-        border-radius: 8px;
-        background: var(--pw-accent, #2a6fdb);
-        color: var(--pw-on-accent, #fff);
-        cursor: pointer;
-      }
-      .page-head button:disabled {
-        opacity: 0.6;
-        cursor: default;
       }
       .error {
         color: var(--pw-danger, #b00020);

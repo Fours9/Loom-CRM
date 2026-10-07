@@ -21,24 +21,37 @@ import {
   shiftBoundsForDate,
   timeOptionsInShift,
 } from '../core/schedule/work-time.util';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../../shared/ui/pw-select.component';
+import { PwDateInputComponent } from '../../../shared/ui/pw-date-input.component';
+import { clearInvalidEndTime } from './request-create-binding.util';
 
 @Component({
   selector: 'app-request-detail-page',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink, DatePipe, PwSelectComponent, PwDateInputComponent],
   template: `
-    <section class="page">
+    <section class="page pw-stage">
+      <span class="pw-stage__glow" aria-hidden="true"></span>
       <div class="sheet">
-        <p class="back"><a routerLink="/absences/requests">← До списку</a></p>
+        <header class="page-head pw-page-head pw-rise">
+          <div>
+            <p class="pw-eyebrow"><a routerLink="/absences/requests">← До списку</a></p>
+            @if (request) {
+              <h1>{{ requestTypeLabel(request.type) }}</h1>
+              <p class="pw-lead">#{{ shortRequestId(request.id) }}</p>
+            } @else {
+              <h1>Заявка</h1>
+            }
+          </div>
+          @if (request) {
+            <span class="pw-request-badge pw-request-badge--lg" [attr.data-status]="request.statusGroup">{{ requestStatusLabel(request.statusGroup) }}</span>
+          }
+        </header>
 
         @if (request) {
-          <header class="head">
-            <div class="head-title">
-              <h1>{{ requestTypeLabel(request.type) }}</h1>
-              <span class="req-code">#{{ shortRequestId(request.id) }}</span>
-            </div>
-            <span class="pw-request-badge pw-request-badge--lg" [attr.data-status]="request.statusGroup">{{ requestStatusLabel(request.statusGroup) }}</span>
-          </header>
 
           <header class="hero">
             <span
@@ -57,7 +70,7 @@ import {
 
           <div class="grid">
             <div class="col details-col">
-              <article class="card" data-help-id="absences.request-detail.employee">
+              <article class="card pw-panel" data-help-id="absences.request-detail.employee">
                 <h2>Працівник</h2>
                 <div class="fields">
                   <label>
@@ -94,7 +107,7 @@ import {
                 </div>
               </article>
 
-              <article class="card" data-help-id="absences.request-detail.details">
+              <article class="card pw-panel" data-help-id="absences.request-detail.details">
                 <div class="card-head">
                 <h2>Деталі заявки</h2>
                   <span class="pw-request-badge pw-request-badge--lg" [attr.data-status]="request.statusGroup">{{ requestStatusLabel(request.statusGroup) }}</span>
@@ -258,22 +271,29 @@ import {
                   <div class="fields edit">
                   <label>
                       Тип
-                      <select [(ngModel)]="editType" name="editType" (ngModelChange)="onEditTypeChange()">
-                        @for (t of typeKeys; track t) {
-                          <option [value]="t">{{ requestTypeLabel(t) }}</option>
-                        }
-                      </select>
+                      <loom-pw-select
+                        [value]="editType"
+                        [options]="editTypeSelectOptions"
+                        placeholder="Оберіть тип"
+                        (valueChange)="onEditTypeSelected($event)"
+                      />
                     </label>
 
                     <div class="row row-2">
                     <label>
                         Дата початку
-                      <input type="date" [(ngModel)]="adjStart" name="adjStart" (ngModelChange)="onAdjDateChange()" />
+                      <loom-pw-date-input
+                        [value]="adjStart"
+                        (valueChange)="onAdjStartSelected($event)"
+                      />
                     </label>
                       @if (editType !== 'part_time') {
                       <label>
                           Дата кінця
-                        <input type="date" [(ngModel)]="adjEnd" name="adjEnd" />
+                        <loom-pw-date-input
+                          [value]="adjEnd"
+                          (valueChange)="onAdjEndSelected($event)"
+                        />
                       </label>
                     }
                     </div>
@@ -282,30 +302,23 @@ import {
                       <div class="row row-2">
                       <label>
                           Час з
-                        <select
-                          [(ngModel)]="adjStartTime"
-                          name="adjStartTime"
+                        <loom-pw-select
+                          [value]="adjStartTime"
+                          [options]="adjStartTimeSelectOptions"
+                          placeholder="Оберіть"
                           [disabled]="!adjShiftBounds"
-                          (ngModelChange)="onAdjStartTimeChange()"
-                        >
-                          <option value="">Оберіть</option>
-                          @for (t of adjStartTimeOptions; track t) {
-                            <option [value]="t">{{ t }}</option>
-                          }
-                        </select>
+                          (valueChange)="onAdjStartTimeSelected($event)"
+                        />
                       </label>
                       <label>
                           Час по
-                        <select
-                          [(ngModel)]="adjEndTime"
-                          name="adjEndTime"
+                        <loom-pw-select
+                          [value]="adjEndTime"
+                          [options]="adjEndTimeSelectOptions"
+                          placeholder="Оберіть"
                           [disabled]="!adjShiftBounds || !adjStartTime"
-                        >
-                          <option value="">Оберіть</option>
-                          @for (t of adjEndTimeOptions; track t) {
-                            <option [value]="t">{{ t }}</option>
-                          }
-                        </select>
+                          (valueChange)="onAdjEndTimeSelected($event)"
+                        />
                       </label>
                       </div>
                       @if (adjStart && !adjShiftBounds) {
@@ -436,14 +449,14 @@ import {
             @if (hasSidebarActions || request.history.length) {
               <aside class="col actions-col">
                 @if (hasSidebarActions) {
-                  <div class="card actions-card" data-help-id="absences.request-detail.actions">
+                  <div class="card pw-panel actions-card" data-help-id="absences.request-detail.actions">
                     <div class="actions-card-head">
                       <h2>Дії</h2>
                       <div class="actions-card-tools">
                         @if (!editing && canModify) {
                           <button
                             type="button"
-                            class="btn ghost sm"
+                            class="btn pw-btn pw-btn--ghost sm"
                             [disabled]="busy"
                             (click)="startEdit()"
                           >
@@ -480,8 +493,8 @@ import {
                         <textarea [(ngModel)]="adjustmentComment" name="adjustmentComment" rows="4"></textarea>
                       </label>
                       <div class="pw-form-actions">
-                        <button type="button" class="btn" [disabled]="busy" (click)="saveEdit()">Зберегти</button>
-                        <button type="button" class="btn secondary" [disabled]="busy" (click)="cancelEdit()">
+                        <button type="button" class="btn pw-btn" [disabled]="busy" (click)="saveEdit()">Зберегти</button>
+                        <button type="button" class="btn pw-btn pw-btn--ghost" [disabled]="busy" (click)="cancelEdit()">
                           Скасувати
                         </button>
                       </div>
@@ -545,7 +558,7 @@ import {
                 }
 
                 @if (request.history.length) {
-                  <article class="card history-card" data-help-id="absences.request-detail.history">
+                  <article class="card pw-panel history-card" data-help-id="absences.request-detail.history">
                     <h2>Історія</h2>
                     <div class="history-scroll">
                       <ul class="history">
@@ -1132,6 +1145,27 @@ export class RequestDetailPageComponent implements OnInit, OnDestroy {
     );
   }
 
+  get editTypeSelectOptions(): PwSelectOption[] {
+    return this.typeKeys.map((t) => ({
+      value: t,
+      label: requestTypeLabel(t),
+    }));
+  }
+
+  get adjStartTimeSelectOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: 'Оберіть' },
+      ...this.adjStartTimeOptions.map((t) => ({ value: t, label: t })),
+    ];
+  }
+
+  get adjEndTimeSelectOptions(): PwSelectOption[] {
+    return [
+      { value: '', label: 'Оберіть' },
+      ...this.adjEndTimeOptions.map((t) => ({ value: t, label: t })),
+    ];
+  }
+
   get adjStartTimeOptions(): string[] {
     return this.mergeTimeOption(
       this.adjShiftBounds
@@ -1280,6 +1314,29 @@ export class RequestDetailPageComponent implements OnInit, OnDestroy {
     this.editing = false;
   }
 
+  onEditTypeSelected(next: string): void {
+    this.editType = next as AbsenceType;
+    this.onEditTypeChange();
+  }
+
+  onAdjStartSelected(next: string): void {
+    this.adjStart = next;
+    this.onAdjDateChange();
+  }
+
+  onAdjEndSelected(next: string): void {
+    this.adjEnd = next;
+  }
+
+  onAdjStartTimeSelected(next: string): void {
+    this.adjStartTime = next;
+    this.onAdjStartTimeChange();
+  }
+
+  onAdjEndTimeSelected(next: string): void {
+    this.adjEndTime = next;
+  }
+
   onEditTypeChange(): void {
     if (this.editType === 'part_time') {
       this.adjEnd = this.adjStart;
@@ -1301,9 +1358,7 @@ export class RequestDetailPageComponent implements OnInit, OnDestroy {
   }
 
   onAdjStartTimeChange(): void {
-    if (this.adjEndTime && this.adjEndTime <= this.adjStartTime) {
-      this.adjEndTime = '';
-    }
+    this.adjEndTime = clearInvalidEndTime(this.adjStartTime, this.adjEndTime);
   }
 
   saveEdit(): void {

@@ -1,5 +1,7 @@
 import {
   Component,
+  ElementRef,
+  HostListener,
   OnDestroy,
   OnInit,
   computed,
@@ -20,12 +22,21 @@ import {
   questionnaireTemplateDescription,
 } from '../questionnaire-labels';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
+import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
+import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../../shared/ui/pw-select.component';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'loom-questionnaire-create-dialog',
   standalone: true,
-  imports: [FormsModule, QuestionnaireEmployeeTypeaheadComponent],
+  imports: [
+    FormsModule,
+    QuestionnaireEmployeeTypeaheadComponent,
+    PwSelectComponent,
+  ],
   template: `
     <div
       class="backdrop"
@@ -38,22 +49,29 @@ import { firstValueFrom } from 'rxjs';
         (click)="$event.stopPropagation()"
         role="dialog"
         aria-modal="true"
+        [attr.aria-labelledby]="headingId"
       >
-        <h2>{{ dialogTitle() }}</h2>
+        <div class="head">
+          <h2 [id]="headingId">{{ dialogTitle() }}</h2>
+          <button
+            type="button"
+            class="icon-close"
+            aria-label="Закрити"
+            title="Закрити"
+            [disabled]="busy()"
+            (click)="close.emit()"
+          >
+            ×
+          </button>
+        </div>
 
         <label class="field">
           Тип / шаблон
-          <select
-            [ngModel]="selectedTemplateCode()"
-            (ngModelChange)="onTemplateChange($event)"
-            name="templateCode"
-          >
-            @for (t of templates(); track t.code) {
-              <option [ngValue]="t.code">
-                {{ t.title }}
-              </option>
-            }
-          </select>
+          <loom-pw-select
+            [value]="selectedTemplateCode()"
+            [options]="templateOptions()"
+            (valueChange)="onTemplateChange($event)"
+          />
         </label>
 
         @if (selectedTypeDescription()) {
@@ -92,12 +110,17 @@ import { firstValueFrom } from 'rxjs';
         }
 
         <div class="actions">
-          <button type="button" class="btn" [disabled]="busy()" (click)="close.emit()">
+          <button
+            type="button"
+            class="btn pw-btn pw-btn--ghost"
+            [disabled]="busy()"
+            (click)="close.emit()"
+          >
             Скасувати
           </button>
           <button
             type="button"
-            class="btn primary"
+            class="btn pw-btn"
             [disabled]="busy() || !selectedTemplateCode() || !title().trim()"
             (click)="submit()"
           >
@@ -110,7 +133,7 @@ import { firstValueFrom } from 'rxjs';
   styles: [
     `
       :host {
-        /* Compete with stage siblings (.pw-page-head etc.); inner backdrop alone is not enough. */
+        display: block;
         z-index: var(--pw-z-modal, 250);
       }
       .backdrop {
@@ -120,24 +143,53 @@ import { firstValueFrom } from 'rxjs';
         display: grid;
         place-items: center;
         background: color-mix(in srgb, #0f172a 45%, transparent);
-        padding: 1rem;
+        padding: calc(var(--shell-topbar-h, 0px) + 0.75rem) 1rem 0.75rem;
         overflow-y: auto;
       }
       .modal {
+        position: relative;
         display: grid;
         gap: 0.75rem;
         width: min(32rem, 100%);
         margin: auto;
         padding: 1.1rem 1.2rem 1.25rem;
         border-radius: 12px;
-        background: var(--pw-surface);
-        border: 1px solid var(--pw-border);
+        background: var(--pw-surface, #1e293b);
+        border: 1px solid var(--pw-border, #334155);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
         overflow: visible;
+      }
+      .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding-right: 2.5rem;
       }
       h2 {
         margin: 0;
         font-size: 1.1rem;
+      }
+      .icon-close {
+        position: absolute;
+        top: 0.7rem;
+        right: 0.75rem;
+        display: inline-grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        font-size: 1.35rem;
+        line-height: 1;
+        background: transparent;
+        color: var(--pw-text);
+        border: 1px solid var(--pw-border-strong, var(--pw-border));
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .icon-close:disabled {
+        opacity: 0.55;
+        cursor: default;
       }
       .field {
         display: grid;
@@ -152,7 +204,6 @@ import { firstValueFrom } from 'rxjs';
         line-height: 1.35;
       }
       input,
-      select,
       textarea {
         border: 1px solid var(--pw-border);
         border-radius: 8px;
@@ -172,18 +223,6 @@ import { firstValueFrom } from 'rxjs';
         gap: 0.5rem;
         margin-top: 0.25rem;
       }
-      .btn {
-        border-radius: 8px;
-        border: 1px solid var(--pw-border);
-        padding: 0.4rem 0.85rem;
-        background: var(--pw-surface);
-        cursor: pointer;
-      }
-      .btn.primary {
-        background: var(--pw-accent);
-        border-color: var(--pw-accent);
-        color: #fff;
-      }
       .btn:disabled {
         opacity: 0.55;
         cursor: not-allowed;
@@ -192,8 +231,10 @@ import { firstValueFrom } from 'rxjs';
   ],
 })
 export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly api = inject(QuestionnairesApiService);
   private readonly scrollLock = inject(OverlayScrollLockService);
+  readonly headingId = 'questionnaire-create-dialog-title';
 
   readonly dialogTitle = input('Створити анкету');
   readonly prefillEmployee = input<Pick<
@@ -222,6 +263,10 @@ export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
     return questionnaireTemplateDescription(tpl.code, tpl.type);
   });
 
+  readonly templateOptions = computed<PwSelectOption[]>(() =>
+    this.templates().map((t) => ({ value: t.code, label: t.title })),
+  );
+
   private backdropPress = false;
 
   private templateTitleFor(code: string): string {
@@ -241,6 +286,7 @@ export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
     const prefill = this.prefillEmployee();
     if (prefill) this.employeeId.set(prefill.id);
@@ -262,6 +308,13 @@ export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.scrollLock.release();
+  }
+
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(event: Event): void {
+    if (this.busy()) return;
+    event.preventDefault();
+    this.close.emit();
   }
 
   onTemplateChange(code: string): void {

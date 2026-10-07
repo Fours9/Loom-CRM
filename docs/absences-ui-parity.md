@@ -19,6 +19,8 @@ Side-by-side vs ProjectWeekend. Values: **pass** | **fail** only.
 
 Engineering wiring done: full PW Absences UI under CRM shell (one host); Postgres via Loom API. Visual/behavior cells stay **fail** until human side-by-side pass.
 
+**Loom chrome (living):** calendar + employees/requests directories use shared `pw-stage` / `pw-filters` / `pw-menu` overlays. Calendar dept/type/status are inclusive multi (`[]` = all) via `buildCalendarQueryFilters`; employee filter is single select. Requests status/type are inclusive multi via API `statusGroups`/`types` (`[]` = all; `buildRequestsListQuery`). Hero/nav compact actions use global `.pw-link-action` (not full `pw-btn--ghost`). Embedded calendar (People tab) uses **local** filter/board stacking (same gate as documents panel).
+
 ## Create request navigation contract
 
 - Єдина FE-точка формування переходу: `apps/web/src/app/features/absences/requests/create-request-navigation.ts`.

@@ -335,7 +335,10 @@ html[data-theme='dark'] .loom-absence-module {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    /* `none` (not translateY(0)): a residual transform makes position:fixed
+       descendants use this element as containing block — modals then center
+       in the panel and fail to dim hero/completeness above it. */
+    transform: none;
   }
 }
 
@@ -433,9 +436,9 @@ html[data-theme='dark'] .loom-absence-module {
 }
 
 /*
-  Dialog hosts are stage children with default z-index:1, so an inner
-  .backdrop { z-index: 250 } cannot escape above .pw-page-head.
-  Elevate the host itself above page chrome.
+  Dialog hosts are nested under .pw-stage (isolation + child z-index:1), so an
+  inner .backdrop { z-index: 250 } alone cannot cover page chrome / completeness.
+  Host itself is a full-viewport fixed layer above stage chrome.
 */
 .app-shell loom-questionnaire-create-dialog,
 .app-shell loom-questionnaire-attach-picker,
@@ -459,6 +462,9 @@ html[data-theme='dark'] .loom-absence-module {
 .loom-absence-module loom-direction-edit-dialog,
 .loom-absence-module loom-department-edit-dialog,
 .loom-absence-module loom-account-role-edit-dialog {
+  position: fixed !important;
+  inset: 0;
+  display: block;
   z-index: var(--pw-z-modal, 250) !important;
 }
 
@@ -562,6 +568,63 @@ html[data-theme='dark'] .loom-absence-module {
   background: var(--pw-accent-soft);
   border-color: var(--pw-accent);
   box-shadow: 0 8px 20px var(--pw-shadow);
+}
+
+/* Compact text/link actions (hero Edit/PDF, profile links) — not full pw-btn--ghost. */
+.app-shell .pw-link-action,
+.loom-absence-module .pw-link-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pw-accent);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.app-shell .pw-link-action:hover,
+.loom-absence-module .pw-link-action:hover {
+  text-decoration: underline;
+}
+
+.app-shell .pw-link-action:disabled,
+.loom-absence-module .pw-link-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* Compact bordered nav (calendar prev/next) — still not full pw-btn. */
+.app-shell .pw-link-action--compact,
+.loom-absence-module .pw-link-action--compact {
+  min-width: 2.4rem;
+  min-height: 2.4rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid var(--pw-border);
+  border-radius: 10px;
+  background: var(--pw-surface);
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.app-shell .pw-link-action--compact:hover,
+.loom-absence-module .pw-link-action--compact:hover {
+  border-color: var(--pw-accent);
+  background: var(--pw-accent-soft);
+  text-decoration: none;
 }
 
 .app-shell .pw-panel,

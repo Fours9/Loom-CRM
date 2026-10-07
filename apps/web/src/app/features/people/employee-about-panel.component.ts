@@ -18,6 +18,10 @@ import { Subscription } from 'rxjs';
 import { EmployeeAboutApiService } from './employee-about-api.service';
 import { EmployeeAboutRepeatingFieldComponent } from './employee-about-repeating-field.component';
 import {
+  PwSelectComponent,
+  type PwSelectOption,
+} from '../../shared/ui/pw-select.component';
+import {
   resolvePeopleAboutSubtab,
   visiblePeopleAboutSubtabs,
 } from './people-about-subtabs';
@@ -25,7 +29,7 @@ import {
 @Component({
   selector: 'loom-employee-about-panel',
   standalone: true,
-  imports: [FormsModule, EmployeeAboutRepeatingFieldComponent],
+  imports: [FormsModule, EmployeeAboutRepeatingFieldComponent, PwSelectComponent],
   template: `
     <section class="about" aria-label="Про себе" data-help-id="people.about.region">
       <p class="lead">
@@ -74,15 +78,12 @@ import {
                 } @else if (canEdit) {
                   @switch (field.valueType) {
                     @case ('single_choice') {
-                      <select
-                        [id]="field.key"
-                        [(ngModel)]="draft[field.key]"
-                      >
-                        <option [ngValue]="null">— не вказано —</option>
-                        @for (opt of field.options ?? []; track opt.value) {
-                          <option [ngValue]="opt.value">{{ opt.labelUa }}</option>
-                        }
-                      </select>
+                      <loom-pw-select
+                        [value]="singleChoiceValue(field)"
+                        [options]="singleChoiceOptions(field)"
+                        placeholder="— не вказано —"
+                        (valueChange)="onSingleChoiceSelected(field.key, $event)"
+                      />
                     }
                     @case ('multi_choice') {
                       <div class="checks">
@@ -134,7 +135,7 @@ import {
               <div class="actions">
                 <button
                   type="button"
-                  class="primary"
+                  class="btn pw-btn"
                   data-help-id="people.about.save"
                   [disabled]="saving"
                   (click)="save()"
@@ -316,6 +317,22 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
     if (this.activeSubtab === next && !opts?.forceEmit) return;
     this.activeSubtab = next;
     this.subtabChange.emit(next);
+  }
+
+  singleChoiceOptions(field: EmployeeAboutFieldView): PwSelectOption[] {
+    return (field.options ?? []).map((opt) => ({
+      value: opt.value,
+      label: opt.labelUa,
+    }));
+  }
+
+  singleChoiceValue(field: EmployeeAboutFieldView): string {
+    const current = this.draft[field.key];
+    return typeof current === 'string' ? current : '';
+  }
+
+  onSingleChoiceSelected(key: string, value: string): void {
+    this.draft[key] = value === '' ? null : value;
   }
 
   isMultiChecked(key: string, value: string): boolean {

@@ -52,7 +52,7 @@
 | 2. Contracts + metadata | Rich metadata from catalog | **Done** |
 | 3. Backend use cases | Shared validation in create/update/adjust | **Done** |
 | 4. Calendar | visualKind, legend | **Done** |
-| 5. Angular UI | Rename, groups, metadata-driven form | **Done** |
+| 5. Angular UI | Rename, groups, metadata-driven form; calendar/lists share `pw-stage` + filters (`buildCalendarQueryFilters`; multi where API plurals; singular `loom-pw-select` on requests status/type) | **Done** |
 | 6. Documents / audit / notify | Atomic neutral projection | **Done** |
 | 7. Tests | Unit + integration + acceptance | **Done** (unit; sequential overlap via overlap policy) |
 | 8. Technical rename | Separate ADR | Deferred |
