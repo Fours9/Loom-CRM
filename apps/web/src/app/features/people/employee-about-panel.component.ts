@@ -17,6 +17,7 @@ import type {
 import { Subscription } from 'rxjs';
 import { EmployeeAboutApiService } from './employee-about-api.service';
 import { EmployeeAboutRepeatingFieldComponent } from './employee-about-repeating-field.component';
+import { PwDateInputComponent } from '../../shared/ui/pw-date-input.component';
 import {
   PwSelectComponent,
   type PwSelectOption,
@@ -29,7 +30,12 @@ import {
 @Component({
   selector: 'loom-employee-about-panel',
   standalone: true,
-  imports: [FormsModule, EmployeeAboutRepeatingFieldComponent, PwSelectComponent],
+  imports: [
+    FormsModule,
+    EmployeeAboutRepeatingFieldComponent,
+    PwSelectComponent,
+    PwDateInputComponent,
+  ],
   template: `
     <section class="about" aria-label="Про себе" data-help-id="people.about.region">
       <p class="lead">
@@ -64,6 +70,29 @@ import {
         </nav>
 
         @if (activeView; as view) {
+          <div class="section-head">
+            <h2>{{ view.labelUa }}</h2>
+            @if (canEdit) {
+              <div class="section-actions">
+                <button
+                  type="button"
+                  class="btn pw-btn"
+                  data-help-id="people.about.save"
+                  [disabled]="saving"
+                  (click)="save()"
+                >
+                  {{ saving ? 'Збереження…' : 'Зберегти' }}
+                </button>
+              </div>
+            }
+          </div>
+          @if (activePurposeUa) {
+            <p class="muted purpose">{{ activePurposeUa }}</p>
+          }
+          @if (saveError) {
+            <p class="error">{{ saveError }}</p>
+          }
+
           <div class="fields">
             @for (field of view.fields; track field.key) {
               <div class="field">
@@ -109,10 +138,9 @@ import {
                       ></textarea>
                     }
                     @case ('date') {
-                      <input
-                        [id]="field.key"
-                        type="date"
-                        [(ngModel)]="draft[field.key]"
+                      <loom-pw-date-input
+                        [value]="asDateString(draft[field.key])"
+                        (valueChange)="onDateSelected(field.key, $event)"
                       />
                     }
                     @default {
@@ -127,23 +155,6 @@ import {
                   <p class="display">
                     {{ field.displayValue || 'не вказано' }}
                   </p>
-                }
-              </div>
-            }
-
-            @if (canEdit) {
-              <div class="actions">
-                <button
-                  type="button"
-                  class="btn pw-btn"
-                  data-help-id="people.about.save"
-                  [disabled]="saving"
-                  (click)="save()"
-                >
-                  {{ saving ? 'Збереження…' : 'Зберегти' }}
-                </button>
-                @if (saveError) {
-                  <p class="error">{{ saveError }}</p>
                 }
               </div>
             }
@@ -166,18 +177,24 @@ import {
         line-height: 1.45;
       }
       .muted,
-      .hint {
+      .hint,
+      .purpose {
         margin: 0;
-        color: var(--loom-muted, #667085);
+        color: var(--pw-muted, #667085);
         max-width: 42rem;
         line-height: 1.45;
+      }
+      .purpose {
+        margin-top: -0.35rem;
+        margin-bottom: 0.15rem;
+        font-size: 0.9rem;
       }
       .hint {
         font-size: 0.85rem;
       }
       .error {
         margin: 0;
-        color: var(--loom-danger, #b42318);
+        color: var(--pw-danger, #b42318);
       }
       .tabs {
         display: flex;
@@ -224,19 +241,40 @@ import {
         font-weight: 700;
         box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pw-accent) 35%, transparent);
       }
+      .section-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: center;
+        margin-bottom: 1.15rem;
+      }
+      .section-head h2 {
+        margin: 0;
+      }
+      .section-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
       .fields {
         display: flex;
         flex-direction: column;
         gap: 1rem;
         max-width: 36rem;
+        overflow: visible;
       }
       .field {
         display: flex;
         flex-direction: column;
         gap: 0.35rem;
+        overflow: visible;
       }
-      .field label {
+      .field > label {
+        font-size: 0.85rem;
         font-weight: 600;
+        color: var(--pw-muted, #667085);
       }
       .display {
         margin: 0;
@@ -249,22 +287,26 @@ import {
       }
       .check {
         font-weight: 400;
+        color: var(--pw-text);
         display: flex;
         gap: 0.4rem;
         align-items: center;
       }
       textarea,
-      input[type='text'],
-      input[type='date'],
-      select {
+      input[type='text'] {
         width: 100%;
         box-sizing: border-box;
+        border: 1px solid var(--pw-border);
+        border-radius: 8px;
+        padding: 0.5rem 0.65rem;
+        min-height: 2.5rem;
+        background: var(--pw-surface);
+        color: inherit;
+        font: inherit;
       }
-      .actions {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        align-items: flex-start;
+      textarea {
+        min-height: 4rem;
+        resize: vertical;
       }
     `,
   ],
@@ -292,6 +334,14 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
   get activeView(): EmployeeAboutSubtabView | null {
     if (!this.data || !this.activeSubtab) return null;
     return this.data.subtabs.find((s) => s.id === this.activeSubtab) ?? null;
+  }
+
+  /** Catalog purpose for the active subtab (FE adapter SoT — not on API view). */
+  get activePurposeUa(): string | null {
+    if (!this.activeSubtab) return null;
+    const meta = visiblePeopleAboutSubtabs().find((t) => t.id === this.activeSubtab);
+    const purpose = meta?.purposeUa?.trim();
+    return purpose || null;
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -332,6 +382,14 @@ export class EmployeeAboutPanelComponent implements OnChanges, OnDestroy {
   }
 
   onSingleChoiceSelected(key: string, value: string): void {
+    this.draft[key] = value === '' ? null : value;
+  }
+
+  asDateString(value: unknown): string {
+    return value == null || value === '' ? '' : String(value);
+  }
+
+  onDateSelected(key: string, value: string): void {
     this.draft[key] = value === '' ? null : value;
   }
 

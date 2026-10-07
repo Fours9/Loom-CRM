@@ -49,6 +49,8 @@ Global `.pw-stage > .pw-filters` does **not** apply inside nested profile panels
 
 Exactly-one fields on profile (assignment org, about single_choice, skills picker, role/visibility, questionnaire template) → `loom-pw-select`. Inclusive filters → `app-multi-select-list`.
 
+**About («Про себе»):** each subtab uses Position/Data `section-head` (`h2` = `labelUa`, Save = `btn pw-btn` in `section-actions`, `margin-bottom: 1.15rem`); top-level + repeating dates → `loom-pw-date-input` with assign-then-handler (no dual-bind); field hosts `overflow: visible` for date popovers. Do not invent a second subtab label registry — catalog via `people-about-subtabs` + API projection.
+
 ## Fill wizard (immersive)
 
 Fill is **not** a filter page, but sticky chrome still needs local stacking:

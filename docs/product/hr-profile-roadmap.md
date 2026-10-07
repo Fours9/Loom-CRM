@@ -29,7 +29,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 
 `/people/:id` вкладки (visibility через `visiblePeopleProfileTabs` + `resolvePeopleProfileTab`):
 
-**Chrome (living):** усі підвкладки й модалки профілю використовують спільний SoT — `pw-btn` / `pw-btn--ghost` / `pw-link-action`, `loom-pw-select` / `loom-pw-date-input` / `app-multi-select-list`, `pw-filters` + `pw-menu` + overlay session; діалоги через `attachPwDialogHostToBody` під `.app-shell` (не bare `body`). Documents tab = reference. Domain PATCH/assign/upload без змін «для стилю».
+**Chrome (living):** усі підвкладки й модалки профілю використовують спільний SoT — `pw-btn` / `pw-btn--ghost` / `pw-link-action`, `loom-pw-select` / `loom-pw-date-input` / `app-multi-select-list`, `pw-filters` + `pw-menu` + overlay session; діалоги через `attachPwDialogHostToBody` під `.app-shell` (не bare `body`). Documents tab = reference. Domain PATCH/assign/upload без змін «для стилю». **About:** `section-head` + Save у `section-actions` (як Посада; spacing 1.15rem) + top-level dates через `loom-pw-date-input`; PATCH/catalog без змін.
 
 | Вкладка | Стан | Видимість |
 | --- | --- | --- |

@@ -107,7 +107,7 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
       }
       .muted {
         margin: 0;
-        color: var(--loom-muted, #667085);
+        color: var(--pw-muted, #667085);
       }
       .display-list {
         margin: 0;
@@ -118,11 +118,12 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
       }
       .row {
         display: grid;
-        gap: 0.45rem;
-        padding: 0.65rem;
+        gap: 0.55rem;
+        padding: 0.75rem 0.85rem;
         border: 1px solid var(--pw-border, #d0d7e2);
         border-radius: 10px;
         background: var(--pw-surface, #fff);
+        overflow: visible;
       }
       .row-head {
         display: flex;
@@ -132,18 +133,31 @@ type AboutGoalRow = Record<string, unknown> & { __uiId: string };
       }
       .child {
         display: grid;
-        gap: 0.25rem;
+        gap: 0.35rem;
         font-weight: 500;
+        overflow: visible;
       }
       .child span {
         font-size: 0.85rem;
+        font-weight: 600;
         color: var(--pw-muted, #667085);
       }
       textarea,
-      input {
+      input[type='text'] {
         width: 100%;
         box-sizing: border-box;
         font-weight: 400;
+        border: 1px solid var(--pw-border);
+        border-radius: 8px;
+        padding: 0.5rem 0.65rem;
+        min-height: 2.5rem;
+        background: var(--pw-surface);
+        color: inherit;
+        font: inherit;
+      }
+      textarea {
+        min-height: 3.5rem;
+        resize: vertical;
       }
       .pw-link-action.danger {
         color: var(--pw-danger, #b91c1c);
