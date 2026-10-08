@@ -1,4 +1,5 @@
-﻿import { AbsenceRequestListItem } from '../core/api/models';
+﻿import { employeeCalendarColorCss } from '../../../shared/employees/employee-calendar-color';
+import { AbsenceRequestListItem } from '../core/api/models';
 import { requestPeriod, requestTypeLabel } from '../core/api/request-view.util';
 import { requestFrameTone } from '../shared/request-status-presentation';
 
@@ -29,7 +30,7 @@ export function toRequestListItemVm(item: AbsenceRequestListItem): RequestListIt
     statusGroup: item.statusGroup,
     frameTone: requestFrameTone(item.statusGroup),
     createdAt: item.createdAt,
-    calendarColor: item.calendarColor || 'var(--pw-border)',
+    calendarColor: employeeCalendarColorCss(item.calendarColor),
     canEdit: !!item.canEdit,
     detailLink: ['/absences/requests', item.id],
     editLink: ['/absences/requests', item.id],

@@ -1,4 +1,5 @@
-﻿import { EmployeeListItem } from '../core/api/models';
+﻿import { employeeCalendarColorCss } from '../../../shared/employees/employee-calendar-color';
+import { EmployeeListItem } from '../core/api/models';
 import { roleDisplayLabel } from '../core/api/labels';
 
 export interface EmployeeListItemViewModel {
@@ -9,6 +10,7 @@ export interface EmployeeListItemViewModel {
   positionName: string;
   roleLabel: string;
   statusLabel: string;
+  /** Resolved via `employeeCalendarColorCss` (never raw null). */
   calendarColor: string;
   detailLink: string[];
 }
@@ -22,7 +24,7 @@ export function toEmployeeListItemVm(employee: EmployeeListItem): EmployeeListIt
     positionName: employee.positionName ?? '',
     roleLabel: roleDisplayLabel(employee.role, employee.isDepartmentManager),
     statusLabel: accountStatusLabel(employee),
-    calendarColor: employee.calendarColor,
+    calendarColor: employeeCalendarColorCss(employee.calendarColor),
     detailLink: ['/absences/employees', employee.id],
   };
 }

@@ -1,4 +1,5 @@
 import type { EmployeeListItem } from '@loom/contracts-employees';
+import { employeeCalendarColorCss } from './employee-calendar-color';
 
 export type EmployeeDirectoryItemVm = {
   id: string;
@@ -9,6 +10,8 @@ export type EmployeeDirectoryItemVm = {
   positionName: string;
   roleLabel: string;
   statusLabel: string;
+  /** Resolved via `employeeCalendarColorCss` (never raw null). */
+  calendarColor: string;
   detailLink: string[];
 };
 
@@ -31,6 +34,7 @@ export function toEmployeeDirectoryItemVm(
     positionName: employee.positionName ?? '',
     roleLabel: directoryRoleLabel(employee),
     statusLabel: directoryStatusLabel(employee),
+    calendarColor: employeeCalendarColorCss(employee.calendarColor),
     detailLink: [...detailBase, employee.id],
   };
 }

@@ -16,6 +16,7 @@ import {
       @for (e of items; track e.id) {
         <li class="employee-card">
           <a class="card-link" [routerLink]="e.detailLink">
+            <span class="swatch" [style.background]="e.calendarColor" aria-hidden="true"></span>
             <span class="card-body">
               <strong class="card-title">{{ e.fullName }}</strong>
               <span class="card-meta">{{ e.employeeNumber }} · {{ e.statusLabel }}</span>
@@ -34,6 +35,7 @@ import {
       <table>
         <thead>
           <tr>
+            <th aria-hidden="true"></th>
             <th>
               <button type="button" class="sort-btn" (click)="toggle('fullName')">
                 ПІБ
@@ -114,6 +116,9 @@ import {
               (keydown.space)="$event.preventDefault(); open(e)"
             >
               <td>
+                <span class="swatch" [style.background]="e.calendarColor" aria-hidden="true"></span>
+              </td>
+              <td>
                 <a class="row-name" [routerLink]="e.detailLink" (click)="$event.stopPropagation()">{{
                   e.fullName
                 }}</a>
@@ -172,11 +177,23 @@ import {
       .card-link {
         text-decoration: none;
         color: inherit;
-        display: block;
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+      }
+      .swatch {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        border: 1px solid var(--pw-border);
+        flex-shrink: 0;
+        margin-top: 0.25rem;
       }
       .card-body {
         display: grid;
         gap: 0.25rem;
+        min-width: 0;
       }
       .card-title {
         color: var(--pw-text-strong);
