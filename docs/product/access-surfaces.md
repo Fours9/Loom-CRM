@@ -62,7 +62,11 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 
 **Privacy admin page:** gated by `absences.admin` surface∧permission; fake privacy persistence removed (unavailable UI until real API).
 
-**EmployeeAccess class C debt (not remapped):** `canViewComment`, `canExportProfilePdf` still use admin\|DM role mirror — candidates `employees.read_team_comment` / `employees.export_profile`.
+**Employee profile Class C (Settings):** `employees.read_team_comment` (view team comment; **no** target-scope) and `employees.export_profile` (PDF ∧ `canViewEmployeeProfile`). Seeded as extras on non-adminEq `department_manager`-preset roles (director/DM). Never remap to ManageProfiles alone.
+
+**Destructive account ops** (reset password, deactivate/delete account, delete employee, edit login email) = **adminEq only** («Повний доступ») — ADR 0011 §4; no separate Settings toggles. AuthZ SoT = `AuthorizationContext`, never `users.role`.
+
+**Field toggles** (`read/write.personal`, emergency, `change_assignment`, `change_status`, `view_history`): Settings checkboxes; write/assignment/status require ManageProfiles at runtime (and Settings UX disables dependents until ManageProfiles). History keeps OR-branch: `ViewHistory ∨ (canView ∧ ManageProfiles)`.
 
 ## Classification (ADR 0012)
 
@@ -79,11 +83,17 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 |------------|-------|---------|
 | `employees.create` | **Global** | `POST /employees`; FE CTA with `employees.view`. Does not constrain by managed departments. |
 | `employees.create_account_at_create` | **Global** (with Create) | Allows `createAccount=true` on `POST /employees` only (workflow-gate). **≠** attach. Admin preset; Settings toggle. OFF does not ban later attach (`employees.create` ∧ managed-dept \| adminEq). |
-| `employees.manage_profiles` | Managed-dept | Canonical basic/contacts/schedule (+ specialized pairings). Not in DM base preset (extra). |
+| `employees.manage_profiles` | Managed-dept | Canonical basic/contacts/schedule (+ specialized pairings). Not in DM base preset (extra). Required for write.personal / write.emergency / change_assignment / change_status. |
 | `employees.assign_account_role` | Managed-dept | Assign AccountRole; `GET …/account-roles/assignable` → `AssignableAccountRoleOption` (`id`, `code`, `name`, `isAdminEquivalent`). Admin-equivalent ceiling (not full permission-subset). Independent of create-account-at-create. |
+| `employees.read_team_comment` | Global (no target-scope) | View team profile comment. Class C; seeded on DM-preset. |
+| `employees.export_profile` | + canView target | Profile PDF export. Class C; seeded on DM-preset. |
+| `employees.read.personal` / `write.personal` | Read global / write+ManageProfiles+managed | Personal contacts. |
+| `employees.read.emergency_contact` / `write.emergency_contact` | Read global / write+ManageProfiles+managed (owner write preserved) | Emergency contact. |
+| `employees.change_assignment` / `change_status` | ManageProfiles+managed | Org assignment / employment status. |
+| `employees.view_history` | OR ManageProfiles∧canView | Profile history. |
 | `employees.edit` | — | Deprecated; cannot be newly granted. |
 
-Settings role dialog: effective / `grants*Explicitly` / `canEdit*Grant` triad (confidential pattern).
+Settings role dialog: effective / `grants*Explicitly` / `canEdit*Grant` triad (confidential pattern). Single entry for capability math: Organization `employee-profile-authz` pure helpers.
 
 ## Questionnaire template grants + Assign / Manage
 
@@ -96,7 +106,7 @@ Settings role dialog: effective / `grants*Explicitly` / `canEdit*Grant` triad (c
 
 Unattached `new` READ: Assign ∨ Lifecycle ∨ Delete ∧ template grant (never View alone). Proposal LIST: View∨owner + template grant. Proposal REJECT: Manage bundle ∧ scope ∧ template grant. Proposal ACCEPT: same as REJECT **plus** exhaustive fail-closed target-profile write policy (`classifyProposalProfileWrite` → Organization `canManageProfilesOnTarget` / `canWritePersonalOnTarget` / `canEditEmergencyOnTarget`; unknown `section.field` DENY). Notifications with assignment metadata require recipient template grant.
 
-Migration seed: built-in literals (`employee-starter`/`360`/`managing`/`docs`) by elevatedBefore parity; upgrade adds published `type=full` (plain) or all published (elevated). See [ADR 0009 §16](../adr/0009-questionnaire-360-mvp.md).
+Migration seed: built-in literals (`employee-starter`/`360`/`managing`/`docs`) by elevatedBefore parity; upgrade adds published `type=full` (plain) or all published (elevated). `employee-named` grant migration copies to roles that already hold `employee-starter` or `employee-360`. See [ADR 0009 §16](../adr/0009-questionnaire-360-mvp.md).
 
 ## Assign flow
 

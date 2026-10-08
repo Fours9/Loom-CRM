@@ -113,9 +113,9 @@ const baseMeta = {
   printLayoutVersion: QUESTIONNAIRE_PRINT_LAYOUT_VERSION,
 };
 
-describe('buildQuestionnairePrintModel (layout 2.4)', () => {
-  it('uses layout version 2.4', () => {
-    expect(QUESTIONNAIRE_PRINT_LAYOUT_VERSION).toBe('2.4');
+describe('buildQuestionnairePrintModel (layout 2.6)', () => {
+  it('uses layout version 2.6', () => {
+    expect(QUESTIONNAIRE_PRINT_LAYOUT_VERSION).toBe('2.6');
   });
 
   it('blank includes all top-level keys (ignores visibleWhen)', () => {
@@ -672,5 +672,145 @@ describe('buildQuestionnairePrintModel (layout 2.4)', () => {
       'career_goals.plan',
       'probation_goals.items',
     ]);
+  });
+
+  it('employee-named coalesces with ПІБ row, inline language, Робота group', () => {
+    const namedSchema: QuestionnaireSchemaJson = {
+      code: 'employee-named',
+      version: 1,
+      title: 'Іменна анкета',
+      steps: [
+        {
+          key: 'profile_mirror',
+          label: 'Особисті дані',
+          fields: [
+            {
+              key: 'personal.last_name',
+              label: 'Прізвище',
+              valueType: 'text',
+              requiredPolicy: 'voluntary',
+            },
+            {
+              key: 'personal.first_name',
+              label: "Ім'я",
+              valueType: 'text',
+              requiredPolicy: 'voluntary',
+            },
+            {
+              key: 'personal.middle_name',
+              label: 'По батькові',
+              valueType: 'text',
+              requiredPolicy: 'voluntary',
+            },
+            {
+              key: 'personal.preferred_language',
+              label: 'Бажана мова',
+              valueType: 'multi_choice',
+              requiredPolicy: 'voluntary',
+              options: [
+                { value: 'uk', label: 'Українська' },
+                { value: 'en', label: 'Англійська' },
+                { value: 'other', label: 'Інша' },
+              ],
+            },
+          ],
+        },
+        {
+          key: 'contacts',
+          label: 'Особисті контакти',
+          fields: [
+            {
+              key: 'contacts.bundle',
+              label: 'Контакти',
+              valueType: 'contacts_bundle',
+              requiredPolicy: 'voluntary',
+            },
+          ],
+        },
+        {
+          key: 'experience',
+          label: 'Професійний досвід',
+          fields: [
+            {
+              key: 'experience.total_tenure',
+              label: 'Загальний стаж',
+              valueType: 'text',
+              requiredPolicy: 'voluntary',
+            },
+          ],
+        },
+        {
+          key: 'company_work',
+          label: 'Робота в компанії',
+          fields: [
+            {
+              key: 'company_work.position_id',
+              label: 'Посада',
+              valueType: 'text',
+              requiredPolicy: 'voluntary',
+            },
+          ],
+        },
+      ],
+    };
+
+    const model = buildQuestionnairePrintModel({
+      schema: namedSchema,
+      answers: {},
+      mode: 'blank',
+      meta: {
+        ...baseMeta,
+        templateCode: 'employee-named',
+        title: namedSchema.title,
+      },
+      formatContext: noopFormat,
+    });
+
+    expect(model.steps).toHaveLength(1);
+    expect(model.steps[0]!.key).toBe('named_form');
+    expect(model.steps[0]!.label).toBe('');
+    expect(listPrintModelFieldKeys(model)).toEqual([
+      'personal.last_name',
+      'personal.first_name',
+      'personal.middle_name',
+      'personal.preferred_language',
+      'contacts.bundle',
+      'company_work.position_id',
+      'experience.total_tenure',
+    ]);
+
+    const fields = model.steps[0]!.fields;
+    expect(fields[0]?.kind).toBe('control_row');
+    if (fields[0]?.kind === 'control_row') {
+      expect(fields[0].controls.map((c) => c.key)).toEqual([
+        'personal.last_name',
+        'personal.first_name',
+        'personal.middle_name',
+      ]);
+    }
+
+    const language = fields.find((f) => f.key === 'personal.preferred_language');
+    expect(language?.kind).toBe('choice_list');
+    if (language?.kind === 'choice_list') {
+      expect(language.layout).toBe('inline');
+    }
+
+    const contacts = fields.find((f) => f.key === 'contacts.bundle');
+    expect(contacts?.kind).toBe('contacts_form');
+    if (contacts?.kind === 'contacts_form') {
+      expect(contacts.work).toHaveLength(0);
+      expect(contacts.emergency).toHaveLength(0);
+      expect(contacts.personal.length).toBeGreaterThan(0);
+    }
+
+    const work = fields.find((f) => f.key === 'work.block');
+    expect(work?.kind).toBe('labeled_group');
+    if (work?.kind === 'labeled_group') {
+      expect(work.label).toBe('Робота');
+      expect(work.fields.map((f) => f.key)).toEqual([
+        'company_work.position_id',
+        'experience.total_tenure',
+      ]);
+    }
   });
 });

@@ -156,7 +156,7 @@ export class PositionManagementFacade {
 
   readonly canManage = computed(
     () =>
-      this.session.user()?.role === 'admin' ||
+      this.session.isAdminEquivalent() ||
       this.session.hasPermission(Permission.DepartmentsManage) ||
       this.session.hasPermission(Permission.PositionsManage) ||
       this.session.hasPermission(Permission.DirectionsManage),
@@ -164,19 +164,19 @@ export class PositionManagementFacade {
 
   readonly canManageDepartments = computed(
     () =>
-      this.session.user()?.role === 'admin' ||
+      this.session.isAdminEquivalent() ||
       this.session.hasPermission(Permission.DepartmentsManage),
   );
 
   readonly canManageDirections = computed(
     () =>
-      this.session.user()?.role === 'admin' ||
+      this.session.isAdminEquivalent() ||
       this.session.hasPermission(Permission.DirectionsManage),
   );
 
   readonly canManagePositions = computed(
     () =>
-      this.session.user()?.role === 'admin' ||
+      this.session.isAdminEquivalent() ||
       this.session.hasPermission(Permission.PositionsManage),
   );
 

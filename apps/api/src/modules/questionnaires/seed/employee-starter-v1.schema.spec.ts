@@ -18,11 +18,10 @@ describe('employee-starter seed content', () => {
     ]);
   });
 
-  it('reuses Full 360 field defs for shared personal and consents steps', () => {
+  it('reuses Full 360 field defs for shared steps (family omits pets)', () => {
     for (const key of [
       'profile_mirror',
       'contacts',
-      'family',
       'education',
       'experience',
       'consents_review',
@@ -34,6 +33,19 @@ describe('employee-starter seed content', () => {
       expect(fromStarter?.fields).toEqual(from360?.fields);
       expect(fromStarter?.label).toBe(from360?.label);
     }
+
+    const family360 = EMPLOYEE_360_V1_SCHEMA.steps.find((s) => s.key === 'family');
+    const familyStarter = EMPLOYEE_STARTER_V1_SCHEMA.steps.find(
+      (s) => s.key === 'family',
+    );
+    expect(familyStarter?.label).toBe(family360?.label);
+    expect(familyStarter?.fields.some((f) => f.key === 'family.pets')).toBe(
+      false,
+    );
+    expect(family360?.fields.some((f) => f.key === 'family.pets')).toBe(true);
+    expect(familyStarter?.fields).toEqual(
+      family360?.fields.filter((f) => f.key !== 'family.pets'),
+    );
   });
 
   it('company_work label matches Managing', () => {

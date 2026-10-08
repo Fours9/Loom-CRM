@@ -2,7 +2,7 @@
 
 **Status:** product/policy source of truth (PR-0 + Track B sync).  
 **Not runtime:** API/FE read published `questionnaire_template_versions.schema_json` only.  
-**Seeds (manually synced):** `employee-360` (full), `employee-managing`, `employee-docs` under `apps/api/.../seed/`.  
+**Seeds (manually synced):** `employee-360` (full), `employee-starter`, `employee-named`, `employee-managing`, `employee-docs` under `apps/api/.../seed/`.  
 **Reference HTML:** [references/anketa_360.html](./references/anketa_360.html) — human prototype only.  
 **Vision mapping:** [employee-profile-core.md](./employee-profile-core.md) §44.  
 **ADR:** [0009-questionnaire-360-mvp.md](../adr/0009-questionnaire-360-mvp.md), [0010-position-catalog](../adr/0010-position-catalog-and-questionnaire-context.md).
@@ -130,6 +130,7 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | --- | --- |
 | `employee-360` (full) | profile_mirror · contacts · family · celebration_dates · experience · education · strengths · hobbies · work_style · consents |
 | `employee-starter` (full / Первинна) | profile_mirror · contacts · family · education · experience · company_work · consents |
+| `employee-named` (full / Іменна) | profile_mirror · contacts (label «Особисті контакти») · experience (`total_tenure` only, label «Загальний досвід у сфері») · company_work (`position_id` freestanding only); PDF single-page |
 | `employee-managing` | profile_mirror · company_work · grade · skills · **goals** (rail/PDF parent; substeps `career_goals` + `probation_goals`) |
 | `employee-docs` | profile_mirror · onboarding · hr_documents |
 

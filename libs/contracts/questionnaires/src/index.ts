@@ -64,6 +64,8 @@ export const QUESTIONNAIRE_BUILTIN_TEMPLATE_DESCRIPTIONS: Record<
 > = {
   'employee-starter':
     'стартова анкета: особисті дані, контакти, сімʼя, освіта, досвід, робота в компанії та згоди',
+  'employee-named':
+    'компактна іменна анкета: особисті дані, особисті контакти, загальний стаж і посада (PDF на одну сторінку)',
   'employee-360':
     'повна 360° анкета для нових, майбутніх або вже працевлаштованих співробітників',
   'employee-managing': 'статистика, навички, грейди робітника',
@@ -236,7 +238,21 @@ export type QuestionnaireSchemaJson = {
 };
 
 /** Bump when PDF visual grammar / print model shape changes. */
-export const QUESTIONNAIRE_PRINT_LAYOUT_VERSION = '2.4';
+export const QUESTIONNAIRE_PRINT_LAYOUT_VERSION = '2.6';
+
+/**
+ * Templates whose print model flattens all schema steps into one PDF section
+ * (single A4 page target — no inter-step page breaks).
+ */
+export const QUESTIONNAIRE_PRINT_SINGLE_PAGE_TEMPLATE_CODES: ReadonlySet<string> =
+  new Set(['employee-named']);
+
+/**
+ * Templates that project contacts_bundle as personal slots only on paper
+ * (omit work + emergency write zones for compact forms).
+ */
+export const QUESTIONNAIRE_PRINT_PERSONAL_CONTACTS_ONLY_TEMPLATE_CODES: ReadonlySet<string> =
+  new Set(['employee-named']);
 
 /** Layout SoT — paper-form blank/spare geometry (not projector whim). */
 export const PAPER_FORM_MIN_ROWS = 3;
@@ -277,8 +293,12 @@ export type QuestionnairePrintControl =
       key: string;
       label: string;
       exclusive: boolean;
-      /** Default vertical; horizontal = caption above checkbox in one row. */
-      layout?: 'vertical' | 'horizontal';
+      /**
+       * Default vertical.
+       * `horizontal` = caption above ☐ in equal columns.
+       * `inline` = ☐ left of option label, options share one row.
+       */
+      layout?: 'vertical' | 'horizontal' | 'inline';
       options: Array<{ value: string; label: string; checked: boolean }>;
     }
   | { kind: 'checkbox_item'; key: string; label: string; checked: boolean };
@@ -348,6 +368,19 @@ export type QuestionnairePrintField =
       key: string;
       label: string;
       rows: QuestionnairePrintSkillRow[];
+    }
+  /** Side-by-side atomic controls (e.g. ПІБ on one row for employee-named). */
+  | {
+      kind: 'control_row';
+      key: string;
+      controls: QuestionnairePrintControl[];
+    }
+  /** Muted subsection header + nested fields (e.g. «Робота» on employee-named). */
+  | {
+      kind: 'labeled_group';
+      key: string;
+      label: string;
+      fields: QuestionnairePrintField[];
     };
 
 export type QuestionnairePrintStep = {

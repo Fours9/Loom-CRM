@@ -19,6 +19,15 @@ function stepFrom360(key: string) {
   return step;
 }
 
+/** Family step without pets — not collected on Первинна. */
+function familyStepWithoutPets() {
+  const family = stepFrom360('family');
+  return {
+    ...family,
+    fields: family.fields.filter((f) => f.key !== 'family.pets'),
+  };
+}
+
 export const EMPLOYEE_STARTER_V1_SCHEMA = {
   code: EMPLOYEE_STARTER_TEMPLATE_CODE,
   version: 1,
@@ -26,7 +35,7 @@ export const EMPLOYEE_STARTER_V1_SCHEMA = {
   steps: [
     stepFrom360('profile_mirror'),
     stepFrom360('contacts'),
-    stepFrom360('family'),
+    familyStepWithoutPets(),
     stepFrom360('education'),
     stepFrom360('experience'),
     {

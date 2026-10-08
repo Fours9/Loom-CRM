@@ -19,8 +19,17 @@ import { Permission } from '../../platform/permissions/permission.names';
 import {
   canChangeAssignmentOnTarget,
   canChangeStatusOnTarget,
+  canDeleteEmployee,
+  canDestructivelyManageAccount,
+  canEditAccountEmail,
   canEditEmergencyOnTarget,
+  canExportProfile,
   canManageProfilesOnTarget,
+  canResetPassword,
+  canViewAccountDetails,
+  canViewEmergencyContact,
+  canViewHistory,
+  canViewPersonalContacts,
   canWritePersonalOnTarget,
 } from './employee-profile-authz';
 import { EmployeeAccessService } from '../access/employee-access.service';
@@ -200,56 +209,56 @@ export class EmployeeProfileService {
   }
 
   async capabilities(actor: User, target: Employee): Promise<ProfileCapabilities> {
-    const [authz, canView, inManagedDept] = await Promise.all([
-      this.authorization.resolve(actor.id),
+    const authz = await this.authorization.resolve(actor.id);
+    const [canView, inManagedDept] = await Promise.all([
       this.access.canViewEmployeeProfile(actor, target),
-      this.access.isTargetInManagedDepartments(actor, target),
+      this.access.isTargetInManagedDepartments(actor, target, authz),
     ]);
     const owner = this.access.isOwner(actor, target);
     const canEditBasic = canManageProfilesOnTarget(authz, inManagedDept);
+    const hasAccount = target.userId != null;
+    const isSelf = target.userId === actor.id;
 
     return {
       canEditBasic,
       canEditEmployment: canChangeAssignmentOnTarget(authz, inManagedDept),
-      canViewPersonal:
-        authz.isAdminEquivalent ||
-        owner ||
-        hasPermission(authz, Permission.EmployeesReadPersonal),
+      canViewPersonal: canViewPersonalContacts(authz, owner),
       canEditPersonal: canWritePersonalOnTarget(authz, inManagedDept),
-      canViewEmergencyContact:
-        authz.isAdminEquivalent ||
-        owner ||
-        hasPermission(authz, Permission.EmployeesReadEmergency),
+      canViewEmergencyContact: canViewEmergencyContact(authz, owner),
       canEditEmergencyContact: canEditEmergencyOnTarget(
         authz,
         inManagedDept,
         owner,
       ),
       canChangeStatus: canChangeStatusOnTarget(authz, inManagedDept),
-      canExport: await this.access.canExportProfilePdf(actor, target),
-      canViewHistory:
-        authz.isAdminEquivalent ||
-        hasPermission(authz, Permission.EmployeesViewHistory) ||
-        (canView &&
-          (authz.isAdminEquivalent ||
-            hasPermission(authz, Permission.EmployeesManageProfiles))),
+      canExport: canExportProfile(authz, canView),
+      canViewHistory: canViewHistory(authz, canView),
       canStartOnboarding: false,
       canAssignQuestionnaire:
         hasPermission(authz, Permission.QuestionnairesAssign) && canView,
       canCreateAccount: await this.access.canCreateEmployeeAccount(
         actor,
         target,
+        authz,
       ),
-      canResetPassword: this.access.canResetEmployeePassword(actor, target),
-      canManageAccount: this.access.canDestructivelyManageAccount(actor, target),
-      canDeleteEmployee: this.access.canDeleteEmployee(actor, target),
-      canEditAdminAccess: await this.access.canEditAdminAccess(actor),
+      canResetPassword: canResetPassword(authz, hasAccount),
+      canManageAccount: canDestructivelyManageAccount(
+        authz,
+        hasAccount,
+        isSelf,
+      ),
+      canDeleteEmployee: canDeleteEmployee(authz, isSelf),
+      canEditAdminAccess: await this.access.canEditAdminAccess(actor, authz),
       canEditVisibilityOverrides: await this.access.canEditVisibilityOverrides(
         actor,
         target.role,
+        authz,
       ),
-      canViewAccountDetails: this.access.canViewAccountDetails(actor, target),
-      canEditAccountEmail: this.access.canEditAccountEmail(actor, target),
+      canViewAccountDetails: canViewAccountDetails(authz, owner),
+      canEditAccountEmail: canEditAccountEmail(authz, {
+        hasOtherUser: hasAccount,
+        isSelf,
+      }),
     };
   }
 

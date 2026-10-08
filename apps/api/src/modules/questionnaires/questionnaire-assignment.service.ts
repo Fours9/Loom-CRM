@@ -448,13 +448,15 @@ export class QuestionnaireAssignmentService {
     actor: User,
     employee: Employee,
   ): Promise<Record<string, unknown> | null> {
-    const includePersonal = this.access.canViewPersonalContacts(
+    const authz = await this.authorization.resolve(actor.id);
+    const includePersonal = await this.access.canViewPersonalContacts(
       actor,
       employee,
+      authz,
     );
     const includeEmployment =
       this.access.isOwner(actor, employee) ||
-      this.access.isAdmin(actor) ||
+      authz.isAdminEquivalent ||
       (await this.access.canViewEmployeeProfile(actor, employee));
 
     if (!includePersonal && !includeEmployment) {
@@ -1045,7 +1047,7 @@ export class QuestionnaireAssignmentService {
     actor: User,
     authz: AuthorizationContext,
   ): Promise<QuestionnaireDirectoryScope> {
-    if (this.access.isAdmin(actor)) {
+    if (authz.isAdminEquivalent) {
       return { kind: 'all' };
     }
     const ctx = await this.access.resolveActorContext(actor);

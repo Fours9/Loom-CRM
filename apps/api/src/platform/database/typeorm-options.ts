@@ -79,6 +79,8 @@ import { PeopleTabAboutSurface1730000043000 } from './migrations/1730000043000-P
 import { EmployeeAbout1730000044000 } from './migrations/1730000044000-EmployeeAbout';
 import { QuestionnaireSubmissionSubjectEmployee1730000045000 } from './migrations/1730000045000-QuestionnaireSubmissionSubjectEmployee';
 import { AbsencesAdminSurface1730000046000 } from './migrations/1730000046000-AbsencesAdminSurface';
+import { EmployeeAccessFieldToggles1730000047000 } from './migrations/1730000047000-EmployeeAccessFieldToggles';
+import { EmployeeNamedQuestionnaireGrant1730000048000 } from './migrations/1730000048000-EmployeeNamedQuestionnaireGrant';
 import { EmployeeAbout } from '../../organization/employees/employee-about.entity';
 
 export function getDataSourceOptions(): DataSourceOptions {
@@ -170,6 +172,8 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeAbout1730000044000,
       QuestionnaireSubmissionSubjectEmployee1730000045000,
       AbsencesAdminSurface1730000046000,
+      EmployeeAccessFieldToggles1730000047000,
+      EmployeeNamedQuestionnaireGrant1730000048000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

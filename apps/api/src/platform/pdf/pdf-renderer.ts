@@ -272,7 +272,11 @@ export class PdfRenderer {
       // Major blocks (e.g. «Професійний досвід») start on a new page for easy
       // physical separation — skip if already on a fresh page (avoids blanks).
       this.beginMajorSection(doc, stepIndex === 0);
-      this.section(doc, step.label, pageWidth);
+      // Compact single-page forms may use an empty step label to avoid
+      // duplicating the PDF header title (employee-named).
+      if (step.label.trim()) {
+        this.section(doc, step.label, pageWidth);
+      }
       for (const field of step.fields) {
         this.drawPrintField(doc, field, pageWidth);
       }
@@ -297,6 +301,22 @@ export class PdfRenderer {
       const h = this.measurePrintControlHeight(doc, field, pageWidth);
       this.ensureSpace(doc, h);
       this.drawPrintControl(doc, field, doc.page.margins.left, pageWidth);
+      return;
+    }
+
+    if (field.kind === 'control_row') {
+      this.drawControlRow(doc, field.controls, pageWidth);
+      return;
+    }
+
+    if (field.kind === 'labeled_group') {
+      // Same chrome as contacts_form title (e.g. «Контакти» / «Робота»).
+      this.ensureSpace(doc, 24);
+      doc.fontSize(10).fillColor('#000').text(field.label);
+      doc.moveDown(0.25);
+      for (const child of field.fields) {
+        this.drawPrintField(doc, child, pageWidth);
+      }
       return;
     }
 
@@ -345,35 +365,10 @@ export class PdfRenderer {
       this.ensureSpace(doc, 24);
       doc.fontSize(10).fillColor('#000').text(field.label);
       doc.moveDown(0.25);
-      doc.fontSize(9).fillColor('#555').text('Робочі контакти');
-      doc.fillColor('#000');
-      for (const c of field.work) {
-        const h = this.measurePrintControlHeight(doc, c, pageWidth - 8);
-        this.ensureSpace(doc, h);
-        this.drawPrintControl(doc, c, doc.page.margins.left + 8, pageWidth - 8);
-      }
-      doc.fontSize(9).fillColor('#555').text('Особисті контакти');
-      doc.fillColor('#000');
-      for (const p of field.personal) {
-        const h = this.measurePrintControlHeight(doc, p.control, pageWidth - 8);
-        this.ensureSpace(doc, h);
-        this.drawPrintControl(
-          doc,
-          p.control,
-          doc.page.margins.left + 8,
-          pageWidth - 8,
-        );
-      }
-      doc.fontSize(9).fillColor('#555').text('Екстрені контакти');
-      doc.fillColor('#000');
-      for (let i = 0; i < field.emergency.length; i++) {
-        this.ensureSpace(doc, 20);
-        doc
-          .fontSize(8)
-          .fillColor('#555')
-          .text(`Контакт ${i + 1}`, { indent: 8 });
+      if (field.work.length > 0) {
+        doc.fontSize(9).fillColor('#555').text('Робочі контакти');
         doc.fillColor('#000');
-        for (const c of field.emergency[i].controls) {
+        for (const c of field.work) {
           const h = this.measurePrintControlHeight(doc, c, pageWidth - 8);
           this.ensureSpace(doc, h);
           this.drawPrintControl(
@@ -382,6 +377,46 @@ export class PdfRenderer {
             doc.page.margins.left + 8,
             pageWidth - 8,
           );
+        }
+      }
+      if (field.personal.length > 0) {
+        doc.fontSize(9).fillColor('#555').text('Особисті контакти');
+        doc.fillColor('#000');
+        for (const p of field.personal) {
+          const h = this.measurePrintControlHeight(
+            doc,
+            p.control,
+            pageWidth - 8,
+          );
+          this.ensureSpace(doc, h);
+          this.drawPrintControl(
+            doc,
+            p.control,
+            doc.page.margins.left + 8,
+            pageWidth - 8,
+          );
+        }
+      }
+      if (field.emergency.length > 0) {
+        doc.fontSize(9).fillColor('#555').text('Екстрені контакти');
+        doc.fillColor('#000');
+        for (let i = 0; i < field.emergency.length; i++) {
+          this.ensureSpace(doc, 20);
+          doc
+            .fontSize(8)
+            .fillColor('#555')
+            .text(`Контакт ${i + 1}`, { indent: 8 });
+          doc.fillColor('#000');
+          for (const c of field.emergency[i].controls) {
+            const h = this.measurePrintControlHeight(doc, c, pageWidth - 8);
+            this.ensureSpace(doc, h);
+            this.drawPrintControl(
+              doc,
+              c,
+              doc.page.margins.left + 8,
+              pageWidth - 8,
+            );
+          }
         }
       }
       return;
@@ -503,7 +538,7 @@ export class PdfRenderer {
       );
     }
     if (control.kind === 'choice_list') {
-      if (control.layout === 'horizontal') {
+      if (control.layout === 'horizontal' || control.layout === 'inline') {
         return (
           12 +
           LABEL_TO_WRITE_GAP +
@@ -711,6 +746,8 @@ export class PdfRenderer {
       doc.y += LABEL_TO_WRITE_GAP;
       if (control.layout === 'horizontal') {
         this.drawHorizontalChoiceOptions(doc, control.options, x, width);
+      } else if (control.layout === 'inline') {
+        this.drawInlineChoiceOptions(doc, control.options, x, width);
       } else {
         for (const opt of control.options) {
           const y = doc.y;
@@ -777,7 +814,7 @@ export class PdfRenderer {
     doc.fillColor('#000');
   }
 
-  /** Options in one row: caption above, checkbox below (languages, status, schedule, …). */
+  /** Options in one row: caption above, checkbox below (status, schedule, …). */
   private drawHorizontalChoiceOptions(
     doc: PdfDoc,
     options: Array<{ value: string; label: string; checked: boolean }>,
@@ -804,6 +841,68 @@ export class PdfRenderer {
     }
     doc.fillColor('#000');
     doc.y = y0 + 11 + CHECKBOX_SIZE + 4;
+  }
+
+  /** Options in one row: ☐ left of label (employee-named preferred language). */
+  private drawInlineChoiceOptions(
+    doc: PdfDoc,
+    options: Array<{ value: string; label: string; checked: boolean }>,
+    x: number,
+    width: number,
+  ): void {
+    const gap = 14;
+    const end = x + width;
+    let cursor = x;
+    let rowY = doc.y;
+    doc.fontSize(9);
+    for (const opt of options) {
+      const labelW = doc.widthOfString(opt.label);
+      const slotW = CHECKBOX_SIZE + 4 + labelW;
+      if (cursor + slotW > end && cursor > x) {
+        cursor = x;
+        rowY += CHECKBOX_SIZE + 6;
+      }
+      this.drawCheckbox(doc, cursor, rowY + 1, opt.checked);
+      doc
+        .fillColor('#000')
+        .text(opt.label, cursor + CHECKBOX_SIZE + 4, rowY, {
+          width: labelW + 2,
+          lineBreak: false,
+        });
+      cursor += slotW + gap;
+    }
+    doc.fillColor('#000');
+    doc.y = rowY + CHECKBOX_SIZE + 4;
+  }
+
+  /** Side-by-side atomic controls (ПІБ row). */
+  private drawControlRow(
+    doc: PdfDoc,
+    controls: QuestionnairePrintControl[],
+    pageWidth: number,
+  ): void {
+    const n = Math.max(controls.length, 1);
+    const gap = 8;
+    const colW = (pageWidth - gap * (n - 1)) / n;
+    const left = doc.page.margins.left;
+    let maxH = 0;
+    for (const control of controls) {
+      maxH = Math.max(
+        maxH,
+        this.measurePrintControlHeight(doc, control, colW),
+      );
+    }
+    this.ensureSpace(doc, maxH);
+    const startY = doc.y;
+    let maxY = startY;
+    for (let i = 0; i < controls.length; i++) {
+      const control = controls[i]!;
+      doc.y = startY;
+      this.drawPrintControl(doc, control, left + i * (colW + gap), colW);
+      maxY = Math.max(maxY, doc.y);
+    }
+    doc.y = maxY;
+    doc.x = left;
   }
 
   /** Light bordered strip so the write area is obvious under the label. */

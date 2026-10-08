@@ -45,6 +45,15 @@ const QUESTIONNAIRES_APPLY_PROFILE_CHANGES =
   'questionnaires.apply_profile_changes';
 const ABSENCES_APPROVE = 'absences.approve';
 const ABSENCES_ADMIN = 'absences.admin';
+const EMPLOYEES_READ_TEAM_COMMENT = 'employees.read_team_comment';
+const EMPLOYEES_EXPORT_PROFILE = 'employees.export_profile';
+const EMPLOYEES_READ_PERSONAL = 'employees.read.personal';
+const EMPLOYEES_WRITE_PERSONAL = 'employees.write.personal';
+const EMPLOYEES_READ_EMERGENCY = 'employees.read.emergency_contact';
+const EMPLOYEES_WRITE_EMERGENCY = 'employees.write.emergency_contact';
+const EMPLOYEES_CHANGE_ASSIGNMENT = 'employees.change_assignment';
+const EMPLOYEES_CHANGE_STATUS = 'employees.change_status';
+const EMPLOYEES_VIEW_HISTORY = 'employees.view_history';
 
 const TOGGLE_EXTRAS = [
   CONFIDENTIAL_VIEW,
@@ -52,6 +61,15 @@ const TOGGLE_EXTRAS = [
   EMPLOYEES_MANAGE_PROFILES,
   EMPLOYEES_ASSIGN_ACCOUNT_ROLE,
   EMPLOYEES_CREATE_ACCOUNT_AT_CREATE,
+  EMPLOYEES_READ_TEAM_COMMENT,
+  EMPLOYEES_EXPORT_PROFILE,
+  EMPLOYEES_READ_PERSONAL,
+  EMPLOYEES_WRITE_PERSONAL,
+  EMPLOYEES_READ_EMERGENCY,
+  EMPLOYEES_WRITE_EMERGENCY,
+  EMPLOYEES_CHANGE_ASSIGNMENT,
+  EMPLOYEES_CHANGE_STATUS,
+  EMPLOYEES_VIEW_HISTORY,
   QUESTIONNAIRES_ASSIGN,
   QUESTIONNAIRES_MANAGE_LIFECYCLE,
   QUESTIONNAIRES_DELETE,
@@ -172,13 +190,19 @@ export type PublishedQuestionnaireTemplate = {
             @if (isAdminEquivalent) {
               <p class="hint">
                 Повний доступ включає всі дозволи нижче; окремі галочки
-                не знімаються.
+                не знімаються. Скидання пароля, деактивація та видалення
+                акаунта / картки — лише з повним доступом.
+              </p>
+            } @else {
+              <p class="hint">
+                Скидання пароля, деактивація та видалення акаунта / картки
+                доступні лише ролям із повним доступом.
               </p>
             }
           </fieldset>
 
           <fieldset class="permission-group">
-            <legend>Працівники</legend>
+            <legend>Працівники — створення й ролі</legend>
             <label class="check">
               <input
                 type="checkbox"
@@ -186,16 +210,7 @@ export type PublishedQuestionnaireTemplate = {
                 [(ngModel)]="grantsCreateEmployees"
                 [disabled]="busy() || !canEditCreateEmployees()"
               />
-              Може створювати працівників
-            </label>
-            <label class="check">
-              <input
-                type="checkbox"
-                name="roleManageProfiles"
-                [(ngModel)]="grantsManageProfiles"
-                [disabled]="busy() || !canEditManageProfiles()"
-              />
-              Може редагувати профілі працівників
+              Створювати працівників
             </label>
             <label class="check">
               <input
@@ -204,7 +219,7 @@ export type PublishedQuestionnaireTemplate = {
                 [(ngModel)]="grantsAssignAccountRole"
                 [disabled]="busy() || !canEditAssignAccountRole()"
               />
-              Може призначати ролі акаунта
+              Призначати ролі акаунта
             </label>
             <div class="check-with-hint">
               <label class="check">
@@ -214,12 +229,121 @@ export type PublishedQuestionnaireTemplate = {
                   [(ngModel)]="grantsCreateAccountAtCreate"
                   [disabled]="busy() || !canEditCreateAccountAtCreate()"
                 />
-                Може створювати обліковий запис при створенні працівника
+                Створювати акаунт разом із карткою
               </label>
               <p class="hint">
-                Акаунт одразу з карткою. Пізніше — окрема політика attach.
+                Обліковий запис одразу при створенні. Пізніше — окрема політика
+                attach.
               </p>
             </div>
+          </fieldset>
+
+          <fieldset class="permission-group">
+            <legend>Працівники — профілі</legend>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleManageProfiles"
+                [(ngModel)]="grantsManageProfiles"
+                [disabled]="busy() || !canEditManageProfiles()"
+              />
+              Редагувати профілі (базові поля, у керованому відділі)
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleReadTeamComment"
+                [(ngModel)]="grantsReadTeamComment"
+                [disabled]="busy() || !canEditReadTeamComment()"
+              />
+              Бачити службовий коментар
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleExportProfile"
+                [(ngModel)]="grantsExportProfile"
+                [disabled]="busy() || !canEditExportProfile()"
+              />
+              Експорт PDF профілю
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleViewHistory"
+                [(ngModel)]="grantsViewHistory"
+                [disabled]="busy() || !canEditViewHistory()"
+              />
+              Переглядати історію профілю
+            </label>
+          </fieldset>
+
+          <fieldset class="permission-group">
+            <legend>Працівники — особисті дані</legend>
+            <p class="hint group-hint">
+              Редагування потребує «редагувати профілі» і керований відділ.
+            </p>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleReadPersonal"
+                [(ngModel)]="grantsReadPersonal"
+                [disabled]="busy() || !canEditReadPersonal()"
+              />
+              Читати особисті контакти
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleWritePersonal"
+                [(ngModel)]="grantsWritePersonal"
+                [disabled]="busy() || !canEditWritePersonal()"
+              />
+              Редагувати особисті контакти
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleReadEmergency"
+                [(ngModel)]="grantsReadEmergency"
+                [disabled]="busy() || !canEditReadEmergency()"
+              />
+              Читати екстрений контакт
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleWriteEmergency"
+                [(ngModel)]="grantsWriteEmergency"
+                [disabled]="busy() || !canEditWriteEmergency()"
+              />
+              Редагувати екстрений контакт
+            </label>
+          </fieldset>
+
+          <fieldset class="permission-group">
+            <legend>Працівники — оргпризначення</legend>
+            <p class="hint group-hint">
+              Потребує «редагувати профілі» і керований відділ.
+            </p>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleChangeAssignment"
+                [(ngModel)]="grantsChangeAssignment"
+                [disabled]="busy() || !canEditChangeAssignment()"
+              />
+              Змінювати напрямок / відділ / посаду
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleChangeStatus"
+                [(ngModel)]="grantsChangeStatus"
+                [disabled]="busy() || !canEditChangeStatus()"
+              />
+              Змінювати статус зайнятості
+            </label>
           </fieldset>
 
           <fieldset class="permission-group">
@@ -488,6 +612,9 @@ export type PublishedQuestionnaireTemplate = {
       .permission-group .check-with-hint .hint {
         margin-left: 1.5rem;
       }
+      .permission-group .group-hint {
+        margin: 0;
+      }
       .template-codes {
         display: grid;
         gap: 0.35rem;
@@ -559,6 +686,15 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   grantsManageQuestionnaires = false;
   grantsAbsencesApprove = false;
   grantsAbsencesAdmin = false;
+  grantsReadTeamComment = false;
+  grantsExportProfile = false;
+  grantsReadPersonal = false;
+  grantsWritePersonal = false;
+  grantsReadEmergency = false;
+  grantsWriteEmergency = false;
+  grantsChangeAssignment = false;
+  grantsChangeStatus = false;
+  grantsViewHistory = false;
 
   private readonly selectedSurfaceIds = signal<readonly string[]>([]);
   private readonly selectedTemplateCodes = signal<readonly string[]>([]);
@@ -663,6 +799,74 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     return role.canEditAbsencesAdminGrant;
   }
 
+  canEditReadTeamComment(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditReadTeamCommentGrant;
+  }
+
+  canEditExportProfile(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditExportProfileGrant;
+  }
+
+  canEditReadPersonal(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditReadPersonalGrant;
+  }
+
+  /** Write field toggles require ManageProfiles in Settings UX (disable + hint). */
+  canEditManageProfilesDependent(): boolean {
+    return this.canEditManageProfiles() && this.grantsManageProfiles;
+  }
+
+  canEditWritePersonal(): boolean {
+    if (!this.canEditManageProfilesDependent()) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditWritePersonalGrant;
+  }
+
+  canEditReadEmergency(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditReadEmergencyGrant;
+  }
+
+  canEditWriteEmergency(): boolean {
+    if (!this.canEditManageProfilesDependent()) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditWriteEmergencyGrant;
+  }
+
+  canEditChangeAssignment(): boolean {
+    if (!this.canEditManageProfilesDependent()) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditChangeAssignmentGrant;
+  }
+
+  canEditChangeStatus(): boolean {
+    if (!this.canEditManageProfilesDependent()) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditChangeStatusGrant;
+  }
+
+  canEditViewHistory(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditViewHistoryGrant;
+  }
+
   /** Surfaces controlled by permission toggles — not independently selectable. */
   isDerivedSurface(surfaceId: string): boolean {
     return surfaceId === Surface.AbsencesAdmin;
@@ -710,6 +914,39 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
       this.grantsAbsencesAdmin = role
         ? role.isAdminEquivalent || role.grantsAbsencesAdminExplicitly
         : false;
+      this.grantsReadTeamComment = role
+        ? role.isAdminEquivalent || role.grantsReadTeamCommentExplicitly
+        : false;
+      this.grantsExportProfile = role
+        ? role.isAdminEquivalent || role.grantsExportProfileExplicitly
+        : false;
+      this.grantsReadPersonal = role
+        ? role.isAdminEquivalent || role.grantsReadPersonalExplicitly
+        : false;
+      this.grantsWritePersonal = role
+        ? role.isAdminEquivalent || role.grantsWritePersonalExplicitly
+        : false;
+      this.grantsReadEmergency = role
+        ? role.isAdminEquivalent || role.grantsReadEmergencyExplicitly
+        : false;
+      this.grantsWriteEmergency = role
+        ? role.isAdminEquivalent || role.grantsWriteEmergencyExplicitly
+        : false;
+      this.grantsChangeAssignment = role
+        ? role.isAdminEquivalent || role.grantsChangeAssignmentExplicitly
+        : false;
+      this.grantsChangeStatus = role
+        ? role.isAdminEquivalent || role.grantsChangeStatusExplicitly
+        : false;
+      this.grantsViewHistory = role
+        ? role.isAdminEquivalent || role.grantsViewHistoryExplicitly
+        : false;
+      if (!this.grantsManageProfiles) {
+        this.grantsWritePersonal = false;
+        this.grantsWriteEmergency = false;
+        this.grantsChangeAssignment = false;
+        this.grantsChangeStatus = false;
+      }
       // One write — do not read selectedSurfaceIds inside this effect (infinite loop).
       this.selectedSurfaceIds.set(
         withAbsencesAdminSurface(
@@ -784,6 +1021,15 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     this.grantsManageQuestionnaires = true;
     this.grantsAbsencesApprove = true;
     this.grantsAbsencesAdmin = true;
+    this.grantsReadTeamComment = true;
+    this.grantsExportProfile = true;
+    this.grantsReadPersonal = true;
+    this.grantsWritePersonal = true;
+    this.grantsReadEmergency = true;
+    this.grantsWriteEmergency = true;
+    this.grantsChangeAssignment = true;
+    this.grantsChangeStatus = true;
+    this.grantsViewHistory = true;
     this.selectedSurfaceIds.set(
       withAbsencesAdminSurface(this.selectedSurfaceIds(), true),
     );
@@ -813,6 +1059,23 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
       }
       if (this.grantsAbsencesApprove) extras.add(ABSENCES_APPROVE);
       if (this.grantsAbsencesAdmin) extras.add(ABSENCES_ADMIN);
+      if (this.grantsReadTeamComment) extras.add(EMPLOYEES_READ_TEAM_COMMENT);
+      if (this.grantsExportProfile) extras.add(EMPLOYEES_EXPORT_PROFILE);
+      if (this.grantsReadPersonal) extras.add(EMPLOYEES_READ_PERSONAL);
+      if (this.grantsManageProfiles && this.grantsWritePersonal) {
+        extras.add(EMPLOYEES_WRITE_PERSONAL);
+      }
+      if (this.grantsReadEmergency) extras.add(EMPLOYEES_READ_EMERGENCY);
+      if (this.grantsManageProfiles && this.grantsWriteEmergency) {
+        extras.add(EMPLOYEES_WRITE_EMERGENCY);
+      }
+      if (this.grantsManageProfiles && this.grantsChangeAssignment) {
+        extras.add(EMPLOYEES_CHANGE_ASSIGNMENT);
+      }
+      if (this.grantsManageProfiles && this.grantsChangeStatus) {
+        extras.add(EMPLOYEES_CHANGE_STATUS);
+      }
+      if (this.grantsViewHistory) extras.add(EMPLOYEES_VIEW_HISTORY);
     }
 
     const surfaceIds = withAbsencesAdminSurface(

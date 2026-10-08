@@ -139,11 +139,35 @@ const EMPLOYEE_STARTER_SECTION_DEFS: ProgressSectionDefinition[] = [
   },
 ];
 
+const EMPLOYEE_NAMED_SECTION_DEFS: ProgressSectionDefinition[] = [
+  {
+    id: 'intro',
+    label: 'Вступ',
+    stepKeys: [QUESTIONNAIRE_INTRO_STEP],
+  },
+  {
+    id: 'personal',
+    label: 'Особисті',
+    stepKeys: ['profile_mirror', 'contacts'],
+  },
+  {
+    id: 'work',
+    label: 'Робота',
+    stepKeys: ['experience', 'company_work'],
+  },
+  {
+    id: 'review',
+    label: 'Перегляд',
+    stepKeys: [QUESTIONNAIRE_REVIEW_STEP],
+  },
+];
+
 const TEMPLATE_PROGRESS_SECTION_MAPS = {
   'employee-360': EMPLOYEE_360_SECTION_DEFS,
   'employee-docs': EMPLOYEE_DOCS_SECTION_DEFS,
   'employee-managing': EMPLOYEE_MANAGING_SECTION_DEFS,
   'employee-starter': EMPLOYEE_STARTER_SECTION_DEFS,
+  'employee-named': EMPLOYEE_NAMED_SECTION_DEFS,
 } satisfies Record<string, ProgressSectionDefinition[]>;
 
 const INTRO_LABEL = 'Вступ';

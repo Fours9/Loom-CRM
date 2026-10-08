@@ -15,6 +15,8 @@ import {
   BLANK_CONTACTS_PERSONAL_ROWS,
   BLANK_SKILLS_MATRIX_ROWS,
   PAPER_FORM_MIN_ROWS,
+  QUESTIONNAIRE_PRINT_PERSONAL_CONTACTS_ONLY_TEMPLATE_CODES,
+  QUESTIONNAIRE_PRINT_SINGLE_PAGE_TEMPLATE_CODES,
   REPEATING_TEXTAREA_LINES,
   TEXTAREA_PAPER_LINES,
 } from '@loom/contracts-questionnaires';
@@ -66,9 +68,30 @@ export const QUESTIONNAIRE_PRINT_OMIT_FIELD_KEYS = new Set([
   'company_work.hr_responsible',
 ]);
 
+/** employee-named: ПІБ columns on one paper row. */
+const NAMED_NAME_ROW_KEYS = [
+  'personal.last_name',
+  'personal.first_name',
+  'personal.middle_name',
+] as const;
+
+/** employee-named: «Робота» block — position then tenure. */
+const NAMED_WORK_FIELD_KEYS = [
+  'company_work.position_id',
+  'experience.total_tenure',
+] as const;
+
 function choiceLayoutForField(
   fieldKey: string,
-): 'vertical' | 'horizontal' {
+  templateCode?: string,
+): 'vertical' | 'horizontal' | 'inline' {
+  if (
+    templateCode &&
+    QUESTIONNAIRE_PRINT_SINGLE_PAGE_TEMPLATE_CODES.has(templateCode) &&
+    fieldKey === 'personal.preferred_language'
+  ) {
+    return 'inline';
+  }
   return HORIZONTAL_CHOICE_FIELD_KEYS.has(fieldKey)
     ? 'horizontal'
     : 'vertical';
@@ -77,7 +100,7 @@ function choiceLayoutForField(
 const PERSONAL_TYPE_LABELS: Record<PersonalContactType, string> = {
   personal_phone: 'Особистий телефон',
   personal_email: 'Особистий email',
-  personal_telegram: 'Особистий Telegram',
+  personal_telegram: 'Особистий Telegram, WhatsApp, Viber',
 };
 
 const PERSONAL_TYPE_BY_BLANK_KEY: Record<
@@ -119,11 +142,12 @@ export function mapFieldToPrintControl(
   value: unknown,
   mode: 'blank' | 'filled',
   formatContext: QuestionnaireFieldFormatContext,
-  options?: { nested?: boolean },
+  options?: { nested?: boolean; templateCode?: string },
 ): QuestionnairePrintControl {
   const nested = options?.nested === true;
   const blank = mode === 'blank';
   const vt = field.valueType;
+  const templateCode = options?.templateCode;
 
   if (vt === 'textarea') {
     return {
@@ -142,7 +166,9 @@ export function mapFieldToPrintControl(
       key: field.key,
       label: field.label,
       exclusive: true,
-      layout: nested ? 'horizontal' : choiceLayoutForField(field.key),
+      layout: nested
+        ? 'horizontal'
+        : choiceLayoutForField(field.key, templateCode),
       options: optionsList.map((o) => ({
         value: o.value,
         label: o.label,
@@ -158,7 +184,9 @@ export function mapFieldToPrintControl(
       key: field.key,
       label: field.label,
       exclusive: false,
-      layout: nested ? 'horizontal' : choiceLayoutForField(field.key),
+      layout: nested
+        ? 'horizontal'
+        : choiceLayoutForField(field.key, templateCode),
       options: optionsList.map((o) => ({
         value: o.value,
         label: o.label,
@@ -345,11 +373,19 @@ function filledEmergencyControls(
   ];
 }
 
+type BuildContactsFormOptions = {
+  /** Omit work + emergency paper zones (compact single-page templates). */
+  personalOnly?: boolean;
+};
+
 function buildContactsForm(
   field: QuestionnaireSchemaField,
   value: unknown,
   mode: 'blank' | 'filled',
+  options: BuildContactsFormOptions = {},
 ): QuestionnairePrintField {
+  const personalOnly = options.personalOnly === true;
+
   const blankWork = (): QuestionnairePrintControl[] => [
     textLineControl(`${field.key}.work.email`, 'Робочий email', null),
     textLineControl(`${field.key}.work.phone`, 'Робочий телефон', null),
@@ -384,11 +420,13 @@ function buildContactsForm(
       kind: 'contacts_form',
       key: field.key,
       label: field.label,
-      work: blankWork(),
+      work: personalOnly ? [] : blankWork(),
       personal: blankPersonal(),
-      emergency: Array.from({ length: BLANK_CONTACTS_EMERGENCY_ROWS }, (_, i) => ({
-        controls: emptyEmergencyControls(i),
-      })),
+      emergency: personalOnly
+        ? []
+        : Array.from({ length: BLANK_CONTACTS_EMERGENCY_ROWS }, (_, i) => ({
+            controls: emptyEmergencyControls(i),
+          })),
     };
   }
 
@@ -396,23 +434,25 @@ function buildContactsForm(
     value ?? emptyEmployeeContactsBundle(),
   );
 
-  const work: QuestionnairePrintControl[] = [
-    textLineControl(
-      `${field.key}.work.email`,
-      'Робочий email',
-      stringOrNull(bundle.work.email),
-    ),
-    textLineControl(
-      `${field.key}.work.phone`,
-      'Робочий телефон',
-      stringOrNull(bundle.work.phone),
-    ),
-    textLineControl(
-      `${field.key}.work.telegram`,
-      'Робочий Telegram',
-      stringOrNull(bundle.work.telegram),
-    ),
-  ];
+  const work: QuestionnairePrintControl[] = personalOnly
+    ? []
+    : [
+        textLineControl(
+          `${field.key}.work.email`,
+          'Робочий email',
+          stringOrNull(bundle.work.email),
+        ),
+        textLineControl(
+          `${field.key}.work.phone`,
+          'Робочий телефон',
+          stringOrNull(bundle.work.phone),
+        ),
+        textLineControl(
+          `${field.key}.work.telegram`,
+          'Робочий Telegram',
+          stringOrNull(bundle.work.telegram),
+        ),
+      ];
 
   const personal: Array<{
     contactType: QuestionnairePrintPersonalContactType;
@@ -449,14 +489,19 @@ function buildContactsForm(
     }
   }
 
-  const emergency = bundle.emergency.map((row, i) => ({
-    controls: filledEmergencyControls(row, i),
-  }));
-  while (emergency.length < BLANK_CONTACTS_EMERGENCY_ROWS) {
-    emergency.push({
-      controls: emptyEmergencyControls(emergency.length),
-    });
-  }
+  const emergency = personalOnly
+    ? []
+    : (() => {
+        const rows = bundle.emergency.map((row, i) => ({
+          controls: filledEmergencyControls(row, i),
+        }));
+        while (rows.length < BLANK_CONTACTS_EMERGENCY_ROWS) {
+          rows.push({
+            controls: emptyEmergencyControls(rows.length),
+          });
+        }
+        return rows;
+      })();
 
   return {
     kind: 'contacts_form',
@@ -586,17 +631,25 @@ function buildPrintField(
   value: unknown,
   mode: 'blank' | 'filled',
   formatContext: QuestionnaireFieldFormatContext,
+  templateCode: string,
 ): QuestionnairePrintField {
   if (field.valueType === 'repeating_group') {
     return buildRepeatingTable(field, value, mode, formatContext);
   }
   if (field.valueType === 'contacts_bundle') {
-    return buildContactsForm(field, value, mode);
+    return buildContactsForm(field, value, mode, {
+      personalOnly:
+        QUESTIONNAIRE_PRINT_PERSONAL_CONTACTS_ONLY_TEMPLATE_CODES.has(
+          templateCode,
+        ),
+    });
   }
   if (field.valueType === 'position_skills_matrix') {
     return buildSkillsMatrix(field, value, mode, formatContext);
   }
-  return mapFieldToPrintControl(field, value, mode, formatContext);
+  return mapFieldToPrintControl(field, value, mode, formatContext, {
+    templateCode,
+  });
 }
 
 /**
@@ -605,6 +658,7 @@ function buildPrintField(
  * Blank is a visibility-superset of filled (field counts need not match).
  * Managing career_goals + probation_goals (and legacy single `goals`) coalesce to
  * one print section «Цілі» — field labels stay as nested paper controls.
+ * Single-page templates (e.g. employee-named) flatten all steps into one section.
  */
 export function buildQuestionnairePrintModel(
   input: BuildQuestionnairePrintModelInput,
@@ -612,6 +666,7 @@ export function buildQuestionnairePrintModel(
   const { schema, answers, mode, meta, formatContext } = input;
   const profileMirror = input.profileMirror ?? {};
   const byKey = fieldsByKey(schema);
+  const templateCode = meta.templateCode;
 
   const mapped = (schema.steps ?? []).map((step) => {
     const fields: QuestionnairePrintField[] = [];
@@ -630,7 +685,13 @@ export function buildQuestionnairePrintModel(
       });
 
       fields.push(
-        buildPrintField(field, resolved.value, mode, formatContext),
+        buildPrintField(
+          field,
+          resolved.value,
+          mode,
+          formatContext,
+          templateCode,
+        ),
       );
     }
     return {
@@ -643,7 +704,10 @@ export function buildQuestionnairePrintModel(
   return {
     mode,
     meta,
-    steps: coalesceGoalsPrintSteps(mapped.filter((s) => s.fields.length > 0)),
+    steps: coalesceSinglePagePrintSteps(
+      coalesceGoalsPrintSteps(mapped.filter((s) => s.fields.length > 0)),
+      templateCode,
+    ),
   };
 }
 
@@ -683,9 +747,115 @@ export function coalesceGoalsPrintSteps(
   return out;
 }
 
-/** Collect top-level field keys from a print model (for specs). */
+/**
+ * Flatten all print steps into one section for compact single-page templates.
+ * Applies employee-named paper layout (ПІБ row, «Робота» group).
+ */
+export function coalesceSinglePagePrintSteps(
+  steps: QuestionnairePrintStep[],
+  templateCode: string,
+): QuestionnairePrintStep[] {
+  if (!QUESTIONNAIRE_PRINT_SINGLE_PAGE_TEMPLATE_CODES.has(templateCode)) {
+    return steps;
+  }
+  const flat =
+    steps.length <= 1
+      ? (steps[0]?.fields ?? [])
+      : steps.flatMap((s) => s.fields);
+  return [
+    {
+      key: 'named_form',
+      // Empty: PDF already shows schema/template title in the page header —
+      // avoid a duplicate «Іменна» section heading under the rule.
+      label: '',
+      fields: layoutEmployeeNamedPrintFields(flat),
+    },
+  ];
+}
+
+/**
+ * Compact employee-named paper order:
+ * ПІБ in one row → remaining profile/contacts → «Робота» (посада, потім стаж).
+ */
+export function layoutEmployeeNamedPrintFields(
+  fields: QuestionnairePrintField[],
+): QuestionnairePrintField[] {
+  const byKey = new Map(fields.map((f) => [f.key, f] as const));
+  const used = new Set<string>();
+  const out: QuestionnairePrintField[] = [];
+
+  const nameControls: QuestionnairePrintControl[] = [];
+  for (const key of NAMED_NAME_ROW_KEYS) {
+    const field = byKey.get(key);
+    if (!field) continue;
+    if (
+      field.kind === 'text_line' ||
+      field.kind === 'text_box' ||
+      field.kind === 'choice_list' ||
+      field.kind === 'checkbox_item'
+    ) {
+      nameControls.push(field);
+      used.add(key);
+    }
+  }
+  if (nameControls.length > 0) {
+    out.push({
+      kind: 'control_row',
+      key: 'personal.name_row',
+      controls: nameControls,
+    });
+  }
+
+  for (const field of fields) {
+    if (used.has(field.key)) continue;
+    if (
+      (NAMED_WORK_FIELD_KEYS as readonly string[]).includes(field.key)
+    ) {
+      continue;
+    }
+    out.push(field);
+    used.add(field.key);
+  }
+
+  const workFields: QuestionnairePrintField[] = [];
+  for (const key of NAMED_WORK_FIELD_KEYS) {
+    const field = byKey.get(key);
+    if (!field) continue;
+    workFields.push(field);
+    used.add(key);
+  }
+  if (workFields.length > 0) {
+    out.push({
+      kind: 'labeled_group',
+      key: 'work.block',
+      label: 'Робота',
+      fields: workFields,
+    });
+  }
+
+  for (const field of fields) {
+    if (!used.has(field.key)) {
+      out.push(field);
+    }
+  }
+  return out;
+}
+
+function flattenPrintFieldKeys(fields: QuestionnairePrintField[]): string[] {
+  return fields.flatMap((field) => {
+    if (field.kind === 'labeled_group') {
+      return flattenPrintFieldKeys(field.fields);
+    }
+    if (field.kind === 'control_row') {
+      return field.controls.map((c) => c.key);
+    }
+    return [field.key];
+  });
+}
+
+/** Collect printable field keys from a print model (expands composites). */
 export function listPrintModelFieldKeys(
   model: QuestionnairePrintModel,
 ): string[] {
-  return model.steps.flatMap((s) => s.fields.map((f) => f.key));
+  return model.steps.flatMap((s) => flattenPrintFieldKeys(s.fields));
 }

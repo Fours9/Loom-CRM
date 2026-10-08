@@ -1,5 +1,8 @@
 import { EMPLOYEE_360_V1_SCHEMA } from '../employee-360-v1.schema';
-import { buildCompanyWorkFields } from './company-work.fields';
+import {
+  buildCompanyWorkFields,
+  buildCompanyWorkPositionOnlyFields,
+} from './company-work.fields';
 import { buildProfileMirrorIdentityFields } from './profile-mirror-identity.fields';
 
 function stepFields(stepKey: string) {
@@ -43,5 +46,13 @@ describe('questionnaire seed shared factories', () => {
     expect(position?.valueType).toBe('organization_ref');
     expect(position?.organizationEntity).toBe('position');
     expect(position?.profileMirrorKey).toBe('positionId');
+  });
+
+  it('position-only company_work has freestanding position_id', () => {
+    const fields = buildCompanyWorkPositionOnlyFields();
+    expect(fields).toHaveLength(1);
+    expect(fields[0]?.key).toBe('company_work.position_id');
+    expect(fields[0]?.cascadeParentKey).toBeUndefined();
+    expect(fields[0]?.profileMirrorKey).toBe('positionId');
   });
 });

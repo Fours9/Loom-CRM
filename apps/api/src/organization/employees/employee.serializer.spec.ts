@@ -5,11 +5,28 @@ import { UserStatus } from '../../platform/identity/user.enums';
 describe('EmployeeSerializer accountRole fail-closed', () => {
   const access = {
     canViewWorkContacts: jest.fn().mockResolvedValue(true),
-    canViewAccountDetails: jest.fn().mockReturnValue(true),
     isOwner: jest.fn().mockReturnValue(false),
-    isAdmin: jest.fn().mockReturnValue(false),
   };
-  const serializer = new EmployeeSerializer(access as never);
+  const authorization = {
+    resolve: jest.fn().mockResolvedValue({
+      userId: 'viewer',
+      accountRole: {
+        id: 'r',
+        code: 'employee',
+        name: 'E',
+        permissionPreset: 'employee',
+        isAdminEquivalent: false,
+        isSystem: true,
+      },
+      permissions: [],
+      surfaces: [],
+      isAdminEquivalent: false,
+    }),
+  };
+  const serializer = new EmployeeSerializer(
+    access as never,
+    authorization as never,
+  );
 
   const baseEmployee = {
     id: 'e1',

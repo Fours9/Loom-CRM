@@ -5,7 +5,7 @@ import {
   type QuestionnairePrintModel,
 } from '@loom/contracts-questionnaires';
 
-describe('PdfRenderer.renderQuestionnaire (layout 2.4)', () => {
+describe('PdfRenderer.renderQuestionnaire (layout 2.6)', () => {
   const baseMeta = {
     title: 'Тестова анкета',
     templateCode: 'employee-docs',

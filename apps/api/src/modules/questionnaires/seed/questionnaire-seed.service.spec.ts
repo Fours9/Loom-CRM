@@ -9,6 +9,11 @@ import {
   EMPLOYEE_STARTER_V1_SCHEMA,
 } from './employee-starter-v1.schema';
 import {
+  EMPLOYEE_NAMED_TEMPLATE_CODE,
+  EMPLOYEE_NAMED_TEMPLATE_TITLE,
+  EMPLOYEE_NAMED_V1_SCHEMA,
+} from './employee-named-v1.schema';
+import {
   EMPLOYEE_DOCS_TEMPLATE_CODE,
   EMPLOYEE_DOCS_TEMPLATE_TITLE,
   EMPLOYEE_DOCS_V1_SCHEMA,
@@ -36,6 +41,11 @@ const SEED_BY_CODE: Record<
     title: EMPLOYEE_STARTER_TEMPLATE_TITLE,
     type: 'full',
     schema: EMPLOYEE_STARTER_V1_SCHEMA as unknown as Record<string, unknown>,
+  },
+  [EMPLOYEE_NAMED_TEMPLATE_CODE]: {
+    title: EMPLOYEE_NAMED_TEMPLATE_TITLE,
+    type: 'full',
+    schema: EMPLOYEE_NAMED_V1_SCHEMA as unknown as Record<string, unknown>,
   },
   [EMPLOYEE_MANAGING_TEMPLATE_CODE]: {
     title: EMPLOYEE_MANAGING_TEMPLATE_TITLE,

@@ -65,6 +65,33 @@ export type AccountRole = {
   canAdminAbsences: boolean;
   grantsAbsencesAdminExplicitly: boolean;
   canEditAbsencesAdminGrant: boolean;
+  canReadTeamComment: boolean;
+  grantsReadTeamCommentExplicitly: boolean;
+  canEditReadTeamCommentGrant: boolean;
+  canExportProfile: boolean;
+  grantsExportProfileExplicitly: boolean;
+  canEditExportProfileGrant: boolean;
+  canReadPersonal: boolean;
+  grantsReadPersonalExplicitly: boolean;
+  canEditReadPersonalGrant: boolean;
+  canWritePersonal: boolean;
+  grantsWritePersonalExplicitly: boolean;
+  canEditWritePersonalGrant: boolean;
+  canReadEmergency: boolean;
+  grantsReadEmergencyExplicitly: boolean;
+  canEditReadEmergencyGrant: boolean;
+  canWriteEmergency: boolean;
+  grantsWriteEmergencyExplicitly: boolean;
+  canEditWriteEmergencyGrant: boolean;
+  canChangeAssignment: boolean;
+  grantsChangeAssignmentExplicitly: boolean;
+  canEditChangeAssignmentGrant: boolean;
+  canChangeStatus: boolean;
+  grantsChangeStatusExplicitly: boolean;
+  canEditChangeStatusGrant: boolean;
+  canViewHistory: boolean;
+  grantsViewHistoryExplicitly: boolean;
+  canEditViewHistoryGrant: boolean;
 };
 
 export type CreateAccountRoleBody = {

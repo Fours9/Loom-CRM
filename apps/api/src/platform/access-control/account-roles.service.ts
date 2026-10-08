@@ -85,7 +85,53 @@ export type AccountRoleView = {
   canAdminAbsences: boolean;
   grantsAbsencesAdminExplicitly: boolean;
   canEditAbsencesAdminGrant: boolean;
+  canReadTeamComment: boolean;
+  grantsReadTeamCommentExplicitly: boolean;
+  canEditReadTeamCommentGrant: boolean;
+  canExportProfile: boolean;
+  grantsExportProfileExplicitly: boolean;
+  canEditExportProfileGrant: boolean;
+  canReadPersonal: boolean;
+  grantsReadPersonalExplicitly: boolean;
+  canEditReadPersonalGrant: boolean;
+  canWritePersonal: boolean;
+  grantsWritePersonalExplicitly: boolean;
+  canEditWritePersonalGrant: boolean;
+  canReadEmergency: boolean;
+  grantsReadEmergencyExplicitly: boolean;
+  canEditReadEmergencyGrant: boolean;
+  canWriteEmergency: boolean;
+  grantsWriteEmergencyExplicitly: boolean;
+  canEditWriteEmergencyGrant: boolean;
+  canChangeAssignment: boolean;
+  grantsChangeAssignmentExplicitly: boolean;
+  canEditChangeAssignmentGrant: boolean;
+  canChangeStatus: boolean;
+  grantsChangeStatusExplicitly: boolean;
+  canEditChangeStatusGrant: boolean;
+  canViewHistory: boolean;
+  grantsViewHistoryExplicitly: boolean;
+  canEditViewHistoryGrant: boolean;
 };
+
+function permissionToggleTriad(
+  role: AccountRole,
+  effectivePermissions: Permission[],
+  extraPermissions: Permission[],
+  permission: Permission,
+  canEditGrant: boolean,
+): {
+  can: boolean;
+  grantsExplicitly: boolean;
+  canEditGrant: boolean;
+} {
+  return {
+    can:
+      role.isAdminEquivalent || effectivePermissions.includes(permission),
+    grantsExplicitly: extraPermissions.includes(permission),
+    canEditGrant,
+  };
+}
 
 export type AppSurfaceView = {
   id: string;
@@ -758,6 +804,100 @@ export class AccountRolesService {
         Permission.AbsencesAdmin,
       ),
       canEditAbsencesAdminGrant: canEditGrant,
+      ...(() => {
+        const readTeam = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesReadTeamComment,
+          canEditGrant,
+        );
+        const exportProfile = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesExportProfile,
+          canEditGrant,
+        );
+        const readPersonal = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesReadPersonal,
+          canEditGrant,
+        );
+        const writePersonal = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesWritePersonal,
+          canEditGrant,
+        );
+        const readEmergency = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesReadEmergency,
+          canEditGrant,
+        );
+        const writeEmergency = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesWriteEmergency,
+          canEditGrant,
+        );
+        const changeAssignment = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesChangeAssignment,
+          canEditGrant,
+        );
+        const changeStatus = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesChangeStatus,
+          canEditGrant,
+        );
+        const viewHistory = permissionToggleTriad(
+          role,
+          effectivePermissions,
+          extraPermissions,
+          Permission.EmployeesViewHistory,
+          canEditGrant,
+        );
+        return {
+          canReadTeamComment: readTeam.can,
+          grantsReadTeamCommentExplicitly: readTeam.grantsExplicitly,
+          canEditReadTeamCommentGrant: readTeam.canEditGrant,
+          canExportProfile: exportProfile.can,
+          grantsExportProfileExplicitly: exportProfile.grantsExplicitly,
+          canEditExportProfileGrant: exportProfile.canEditGrant,
+          canReadPersonal: readPersonal.can,
+          grantsReadPersonalExplicitly: readPersonal.grantsExplicitly,
+          canEditReadPersonalGrant: readPersonal.canEditGrant,
+          canWritePersonal: writePersonal.can,
+          grantsWritePersonalExplicitly: writePersonal.grantsExplicitly,
+          canEditWritePersonalGrant: writePersonal.canEditGrant,
+          canReadEmergency: readEmergency.can,
+          grantsReadEmergencyExplicitly: readEmergency.grantsExplicitly,
+          canEditReadEmergencyGrant: readEmergency.canEditGrant,
+          canWriteEmergency: writeEmergency.can,
+          grantsWriteEmergencyExplicitly: writeEmergency.grantsExplicitly,
+          canEditWriteEmergencyGrant: writeEmergency.canEditGrant,
+          canChangeAssignment: changeAssignment.can,
+          grantsChangeAssignmentExplicitly: changeAssignment.grantsExplicitly,
+          canEditChangeAssignmentGrant: changeAssignment.canEditGrant,
+          canChangeStatus: changeStatus.can,
+          grantsChangeStatusExplicitly: changeStatus.grantsExplicitly,
+          canEditChangeStatusGrant: changeStatus.canEditGrant,
+          canViewHistory: viewHistory.can,
+          grantsViewHistoryExplicitly: viewHistory.grantsExplicitly,
+          canEditViewHistoryGrant: viewHistory.canEditGrant,
+        };
+      })(),
     };
   }
 }

@@ -1,6 +1,6 @@
 # Questionnaire PDF print
 
-Living product note for server-generated A4 questionnaire PDFs (paper-form layout **2.4**).
+Living product note for server-generated A4 questionnaire PDFs (paper-form layout **2.6**).
 
 ## Two formats (product SoT)
 
@@ -15,8 +15,8 @@ There is **no** third “review summary” PDF. FE Review keeps `formatQuestionn
 - Atomic `QuestionnairePrintControl` (`text_line` / `text_box` / `choice_list` / `checkbox_item`) reused **top-level and inside** `repeating_table` cells — never cell `display` strings.
 - Composites: `contacts_form` (work / personal / emergency as controls; emergency = fullName, relationship, primaryPhone, secondaryPhone — **notes omitted from PDF**), `skills_matrix` (per-row rating).
 - Blank ignores `visibleWhen`; filled applies it → blank is a **visibility-superset**.
-- Layout SoT constants in `@loom/contracts-questionnaires`: `QUESTIONNAIRE_PRINT_LAYOUT_VERSION = '2.4'`, `PAPER_FORM_MIN_ROWS`, `TEXTAREA_PAPER_LINES` (3), `REPEATING_TEXTAREA_LINES`, contacts/skills blank row counts (`BLANK_CONTACTS_EMERGENCY_ROWS = 1`).
-- Field chrome: muted label **above** a bordered write zone; `choice_list` is vertical by default; horizontal (caption above ☐) only for nested table choices (e.g. language level) and opt-in keys `company_work.status` / `schedule` / `contract_type`; PDF omits `company_work.mentor` and `company_work.hr_responsible`; major **print** sections start on a new page (no trailing blank pages). Managing `career_goals` + `probation_goals` schema steps coalesce to one print section «Цілі» (`coalesceGoalsPrintSteps`); field labels stay nested paper controls. Fill rail keeps them as substeps under parent «Цілі».
+- Layout SoT constants in `@loom/contracts-questionnaires`: `QUESTIONNAIRE_PRINT_LAYOUT_VERSION = '2.6'`, `PAPER_FORM_MIN_ROWS`, `TEXTAREA_PAPER_LINES` (3), `REPEATING_TEXTAREA_LINES`, contacts/skills blank row counts (`BLANK_CONTACTS_EMERGENCY_ROWS = 1`), `QUESTIONNAIRE_PRINT_SINGLE_PAGE_TEMPLATE_CODES` / `QUESTIONNAIRE_PRINT_PERSONAL_CONTACTS_ONLY_TEMPLATE_CODES` (`employee-named`).
+- Field chrome: muted label **above** a bordered write zone; `choice_list` is vertical by default; horizontal (caption above ☐) for nested table choices and opt-in keys `company_work.status` / `schedule` / `contract_type`; `inline` (☐ left of label in one row) for employee-named `personal.preferred_language`; PDF omits `company_work.mentor` and `company_work.hr_responsible`; major **print** sections start on a new page (no trailing blank pages). Managing `career_goals` + `probation_goals` schema steps coalesce to one print section «Цілі» (`coalesceGoalsPrintSteps`); field labels stay nested paper controls. Fill rail keeps them as substeps under parent «Цілі». `employee-named` flattens all steps into one print section with empty step label (no duplicate heading under the PDF header title «Іменна анкета»; `coalesceSinglePagePrintSteps` + `layoutEmployeeNamedPrintFields`): ПІБ as `control_row`, preferred language `choice_list` layout `inline` (☐ left of label), contacts personal-only, then labeled «Робота» group (посада → загальний стаж).
 
 ### Boolean mapping
 

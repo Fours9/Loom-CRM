@@ -270,6 +270,23 @@ const MANAGING_SNAPSHOT_TAIL: QuestionnaireSchemaField[] = [
 ];
 
 /**
+ * Freestanding position picker (no direction/department cascade).
+ * Used by compact templates (e.g. employee-named) that only collect position.
+ */
+export function buildCompanyWorkPositionOnlyFields(): QuestionnaireSchemaField[] {
+  return [
+    {
+      key: 'company_work.position_id',
+      label: 'Посада',
+      valueType: 'organization_ref',
+      organizationEntity: 'position',
+      profileMirrorKey: 'positionId',
+      requiredPolicy: 'voluntary',
+    },
+  ];
+}
+
+/**
  * Shared company_work step fields.
  * `full` must stay structurally identical to the historical Full 360 snapshot.
  * `managing` uses organization_ref catalogs + profileMirrorKey autofill.

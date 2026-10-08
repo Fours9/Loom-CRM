@@ -3,6 +3,7 @@ import { EntityManager } from 'typeorm';
 import type { QuestionnaireType } from '../questionnaire.enums';
 import { EMPLOYEE_360_TEMPLATE_CODE } from '../seed/employee-360-v1.schema';
 import { EMPLOYEE_STARTER_TEMPLATE_CODE } from '../seed/employee-starter-v1.schema';
+import { EMPLOYEE_NAMED_TEMPLATE_CODE } from '../seed/employee-named-v1.schema';
 
 /** Fail-closed stable prefix map (no UA transliteration). */
 export function questionnaireAssignmentCodePrefix(
@@ -14,6 +15,9 @@ export function questionnaireAssignmentCodePrefix(
   }
   if (templateCode === EMPLOYEE_STARTER_TEMPLATE_CODE) {
     return 'STA';
+  }
+  if (templateCode === EMPLOYEE_NAMED_TEMPLATE_CODE) {
+    return 'IMN';
   }
   switch (type) {
     case 'full':

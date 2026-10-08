@@ -15,6 +15,10 @@ export const Permission = {
   EmployeesChangeAssignment: 'employees.change_assignment',
   EmployeesChangeStatus: 'employees.change_status',
   EmployeesViewHistory: 'employees.view_history',
+  /** Team profile comment view (Class C; no target-scope). */
+  EmployeesReadTeamComment: 'employees.read_team_comment',
+  /** Profile PDF export; still requires canViewEmployeeProfile. */
+  EmployeesExportProfile: 'employees.export_profile',
   DepartmentsManage: 'departments.manage',
   PositionsManage: 'positions.manage',
   DirectionsManage: 'directions.manage',

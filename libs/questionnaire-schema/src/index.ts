@@ -79,6 +79,8 @@ export type {
 export {
   buildQuestionnairePrintModel,
   coalesceGoalsPrintSteps,
+  coalesceSinglePagePrintSteps,
+  layoutEmployeeNamedPrintFields,
   listPrintModelFieldKeys,
   mapFieldToPrintControl,
   QUESTIONNAIRE_PRINT_OMIT_FIELD_KEYS,

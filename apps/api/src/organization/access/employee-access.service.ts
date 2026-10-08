@@ -6,9 +6,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
-import { UserRole } from '../../platform/identity/user.enums';
 import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
-import { hasPermission } from '../../platform/access-control/authorization-context';
+import {
+  hasPermission,
+  type AuthorizationContext,
+} from '../../platform/access-control/authorization-context';
 import { Permission } from '../../platform/permissions/permission.names';
 import { Employee } from '../employees/employee.entity';
 import { EmploymentAssignment } from '../employees/employment-assignment.entity';
@@ -23,6 +25,22 @@ import {
   managementKindImpliesManager,
 } from '../employment-catalog/management-kind';
 import { AccessScope } from './access-scope';
+import {
+  canDeleteEmployee as canDeleteEmployeeAuthz,
+  canDestructivelyManageAccount as canDestructivelyManageAccountAuthz,
+  canEditAccountEmail as canEditAccountEmailAuthz,
+  canEditAdminComment as canEditAdminCommentAuthz,
+  canEditVisibilityOverrides as canEditVisibilityOverridesAuthz,
+  canExportProfile,
+  canResetPassword,
+  canViewAccountDetails as canViewAccountDetailsAuthz,
+  canViewAdminComment as canViewAdminCommentAuthz,
+  canViewPersonalContacts as canViewPersonalContactsAuthz,
+  canViewTeamComment,
+  canViewVisibilityOverrides as canViewVisibilityOverridesAuthz,
+  canViewWorkContacts as canViewWorkContactsAuthz,
+  canViewEmergencyContact as canViewEmergencyContactAuthz,
+} from '../employees/employee-profile-authz';
 
 export type ActorAccessContext = {
   scope: AccessScope;
@@ -52,24 +70,6 @@ export class EmployeeAccessService {
     private readonly authorization: AuthorizationContextService,
   ) {}
 
-  /**
-   * Prefer AuthorizationContext.isAdminEquivalent. Mirror users.role===admin
-   * remains valid when assign TX keeps compatibility mirror in sync.
-   */
-  isAdminRole(viewer: User): boolean {
-    return viewer.role === UserRole.Admin;
-  }
-
-  /** Permission catalog role (User.role), not legacy isDepartmentManager flag. */
-  isDepartmentManagerRole(viewer: User): boolean {
-    return viewer.role === UserRole.DepartmentManager;
-  }
-
-  /** @deprecated Use isAdminRole — kept as alias for call-site migration. */
-  isAdmin(viewer: User): boolean {
-    return this.isAdminRole(viewer);
-  }
-
   async isAdminEquivalentAsync(viewer: User): Promise<boolean> {
     return (await this.authorization.resolve(viewer.id)).isAdminEquivalent;
   }
@@ -78,12 +78,11 @@ export class EmployeeAccessService {
     return target.userId != null && target.userId === viewer.id;
   }
 
-  /**
-   * Permission-role manager (DM catalog role). Does NOT read User.isDepartmentManager.
-   * For managed dept scope use resolveActorContext / resolveManagedScope.
-   */
-  isManager(viewer: User): boolean {
-    return this.isDepartmentManagerRole(viewer);
+  private async resolveAuthz(
+    viewer: User,
+    authz?: AuthorizationContext,
+  ): Promise<AuthorizationContext> {
+    return authz ?? (await this.authorization.resolve(viewer.id));
   }
 
   /**
@@ -292,80 +291,106 @@ export class EmployeeAccessService {
     return this.canEditEmployeeProfile(actor, target);
   }
 
-  async canViewWorkContacts(viewer: User, target: Employee): Promise<boolean> {
-    if (this.isAdminRole(viewer) || this.isOwner(viewer, target)) return true;
-    return this.canViewEmployeeProfile(viewer, target);
+  async canViewWorkContacts(
+    viewer: User,
+    target: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(viewer, authz);
+    const isOwner = this.isOwner(viewer, target);
+    if (resolved.isAdminEquivalent || isOwner) return true;
+    const canView = await this.canViewEmployeeProfile(viewer, target);
+    return canViewWorkContactsAuthz(resolved, isOwner, canView);
   }
 
-  canViewAccountDetails(viewer: User, target: Employee): boolean {
-    return this.isAdminRole(viewer) || this.isOwner(viewer, target);
+  async canViewAccountDetails(
+    viewer: User,
+    target: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(viewer, authz);
+    return canViewAccountDetailsAuthz(resolved, this.isOwner(viewer, target));
   }
 
-  canEditAccountEmail(viewer: User, target: Employee): boolean {
+  async canEditAccountEmail(
+    viewer: User,
+    target: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(viewer, authz);
+    return canEditAccountEmailAuthz(resolved, {
+      hasOtherUser: target.userId != null,
+      isSelf: target.userId === viewer.id,
+    });
+  }
+
+  async canEditAdminAccess(
+    viewer: User,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(viewer, authz);
     return (
-      this.isAdminRole(viewer) &&
-      target.userId != null &&
-      target.userId !== viewer.id
+      resolved.isAdminEquivalent ||
+      hasPermission(resolved, Permission.EmployeesAssignAccountRole)
     );
   }
 
-  async canEditAdminAccess(viewer: User): Promise<boolean> {
-    const authz = await this.authorization.resolve(viewer.id);
-    return (
-      authz.isAdminEquivalent ||
-      hasPermission(authz, Permission.EmployeesAssignAccountRole)
-    );
-  }
-
-  /**
-   * Class C debt: admin|DM account-role semantic — no equivalent permission yet
-   * (candidate: employees.read_team_comment). Do not remap to ManageProfiles/scope alone.
-   */
-  canViewComment(viewer: User, _target: Employee): boolean {
-    return this.isAdminRole(viewer) || this.isDepartmentManagerRole(viewer);
+  async canViewComment(
+    viewer: User,
+    _target: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    return canViewTeamComment(await this.resolveAuthz(viewer, authz));
   }
 
   canEditComment(viewer: User, target: Employee): Promise<boolean> {
     return this.canEditEmployeeProfile(viewer, target);
   }
 
-  /** Class B — prefer authz.isAdminEquivalent at call sites. */
-  canViewAdminComment(viewer: User): boolean {
-    return this.isAdminRole(viewer);
+  async canViewAdminComment(
+    viewer: User,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    return canViewAdminCommentAuthz(await this.resolveAuthz(viewer, authz));
   }
 
-  /** Class B — prefer authz.isAdminEquivalent at call sites. */
-  canEditAdminComment(viewer: User): boolean {
-    return this.isAdminRole(viewer);
+  async canEditAdminComment(
+    viewer: User,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    return canEditAdminCommentAuthz(await this.resolveAuthz(viewer, authz));
   }
 
-  canViewPersonalContacts(viewer: User, target?: Employee): boolean {
-    if (this.isAdminRole(viewer)) return true;
-    if (target && this.isOwner(viewer, target)) return true;
-    return false;
+  async canViewPersonalContacts(
+    viewer: User,
+    target?: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(viewer, authz);
+    const isOwner = target ? this.isOwner(viewer, target) : false;
+    return canViewPersonalContactsAuthz(resolved, isOwner);
   }
 
-  canEditPersonalContacts(viewer: User): boolean {
-    return this.isAdminRole(viewer);
-  }
-
-  canViewEmergencyContact(viewer: User): boolean {
-    return this.isAdminRole(viewer);
-  }
-
-  canEditEmergencyContact(viewer: User): boolean {
-    return this.isAdminRole(viewer);
+  async canViewEmergencyContact(
+    viewer: User,
+    target?: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(viewer, authz);
+    const isOwner = target ? this.isOwner(viewer, target) : false;
+    return canViewEmergencyContactAuthz(resolved, isOwner);
   }
 
   async canCreateEmployeeAccount(
     viewer: User,
     target: Employee,
+    authz?: AuthorizationContext,
   ): Promise<boolean> {
     if (target.userId != null) return false;
-    const authz = await this.authorization.resolve(viewer.id);
-    if (authz.isAdminEquivalent) return true;
-    if (!hasPermission(authz, Permission.EmployeesCreate)) return false;
-    const ctx = await this.resolveActorContext(viewer);
+    const resolved = await this.resolveAuthz(viewer, authz);
+    if (resolved.isAdminEquivalent) return true;
+    if (!hasPermission(resolved, Permission.EmployeesCreate)) return false;
+    const ctx = await this.resolveActorContext(viewer, resolved);
     if (ctx.scope !== 'managed_departments') return false;
     const targetDeptId = await this.targetDepartmentId(target);
     return Boolean(
@@ -373,41 +398,55 @@ export class EmployeeAccessService {
     );
   }
 
-  canManageExistingEmployeeAccount(viewer: User, target: Employee): boolean {
-    return this.isAdminRole(viewer) && target.userId != null;
+  async canResetEmployeePassword(
+    viewer: User,
+    target: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(viewer, authz);
+    return canResetPassword(resolved, target.userId != null);
   }
 
-  canResetEmployeePassword(viewer: User, target: Employee): boolean {
-    return this.isAdminRole(viewer) && target.userId != null;
-  }
-
-  canDestructivelyManageAccount(actor: User, target: Employee): boolean {
-    return (
-      this.canManageExistingEmployeeAccount(actor, target) &&
-      target.userId !== actor.id
+  async canDestructivelyManageAccount(
+    actor: User,
+    target: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(actor, authz);
+    return canDestructivelyManageAccountAuthz(
+      resolved,
+      target.userId != null,
+      target.userId === actor.id,
     );
   }
 
-  canDeleteEmployee(actor: User, target: Employee): boolean {
-    return this.isAdminRole(actor) && target.userId !== actor.id;
+  async canDeleteEmployee(
+    actor: User,
+    target: Employee,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    const resolved = await this.resolveAuthz(actor, authz);
+    return canDeleteEmployeeAuthz(resolved, target.userId === actor.id);
   }
 
-  /**
-   * Class C debt: admin|DM account-role semantic — no equivalent permission yet
-   * (candidate: employees.export_profile). DM preset lacks ManageProfiles; do not remap.
-   */
   async canExportProfilePdf(
     viewer: User,
     target: Employee,
+    authz?: AuthorizationContext,
   ): Promise<boolean> {
-    if (!(this.isAdminRole(viewer) || this.isDepartmentManagerRole(viewer))) {
-      return false;
-    }
-    return this.canViewEmployeeProfile(viewer, target);
+    const resolved = await this.resolveAuthz(viewer, authz);
+    const canView = await this.canViewEmployeeProfile(viewer, target);
+    return canExportProfile(resolved, canView);
   }
 
-  canViewVisibilityOverrides(viewer: User, _targetRole: string): boolean {
-    return this.isAdminRole(viewer);
+  async canViewVisibilityOverrides(
+    viewer: User,
+    _targetRole: string,
+    authz?: AuthorizationContext,
+  ): Promise<boolean> {
+    return canViewVisibilityOverridesAuthz(
+      await this.resolveAuthz(viewer, authz),
+    );
   }
 
   /**
@@ -417,8 +456,9 @@ export class EmployeeAccessService {
   async isTargetInManagedDepartments(
     actor: User,
     target: Employee,
+    authz?: AuthorizationContext,
   ): Promise<boolean> {
-    const ctx = await this.resolveActorContext(actor);
+    const ctx = await this.resolveActorContext(actor, authz);
     if (ctx.scope !== 'managed_departments') return false;
     const targetDeptId = await this.targetDepartmentId(target);
     return Boolean(
@@ -429,9 +469,11 @@ export class EmployeeAccessService {
   async canEditVisibilityOverrides(
     viewer: User,
     _targetRole: string,
+    authz?: AuthorizationContext,
   ): Promise<boolean> {
-    const authz = await this.authorization.resolve(viewer.id);
-    return authz.isAdminEquivalent;
+    return canEditVisibilityOverridesAuthz(
+      await this.resolveAuthz(viewer, authz),
+    );
   }
 
   private static readonly EMPLOYEE_CARD_RELATIONS = [

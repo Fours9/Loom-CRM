@@ -549,7 +549,11 @@ export class EmployeeContactsEditorComponent implements OnChanges {
   }> = [
     { type: 'personal_email', label: 'Email', addLabel: 'email', inputMode: 'email' },
     { type: 'personal_phone', label: 'Телефон', addLabel: 'телефон', inputMode: 'tel' },
-    { type: 'personal_telegram', label: 'Telegram', addLabel: 'telegram' },
+    {
+      type: 'personal_telegram',
+      label: 'Telegram, WhatsApp, Viber',
+      addLabel: 'telegram / whatsapp / viber',
+    },
   ];
 
   ngOnChanges(changes: SimpleChanges): void {

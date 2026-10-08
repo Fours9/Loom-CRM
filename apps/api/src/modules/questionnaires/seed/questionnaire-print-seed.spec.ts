@@ -12,6 +12,7 @@ import {
 } from '@loom/contracts-questionnaires';
 import { EMPLOYEE_360_V1_SCHEMA } from './employee-360-v1.schema';
 import { EMPLOYEE_STARTER_V1_SCHEMA } from './employee-starter-v1.schema';
+import { EMPLOYEE_NAMED_V1_SCHEMA } from './employee-named-v1.schema';
 import { EMPLOYEE_MANAGING_V1_SCHEMA } from './employee-managing-v1.schema';
 import { EMPLOYEE_DOCS_V1_SCHEMA } from './employee-docs-v1.schema';
 
@@ -34,6 +35,7 @@ describe('questionnaire print model — seed schemas', () => {
   const schemas = [
     EMPLOYEE_360_V1_SCHEMA,
     EMPLOYEE_STARTER_V1_SCHEMA,
+    EMPLOYEE_NAMED_V1_SCHEMA,
     EMPLOYEE_MANAGING_V1_SCHEMA,
     EMPLOYEE_DOCS_V1_SCHEMA,
   ];
@@ -91,7 +93,7 @@ describe('questionnaire print model — seed schemas', () => {
               ),
             ).toBe(true);
           }
-          if (field.kind === 'contacts_form') {
+          if (field.kind === 'contacts_form' && field.emergency.length > 0) {
             expect(field.emergency[0]?.controls).toHaveLength(4);
           }
         }

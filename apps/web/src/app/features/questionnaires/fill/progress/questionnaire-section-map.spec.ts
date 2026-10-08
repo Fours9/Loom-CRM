@@ -130,6 +130,31 @@ describe('buildProgressSections', () => {
     );
   });
 
+  it('employee-named groups personal + work without consents', () => {
+    const namedSteps = [
+      { key: 'profile_mirror', label: 'Особисті дані' },
+      { key: 'contacts', label: 'Особисті контакти' },
+      { key: 'experience', label: 'Професійний досвід' },
+      { key: 'company_work', label: 'Робота в компанії' },
+    ];
+    const sections = buildProgressSections({
+      templateCode: 'employee-named',
+      schemaSteps: namedSteps,
+    });
+    expect(sections.map((s) => s.id)).toEqual([
+      'intro',
+      'personal',
+      'work',
+      'review',
+    ]);
+    expect(
+      sections.find((s) => s.id === 'personal')!.steps.map((t) => t.key),
+    ).toEqual(['profile_mirror', 'contacts']);
+    expect(
+      sections.find((s) => s.id === 'work')!.steps.map((t) => t.key),
+    ).toEqual(['experience', 'company_work']);
+  });
+
   it('employee-managing nests career + probation under Цілі', () => {
     const managingSteps = [
       { key: 'profile_mirror', label: 'Особисті дані' },

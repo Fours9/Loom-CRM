@@ -13,6 +13,9 @@ describe('questionnaireAssignmentCodePrefix', () => {
     expect(questionnaireAssignmentCodePrefix('employee-starter', 'full')).toBe(
       'STA',
     );
+    expect(questionnaireAssignmentCodePrefix('employee-named', 'full')).toBe(
+      'IMN',
+    );
     expect(questionnaireAssignmentCodePrefix('other', 'full')).toBe('POV');
     expect(questionnaireAssignmentCodePrefix('x', 'managing')).toBe('MAN');
     expect(questionnaireAssignmentCodePrefix('x', 'docs')).toBe('DOC');

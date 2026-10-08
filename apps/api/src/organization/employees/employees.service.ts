@@ -1152,7 +1152,7 @@ export class EmployeesService {
 
   async updateAccountEmail(actor: User, id: string, email: string) {
     const employee = await this.access.getEmployeeOrFail(id);
-    if (!this.access.canEditAccountEmail(actor, employee)) {
+    if (!(await this.access.canEditAccountEmail(actor, employee))) {
       throw new ForbiddenException();
     }
     if (!employee.userId) throw new BadRequestException('No account');
@@ -1342,7 +1342,7 @@ export class EmployeesService {
     status: 'active' | 'deactivated',
   ) {
     const employee = await this.access.getEmployeeOrFail(id);
-    if (!this.access.canDestructivelyManageAccount(actor, employee)) {
+    if (!(await this.access.canDestructivelyManageAccount(actor, employee))) {
       throw new ForbiddenException();
     }
     if (!employee.userId) throw new BadRequestException('No account');
@@ -1356,7 +1356,7 @@ export class EmployeesService {
 
   async deleteAccount(actor: User, id: string) {
     const employee = await this.access.getEmployeeOrFail(id);
-    if (!this.access.canDestructivelyManageAccount(actor, employee)) {
+    if (!(await this.access.canDestructivelyManageAccount(actor, employee))) {
       throw new ForbiddenException();
     }
     if (!employee.userId) throw new BadRequestException('No account');

@@ -1,106 +1,56 @@
-import { UserRole, UserStatus } from '../../platform/identity/user.enums';
-import type { User } from '../../platform/identity/user.entity';
-import type { Employee } from '../employees/employee.entity';
-import { EmployeeAccessService } from './employee-access.service';
+import { Permission } from '../../platform/permissions/permission.names';
+import type { AuthorizationContext } from '../../platform/access-control/authorization-context';
+import {
+  canDeleteEmployee,
+  canDestructivelyManageAccount,
+  canResetPassword,
+} from '../employees/employee-profile-authz';
 
-function user(partial: Partial<User> & Pick<User, 'id' | 'role'>): User {
+function authz(partial: {
+  isAdminEquivalent?: boolean;
+  permissions?: Permission[];
+}): AuthorizationContext {
   return {
-    email: `${partial.id}@example.com`,
-    status: UserStatus.Active,
-    isDepartmentManager: false,
-    mustChangePassword: false,
-    tokenVersion: 0,
-    passwordHash: 'x',
-    passwordChangedAt: null,
-    lastLoginAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...partial,
-  } as User;
+    userId: 'u1',
+    accountRole: {
+      id: 'r1',
+      code: 'x',
+      name: 'X',
+      permissionPreset: 'employee',
+      isAdminEquivalent: partial.isAdminEquivalent ?? false,
+      isSystem: true,
+    },
+    permissions: partial.permissions ?? [],
+    surfaces: [],
+    questionnaireTemplateCodes: [],
+    isAdminEquivalent: partial.isAdminEquivalent ?? false,
+  };
 }
 
-function employee(
-  partial: Partial<Employee> & Pick<Employee, 'id'>,
-): Employee {
-  return {
-    userId: null,
-    employeeNumber: 'E-001',
-    firstName: 'A',
-    lastName: 'B',
-    ...partial,
-  } as Employee;
-}
-
-describe('EmployeeAccessService account predicates', () => {
-  const access = Object.create(EmployeeAccessService.prototype) as EmployeeAccessService;
-
-  const admin = user({ id: 'admin-1', role: UserRole.Admin });
-  const manager = user({
-    id: 'mgr-1',
-    role: UserRole.DepartmentManager,
-    isDepartmentManager: true,
+describe('account predicates (employee-profile-authz)', () => {
+  const admin = authz({ isAdminEquivalent: true });
+  const manager = authz({
+    permissions: [Permission.EmployeesManageProfiles],
   });
 
-  it('canResetEmployeePassword requires admin + target account', () => {
-    expect(
-      access.canResetEmployeePassword(
-        admin,
-        employee({ id: 'e1', userId: 'u1' }),
-      ),
-    ).toBe(true);
-    expect(
-      access.canResetEmployeePassword(admin, employee({ id: 'e1', userId: null })),
-    ).toBe(false);
-    expect(
-      access.canResetEmployeePassword(
-        manager,
-        employee({ id: 'e1', userId: 'u1' }),
-      ),
-    ).toBe(false);
-  });
-
-  it('admin can reset own password', () => {
-    expect(
-      access.canResetEmployeePassword(
-        admin,
-        employee({ id: 'e-self', userId: admin.id }),
-      ),
-    ).toBe(true);
+  it('canResetPassword requires adminEq + target account', () => {
+    expect(canResetPassword(admin, true)).toBe(true);
+    expect(canResetPassword(admin, false)).toBe(false);
+    expect(canResetPassword(manager, true)).toBe(false);
   });
 
   it('canDestructivelyManageAccount bans self', () => {
-    expect(
-      access.canDestructivelyManageAccount(
-        admin,
-        employee({ id: 'e2', userId: 'u2' }),
-      ),
-    ).toBe(true);
-    expect(
-      access.canDestructivelyManageAccount(
-        admin,
-        employee({ id: 'e-self', userId: admin.id }),
-      ),
-    ).toBe(false);
+    expect(canDestructivelyManageAccount(admin, true, false)).toBe(true);
+    expect(canDestructivelyManageAccount(admin, true, true)).toBe(false);
   });
 
-  it('canDeleteEmployee bans self; managers cannot', () => {
-    expect(
-      access.canDeleteEmployee(admin, employee({ id: 'e3', userId: 'u3' })),
-    ).toBe(true);
-    expect(
-      access.canDeleteEmployee(
-        admin,
-        employee({ id: 'e-self', userId: admin.id }),
-      ),
-    ).toBe(false);
-    expect(
-      access.canDeleteEmployee(manager, employee({ id: 'e3', userId: 'u3' })),
-    ).toBe(false);
+  it('canDeleteEmployee bans self; non-adminEq denied', () => {
+    expect(canDeleteEmployee(admin, false)).toBe(true);
+    expect(canDeleteEmployee(admin, true)).toBe(false);
+    expect(canDeleteEmployee(manager, false)).toBe(false);
   });
 
-  it('canDeleteEmployee allows admin when target has no account', () => {
-    expect(
-      access.canDeleteEmployee(admin, employee({ id: 'e4', userId: null })),
-    ).toBe(true);
+  it('canDeleteEmployee allows adminEq when target has no account', () => {
+    expect(canDeleteEmployee(admin, false)).toBe(true);
   });
 });

@@ -1198,6 +1198,7 @@ export class EmployeeDetailPageComponent implements OnInit, OnDestroy {
   /** `?edit=1` may open edit once; do not re-enter after save/reload. */
   private editQueryConsumed = false;
 
+  /** Admin-equivalent account role (not legacy users.role mirror). */
   get isAdmin(): boolean {
     return this.auth.isAdmin();
   }

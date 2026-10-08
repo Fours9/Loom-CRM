@@ -3,7 +3,10 @@ import type { AuthorizationContext } from '../../platform/access-control/authori
 import {
   canCreateAccountAtEmployeeCreate,
   canEditEmergencyOnTarget,
+  canExportProfile,
   canManageProfilesOnTarget,
+  canViewHistory,
+  canViewTeamComment,
   canWritePersonalOnTarget,
 } from './employee-profile-authz';
 
@@ -23,6 +26,7 @@ function authz(partial: {
     },
     permissions: partial.permissions ?? [],
     surfaces: [],
+    questionnaireTemplateCodes: [],
     isAdminEquivalent: partial.isAdminEquivalent ?? false,
   };
 }
@@ -107,5 +111,64 @@ describe('employee-profile-authz', () => {
         authz({ permissions: [Permission.EmployeesCreateAccountAtCreate] }),
       ),
     ).toBe(true);
+  });
+
+  it('Class C comment: permission without scope; ManageProfiles alone denies', () => {
+    expect(
+      canViewTeamComment(
+        authz({ permissions: [Permission.EmployeesReadTeamComment] }),
+      ),
+    ).toBe(true);
+    expect(
+      canViewTeamComment(
+        authz({ permissions: [Permission.EmployeesManageProfiles] }),
+      ),
+    ).toBe(false);
+    expect(canViewTeamComment(authz({ isAdminEquivalent: true }))).toBe(true);
+  });
+
+  it('Class C export requires permission AND canView', () => {
+    expect(
+      canExportProfile(
+        authz({ permissions: [Permission.EmployeesExportProfile] }),
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      canExportProfile(
+        authz({ permissions: [Permission.EmployeesExportProfile] }),
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      canExportProfile(
+        authz({ permissions: [Permission.EmployeesManageProfiles] }),
+        true,
+      ),
+    ).toBe(false);
+    expect(canExportProfile(authz({ isAdminEquivalent: true }), true)).toBe(
+      true,
+    );
+  });
+
+  it('history OR-branch: ViewHistory or ManageProfiles∧canView', () => {
+    expect(
+      canViewHistory(
+        authz({ permissions: [Permission.EmployeesViewHistory] }),
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      canViewHistory(
+        authz({ permissions: [Permission.EmployeesManageProfiles] }),
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      canViewHistory(
+        authz({ permissions: [Permission.EmployeesManageProfiles] }),
+        false,
+      ),
+    ).toBe(false);
   });
 });

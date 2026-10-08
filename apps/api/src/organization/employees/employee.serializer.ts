@@ -6,6 +6,14 @@ import { EmployeeAccessService } from '../access/employee-access.service';
 import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
 import {
   canChangeAssignmentOnTarget,
+  canDeleteEmployee,
+  canDestructivelyManageAccount,
+  canExportProfile,
+  canResetPassword,
+  canViewAccountDetails,
+  canViewAdminComment,
+  canViewPersonalContacts,
+  canViewTeamComment,
   canWritePersonalOnTarget,
 } from './employee-profile-authz';
 import {
@@ -97,12 +105,13 @@ export class EmployeeSerializer {
     viewer: User,
     ctx?: EmployeeListProjectionContext,
   ): Promise<EmployeeListDto> {
+    const authz = await this.authorization.resolve(viewer.id);
+    const isOwner = this.access.isOwner(viewer, employee);
     const showWorkContacts =
       ctx?.canViewWorkContacts ??
-      (await this.access.canViewWorkContacts(viewer, employee));
-    const canViewAccount = this.access.canViewAccountDetails(viewer, employee);
-    const isOwner = this.access.isOwner(viewer, employee);
-    const showMustChange = this.access.isAdmin(viewer) || isOwner;
+      (await this.access.canViewWorkContacts(viewer, employee, authz));
+    const canViewAccount = canViewAccountDetails(authz, isOwner);
+    const showMustChange = authz.isAdminEquivalent || isOwner;
     const hasAccount = employee.userId != null;
 
     const direction =
@@ -186,10 +195,13 @@ export class EmployeeSerializer {
     viewer: User,
     ctx?: Pick<EmployeeListProjectionContext, 'assignmentDirection'>,
   ): Promise<EmployeeDetailDto> {
+    const authz = await this.authorization.resolve(viewer.id);
+    const isOwner = this.access.isOwner(viewer, employee);
     const base = await this.toListDto(employee, viewer, {
       canViewWorkContacts: await this.access.canViewWorkContacts(
         viewer,
         employee,
+        authz,
       ),
       completenessPercent: 0,
       assignmentDirection: ctx?.assignmentDirection ?? null,
@@ -197,13 +209,13 @@ export class EmployeeSerializer {
     const { completenessPercent: _drop, ...rest } = base;
     const dto: EmployeeDetailDto = { ...rest };
 
-    if (this.access.canViewComment(viewer, employee)) {
+    if (canViewTeamComment(authz)) {
       dto.comment = employee.comment;
     }
-    if (this.access.canViewAdminComment(viewer)) {
+    if (canViewAdminComment(authz)) {
       dto.adminComment = employee.adminComment;
     }
-    if (this.access.canViewPersonalContacts(viewer)) {
+    if (canViewPersonalContacts(authz, isOwner)) {
       dto.personalPhoneNumber = employee.personalPhoneNumber;
       dto.personalTelegram = employee.personalTelegram;
       dto.personalEmail = employee.personalEmail;
@@ -217,27 +229,26 @@ export class EmployeeSerializer {
     const inManagedDept = await this.access.isTargetInManagedDepartments(
       viewer,
       employee,
+      authz,
     );
-    const adminEq = authz.isAdminEquivalent;
+    const isOwner = this.access.isOwner(viewer, employee);
+    const hasAccount = employee.userId != null;
+    const isSelf = employee.userId === viewer.id;
 
-    // Class C (DM-account-role semantic) — keep mirror until dedicated permissions exist.
-    const canViewComment = this.access.canViewComment(viewer, employee);
+    const canViewComment = canViewTeamComment(authz);
     const canEditComment = await this.access.canEditComment(viewer, employee);
-    // Class B — adminEq
-    const canViewAdminComment = adminEq;
-    const canEditAdminComment = adminEq;
-    // Class A — profile-authz helpers
-    const canViewPersonalContacts =
-      adminEq || this.access.isOwner(viewer, employee);
+    const viewAdminComment = canViewAdminComment(authz);
+    const editAdminComment = viewAdminComment;
+    const viewPersonal = canViewPersonalContacts(authz, isOwner);
     const canEditPersonalContacts = canWritePersonalOnTarget(
       authz,
       inManagedDept,
     );
-    // Class C — export
-    const canExportProfilePdf = await this.access.canExportProfilePdf(
+    const canViewTarget = await this.access.canViewEmployeeProfile(
       viewer,
       employee,
     );
+    const canExportProfilePdf = canExportProfile(authz, canViewTarget);
 
     const permissions: Record<string, boolean> = {
       canEditProfile: await this.access.canEditEmployeeProfile(
@@ -249,33 +260,31 @@ export class EmployeeSerializer {
         viewer,
         employee,
       ),
-      canResetPassword: adminEq && employee.userId != null,
+      canResetPassword: canResetPassword(authz, hasAccount),
       canCreateAccount: await this.access.canCreateEmployeeAccount(
         viewer,
         employee,
+        authz,
       ),
-      canManageAccount:
-        adminEq &&
-        employee.userId != null &&
-        employee.userId !== viewer.id,
-      canDeleteEmployee:
-        adminEq && employee.userId !== viewer.id,
-      canViewAccountDetails: this.access.canViewAccountDetails(
-        viewer,
-        employee,
+      canManageAccount: canDestructivelyManageAccount(
+        authz,
+        hasAccount,
+        isSelf,
       ),
+      canDeleteEmployee: canDeleteEmployee(authz, isSelf),
+      canViewAccountDetails: canViewAccountDetails(authz, isOwner),
     };
 
     if (canViewComment || canEditComment) {
       permissions['canViewComment'] = canViewComment;
       permissions['canEditComment'] = canEditComment;
     }
-    if (canViewAdminComment || canEditAdminComment) {
-      permissions['canViewAdminComment'] = canViewAdminComment;
-      permissions['canEditAdminComment'] = canEditAdminComment;
+    if (viewAdminComment || editAdminComment) {
+      permissions['canViewAdminComment'] = viewAdminComment;
+      permissions['canEditAdminComment'] = editAdminComment;
     }
-    if (canViewPersonalContacts || canEditPersonalContacts) {
-      permissions['canViewPersonalContacts'] = canViewPersonalContacts;
+    if (viewPersonal || canEditPersonalContacts) {
+      permissions['canViewPersonalContacts'] = viewPersonal;
       permissions['canEditPersonalContacts'] = canEditPersonalContacts;
     }
     if (canExportProfilePdf) {
@@ -283,12 +292,14 @@ export class EmployeeSerializer {
     }
 
     const targetRole = employee.role;
-    if (adminEq) {
+    if (authz.isAdminEquivalent) {
       permissions['canViewProfileVisibilityOverride'] = true;
       permissions['canViewAbsenceVisibilityOverride'] = true;
       permissions['canViewShowAbsenceTypeToPeersOverride'] = true;
     }
-    if (await this.access.canEditVisibilityOverrides(viewer, targetRole)) {
+    if (
+      await this.access.canEditVisibilityOverrides(viewer, targetRole, authz)
+    ) {
       permissions['canEditProfileVisibilityOverride'] = true;
       permissions['canEditAbsenceVisibilityOverride'] = true;
       permissions['canEditShowAbsenceTypeToPeersOverride'] = true;

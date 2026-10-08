@@ -68,14 +68,14 @@ import { firstValueFrom } from 'rxjs';
         </div>
 
         <div class="body">
-          <label class="field">
-            Тип / шаблон
+          <div class="field">
+            <span class="field-label">Тип / шаблон</span>
             <loom-pw-select
               [value]="selectedTemplateCode()"
               [options]="templateOptions()"
               (valueChange)="onTemplateChange($event)"
             />
-          </label>
+          </div>
 
           @if (selectedTypeDescription()) {
             <p class="type-desc">{{ selectedTypeDescription() }}</p>
@@ -204,6 +204,10 @@ import { firstValueFrom } from 'rxjs';
         gap: 0.3rem;
         font-size: 0.8rem;
         color: var(--pw-muted);
+      }
+      .field-label {
+        font-size: inherit;
+        color: inherit;
       }
       .type-desc {
         margin: -0.35rem 0 0;

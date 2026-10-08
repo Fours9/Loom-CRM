@@ -34,6 +34,8 @@ const ADMIN: Permission[] = [
   Permission.EmployeesChangeAssignment,
   Permission.EmployeesChangeStatus,
   Permission.EmployeesViewHistory,
+  Permission.EmployeesReadTeamComment,
+  Permission.EmployeesExportProfile,
   Permission.DocumentsManage,
   Permission.ConfidentialView,
   Permission.QuestionnairesManageLifecycle,

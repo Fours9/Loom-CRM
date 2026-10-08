@@ -60,7 +60,7 @@ export type PwSelectOption = { value: string; label: string };
               role="option"
               [attr.aria-selected]="opt.value === currentValue()"
               [class.active]="opt.value === currentValue()"
-              (click)="choose(opt.value)"
+              (click)="choose(opt.value, $event)"
             >
               {{ opt.label }}
             </li>
@@ -238,7 +238,11 @@ export class PwSelectComponent
     this.openMenu();
   }
 
-  choose(value: string): void {
+  choose(value: string, event?: Event): void {
+    // Inside a wrapping <label>, option clicks would also activate the trigger
+    // and reopen the menu — block that default before closing.
+    event?.preventDefault();
+    event?.stopPropagation();
     if (this.isDisabled()) return;
     commitPwControlValue(value, {
       setValue: (v) => this.internalValue.set(v),

@@ -42,7 +42,7 @@ export class EmployeeDeletionCoordinator {
         userId: snap.userId,
       } as Employee;
 
-      if (!this.access.canDeleteEmployee(actor, lockedTarget)) {
+      if (!(await this.access.canDeleteEmployee(actor, lockedTarget))) {
         throw new ForbiddenException();
       }
 
