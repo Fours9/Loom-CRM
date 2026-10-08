@@ -1,3 +1,4 @@
+import { EMPLOYEE_CALENDAR_COLOR_PALETTE } from './employee-calendar-color';
 import {
   emptyEmployeeCreateDraft,
   generateTemporaryPassword,
@@ -11,6 +12,15 @@ describe('employee-create-draft', () => {
     expect(
       emptyEmployeeCreateDraft({ canCreateAccountAtCreate: true }).createAccount,
     ).toBe(false);
+  });
+
+  it('defaults calendar color from palette (injectable entropy)', () => {
+    const draft = emptyEmployeeCreateDraft(undefined, { randomByte: () => 4 });
+    expect(draft.calendarColor).toBe(EMPLOYEE_CALENDAR_COLOR_PALETTE[4]);
+    expect(
+      emptyEmployeeCreateDraft(undefined, { calendarColor: '#FF00AA' })
+        .calendarColor,
+    ).toBe('#FF00AA');
   });
 
   it('does not default temporary password', () => {

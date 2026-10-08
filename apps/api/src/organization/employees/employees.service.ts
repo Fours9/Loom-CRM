@@ -61,7 +61,12 @@ import {
   isManagementKind,
 } from '../employment-catalog/management-kind';
 import { defaultSystemAccountRoleCodeFromLeadership } from '@loom/contracts-access-control';
-import type { EmploymentManagementKind } from '@loom/contracts-employees';
+import {
+  resolveEmployeeCalendarColorForCreate,
+  type CreateEmployeeResponse,
+  type EmploymentManagementKind,
+} from '@loom/contracts-employees';
+import { randomInt } from 'node:crypto';
 import { Permission } from '../../platform/permissions/permission.names';
 import {
   hasPermission,
@@ -82,7 +87,6 @@ import {
 import type { PersonalContactWriteInput } from './employee-personal-contacts';
 import { canAssignAccountRole } from './employee-account-role-assign.policy';
 import { canCreateAccountAtEmployeeCreate } from './employee-profile-authz';
-import type { CreateEmployeeResponse } from '@loom/contracts-employees';
 
 type DisplayedOrgProjection = {
   displayedDirection: {
@@ -607,7 +611,10 @@ export class EmployeesService {
             employeeNumber,
             role: UserRole.Employee,
             userId: null,
-            calendarColor: dto.calendarColor ?? null,
+            calendarColor: resolveEmployeeCalendarColorForCreate(
+              dto.calendarColor,
+              randomInt(0, 256),
+            ),
             phoneNumber: null,
             telegram: null,
             workEmail: null,

@@ -596,3 +596,55 @@ export type PatchEmployeeAboutSubtabRequest = {
   subtabId: PeopleAboutSubtabId;
   values: Record<string, unknown>;
 };
+
+/**
+ * Employee calendar color domain SoT (create defaults + API fill-when-empty).
+ * Kept in this barrel — contracts packages are source-only single-entry modules
+ * (Node ESM resolve has no extensionless relative imports here).
+ */
+export const EMPLOYEE_CALENDAR_COLOR_PALETTE = [
+  '#2A6FDB',
+  '#0D9488',
+  '#CA8A04',
+  '#DC2626',
+  '#16A34A',
+  '#EA580C',
+  '#0891B2',
+  '#4F46E5',
+  '#BE185D',
+  '#475569',
+  '#65A30D',
+  '#B45309',
+] as const;
+
+export type EmployeeCalendarPaletteColor =
+  (typeof EMPLOYEE_CALENDAR_COLOR_PALETTE)[number];
+
+/** First palette entry — placeholder / edit fallback when stored color missing. */
+export const EMPLOYEE_CALENDAR_COLOR_PLACEHOLDER: EmployeeCalendarPaletteColor =
+  EMPLOYEE_CALENDAR_COLOR_PALETTE[0];
+
+/**
+ * Deterministic palette pick: any integer maps stably into the palette.
+ * Entropy/randomness belongs at the call site (byte, randomInt, test stub).
+ */
+export function employeeCalendarColorAt(
+  index: number,
+): EmployeeCalendarPaletteColor {
+  const len = EMPLOYEE_CALENDAR_COLOR_PALETTE.length;
+  const i = ((Math.trunc(index) % len) + len) % len;
+  return EMPLOYEE_CALENDAR_COLOR_PALETTE[i]!;
+}
+
+/**
+ * Create/persist resolution: keep explicit trimmed color, else palette pick.
+ * Custom colors outside the palette remain allowed when the client sends them.
+ */
+export function resolveEmployeeCalendarColorForCreate(
+  requested: string | null | undefined,
+  entropyIndex: number,
+): string {
+  const trimmed = (requested ?? '').trim();
+  if (trimmed.length > 0) return trimmed;
+  return employeeCalendarColorAt(entropyIndex);
+}

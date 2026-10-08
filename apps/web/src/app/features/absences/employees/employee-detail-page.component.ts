@@ -19,6 +19,7 @@ import { requestFrameTone } from '../shared/request-status-presentation';
 import { ScheduleEditorComponent } from '../shared/schedule-editor.component';
 import { buildCreateAbsenceRequestLink } from '../requests/create-request-navigation';
 import { PERSON_AVATAR_PATH } from '../../../shared/icons/person-avatar-icon';
+import { EMPLOYEE_CALENDAR_COLOR_PLACEHOLDER } from '../../../shared/employees/employee-calendar-color';
 import {
   ABSENCE_OVERRIDE_UI,
   ABSENCE_TYPE_DETAIL_OVERRIDE_UI,
@@ -230,7 +231,7 @@ import {
                             type="text"
                             [(ngModel)]="edit.calendarColor"
                             name="calendarColorText"
-                            placeholder="#2A6FDB"
+                            [placeholder]="calendarColorPlaceholder"
                             maxlength="7"
                             (blur)="normalizeCalendarColor()"
                           />
@@ -1142,6 +1143,7 @@ export class EmployeeDetailPageComponent implements OnInit, OnDestroy {
   private readonly helpPage = inject(HelpPageContextService);
 
   readonly personAvatarPath = PERSON_AVATAR_PATH;
+  readonly calendarColorPlaceholder = EMPLOYEE_CALENDAR_COLOR_PLACEHOLDER;
   readonly createRequestLink = buildCreateAbsenceRequestLink();
   readonly requestTypeLabel = requestTypeLabel;
   readonly requestPeriod = requestPeriod;
@@ -1168,12 +1170,27 @@ export class EmployeeDetailPageComponent implements OnInit, OnDestroy {
   readonly absenceTypeDetailPwOptions: PwSelectOption[] = this.absenceTypeDetailOptions;
 
   employee: EmployeeProfile | null = null;
-  edit = {
+  /** Custom hex allowed — not constrained to create palette literals. */
+  edit: {
+    lastName: string;
+    firstName: string;
+    middleName: string;
+    employeeNumber: string;
+    calendarColor: string;
+    workEmail: string;
+    phoneNumber: string;
+    telegram: string;
+    personalPhoneNumber: string;
+    personalTelegram: string;
+    personalEmail: string;
+    comment: string;
+    adminComment: string;
+  } = {
     lastName: '',
     firstName: '',
     middleName: '',
     employeeNumber: '',
-    calendarColor: '#2A6FDB',
+    calendarColor: EMPLOYEE_CALENDAR_COLOR_PLACEHOLDER,
     workEmail: '',
     phoneNumber: '',
     telegram: '',
@@ -1321,7 +1338,8 @@ export class EmployeeDetailPageComponent implements OnInit, OnDestroy {
       firstName: employee.firstName,
       middleName: employee.middleName || '',
       employeeNumber: employee.employeeNumber,
-      calendarColor: employee.calendarColor,
+      calendarColor:
+        employee.calendarColor || EMPLOYEE_CALENDAR_COLOR_PLACEHOLDER,
       workEmail: employee.workEmail || '',
       phoneNumber: employee.phoneNumber || '',
       telegram: employee.telegram || '',
@@ -1385,7 +1403,8 @@ export class EmployeeDetailPageComponent implements OnInit, OnDestroy {
   }
 
   normalizeCalendarColor(): void {
-    const previous = this.employee?.calendarColor || '#2A6FDB';
+    const previous =
+      this.employee?.calendarColor || EMPLOYEE_CALENDAR_COLOR_PLACEHOLDER;
     let value = (this.edit.calendarColor || '').trim();
     if (!value) {
       this.edit.calendarColor = previous;

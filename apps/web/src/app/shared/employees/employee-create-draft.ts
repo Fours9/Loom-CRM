@@ -3,6 +3,7 @@ import type {
   EmployeeCreateScheduleDay,
   EmploymentManagementKind,
 } from '@loom/contracts-employees';
+import { nextRandomEmployeeCalendarColor } from './employee-calendar-color';
 import {
   defaultSchedule,
   normalizeSchedulePayload,
@@ -36,9 +37,16 @@ export type EmployeeCreateDraft = {
   schedule: ScheduleDay[];
 };
 
-export function emptyEmployeeCreateDraft(_caps?: {
-  canCreateAccountAtCreate?: boolean;
-}): EmployeeCreateDraft {
+export function emptyEmployeeCreateDraft(
+  _caps?: {
+    canCreateAccountAtCreate?: boolean;
+  },
+  options?: {
+    /** Inject for tests; default = crypto palette pick. */
+    calendarColor?: string;
+    randomByte?: () => number;
+  },
+): EmployeeCreateDraft {
   return {
     createAccount: false,
     lastName: '',
@@ -57,7 +65,9 @@ export function emptyEmployeeCreateDraft(_caps?: {
     positionId: '',
     accountRoleId: '',
     managementKind: 'none',
-    calendarColor: '#2A6FDB',
+    calendarColor:
+      options?.calendarColor ??
+      nextRandomEmployeeCalendarColor(options?.randomByte),
     schedule: defaultSchedule(),
   };
 }

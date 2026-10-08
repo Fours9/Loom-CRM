@@ -6,6 +6,7 @@ import {
 } from '@loom/contracts-access-control';
 import { ScheduleEditorComponent } from '../schedule/public-api';
 import { PasswordVisibilityToggleComponent } from '../password-visibility-toggle.component';
+import { EMPLOYEE_CALENDAR_COLOR_PLACEHOLDER } from './employee-calendar-color';
 import {
   generateTemporaryPassword,
   type EmployeeCreateDraft,
@@ -72,7 +73,7 @@ import {
                   type="text"
                   [(ngModel)]="draft.calendarColor"
                   name="calendarColorText"
-                  placeholder="#2A6FDB"
+                  [placeholder]="colorPlaceholder"
                   maxlength="7"
                 />
               </div>
@@ -462,6 +463,7 @@ export class EmployeeCreateFormComponent {
   @Input() canEditPersonal = false;
   @Output() readonly submitted = new EventEmitter<void>();
 
+  readonly colorPlaceholder = EMPLOYEE_CALENDAR_COLOR_PLACEHOLDER;
   showTemporaryPassword = false;
 
   private get orgState(): EmploymentOrgFilterState {
