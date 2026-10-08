@@ -21,5 +21,6 @@ Source of truth: ProjectWeekend `ApiService` + models. Status: `ready` | `partia
 | Calendar | getCalendarRange | { days: [{ date, segments, overflowCount }] } | GET /absences/calendar | ready |
 | Day drawer | getCalendarDay | { date, items } | GET /absences/calendar/days/:date | ready |
 | Filters | departments/positions | arrays | GET /departments, /positions | ready |
+| Admin privacy | getPrivacy / updatePrivacy | PrivacySettings | GET/PUT /settings/privacy | ready |
 
-Notes: privacy hatch / peer redaction and full calendar visibility policy remain simplified vs PW backend; expand when Admin privacy lands.
+Notes: privacy hatch / peer redaction and full calendar visibility policy remain simplified vs PW backend; Admin privacy CRUD lands on `application_settings` (`privacy.*`). Calendar enforcement of modes still partial.

@@ -60,7 +60,7 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 
 **Absences approve:** Settings checkbox «Затверджувати заявки» → extra `absences.approve` (DM+admin presets already include it). Row caps via AuthZ + managed submission dept (null snapshot → current EA dept). Create-for-other: `metadata.capabilities.canCreateForOther` (`AbsencesCreate` ∧ managed scope \| adminEq) — FE must not proxy via Approve.
 
-**Privacy admin page:** gated by `absences.admin` surface∧permission; fake privacy persistence removed (unavailable UI until real API).
+**Privacy admin page:** gated by `absences.admin` surface∧permission. Persistence: `GET/PUT /api/v1/settings/privacy` ↔ `application_settings` keys `privacy.*` (Absences module; GET needs `absences.calendar.view`, PUT needs `absences.admin`).
 
 **Employee profile Class C (Settings):** `employees.read_team_comment` (view team comment; **no** target-scope) and `employees.export_profile` (PDF ∧ `canViewEmployeeProfile`). Seeded as extras on non-adminEq `department_manager`-preset roles (director/DM). Never remap to ManageProfiles alone.
 

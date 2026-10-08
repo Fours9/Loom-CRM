@@ -16,7 +16,7 @@ ProjectWeekend is **read-only**. Actions describe how code was / will be brought
 | backend/src/calendar/ | apps/api/src/modules/absences/calendar/ | copy-rewrite | done | `{ days/segments }` + day items | GET calendar |
 | frontend/layouts/shell | apps/web/src/app/layouts/shell.component.ts | copy-refactor | done | PW topbar + flyout under CRM shell | build |
 | frontend/features/employees | apps/web/.../absences/employees/ | copy-preserve | done | Loom employees API | build |
-| frontend/features/admin | apps/web/.../absences/admin/ | copy-preserve | done | privacy stub if settings missing | build |
+| frontend/features/admin | apps/web/.../absences/admin/ | copy-preserve | done | GET/PUT /settings/privacy → application_settings | build |
 | frontend/features/dashboard | apps/web/.../absences/dashboard/ | copy-preserve | done | `/absences` home | build |
 | frontend/features/requests | apps/web/.../absences/requests/ | copy-preserve | done | `/absences/requests` | build |
 | frontend/features/calendar | apps/web/.../absences/calendar/ | copy-preserve | done | CRM shell + PW module nav | build |
