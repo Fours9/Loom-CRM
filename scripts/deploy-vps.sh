@@ -33,10 +33,12 @@ log() { echo "[deploy-vps] $*"; }
 
 require_compose_version
 
-log "git fetch/pull origin main"
-git fetch origin main
-git checkout main
-git pull --ff-only origin main
+# Default branch in this repo is master (origin/HEAD → master).
+BRANCH="${LOOM_DEPLOY_BRANCH:-master}"
+log "git fetch/pull origin ${BRANCH}"
+git fetch origin "$BRANCH"
+git checkout "$BRANCH"
+git pull --ff-only origin "$BRANCH"
 
 log "build images (api web)"
 loom_compose "$FILESET" build api web
