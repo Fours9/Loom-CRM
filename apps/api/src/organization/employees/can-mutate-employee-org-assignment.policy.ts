@@ -1,16 +1,22 @@
-import { Permission } from '../../platform/permissions/permission.names';
-import { permissionsForRole } from '../../platform/permissions/role-permissions';
-import { UserRole } from '../../platform/identity/user.enums';
+import type { AuthorizationContext } from '../../platform/access-control/authorization-context';
 
 /**
- * Single predicate for mutating employee org placement (department / position)
- * on legacy PATCH and for People `canEditEmployment` / Absences `canEditOrgAssignment`.
- * Matches role matrix: `employees.change_assignment` (Admin today).
+ * Legacy PATCH org placement (department/position on EmployeesService.update).
+ * Writer is already adminEquivalent-only — keep this predicate aligned (do not widen).
+ *
+ * People canonical capability: {@link canChangeAssignmentOnTarget}.
+ *
+ * @deprecated Prefer canChangeAssignmentOnTarget for serializers / People UI.
  */
-export function canMutateEmployeeOrgAssignment(actor: {
-  role: UserRole;
+export function canMutateEmployeeOrgAssignment(authz: {
+  isAdminEquivalent: boolean;
 }): boolean {
-  return permissionsForRole(actor.role).includes(
-    Permission.EmployeesChangeAssignment,
-  );
+  return authz.isAdminEquivalent;
+}
+
+/** @deprecated Use AuthorizationContext overload. */
+export function canMutateEmployeeOrgAssignmentFromAuthz(
+  authz: AuthorizationContext,
+): boolean {
+  return authz.isAdminEquivalent;
 }

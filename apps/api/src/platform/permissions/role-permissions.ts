@@ -45,6 +45,7 @@ const ADMIN: Permission[] = [
   Permission.DepartmentsManage,
   Permission.PositionsManage,
   Permission.DirectionsManage,
+  Permission.AbsencesAdmin,
   Permission.SettingsManage,
   Permission.AuditView,
 ];

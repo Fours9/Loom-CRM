@@ -78,6 +78,7 @@ import { QuestionnaireManageBundleApply1730000042000 } from './migrations/173000
 import { PeopleTabAboutSurface1730000043000 } from './migrations/1730000043000-PeopleTabAboutSurface';
 import { EmployeeAbout1730000044000 } from './migrations/1730000044000-EmployeeAbout';
 import { QuestionnaireSubmissionSubjectEmployee1730000045000 } from './migrations/1730000045000-QuestionnaireSubmissionSubjectEmployee';
+import { AbsencesAdminSurface1730000046000 } from './migrations/1730000046000-AbsencesAdminSurface';
 import { EmployeeAbout } from '../../organization/employees/employee-about.entity';
 
 export function getDataSourceOptions(): DataSourceOptions {
@@ -168,6 +169,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       PeopleTabAboutSurface1730000043000,
       EmployeeAbout1730000044000,
       QuestionnaireSubmissionSubjectEmployee1730000045000,
+      AbsencesAdminSurface1730000046000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

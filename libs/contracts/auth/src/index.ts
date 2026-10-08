@@ -24,6 +24,8 @@ export const Permission = {
   AbsencesApprove: 'absences.approve',
   AbsencesCancel: 'absences.cancel',
   AbsencesCalendarView: 'absences.calendar.view',
+  /** Absences admin privacy page + deletion finalize; pairs with surface absences.admin. */
+  AbsencesAdmin: 'absences.admin',
   DocumentsView: 'documents.view',
   DocumentsManage: 'documents.manage',
   /** Cross-domain classification; ≠ documents.view / documents.manage (ADR 0012). */
@@ -66,8 +68,11 @@ export type CurrentUserResponse = {
   /** Compatibility mirror of the account role; authZ SoT is permissions + surfaces. */
   role: UserRole;
   permissions: Permission[];
-  /** UI surface ids granted by the account role. Absent until the rollout lands. */
-  surfaces?: string[];
+  /**
+   * UI surface ids granted by the account role.
+   * Always present from /auth/me; empty array = zero exposed surfaces (not pre-rollout).
+   */
+  surfaces: string[];
   /**
    * Opaque questionnaire template codes granted to the account role.
    * Absent / empty = none unless accountRole.isAdminEquivalent.

@@ -22,6 +22,8 @@ export const Permission = {
   AbsencesApprove: 'absences.approve',
   AbsencesCancel: 'absences.cancel',
   AbsencesCalendarView: 'absences.calendar.view',
+  /** Absences admin privacy page + deletion finalize; pairs with surface absences.admin. */
+  AbsencesAdmin: 'absences.admin',
   DocumentsView: 'documents.view',
   DocumentsManage: 'documents.manage',
   /** Cross-domain classification; ≠ documents.view / documents.manage (ADR 0012). */

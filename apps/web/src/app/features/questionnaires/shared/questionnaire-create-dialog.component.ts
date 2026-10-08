@@ -52,7 +52,9 @@ import { firstValueFrom } from 'rxjs';
         [attr.aria-labelledby]="headingId"
       >
         <div class="head">
-          <h2 [id]="headingId">{{ dialogTitle() }}</h2>
+          <div class="head-title">
+            <h2 [id]="headingId">{{ dialogTitle() }}</h2>
+          </div>
           <button
             type="button"
             class="icon-close"
@@ -65,59 +67,53 @@ import { firstValueFrom } from 'rxjs';
           </button>
         </div>
 
-        <label class="field">
-          Тип / шаблон
-          <loom-pw-select
-            [value]="selectedTemplateCode()"
-            [options]="templateOptions()"
-            (valueChange)="onTemplateChange($event)"
+        <div class="body">
+          <label class="field">
+            Тип / шаблон
+            <loom-pw-select
+              [value]="selectedTemplateCode()"
+              [options]="templateOptions()"
+              (valueChange)="onTemplateChange($event)"
+            />
+          </label>
+
+          @if (selectedTypeDescription()) {
+            <p class="type-desc">{{ selectedTypeDescription() }}</p>
+          }
+
+          <label class="field">
+            Назва
+            <input
+              type="text"
+              [ngModel]="title()"
+              (ngModelChange)="onTitleInput($event)"
+              name="title"
+              placeholder="Назва анкети"
+            />
+          </label>
+
+          <loom-questionnaire-employee-typeahead
+            [initialEmployee]="prefillEmployee()"
+            (employeeChange)="onEmployee($event)"
           />
-        </label>
 
-        @if (selectedTypeDescription()) {
-          <p class="type-desc">{{ selectedTypeDescription() }}</p>
-        }
+          <label class="field">
+            Службова примітка
+            <textarea
+              rows="3"
+              [ngModel]="comment()"
+              (ngModelChange)="comment.set($event)"
+              name="comment"
+              placeholder="Видно лише з правом читання службової примітки"
+            ></textarea>
+          </label>
 
-        <label class="field">
-          Назва
-          <input
-            type="text"
-            [ngModel]="title()"
-            (ngModelChange)="onTitleInput($event)"
-            name="title"
-            placeholder="Назва анкети"
-          />
-        </label>
+          @if (error()) {
+            <p class="error">{{ error() }}</p>
+          }
+        </div>
 
-        <loom-questionnaire-employee-typeahead
-          [initialEmployee]="prefillEmployee()"
-          (employeeChange)="onEmployee($event)"
-        />
-
-        <label class="field">
-          Службова примітка
-          <textarea
-            rows="3"
-            [ngModel]="comment()"
-            (ngModelChange)="comment.set($event)"
-            name="comment"
-            placeholder="Видно лише з правом читання службової примітки"
-          ></textarea>
-        </label>
-
-        @if (error()) {
-          <p class="error">{{ error() }}</p>
-        }
-
-        <div class="actions">
-          <button
-            type="button"
-            class="btn pw-btn pw-btn--ghost"
-            [disabled]="busy()"
-            (click)="close.emit()"
-          >
-            Скасувати
-          </button>
+        <div class="foot">
           <button
             type="button"
             class="btn pw-btn"
@@ -134,7 +130,6 @@ import { firstValueFrom } from 'rxjs';
     `
       :host {
         display: block;
-        z-index: var(--pw-z-modal, 250);
       }
       .backdrop {
         position: fixed;
@@ -144,15 +139,13 @@ import { firstValueFrom } from 'rxjs';
         place-items: center;
         background: color-mix(in srgb, #0f172a 45%, transparent);
         padding: calc(var(--shell-topbar-h, 0px) + 0.75rem) 1rem 0.75rem;
-        overflow-y: auto;
       }
       .modal {
-        position: relative;
         display: grid;
-        gap: 0.75rem;
+        grid-template-rows: auto minmax(0, 1fr) auto;
         width: min(32rem, 100%);
-        margin: auto;
-        padding: 1.1rem 1.2rem 1.25rem;
+        max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.5rem);
+        position: relative;
         border-radius: 12px;
         background: var(--pw-surface, #1e293b);
         border: 1px solid var(--pw-border, #334155);
@@ -164,7 +157,14 @@ import { firstValueFrom } from 'rxjs';
         align-items: flex-start;
         justify-content: space-between;
         gap: 0.75rem;
-        padding-right: 2.5rem;
+        padding: 1rem 3.4rem 0.85rem 1.15rem;
+        border-bottom: 1px solid var(--pw-border);
+      }
+      .head-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
       }
       h2 {
         margin: 0;
@@ -191,6 +191,14 @@ import { firstValueFrom } from 'rxjs';
         opacity: 0.55;
         cursor: default;
       }
+      .body {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 1rem 1.15rem;
+        display: grid;
+        gap: 0.75rem;
+      }
       .field {
         display: grid;
         gap: 0.3rem;
@@ -208,20 +216,24 @@ import { firstValueFrom } from 'rxjs';
         border: 1px solid var(--pw-border);
         border-radius: 8px;
         padding: 0.45rem 0.6rem;
-        background: var(--pw-bg, #fff);
+        background: var(--pw-surface);
+        color: inherit;
         font-size: 0.95rem;
         font-family: inherit;
+        width: 100%;
+        box-sizing: border-box;
       }
       .error {
         margin: 0;
-        color: #b42318;
+        color: var(--pw-danger, #b42318);
         font-size: 0.9rem;
       }
-      .actions {
+      .foot {
         display: flex;
         justify-content: flex-end;
         gap: 0.5rem;
-        margin-top: 0.25rem;
+        padding: 0.85rem 1.15rem 1rem;
+        border-top: 1px solid var(--pw-border);
       }
       .btn:disabled {
         opacity: 0.55;

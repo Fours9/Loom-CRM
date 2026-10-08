@@ -4,7 +4,6 @@ import type { EmployeeProfileCapabilities } from '@loom/contracts-employees';
 import {
   Surface,
   canAccessSurface,
-  hasSurfaceCatalog,
   type SurfaceId,
 } from '../../core/access/can-access-surface';
 
@@ -88,12 +87,13 @@ export function visiblePeopleProfileTabs(input: {
 }): readonly PeopleProfileTab[] {
   const caps = input.capabilities;
   const perms = input.permissions;
+  /** Prefer session-layer `surfaces !== undefined` (empty = zero grants, not pre-rollout). */
+  const useSurfaces = input.surfaces !== undefined;
   const session = {
     permissions: perms,
-    surfaces: input.surfaces ?? [],
+    surfaces: input.surfaces,
     isAdminEquivalent: input.isAdminEquivalent,
   };
-  const useSurfaces = hasSurfaceCatalog(session);
 
   return ALL_TABS.filter((tab) => {
     if (useSurfaces) {

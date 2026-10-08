@@ -59,6 +59,12 @@ export type AccountRole = {
   canManageQuestionnaires: boolean;
   grantsManageQuestionnairesExplicitly: boolean;
   canEditManageQuestionnairesGrant: boolean;
+  canApproveAbsences: boolean;
+  grantsAbsencesApproveExplicitly: boolean;
+  canEditAbsencesApproveGrant: boolean;
+  canAdminAbsences: boolean;
+  grantsAbsencesAdminExplicitly: boolean;
+  canEditAbsencesAdminGrant: boolean;
 };
 
 export type CreateAccountRoleBody = {

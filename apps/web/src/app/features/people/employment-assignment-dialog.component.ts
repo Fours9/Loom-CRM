@@ -198,14 +198,6 @@ import {
         <div class="foot">
           <button
             type="button"
-            class="btn pw-btn pw-btn--ghost"
-            [disabled]="busy"
-            (click)="closed.emit()"
-          >
-            Скасувати
-          </button>
-          <button
-            type="button"
             class="btn pw-btn"
             data-help-id="people.dialog.assignment.save"
             [disabled]="busy"

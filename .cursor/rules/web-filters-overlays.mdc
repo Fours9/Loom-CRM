@@ -41,7 +41,8 @@ Global `.pw-stage > .pw-filters` does **not** apply inside nested profile panels
 | Action | Class |
 |--------|--------|
 | Primary CTA (Save, Assign, Upload, Create, **Нове призначення**, **Додати документи**) | `btn pw-btn` |
-| Dialog Cancel / secondary | `btn pw-btn pw-btn--ghost` |
+| Dialog dismiss | head `×` (`.icon-close`) — not footer «Скасувати» |
+| Dialog secondary (rare, non-dismiss) | `btn pw-btn pw-btn--ghost` |
 | Hero / section Edit / Cancel / compact links | `pw-link-action` |
 | Destructive compact | `pw-link-action danger` (color override only) |
 
@@ -111,7 +112,7 @@ With `ngModel`, the model updates before `(ngModelChange)` side-effect handlers.
 |-------|-----|
 | `.pw-link-action` | Compact hero/nav text links (Edit, PDF, «Профіль Loom») — global SoT; do **not** replace with full `pw-btn--ghost` |
 | `.pw-link-action--compact` | Calendar prev/next/today bordered chips |
-| `.pw-btn--ghost` | Dialog secondary / cancel — full control height |
+| `.pw-btn--ghost` | Rare dialog secondary (non-dismiss) — full control height |
 | `.pw-btn` | Primary CTAs («Нова заявка») |
 
 Avoid oversized buttons + accidental `button { width: 100% }` stretch on hero actions.
@@ -120,7 +121,7 @@ Avoid oversized buttons + accidental `button { width: 100% }` stretch on hero ac
 
 Modal chrome must not use `overflow: hidden` in a way that clips open `pw-menu`. Prefer `overflow: visible` on the dialog shell; scroll a dedicated list region below the select if needed. Rely on `loom-pw-select` drop-up near the bottom. Host stays `--pw-z-modal`.
 
-Dialog hosts are globally `position: fixed; inset: 0; z-index: var(--pw-z-modal)`. Do **not** leave a residual `transform` on ancestors (`.pw-rise` must end at `transform: none`, not `translateY(0)`). Profile / nested tab dialogs must call `attachPwDialogHostToBody` (reparents under `.app-shell` / `.loom-absence-module` / `[data-pw-app]` only — **never** bare `body`) so fixed backdrops escape panel stacking **and** keep `--pw-surface` / `.pw-btn` tokens. Dialog recipe: head (title [+ help] + ×) · scrollable `.body` · foot Cancel ghost + primary; shell `overflow: visible`.
+Dialog hosts are globally `position: fixed; inset: 0; z-index: var(--pw-z-modal)`. Do **not** leave a residual `transform` on ancestors (`.pw-rise` must end at `transform: none`, not `translateY(0)`). Profile / nested tab / Settings dialogs must call `attachPwDialogHostToBody` (reparents under `.app-shell` / `.loom-absence-module` / `[data-pw-app]` only — **never** bare `body`) so fixed backdrops escape panel stacking **and** keep `--pw-surface` / `.pw-btn` tokens. Dialog recipe (profile SoT): head (title [+ help] + absolute `×`) · scrollable `.body` · foot primary only (`btn pw-btn`); backdrop `place-items: center` + shell-topbar padding; shell `overflow: visible`; grid rows `auto minmax(0,1fr) auto`.
 
 ## Inclusive filters (directories)
 

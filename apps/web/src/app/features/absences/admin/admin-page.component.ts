@@ -1,9 +1,10 @@
-﻿import { Component, OnInit, inject } from '@angular/core';
+﻿import { Component, OnInit, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api/api.service';
 import { PrivacySettings } from '../core/api/models';
-import { AuthService } from '../core/auth/auth.service';
+import { SessionStore } from '../../../core/auth/session.store';
+import { Surface } from '../../../core/access/can-access-surface';
 import {
   ABSENCE_VISIBILITY_MODE_OPTIONS,
   EMPLOYEE_ABSENCE_DETAIL_OPTIONS,
@@ -28,8 +29,8 @@ import {
         </div>
       </header>
 
-      @if (!isAdmin) {
-        <p class="muted">Керувати налаштуваннями може лише адміністратор.</p>
+      @if (!canManagePrivacy()) {
+        <p class="muted">Керувати налаштуваннями може лише адміністратор відсутностей.</p>
       }
 
       <p class="catalog-link">
@@ -40,13 +41,15 @@ import {
       <div class="grid">
         <article class="card card-privacy pw-panel pw-rise" style="--pw-delay: 60ms">
           <h2>Конфіденційність</h2>
-          @if (privacy) {
+          @if (privacyUnavailable) {
+            <p class="muted">Налаштування конфіденційності зараз недоступні.</p>
+          } @else if (privacy) {
             <label class="check">
               <input
                 type="checkbox"
                 [(ngModel)]="privacy.globalPrivacyPriority"
                 name="globalPriority"
-                [disabled]="!isAdmin"
+                [disabled]="!canManagePrivacy()"
                 (ngModelChange)="privacyMessage = ''"
               />
               Глобальні налаштування мають пріоритет над індивідуальними
@@ -62,7 +65,7 @@ import {
                 <loom-pw-select
                   [value]="privacy.profileVisibilityMode"
                   [options]="profileModePwOptions"
-                  [disabled]="!isAdmin"
+                  [disabled]="!canManagePrivacy()"
                   (valueChange)="onProfileModeSelected($event)"
                 />
               </label>
@@ -75,7 +78,7 @@ import {
                 <loom-pw-select
                   [value]="privacy.absenceVisibilityMode"
                   [options]="absenceModePwOptions"
-                  [disabled]="!isAdmin"
+                  [disabled]="!canManagePrivacy()"
                   (valueChange)="onAbsenceModeSelected($event)"
                 />
               </label>
@@ -87,7 +90,7 @@ import {
                     <loom-pw-select
                       [value]="employeeAbsenceDetail"
                       [options]="employeeAbsenceDetailPwOptions"
-                      [disabled]="!isAdmin"
+                      [disabled]="!canManagePrivacy()"
                       (valueChange)="onEmployeeAbsenceDetailSelected($event)"
                     />
                   </label>
@@ -98,7 +101,7 @@ import {
                 </div>
               }
             </div>
-            @if (isAdmin) {
+            @if (canManagePrivacy()) {
               <button type="button" class="btn pw-btn" (click)="savePrivacy()">Зберегти</button>
             }
             @if (privacyMessage) {
@@ -189,9 +192,10 @@ import {
 })
 export class AdminPageComponent implements OnInit {
   private readonly api = inject(ApiService);
-  private readonly auth = inject(AuthService);
+  private readonly session = inject(SessionStore);
 
   privacy: PrivacySettings | null = null;
+  privacyUnavailable = false;
   error = '';
   privacyMessage = '';
   readonly absenceModeOptions = ABSENCE_VISIBILITY_MODE_OPTIONS;
@@ -203,9 +207,9 @@ export class AdminPageComponent implements OnInit {
     ...EMPLOYEE_ABSENCE_DETAIL_OPTIONS,
   ];
 
-  get isAdmin(): boolean {
-    return this.auth.isAdmin();
-  }
+  readonly canManagePrivacy = computed(() =>
+    this.session.canAccessSurface(Surface.AbsencesAdmin),
+  );
 
   get employeeAbsenceDetail(): 'full' | 'hide_type' {
     return this.privacy?.showAbsenceTypeToPeers === false ? 'hide_type' : 'full';
@@ -235,13 +239,20 @@ export class AdminPageComponent implements OnInit {
 
   ngOnInit(): void {
     this.api.getPrivacy().subscribe({
-      next: (p) => (this.privacy = p),
-      error: () => (this.error = 'Не вдалося завантажити privacy'),
+      next: (p) => {
+        this.privacy = p;
+        this.privacyUnavailable = false;
+      },
+      error: () => {
+        this.privacy = null;
+        this.privacyUnavailable = true;
+        this.error = 'Не вдалося завантажити privacy';
+      },
     });
   }
 
   savePrivacy(): void {
-    if (!this.privacy || !this.isAdmin) return;
+    if (!this.privacy || !this.canManagePrivacy()) return;
     this.error = '';
     this.privacyMessage = '';
     this.api
@@ -257,6 +268,7 @@ export class AdminPageComponent implements OnInit {
       .subscribe({
         next: (p) => {
           this.privacy = p;
+          this.privacyUnavailable = false;
           this.privacyMessage = 'Збережено';
         },
         error: () => (this.error = 'Не вдалося зберегти privacy'),

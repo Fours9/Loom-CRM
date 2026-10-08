@@ -911,7 +911,7 @@ export class EmployeesService {
     }
     // Legacy org patch: display mirror only — Access SoT is active EA.
     // Prefer EA writer; Absences should be read-only for dept/position.
-    const orgPatch = pickLegacyOrgAssignmentPatch(actor, dto);
+    const orgPatch = pickLegacyOrgAssignmentPatch(authz, dto);
     if (orgPatch.departmentId !== undefined) {
       const departmentId = this.optionalUuid(orgPatch.departmentId);
       if (departmentId) await this.departments.getOrFail(departmentId);

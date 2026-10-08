@@ -26,7 +26,8 @@ import { JwtAuthGuard } from '../../platform/auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../platform/auth/decorators/current-user.decorator';
 import { PermissionsGuard } from '../../platform/permissions/permissions.guard';
 import { RequirePermissions } from '../../platform/permissions/require-permissions.decorator';
-import { permissionsForRole } from '../../platform/permissions/role-permissions';
+import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
+import { hasPermission } from '../../platform/access-control/authorization-context';
 import { User } from '../../platform/identity/user.entity';
 import { EmploymentCatalogService } from './employment-catalog.service';
 import { EMPLOYMENT_CATALOG_DESCRIPTION_MAX } from './employment-catalog.helpers';
@@ -70,12 +71,15 @@ class ReorderCatalogDto {
 @Controller()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class EmploymentCatalogController {
-  constructor(private readonly catalogs: EmploymentCatalogService) {}
+  constructor(
+    private readonly catalogs: EmploymentCatalogService,
+    private readonly authorization: AuthorizationContextService,
+  ) {}
 
   @Get('work-formats')
   @RequirePermissions(Permission.EmployeesView)
-  listWorkFormats(@CurrentUser() user: User, @Query('all') all?: string) {
-    this.assertCanSeeAll(user, all);
+  async listWorkFormats(@CurrentUser() user: User, @Query('all') all?: string) {
+    await this.assertCanSeeAll(user, all);
     return this.catalogs.listWorkFormats(all === '1' || all === 'true');
   }
 
@@ -109,8 +113,11 @@ export class EmploymentCatalogController {
 
   @Get('employment-types')
   @RequirePermissions(Permission.EmployeesView)
-  listEmploymentTypes(@CurrentUser() user: User, @Query('all') all?: string) {
-    this.assertCanSeeAll(user, all);
+  async listEmploymentTypes(
+    @CurrentUser() user: User,
+    @Query('all') all?: string,
+  ) {
+    await this.assertCanSeeAll(user, all);
     return this.catalogs.listEmploymentTypes(all === '1' || all === 'true');
   }
 
@@ -142,13 +149,16 @@ export class EmploymentCatalogController {
     return { ok: true };
   }
 
-  private assertCanSeeAll(user: User, all?: string): void {
+  private async assertCanSeeAll(user: User, all?: string): Promise<void> {
     const wantsAll = all === '1' || all === 'true';
     if (!wantsAll) {
       return;
     }
-    if (!permissionsForRole(user.role).includes(Permission.PositionsManage)) {
-      throw new ForbiddenException('Only PositionsManage may view inactive catalog rows');
+    const authz = await this.authorization.resolve(user.id);
+    if (!hasPermission(authz, Permission.PositionsManage)) {
+      throw new ForbiddenException(
+        'Only PositionsManage may view inactive catalog rows',
+      );
     }
   }
 }

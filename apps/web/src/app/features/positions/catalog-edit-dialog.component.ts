@@ -1,7 +1,17 @@
-import { Component, HostListener, OnDestroy, OnInit, inject, input, output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  inject,
+  input,
+  output,
+} from '@angular/core';
 import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
 import type { HelpTourId } from '../../core/help/help-tour.models';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
+import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
 
 @Component({
   selector: 'loom-catalog-edit-dialog',
@@ -56,10 +66,8 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
         z-index: var(--pw-z-modal, 250);
         display: grid;
         place-items: center;
-        align-items: start;
         background: color-mix(in srgb, #0f172a 45%, transparent);
-        padding: calc(var(--shell-topbar-h, 0px) + 1rem) 1rem 0.75rem;
-        overflow-y: auto;
+        padding: calc(var(--shell-topbar-h, 0px) + 0.75rem) 1rem 0.75rem;
       }
       .modal {
         display: grid;
@@ -128,6 +136,7 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
   ],
 })
 export class CatalogEditDialogComponent implements OnInit, OnDestroy {
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   readonly headingId = input.required<string>();
   readonly title = input.required<string>();
@@ -137,6 +146,7 @@ export class CatalogEditDialogComponent implements OnInit, OnDestroy {
   private backdropPress = false;
 
   ngOnInit(): void {
+    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

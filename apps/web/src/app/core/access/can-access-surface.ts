@@ -22,6 +22,7 @@ export const Surface = {
   PeopleTabAdministration: 'people.tab.administration',
   PeopleTabLater: 'people.tab.later',
   SettingsAccessRoles: 'settings.access_roles',
+  AbsencesAdmin: 'absences.admin',
 } as const;
 
 export type SurfaceId = (typeof Surface)[keyof typeof Surface] | string;
@@ -31,11 +32,13 @@ const SURFACE_PERMISSION: Readonly<Record<string, Permission>> = {
   [Surface.NavQuestionnaires]: Permission.QuestionnairesView,
   [Surface.PeopleTabDocuments]: Permission.DocumentsView,
   [Surface.PeopleTabQuestionnaires]: Permission.QuestionnairesView,
+  [Surface.AbsencesAdmin]: Permission.AbsencesAdmin,
 };
 
 export type SurfaceSession = {
   permissions: readonly string[];
-  surfaces: readonly string[];
+  /** Present once /auth/me ships surfaces; empty = zero grants (not pre-rollout). */
+  surfaces?: readonly string[];
   /** System `admin` or a custom role with is_admin_equivalent — bypasses both layers. */
   isAdminEquivalent?: boolean;
 };
@@ -53,15 +56,16 @@ export function canAccessSurface(
   surfaceId: SurfaceId,
 ): boolean {
   if (session.isAdminEquivalent) return true;
-  if (!session.surfaces.includes(surfaceId)) return false;
+  if (!session.surfaces?.includes(surfaceId)) return false;
   const permission = surfacePermission(surfaceId);
   return !permission || session.permissions.includes(permission);
 }
 
 /**
- * Surfaces are authoritative only once the API ships them.
- * Empty list = pre-rollout session; callers fall back to permission-only gating.
+ * Whether `session.surfaces` is present as an authoritative catalog.
+ * Empty array = modern session with zero grants — not pre-rollout.
+ * Prefer `SessionStore.surfacesReady` (`user?.surfaces !== undefined`) at the session layer.
  */
 export function hasSurfaceCatalog(session: SurfaceSession): boolean {
-  return session.surfaces.length > 0;
+  return session.surfaces !== undefined;
 }

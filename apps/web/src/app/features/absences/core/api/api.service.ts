@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map, of, catchError } from 'rxjs';
+import { Observable } from 'rxjs';
 import {
   AbsenceMetadataResponse,
   AbsenceRequestAttachment,
@@ -192,26 +192,11 @@ export class ApiService {
   }
 
   getPrivacy(): Observable<PrivacySettings> {
-    return this.http.get<PrivacySettings>('/api/v1/settings/privacy').pipe(
-      catchError(() =>
-        of({
-          id: 1,
-          absenceVisibilityMode: 'all_approved',
-          profileVisibilityMode: 'all',
-          globalPrivacyPriority: false,
-          showDepartmentOnCalendar: true,
-          showPositionOnCalendar: true,
-          showAbsenceTypeToPeers: true,
-          sessionInactivityMinutes: 60,
-        } satisfies PrivacySettings),
-      ),
-    );
+    return this.http.get<PrivacySettings>('/api/v1/settings/privacy');
   }
 
   updatePrivacy(body: Partial<PrivacySettings>): Observable<PrivacySettings> {
-    return this.http.put<PrivacySettings>('/api/v1/settings/privacy', body).pipe(
-      catchError(() => this.getPrivacy().pipe(map((p) => ({ ...p, ...body })))),
-    );
+    return this.http.put<PrivacySettings>('/api/v1/settings/privacy', body);
   }
 
   getRequests(filters?: {

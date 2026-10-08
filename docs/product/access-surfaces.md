@@ -32,6 +32,7 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 | `nav.positions` | ні | ні | так | так |
 | `nav.questionnaires` | seed | seed | seed | так |
 | `nav.absences` | так | так | так | так |
+| `absences.admin` | ні | ні | ні | так |
 | `nav.statistics` | seed | seed | seed | так |
 | `nav.settings` | ні | ні | ні | так |
 | `route.positions` | ні | ні | так | так |
@@ -52,7 +53,16 @@ Permission-backed surface: `visible = hasSurface AND hasPermission`. `isAdminEqu
 | `people.tab.documents` | `documents.view` |
 | `people.tab.questionnaires` | `questionnaires.view` |
 | `nav.questionnaires` | `questionnaires.view` |
+| `absences.admin` | `absences.admin` |
 | `settings.access_roles` | (API: adminEquivalent; surface = UI only) |
+
+**AbsencesAdmin atomic pair:** Settings checkbox «Адміністрування робочого календаря» grants/revokes **both** `Permission.AbsencesAdmin` and surface `absences.admin` in one AccountRoles TX. Backend fail-closed `ABSENCES_ADMIN_PAIR_MISMATCH` on create / update / `PUT …/surfaces` if they diverge. Generic surfaces checklist entry is derived/disabled. `surfaces: []` on `/auth/me` is a valid modern role (zero surfaces) — **not** pre-rollout; FE `surfacesReady` = `surfaces !== undefined`, route guard fail-closed.
+
+**Absences approve:** Settings checkbox «Затверджувати заявки» → extra `absences.approve` (DM+admin presets already include it). Row caps via AuthZ + managed submission dept (null snapshot → current EA dept). Create-for-other: `metadata.capabilities.canCreateForOther` (`AbsencesCreate` ∧ managed scope \| adminEq) — FE must not proxy via Approve.
+
+**Privacy admin page:** gated by `absences.admin` surface∧permission; fake privacy persistence removed (unavailable UI until real API).
+
+**EmployeeAccess class C debt (not remapped):** `canViewComment`, `canExportProfilePdf` still use admin\|DM role mirror — candidates `employees.read_team_comment` / `employees.export_profile`.
 
 ## Classification (ADR 0012)
 

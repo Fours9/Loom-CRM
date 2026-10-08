@@ -37,7 +37,9 @@ import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
         aria-labelledby="questionnaire-attach-picker-title"
       >
         <div class="head">
-          <h2 id="questionnaire-attach-picker-title">Прикріпити анкету</h2>
+          <div class="head-title">
+            <h2 id="questionnaire-attach-picker-title">Прикріпити анкету</h2>
+          </div>
           <button
             type="button"
             class="icon-close"
@@ -50,27 +52,21 @@ import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
           </button>
         </div>
 
-        @if (constraint()?.kind === 'any_employee') {
-          <loom-questionnaire-employee-typeahead
-            (employeeChange)="onEmployee($event)"
-          />
-        } @else {
-          <p class="muted">Прикріплення недоступне для цього стану.</p>
-        }
+        <div class="body">
+          @if (constraint()?.kind === 'any_employee') {
+            <loom-questionnaire-employee-typeahead
+              (employeeChange)="onEmployee($event)"
+            />
+          } @else {
+            <p class="muted">Прикріплення недоступне для цього стану.</p>
+          }
 
-        @if (error()) {
-          <p class="error">{{ error() }}</p>
-        }
+          @if (error()) {
+            <p class="error">{{ error() }}</p>
+          }
+        </div>
 
-        <div class="actions">
-          <button
-            type="button"
-            class="btn pw-btn pw-btn--ghost"
-            [disabled]="busy()"
-            (click)="close.emit()"
-          >
-            Скасувати
-          </button>
+        <div class="foot">
           <button
             type="button"
             class="btn pw-btn"
@@ -96,15 +92,13 @@ import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
         place-items: center;
         background: color-mix(in srgb, #0f172a 45%, transparent);
         padding: calc(var(--shell-topbar-h, 0px) + 0.75rem) 1rem 0.75rem;
-        overflow-y: auto;
       }
       .modal {
-        position: relative;
         display: grid;
-        gap: 0.75rem;
+        grid-template-rows: auto minmax(0, 1fr) auto;
         width: min(28rem, 100%);
-        margin: auto;
-        padding: 1.1rem 1.2rem 1.25rem;
+        max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.5rem);
+        position: relative;
         border-radius: 12px;
         background: var(--pw-surface, #1e293b);
         border: 1px solid var(--pw-border, #334155);
@@ -116,7 +110,14 @@ import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
         align-items: flex-start;
         justify-content: space-between;
         gap: 0.75rem;
-        padding-right: 2.5rem;
+        padding: 1rem 3.4rem 0.85rem 1.15rem;
+        border-bottom: 1px solid var(--pw-border);
+      }
+      .head-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
       }
       h2 {
         margin: 0;
@@ -143,6 +144,14 @@ import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
         opacity: 0.55;
         cursor: default;
       }
+      .body {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 1rem 1.15rem;
+        display: grid;
+        gap: 0.75rem;
+      }
       .muted {
         margin: 0;
         color: var(--pw-muted);
@@ -150,14 +159,15 @@ import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
       }
       .error {
         margin: 0;
-        color: #b42318;
+        color: var(--pw-danger, #b42318);
         font-size: 0.9rem;
       }
-      .actions {
+      .foot {
         display: flex;
         justify-content: flex-end;
         gap: 0.5rem;
-        margin-top: 0.25rem;
+        padding: 0.85rem 1.15rem 1rem;
+        border-top: 1px solid var(--pw-border);
       }
       .btn:disabled {
         opacity: 0.55;

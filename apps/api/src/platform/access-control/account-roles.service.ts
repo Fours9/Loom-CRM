@@ -25,6 +25,7 @@ import { userRoleMirrorFor } from './account-role-mirror';
 import { AuthorizationContextService } from './authorization-context.service';
 import type { AuthorizationContext } from './authorization-context';
 import { LastAdminPolicy } from './last-admin.policy';
+import { assertAbsencesAdminPairAligned } from './absences-admin-pair';
 import type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
 
 export type { AssignableAccountRoleOption } from '@loom/contracts-access-control';
@@ -78,6 +79,12 @@ export type AccountRoleView = {
   canManageQuestionnaires: boolean;
   grantsManageQuestionnairesExplicitly: boolean;
   canEditManageQuestionnairesGrant: boolean;
+  canApproveAbsences: boolean;
+  grantsAbsencesApproveExplicitly: boolean;
+  canEditAbsencesApproveGrant: boolean;
+  canAdminAbsences: boolean;
+  grantsAbsencesAdminExplicitly: boolean;
+  canEditAbsencesAdminGrant: boolean;
 };
 
 export type AppSurfaceView = {
@@ -193,6 +200,12 @@ export class AccountRolesService {
         manager,
         input.surfaceIds ?? [],
       );
+      this.assertAbsencesAdminPairForState({
+        permissionPreset: preset,
+        isAdminEquivalent,
+        extras,
+        surfaceIds,
+      });
       const repo = manager.getRepository(AccountRole);
       const saved = await repo.save(
         repo.create({
@@ -270,23 +283,41 @@ export class AccountRolesService {
         role.isAdminEquivalent,
       );
 
+      const beforeExtras = this.assertPermissions(
+        await this.currentExtras(manager, role.id),
+      );
+      const beforeSurfaces = await this.currentSurfaceIds(manager, role.id);
+      const nextExtras =
+        input.extraPermissions !== undefined
+          ? this.assertPermissions(input.extraPermissions)
+          : beforeExtras;
+      const nextSurfaces =
+        input.surfaceIds !== undefined
+          ? await this.assertSurfaceIds(manager, input.surfaceIds)
+          : beforeSurfaces;
+
+      if (
+        input.extraPermissions !== undefined ||
+        input.surfaceIds !== undefined
+      ) {
+        this.assertAbsencesAdminPairForState({
+          permissionPreset: role.permissionPreset,
+          isAdminEquivalent: role.isAdminEquivalent,
+          extras: nextExtras,
+          surfaceIds: nextSurfaces,
+        });
+      }
+
       if (input.extraPermissions !== undefined) {
-        const extras = this.assertPermissions(input.extraPermissions);
-        const before = await this.currentExtras(manager, role.id);
-        if (!sameStringSet(before, extras)) {
-          await this.replaceExtras(manager, role.id, extras);
+        if (!sameStringSet(beforeExtras, nextExtras)) {
+          await this.replaceExtras(manager, role.id, nextExtras);
           definitionChanged = true;
         }
       }
 
       if (input.surfaceIds !== undefined) {
-        const surfaceIds = await this.assertSurfaceIds(
-          manager,
-          input.surfaceIds,
-        );
-        const before = await this.currentSurfaceIds(manager, role.id);
-        if (!sameStringSet(before, surfaceIds)) {
-          await this.replaceSurfaceRows(manager, role.id, surfaceIds);
+        if (!sameStringSet(beforeSurfaces, nextSurfaces)) {
+          await this.replaceSurfaceRows(manager, role.id, nextSurfaces);
           definitionChanged = true;
         }
       }
@@ -386,6 +417,25 @@ export class AccountRolesService {
         'permissionPreset "admin" requires isAdminEquivalent = true',
       );
     }
+  }
+
+  private assertAbsencesAdminPairForState(input: {
+    permissionPreset: AccountRolePermissionPreset;
+    isAdminEquivalent: boolean;
+    extras: Permission[];
+    surfaceIds: string[];
+  }): void {
+    const effectiveHasAdmin =
+      input.isAdminEquivalent ||
+      permissionsForPreset(input.permissionPreset).includes(
+        Permission.AbsencesAdmin,
+      ) ||
+      input.extras.includes(Permission.AbsencesAdmin);
+    assertAbsencesAdminPairAligned({
+      effectiveHasAdmin,
+      surfaceIds: input.surfaceIds,
+      isAdminEquivalent: input.isAdminEquivalent,
+    });
   }
 
   private assertPermissions(values: string[]): Permission[] {
@@ -694,6 +744,20 @@ export class AccountRolesService {
       canManageQuestionnaires,
       grantsManageQuestionnairesExplicitly,
       canEditManageQuestionnairesGrant: canEditGrant,
+      canApproveAbsences:
+        role.isAdminEquivalent ||
+        effectivePermissions.includes(Permission.AbsencesApprove),
+      grantsAbsencesApproveExplicitly: extraPermissions.includes(
+        Permission.AbsencesApprove,
+      ),
+      canEditAbsencesApproveGrant: canEditGrant,
+      canAdminAbsences:
+        role.isAdminEquivalent ||
+        effectivePermissions.includes(Permission.AbsencesAdmin),
+      grantsAbsencesAdminExplicitly: extraPermissions.includes(
+        Permission.AbsencesAdmin,
+      ),
+      canEditAbsencesAdminGrant: canEditGrant,
     };
   }
 }

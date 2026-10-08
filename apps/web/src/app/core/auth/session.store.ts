@@ -4,7 +4,6 @@ import { firstValueFrom } from 'rxjs';
 import type { CurrentUserResponse, Permission } from '@loom/contracts-auth';
 import {
   canAccessSurface,
-  hasSurfaceCatalog,
   type SurfaceId,
   type SurfaceSession,
 } from '../access/can-access-surface';
@@ -28,22 +27,20 @@ export class SessionStore {
     () => this.user()?.surfaces ?? [],
   );
 
-  /** System `admin` role or a custom account role flagged is_admin_equivalent. */
-  readonly isAdminEquivalent = computed(() => {
-    const user = this.user();
-    if (!user) return false;
-    return user.accountRole?.isAdminEquivalent ?? user.role === 'admin';
-  });
+  /** Account role flagged is_admin_equivalent (SoT — not legacy `role === 'admin'`). */
+  readonly isAdminEquivalent = computed(
+    () => this.user()?.accountRole?.isAdminEquivalent === true,
+  );
 
   readonly surfaceSession = computed<SurfaceSession>(() => ({
     permissions: this.user()?.permissions ?? [],
-    surfaces: this.surfaces(),
+    surfaces: this.user()?.surfaces,
     isAdminEquivalent: this.isAdminEquivalent(),
   }));
 
-  /** True once the API ships a surface catalog; before that callers gate on permissions. */
-  readonly surfacesReady = computed(() =>
-    hasSurfaceCatalog(this.surfaceSession()),
+  /** True once /auth/me shipped `surfaces` (empty array = zero grants, not pre-rollout). */
+  readonly surfacesReady = computed(
+    () => this.user()?.surfaces !== undefined,
   );
 
   canAccessSurface(surfaceId: SurfaceId): boolean {

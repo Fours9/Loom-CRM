@@ -825,8 +825,11 @@ export class RequestCreatePageComponent implements OnInit {
     return types.find((t) => t.value === this.type) ?? null;
   }
 
+  /** From absences metadata capabilities — not client role checks. */
+  private canCreateForOther = false;
+
   get canPickEmployee(): boolean {
-    return this.auth.isAdmin() || this.auth.isManager();
+    return this.canCreateForOther;
   }
 
   /** @deprecated Prefer showsEndDate from metadata.dateMode */
@@ -900,15 +903,16 @@ export class RequestCreatePageComponent implements OnInit {
         if (!this.typeMetadata.some((t) => t.value === this.type) && this.typeMetadata[0]) {
           this.type = this.typeMetadata[0].value;
         }
+        this.canCreateForOther = meta.capabilities?.canCreateForOther === true;
+        if (this.canPickEmployee) {
+          this.api
+            .getDepartments(true)
+            .subscribe((d) => (this.departments = d.filter((x) => x.isActive)));
+          this.reloadPositions();
+          this.applyNavigationPrefill(prefill);
+        }
       },
     });
-
-    if (this.canPickEmployee) {
-      this.api
-        .getDepartments(true)
-        .subscribe((d) => (this.departments = d.filter((x) => x.isActive)));
-      this.reloadPositions();
-    }
 
     this.applyNavigationPrefill(prefill);
     this.reloadSchedule();

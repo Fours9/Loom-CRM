@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
 import { UserRole } from '../../platform/identity/user.enums';
 import { AuthorizationContextService } from '../../platform/access-control/authorization-context.service';
@@ -14,7 +14,10 @@ import { Employee } from '../employees/employee.entity';
 import { EmploymentAssignment } from '../employees/employment-assignment.entity';
 import { EmploymentAssignmentManagedDepartment } from '../employees/employment-assignment-managed-department.entity';
 import { Department } from '../departments/department.entity';
-import { CurrentEmploymentAssignmentResolver } from '../employment-catalog/current-employment-assignment.resolver';
+import {
+  CurrentEmploymentAssignmentResolver,
+  selectCurrentEmploymentAssignment,
+} from '../employment-catalog/current-employment-assignment.resolver';
 import {
   ManagementKind,
   managementKindImpliesManager,
@@ -83,9 +86,16 @@ export class EmployeeAccessService {
     return this.isDepartmentManagerRole(viewer);
   }
 
-  async resolveActorContext(actor: User): Promise<ActorAccessContext> {
-    const authz = await this.authorization.resolve(actor.id);
-    if (authz.isAdminEquivalent) {
+  /**
+   * @param authz Optional pre-resolved AuthZ — avoids a second AuthorizationContextService.resolve
+   * when the caller already holds the snapshot (Absences AbsenceActorFacts).
+   */
+  async resolveActorContext(
+    actor: User,
+    authz?: Awaited<ReturnType<AuthorizationContextService['resolve']>>,
+  ): Promise<ActorAccessContext> {
+    const resolved = authz ?? (await this.authorization.resolve(actor.id));
+    if (resolved.isAdminEquivalent) {
       const self = await this.employees.findOne({ where: { userId: actor.id } });
       return {
         scope: 'all',
@@ -151,6 +161,56 @@ export class EmployeeAccessService {
   async resolveManagedScope(actor: User): Promise<string[]> {
     const ctx = await this.resolveActorContext(actor);
     return ctx.managedDepartmentIds;
+  }
+
+  /**
+   * Batch current active EA departmentId for employees (Absences submission-dept fallback).
+   * Single query — do not N× resolve per row.
+   */
+  async batchCurrentDepartmentIds(
+    employees: ReadonlyArray<{ id: string; currentAssignmentId: string | null }>,
+  ): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    if (!employees.length) return out;
+
+    const employeeIds = employees.map((e) => e.id);
+    const pointerByEmployee = new Map(
+      employees.map((e) => [e.id, e.currentAssignmentId] as const),
+    );
+
+    const rows = await this.assignments.find({
+      where: { employeeId: In(employeeIds), status: 'active' },
+      select: ['id', 'employeeId', 'departmentId', 'startDate', 'status'],
+    });
+
+    const byEmployee = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const list = byEmployee.get(row.employeeId) ?? [];
+      list.push(row);
+      byEmployee.set(row.employeeId, list);
+    }
+
+    for (const emp of employees) {
+      const candidates = byEmployee.get(emp.id) ?? [];
+      const pointer = pointerByEmployee.get(emp.id) ?? null;
+      const selected = selectCurrentEmploymentAssignment(
+        candidates.map((c) => ({
+          id: c.id,
+          employeeId: c.employeeId,
+          status: c.status,
+          startDate: c.startDate,
+        })),
+        emp.id,
+        pointer,
+      );
+      if (!selected) {
+        out.set(emp.id, null);
+        continue;
+      }
+      const full = candidates.find((c) => c.id === selected.id);
+      out.set(emp.id, full?.departmentId ?? null);
+    }
+    return out;
   }
 
   async requireCanView(actor: User, target: Employee): Promise<void> {
@@ -257,6 +317,10 @@ export class EmployeeAccessService {
     );
   }
 
+  /**
+   * Class C debt: admin|DM account-role semantic — no equivalent permission yet
+   * (candidate: employees.read_team_comment). Do not remap to ManageProfiles/scope alone.
+   */
   canViewComment(viewer: User, _target: Employee): boolean {
     return this.isAdminRole(viewer) || this.isDepartmentManagerRole(viewer);
   }
@@ -265,10 +329,12 @@ export class EmployeeAccessService {
     return this.canEditEmployeeProfile(viewer, target);
   }
 
+  /** Class B — prefer authz.isAdminEquivalent at call sites. */
   canViewAdminComment(viewer: User): boolean {
     return this.isAdminRole(viewer);
   }
 
+  /** Class B — prefer authz.isAdminEquivalent at call sites. */
   canEditAdminComment(viewer: User): boolean {
     return this.isAdminRole(viewer);
   }
@@ -326,6 +392,10 @@ export class EmployeeAccessService {
     return this.isAdminRole(actor) && target.userId !== actor.id;
   }
 
+  /**
+   * Class C debt: admin|DM account-role semantic — no equivalent permission yet
+   * (candidate: employees.export_profile). DM preset lacks ManageProfiles; do not remap.
+   */
   async canExportProfilePdf(
     viewer: User,
     target: Employee,

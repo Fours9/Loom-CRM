@@ -1,15 +1,14 @@
-import type { UserRole } from '../../platform/identity/user.enums';
-import { canMutateEmployeeOrgAssignment } from './can-mutate-employee-org-assignment.policy';
-
 /**
  * Fields from UpdateEmployeeDto that may mutate denormalized org placement.
  * Empty object ⇒ strip (EmployeesService.update must not apply dept/pos).
+ *
+ * Legacy writer requires adminEquivalent (see EmployeesService.update).
  */
 export function pickLegacyOrgAssignmentPatch(
-  actor: { role: UserRole },
+  authz: { isAdminEquivalent: boolean },
   dto: { departmentId?: string | null; positionId?: string | null },
 ): { departmentId?: string | null; positionId?: string | null } {
-  if (!canMutateEmployeeOrgAssignment(actor)) {
+  if (!authz.isAdminEquivalent) {
     return {};
   }
   const out: { departmentId?: string | null; positionId?: string | null } = {};

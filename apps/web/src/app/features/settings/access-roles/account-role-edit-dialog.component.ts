@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   HostListener,
   OnDestroy,
   OnInit,
@@ -22,8 +23,10 @@ import {
   groupSurfaces,
   type SurfaceGroupVm,
 } from './surface-catalog';
+import { Surface } from '../../../core/access/can-access-surface';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
 import { HelpTriggerComponent } from '../../../core/help/help-trigger.component';
+import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
 import {
   MultiSelectListComponent,
   type MultiSelectItem,
@@ -40,6 +43,8 @@ const QUESTIONNAIRES_MANAGE_LIFECYCLE = 'questionnaires.manage_lifecycle';
 const QUESTIONNAIRES_DELETE = 'questionnaires.delete';
 const QUESTIONNAIRES_APPLY_PROFILE_CHANGES =
   'questionnaires.apply_profile_changes';
+const ABSENCES_APPROVE = 'absences.approve';
+const ABSENCES_ADMIN = 'absences.admin';
 
 const TOGGLE_EXTRAS = [
   CONFIDENTIAL_VIEW,
@@ -51,7 +56,18 @@ const TOGGLE_EXTRAS = [
   QUESTIONNAIRES_MANAGE_LIFECYCLE,
   QUESTIONNAIRES_DELETE,
   QUESTIONNAIRES_APPLY_PROFILE_CHANGES,
+  ABSENCES_APPROVE,
+  ABSENCES_ADMIN,
 ] as const;
+
+/** Pure pair helper — safe to call from effects without reading a writable signal. */
+function withAbsencesAdminSurface(
+  surfaceIds: readonly string[],
+  enabled: boolean,
+): string[] {
+  const without = surfaceIds.filter((id) => id !== Surface.AbsencesAdmin);
+  return enabled ? [...without, Surface.AbsencesAdmin] : without;
+}
 
 export type PublishedQuestionnaireTemplate = {
   code: string;
@@ -83,25 +99,23 @@ export type PublishedQuestionnaireTemplate = {
               tourId="settings.dialog.role"
               ariaLabel="Підказка про цю форму"
             />
-          </div>
-          <div class="head-actions">
             @if (role()?.isSystem) {
               <span class="badge">Системна роль</span>
             }
-            <button type="button" class="ghost-neutral" (click)="closed.emit()" [disabled]="busy()">
-              Скасувати
-            </button>
-            <button
-              type="button"
-              data-help-id="settings.dialog.role.save"
-              (click)="submit()"
-              [disabled]="busy() || !name.trim()"
-            >
-              {{ role() ? 'Зберегти' : 'Створити' }}
-            </button>
           </div>
+          <button
+            type="button"
+            class="icon-close"
+            aria-label="Закрити"
+            title="Закрити"
+            [disabled]="busy()"
+            (click)="closed.emit()"
+          >
+            ×
+          </button>
         </div>
 
+        <div class="body">
         @if (error()) {
           <p class="error">{{ error() }}</p>
         }
@@ -252,6 +266,35 @@ export type PublishedQuestionnaireTemplate = {
             </label>
           </fieldset>
 
+          <fieldset class="permission-group">
+            <legend>Робочий календар</legend>
+            <label class="check">
+              <input
+                type="checkbox"
+                name="roleAbsencesApprove"
+                [(ngModel)]="grantsAbsencesApprove"
+                [disabled]="busy() || !canEditAbsencesApprove()"
+              />
+              Може затверджувати відсутності
+            </label>
+            <div class="check-with-hint">
+              <label class="check">
+                <input
+                  type="checkbox"
+                  name="roleAbsencesAdmin"
+                  [(ngModel)]="grantsAbsencesAdmin"
+                  [disabled]="busy() || !canEditAbsencesAdmin()"
+                  (ngModelChange)="onAbsencesAdminChange()"
+                />
+                Може адмініструвати відсутності
+              </label>
+              <p class="hint">
+                Сторінка конфіденційності відсутностей і фіналізація видалення.
+                Екран absences.admin надається разом із цим правом.
+              </p>
+            </div>
+          </fieldset>
+
           @if (presetLocked()) {
             <p class="hint">
               Набір прав і рівень адміністратора системної ролі змінити не можна — доступні
@@ -273,65 +316,113 @@ export type PublishedQuestionnaireTemplate = {
               <section class="surface-group">
                 <h3>{{ group.label }}</h3>
                 @for (surface of group.surfaces; track surface.id) {
-                  <label class="check">
-                    <input
-                      type="checkbox"
-                      [name]="'surface_' + surface.id"
-                      [checked]="isSurfaceSelected(surface.id)"
-                      [disabled]="busy()"
-                      (change)="toggleSurface(surface.id)"
-                    />
-                    {{ surface.label }}
-                  </label>
+                  @if (!isDerivedSurface(surface.id)) {
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [name]="'surface_' + surface.id"
+                        [checked]="isSurfaceSelected(surface.id)"
+                        [disabled]="busy()"
+                        (change)="toggleSurface(surface.id)"
+                      />
+                      {{ surface.label }}
+                    </label>
+                  }
                 }
               </section>
             }
           </fieldset>
         </form>
+        </div>
+
+        <div class="foot">
+          <button
+            type="button"
+            class="btn pw-btn"
+            data-help-id="settings.dialog.role.save"
+            (click)="submit()"
+            [disabled]="busy() || !name.trim()"
+          >
+            {{ role() ? 'Зберегти' : 'Створити' }}
+          </button>
+        </div>
       </div>
     </div>
   `,
   styles: [
     `
+      :host {
+        display: block;
+      }
       .backdrop {
         position: fixed;
         inset: 0;
         z-index: var(--pw-z-modal, 250);
         display: grid;
-        place-items: start center;
+        place-items: center;
         background: color-mix(in srgb, #0f172a 45%, transparent);
-        padding: calc(var(--shell-topbar-h, 0px) + 0.35rem) 1rem 0.75rem;
-        overflow: auto;
+        padding: calc(var(--shell-topbar-h, 0px) + 0.75rem) 1rem 0.75rem;
       }
       .modal {
         display: grid;
-        gap: 0.85rem;
+        grid-template-rows: auto minmax(0, 1fr) auto;
         width: min(42rem, 100%);
-        margin: 0.35rem auto 0;
-        padding: 1.1rem 1.2rem;
+        max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.5rem);
+        position: relative;
         border-radius: 12px;
-        background: var(--pw-surface);
-        border: 1px solid var(--pw-border);
+        background: var(--pw-surface, #1e293b);
+        border: 1px solid var(--pw-border, #334155);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+        overflow: visible;
       }
       .head {
         display: flex;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 0.75rem;
-        align-items: center;
-        flex-wrap: wrap;
+        padding: 1rem 3.4rem 0.85rem 1.15rem;
+        border-bottom: 1px solid var(--pw-border);
       }
       .head-title {
         display: flex;
         align-items: center;
         gap: 0.5rem;
         min-width: 0;
-      }
-      .head-actions {
-        display: flex;
         flex-wrap: wrap;
+      }
+      .icon-close {
+        position: absolute;
+        top: 0.7rem;
+        right: 0.75rem;
+        display: inline-grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        font-size: 1.35rem;
+        line-height: 1;
+        background: transparent;
+        color: var(--pw-text);
+        border: 1px solid var(--pw-border-strong);
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .icon-close:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .body {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 1rem 1.15rem;
+      }
+      .foot {
+        display: flex;
+        justify-content: flex-end;
         gap: 0.5rem;
-        align-items: center;
+        padding: 0.85rem 1.15rem 1rem;
+        border-top: 1px solid var(--pw-border);
       }
       h2 {
         margin: 0;
@@ -404,6 +495,8 @@ export type PublishedQuestionnaireTemplate = {
         padding-top: 0.55rem;
         border-top: 1px solid var(--pw-border);
         font-size: 0.9rem;
+        /* Match assignment/position multi-select — default 2.6rem reads too thin here. */
+        --ms-trigger-height: 4.75rem;
       }
       .surface-group {
         display: grid;
@@ -419,33 +512,25 @@ export type PublishedQuestionnaireTemplate = {
         color: var(--pw-danger, #a32d2d);
       }
       input,
-      select,
-      button {
+      select {
         padding: 0.5rem 0.7rem;
         border-radius: 8px;
         border: 1px solid var(--pw-border-strong);
         box-sizing: border-box;
         font: inherit;
+        background: var(--pw-surface);
+        color: inherit;
+        width: 100%;
       }
-      button {
-        background: var(--pw-accent);
-        color: var(--pw-on-accent);
-        border: 0;
-        cursor: pointer;
-      }
-      .ghost-neutral {
-        background: transparent;
-        color: var(--pw-text);
-        border: 1px solid var(--pw-border-strong);
-      }
-      button:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
+      .btn:disabled {
+        opacity: 0.65;
+        cursor: default;
       }
     `,
   ],
 })
 export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   /** null = create a custom role. */
   readonly role = input<AccountRole | null>(null);
@@ -472,13 +557,17 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   grantsCreateAccountAtCreate = false;
   grantsAssignQuestionnaires = false;
   grantsManageQuestionnaires = false;
+  grantsAbsencesApprove = false;
+  grantsAbsencesAdmin = false;
 
   private readonly selectedSurfaceIds = signal<readonly string[]>([]);
   private readonly selectedTemplateCodes = signal<readonly string[]>([]);
   private backdropPress = false;
 
   readonly surfaceGroups = computed<SurfaceGroupVm[]>(() =>
-    groupSurfaces(this.surfaces()),
+    groupSurfaces(
+      this.surfaces().filter((s) => !this.isDerivedSurface(s.id)),
+    ).filter((g) => g.surfaces.length > 0),
   );
 
   /** Published + orphan grants (orphans stay selectable until explicitly removed). */
@@ -560,7 +649,27 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     return role.canEditQuestionnaireTemplates;
   }
 
+  canEditAbsencesApprove(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditAbsencesApproveGrant;
+  }
+
+  canEditAbsencesAdmin(): boolean {
+    if (this.isAdminEquivalent) return false;
+    const role = this.role();
+    if (!role) return true;
+    return role.canEditAbsencesAdminGrant;
+  }
+
+  /** Surfaces controlled by permission toggles — not independently selectable. */
+  isDerivedSurface(surfaceId: string): boolean {
+    return surfaceId === Surface.AbsencesAdmin;
+  }
+
   ngOnInit(): void {
+    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 
@@ -595,7 +704,19 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
       this.grantsManageQuestionnaires = role
         ? role.isAdminEquivalent || role.grantsManageQuestionnairesExplicitly
         : false;
-      this.selectedSurfaceIds.set([...(role?.surfaceIds ?? [])]);
+      this.grantsAbsencesApprove = role
+        ? role.isAdminEquivalent || role.grantsAbsencesApproveExplicitly
+        : false;
+      this.grantsAbsencesAdmin = role
+        ? role.isAdminEquivalent || role.grantsAbsencesAdminExplicitly
+        : false;
+      // One write — do not read selectedSurfaceIds inside this effect (infinite loop).
+      this.selectedSurfaceIds.set(
+        withAbsencesAdminSurface(
+          [...(role?.surfaceIds ?? [])],
+          this.grantsAbsencesAdmin,
+        ),
+      );
       this.selectedTemplateCodes.set([...(role?.questionnaireTemplateCodes ?? [])]);
     });
   }
@@ -609,11 +730,21 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   }
 
   toggleSurface(surfaceId: string): void {
+    if (this.isDerivedSurface(surfaceId)) return;
     const current = this.selectedSurfaceIds();
     this.selectedSurfaceIds.set(
       current.includes(surfaceId)
         ? current.filter((id) => id !== surfaceId)
         : [...current, surfaceId],
+    );
+  }
+
+  onAbsencesAdminChange(): void {
+    this.selectedSurfaceIds.set(
+      withAbsencesAdminSurface(
+        this.selectedSurfaceIds(),
+        this.grantsAbsencesAdmin,
+      ),
     );
   }
 
@@ -651,6 +782,11 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
     this.grantsCreateAccountAtCreate = true;
     this.grantsAssignQuestionnaires = true;
     this.grantsManageQuestionnaires = true;
+    this.grantsAbsencesApprove = true;
+    this.grantsAbsencesAdmin = true;
+    this.selectedSurfaceIds.set(
+      withAbsencesAdminSurface(this.selectedSurfaceIds(), true),
+    );
   }
 
   submit(): void {
@@ -675,14 +811,22 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
         extras.add(QUESTIONNAIRES_DELETE);
         extras.add(QUESTIONNAIRES_APPLY_PROFILE_CHANGES);
       }
+      if (this.grantsAbsencesApprove) extras.add(ABSENCES_APPROVE);
+      if (this.grantsAbsencesAdmin) extras.add(ABSENCES_ADMIN);
     }
+
+    const surfaceIds = withAbsencesAdminSurface(
+      this.selectedSurfaceIds(),
+      this.grantsAbsencesAdmin,
+    );
+    this.selectedSurfaceIds.set(surfaceIds);
 
     const body: CreateAccountRoleBody = {
       name,
       permissionPreset: this.permissionPreset,
       isAdminEquivalent: this.isAdminEquivalent,
       extraPermissions: [...extras],
-      surfaceIds: [...this.selectedSurfaceIds()],
+      surfaceIds: [...surfaceIds],
     };
     if (!this.isAdminEquivalent) {
       body.questionnaireTemplateCodes = [...this.selectedTemplateCodes()];

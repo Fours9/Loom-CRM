@@ -1,6 +1,7 @@
-import { User } from '../../platform/identity/user.entity';
-import { UserRole } from '../../platform/identity/user.enums';
-import { PermissionService } from '../../platform/permissions/permission.service';
+import {
+  hasPermission,
+  type AuthorizationContext,
+} from '../../platform/access-control/authorization-context';
 import { Permission } from '../../platform/permissions/permission.names';
 import { Employee } from '../../organization/employees/employee.entity';
 import { AbsenceRequest } from './absence-request.entity';
@@ -19,8 +20,8 @@ export type PwPermissions = {
 };
 
 export type PwPermissionContext = {
-  /** Viewer manages the request's submission department (or is admin). */
-  canManageSubmissionDepartment: boolean;
+  /** Organization already resolved: actor manages the request's effective submission dept. */
+  inManagedSubmissionDepartment: boolean;
 };
 
 function todayKyiv(): string {
@@ -42,53 +43,49 @@ export function statusGroupOf(row: AbsenceRequest): string {
 
 /**
  * PW-parity capabilities for a request detail/list row.
+ * AuthZ SoT = AuthorizationContext (never users.role / PermissionService.has(role)).
  *
- * Moderation (approve/reject/adjust):
- * - Admin may moderate own requests (solo-admin).
- * - Managers may not moderate own requests.
- * - Non-owners: admin or manager of submission department.
+ * @see Absences AuthZ plan — locked truth table (adminEq vs AbsencesAdmin).
  */
 export function pwPermissions(
-  actor: User,
+  authz: AuthorizationContext,
   request: AbsenceRequest,
   employee: Employee,
-  permissions: PermissionService,
   ctx: PwPermissionContext,
 ): PwPermissions {
-  const isOwner = employee.userId === actor.id;
-  const isCreator = request.createdByUserId === actor.id;
-  const isAdmin = actor.role === UserRole.Admin;
+  const isOwner = employee.userId === authz.userId;
+  const isCreator = request.createdByUserId === authz.userId;
+  const adminEq = authz.isAdminEquivalent;
+  const hasApprove = hasPermission(authz, Permission.AbsencesApprove);
+  const hasAdmin = hasPermission(authz, Permission.AbsencesAdmin);
+  const hasCancel = hasPermission(authz, Permission.AbsencesCancel);
+
   const pending = request.status === AbsenceRequestStatus.Pending;
   const approved = request.status === AbsenceRequestStatus.Approved;
   const rejected = request.status === AbsenceRequestStatus.Rejected;
   const cancelled = request.status === AbsenceRequestStatus.Cancelled;
   const deletionRequested =
     request.status === AbsenceRequestStatus.DeletionRequested;
-  const hasApprove = permissions.has(actor.role, Permission.AbsencesApprove);
+  const terminal = approved || rejected || cancelled;
 
-  const canModerateRequest =
+  const canModerate =
     hasApprove &&
-    (isOwner
-      ? isAdmin
-      : isAdmin || ctx.canManageSubmissionDepartment);
+    (isOwner ? adminEq : adminEq || ctx.inManagedSubmissionDepartment);
 
   return {
-    canApprove: pending && canModerateRequest,
-    canReject: pending && canModerateRequest,
-    canAdjust: approved && canModerateRequest,
-    canEdit: pending && (isOwner || isAdmin || isCreator),
+    canApprove: pending && canModerate,
+    canReject: pending && canModerate,
+    canAdjust: approved && canModerate,
+    canEdit: pending && (isOwner || isCreator || adminEq),
     canDelete:
-      pending &&
-      (isOwner || isAdmin || isCreator) &&
-      permissions.has(actor.role, Permission.AbsencesCancel),
-    // PW: approved|rejected + admin|dept manager. Loom also keeps cancelled (legacy) + owner.
+      pending && hasCancel && (isOwner || isCreator || adminEq),
     canRequestDeletion:
-      (approved || rejected || cancelled) &&
-      (isAdmin || isOwner || ctx.canManageSubmissionDepartment),
-    canApproveDeletion: deletionRequested && isAdmin,
-    canRejectDeletion: deletionRequested && isAdmin,
+      terminal &&
+      (isOwner || adminEq || ctx.inManagedSubmissionDepartment),
+    canApproveDeletion: deletionRequested && hasAdmin,
+    canRejectDeletion: deletionRequested && hasAdmin,
     canManageAttachments:
-      (pending && (isOwner || isAdmin || isCreator)) ||
-      (approved && canModerateRequest),
+      (pending && (isOwner || isCreator || adminEq)) ||
+      (approved && canModerate),
   };
 }

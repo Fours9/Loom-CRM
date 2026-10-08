@@ -7,6 +7,7 @@ export const SURFACE_GROUP_LABELS: Readonly<Record<string, string>> = {
   route: 'Маршрути',
   people: 'Профіль працівника',
   settings: 'Налаштування',
+  absences: 'Робочий календар',
 };
 
 export const PERMISSION_PRESET_LABELS: Readonly<
@@ -38,6 +39,12 @@ export const FALLBACK_SURFACE_CATALOG: readonly AppSurface[] = [
   { id: Surface.NavAbsences, group: 'nav', label: 'Робочий календар' },
   { id: Surface.NavStatistics, group: 'nav', label: 'Статистика' },
   { id: Surface.NavSettings, group: 'nav', label: 'Налаштування' },
+  {
+    id: Surface.AbsencesAdmin,
+    group: 'absences',
+    label: 'Відсутності — адміністрування',
+    requiredPermission: Permission.AbsencesAdmin,
+  },
   { id: Surface.RoutePositions, group: 'route', label: 'Сторінка посад' },
   { id: Surface.PeopleTabData, group: 'people', label: 'Дані працівника' },
   { id: Surface.PeopleTabWork, group: 'people', label: 'Робота' },

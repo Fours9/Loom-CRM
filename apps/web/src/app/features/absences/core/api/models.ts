@@ -194,6 +194,10 @@ export type AbsenceMetadataResponse = {
     maximumDate: string | null;
     supportsPartialDay: boolean;
   };
+  /** Server-computed actor capabilities — SoT for create-for-other UI. */
+  capabilities?: {
+    canCreateForOther: boolean;
+  };
 };
 
 export type AbsenceRequestStatus =

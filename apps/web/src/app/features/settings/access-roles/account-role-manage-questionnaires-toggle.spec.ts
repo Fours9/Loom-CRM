@@ -2,10 +2,17 @@
  * Mirrors Settings dialog TOGGLE_EXTRAS strip/re-add for Manage questionnaires triad.
  */
 const TOGGLE_EXTRAS = [
+  'confidential.view',
+  'employees.create',
+  'employees.manage_profiles',
+  'employees.assign_account_role',
+  'employees.create_account_at_create',
   'questionnaires.assign',
   'questionnaires.manage_lifecycle',
   'questionnaires.delete',
   'questionnaires.apply_profile_changes',
+  'absences.approve',
+  'absences.admin',
 ] as const;
 
 const L = 'questionnaires.manage_lifecycle';

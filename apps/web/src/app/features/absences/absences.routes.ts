@@ -1,4 +1,6 @@
 import { Routes } from '@angular/router';
+import { Surface } from '../../core/access/can-access-surface';
+import { surfaceGuard } from '../../core/access/surface.guard';
 
 /**
  * Full ProjectWeekend UI under /absences — chrome comes from CRM Shell
@@ -60,6 +62,7 @@ export const ABSENCE_ROUTES: Routes = [
   },
   {
     path: 'admin',
+    canActivate: [surfaceGuard(Surface.AbsencesAdmin)],
     loadComponent: () =>
       import('./admin/admin-page.component').then((m) => m.AdminPageComponent),
   },

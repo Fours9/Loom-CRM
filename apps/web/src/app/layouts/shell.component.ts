@@ -21,6 +21,7 @@ import {
 import { filter, Subscription } from 'rxjs';
 import { NavigationService } from '../core/navigation/navigation.service';
 import { SessionStore } from '../core/auth/session.store';
+import { Surface } from '../core/access/can-access-surface';
 import { TranslatePipe } from '../core/i18n/translate.pipe';
 import { ThemeService } from '../core/theme/theme.service';
 import { OverlayScrollLockService } from '../core/overlay/overlay-scroll-lock.service';
@@ -107,7 +108,7 @@ import { HelpMenuComponent } from '../core/help';
             <a routerLink="/absences/calendar" routerLinkActive="active">
               {{ 'nav.calendar' | t }}
             </a>
-            @if (isAdmin()) {
+            @if (canAccessAbsencesAdmin()) {
               <a routerLink="/absences/admin" routerLinkActive="active">
                 {{ 'nav.admin' | t }}
               </a>
@@ -317,7 +318,7 @@ import { HelpMenuComponent } from '../core/help';
                     </svg>
                     <span class="nav-label">{{ 'nav.calendar' | t }}</span>
                   </a>
-                  @if (isAdmin()) {
+                  @if (canAccessAbsencesAdmin()) {
                     <a
                       class="side-link side-link-child"
                       routerLink="/absences/admin"
@@ -987,7 +988,9 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.viewport.isTabletUp() ? this.sideOpen() : this.isMobileNavOpen(),
   );
   readonly accountEmail = computed(() => this.session.user()?.email ?? '');
-  readonly isAdmin = computed(() => this.session.user()?.role === 'admin');
+  readonly canAccessAbsencesAdmin = computed(() =>
+    this.session.canAccessSurface(Surface.AbsencesAdmin),
+  );
 
   /** SVG path `d` for a nav route (24×24 viewBox). */
   navIconPath(path: string): string {

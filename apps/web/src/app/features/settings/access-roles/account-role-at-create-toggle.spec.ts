@@ -8,6 +8,8 @@ const TOGGLE_EXTRAS = [
   'employees.manage_profiles',
   'employees.assign_account_role',
   'employees.create_account_at_create',
+  'absences.approve',
+  'absences.admin',
 ] as const;
 
 const AT_CREATE = 'employees.create_account_at_create';

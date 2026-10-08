@@ -21,6 +21,8 @@ Engineering wiring done: full PW Absences UI under CRM shell (one host); Postgre
 
 **Loom chrome (living):** calendar + employees/requests directories use shared `pw-stage` / `pw-filters` / `pw-menu` overlays. Calendar dept/type/status are inclusive multi (`[]` = all) via `buildCalendarQueryFilters`; employee filter is single select. Requests status/type are inclusive multi via API `statusGroups`/`types` (`[]` = all; `buildRequestsListQuery`). Hero/nav compact actions use global `.pw-link-action` (not full `pw-btn--ghost`). Embedded calendar (People tab) uses **local** filter/board stacking (same gate as documents panel).
 
+**AuthZ (living, ADR 0011):** approve/admin are AccountRole permissions (`absences.approve` / atomic `absences.admin`↔surface), not `users.role`. Row caps via `AuthorizationContext` + managed submission dept; create-for-other from `metadata.capabilities.canCreateForOther`. Admin page: surface guard + fail-closed privacy UI.
+
 ## Create request navigation contract
 
 - Єдина FE-точка формування переходу: `apps/web/src/app/features/absences/requests/create-request-navigation.ts`.

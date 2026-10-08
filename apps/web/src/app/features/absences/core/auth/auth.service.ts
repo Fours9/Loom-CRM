@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Observable } from 'rxjs';
 import { SessionStore } from '../../../../core/auth/session.store';
 import type { AuthUser } from './auth.models';
-import type { CurrentUserResponse, Permission } from '@loom/contracts-auth';
+import { Permission, type CurrentUserResponse } from '@loom/contracts-auth';
 import { environment } from '../../../../../environments/environment';
 import { ACCESS_TOKEN_KEY } from '../../../../core/auth/session.store';
 
@@ -30,15 +30,16 @@ export class AuthService {
     return this.session.user()?.employeeId ?? null;
   }
 
+  /** Thin wrapper — prefer session.isAdminEquivalent / hasPermission for new gates. */
   isAdmin(): boolean {
-    return this.session.user()?.role === 'admin';
+    return this.session.isAdminEquivalent();
   }
 
+  /** Thin wrapper — prefer AbsencesApprove / metadata capabilities for new gates. */
   isManager(): boolean {
-    const user = this.session.user();
-    return Boolean(
-      user &&
-        (user.role === 'department_manager' || user.role === 'admin'),
+    return (
+      this.session.isAdminEquivalent() ||
+      this.session.hasPermission(Permission.AbsencesApprove)
     );
   }
 

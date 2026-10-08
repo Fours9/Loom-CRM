@@ -171,9 +171,6 @@ const MAX_FILES = 20;
         </div>
 
         <div class="foot">
-          <button type="button" class="btn pw-btn pw-btn--ghost" [disabled]="busy" (click)="closed.emit()">
-            Скасувати
-          </button>
           <button
             type="button"
             class="btn pw-btn"
@@ -205,7 +202,7 @@ const MAX_FILES = 20;
       .modal {
         position: relative;
         width: min(36rem, 100%);
-        max-height: min(90vh, 40rem);
+        max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.5rem);
         display: grid;
         grid-template-rows: auto minmax(0, 1fr) auto;
         border-radius: 12px;
@@ -216,7 +213,7 @@ const MAX_FILES = 20;
       }
       .head {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 0.75rem;
         padding: 1rem 3.4rem 0.85rem 1.15rem;

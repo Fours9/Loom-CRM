@@ -5,8 +5,8 @@ import { SessionStore } from '../auth/session.store';
 import type { SurfaceId } from './can-access-surface';
 
 /**
- * Route-level surface gate. Redirects to the dashboard when the surface is not exposed.
- * Pre-rollout sessions (no surface catalog) pass through — permissions still guard the API.
+ * Route-level surface gate. Fail-closed when the surface catalog is not ready
+ * or the surface is not exposed — redirects to the dashboard.
  */
 export function surfaceGuard(surfaceId: SurfaceId): CanActivateFn {
   return () => {
@@ -14,8 +14,10 @@ export function surfaceGuard(surfaceId: SurfaceId): CanActivateFn {
     const router = inject(Router);
 
     return whenSessionReady(session, () => {
-      if (!session.surfacesReady()) return true;
-      return session.canAccessSurface(surfaceId) ? true : router.createUrlTree(['/']);
+      if (!session.surfacesReady()) return router.createUrlTree(['/']);
+      return session.canAccessSurface(surfaceId)
+        ? true
+        : router.createUrlTree(['/']);
     });
   };
 }

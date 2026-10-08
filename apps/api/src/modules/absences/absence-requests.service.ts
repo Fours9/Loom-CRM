@@ -7,11 +7,16 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Not, Repository } from 'typeorm';
 import { User } from '../../platform/identity/user.entity';
-import { UserRole } from '../../platform/identity/user.enums';
 import { AuditService } from '../../platform/audit/audit.service';
 import { NotificationsService } from '../../platform/notifications/notifications.service';
-import { PermissionService } from '../../platform/permissions/permission.service';
-import { EmployeeAccessService } from '../../organization/access/employee-access.service';
+import {
+  AuthorizationContextService,
+} from '../../platform/access-control/authorization-context.service';
+import type { AuthorizationContext } from '../../platform/access-control/authorization-context';
+import {
+  EmployeeAccessService,
+  type ActorAccessContext,
+} from '../../organization/access/employee-access.service';
 import { DepartmentsService } from '../../organization/departments/departments.service';
 import { PositionsService } from '../../organization/positions/positions.service';
 import { EmployeesService } from '../../organization/employees/employees.service';
@@ -34,6 +39,11 @@ import { validateTimeEventCandidate } from './domain/time-event-request-validato
 import { assertSchedulePolicy } from './domain/time-event-schedule-policy';
 import { checkTimeEventOverlap } from './domain/time-event-overlap-policy';
 import { TimeEventWorkflowPolicy } from './domain/time-event-workflow-policy';
+
+export type AbsenceActorFacts = {
+  authz: AuthorizationContext;
+  access: ActorAccessContext;
+};
 
 export type ListQuery = {
   page?: number;
@@ -68,10 +78,11 @@ export class AbsenceRequestsService {
     private readonly employees: EmployeesService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
-    private readonly permissions: PermissionService,
+    private readonly authorization: AuthorizationContextService,
   ) {}
 
   async metadata(actor: User) {
+    const facts = await this.resolveActorFacts(actor);
     const depts = await this.departments.findAll();
     return {
       types: buildTimeEventTypeMetadata(),
@@ -98,7 +109,16 @@ export class AbsenceRequestsService {
         maximumDate: null as string | null,
         supportsPartialDay: true,
       },
+      /** @deprecated Display/compat only — never use for FE authZ. */
       actorRole: actor.role,
+      capabilities: {
+        canCreateForOther: TimeEventWorkflowPolicy.canCreateForOther({
+          authz: facts.authz,
+          hasManagedScope:
+            facts.access.scope === 'all' ||
+            facts.access.managedDepartmentIds.length > 0,
+        }),
+      },
     };
   }
 
@@ -163,13 +183,26 @@ export class AbsenceRequestsService {
 
     const total = rows.length;
     const slice = rows.slice((page - 1) * pageSize, page * pageSize);
-    const items = await Promise.all(
-      slice.map(async (r) => {
+    const facts = await this.resolveActorFacts(actor);
+    const currentDeptByEmployee = await this.access.batchCurrentDepartmentIds(
+      slice.map((r) => {
         const emp = empById.get(r.employeeId)!;
-        const perms = await this.permissionsFor(actor, r, emp);
-        return this.toListItem(r, emp, deptName, posName, perms);
+        return {
+          id: emp.id,
+          currentAssignmentId: emp.currentAssignmentId ?? null,
+        };
       }),
     );
+    const items = slice.map((r) => {
+      const emp = empById.get(r.employeeId)!;
+      const perms = this.permissionsFor(
+        facts,
+        r,
+        emp,
+        currentDeptByEmployee.get(emp.id) ?? null,
+      );
+      return this.toListItem(r, emp, deptName, posName, perms);
+    });
     return { items, page, pageSize, total };
   }
 
@@ -250,6 +283,7 @@ export class AbsenceRequestsService {
   }
 
   async findOne(actor: User, id: string) {
+    const facts = await this.resolveActorFacts(actor);
     const row = await this.getOrFail(id);
     const emp = await this.access.getEmployeeOrFail(row.employeeId);
     try {
@@ -261,7 +295,18 @@ export class AbsenceRequestsService {
     const deptName = new Map(depts.map((d) => [d.id, d.name]));
     const positions = await this.positions.findAll();
     const posName = new Map(positions.map((p) => [p.id, p.name]));
-    const perms = await this.permissionsFor(actor, row, emp);
+    const currentDeptMap = await this.access.batchCurrentDepartmentIds([
+      {
+        id: emp.id,
+        currentAssignmentId: emp.currentAssignmentId ?? null,
+      },
+    ]);
+    const perms = this.permissionsFor(
+      facts,
+      row,
+      emp,
+      currentDeptMap.get(emp.id) ?? null,
+    );
     const history = await this.history.find({
       where: { requestId: id },
       order: { createdAt: 'ASC' },
@@ -321,12 +366,21 @@ export class AbsenceRequestsService {
     }
     const emp = await this.access.getEmployeeOrFail(employeeId);
     await this.access.requireCanView(actor, emp);
-    TimeEventWorkflowPolicy.assertCanCreateFor({
+    const facts = await this.resolveActorFacts(actor);
+    const targetFacts = await this.access.resolveTargetAccess(
       actor,
+      emp,
+      facts.access,
+    );
+    const workflowCtx = {
+      authz: facts.authz,
       targetEmployeeUserId: emp.userId,
-    });
+      canCreateForTarget:
+        facts.authz.isAdminEquivalent || targetFacts.isViaManagedScope,
+    };
+    TimeEventWorkflowPolicy.assertCanCreateFor(workflowCtx);
     TimeEventWorkflowPolicy.assertBackdatingAllowed(
-      { actor, targetEmployeeUserId: emp.userId },
+      workflowCtx,
       input.startDate,
     );
 
@@ -637,8 +691,9 @@ export class AbsenceRequestsService {
   }
 
   async approveDeletion(actor: User, id: string, body: { version?: number }) {
-    if (actor.role !== UserRole.Admin) {
-      throw new ForbiddenException('Only admin can approve deletion');
+    const detail = await this.findOne(actor, id);
+    if (!detail.permissions.canApproveDeletion) {
+      throw new ForbiddenException('Cannot approve deletion');
     }
     const row = await this.getOrFail(id);
     this.assertVersion(row, body.version);
@@ -654,8 +709,9 @@ export class AbsenceRequestsService {
     id: string,
     body: { version?: number; comment?: string },
   ) {
-    if (actor.role !== UserRole.Admin) {
-      throw new ForbiddenException('Only admin can reject deletion');
+    const detail = await this.findOne(actor, id);
+    if (!detail.permissions.canRejectDeletion) {
+      throw new ForbiddenException('Cannot reject deletion');
     }
     const row = await this.getOrFail(id);
     this.assertVersion(row, body.version);
@@ -875,32 +931,41 @@ export class AbsenceRequestsService {
     }
   }
 
-  private async permissionsFor(
-    actor: User,
+  private async resolveActorFacts(actor: User): Promise<AbsenceActorFacts> {
+    const authz = await this.authorization.resolve(actor.id);
+    const access = await this.access.resolveActorContext(actor, authz);
+    return { authz, access };
+  }
+
+  private permissionsFor(
+    facts: AbsenceActorFacts,
     request: AbsenceRequest,
     employee: Employee,
+    currentEaDepartmentId: string | null,
   ) {
-    return pwPermissions(actor, request, employee, this.permissions, {
-      canManageSubmissionDepartment: await this.canManageSubmissionDepartment(
-        actor,
+    return pwPermissions(facts.authz, request, employee, {
+      inManagedSubmissionDepartment: this.inManagedSubmissionDepartment(
+        facts,
         request,
-        employee,
+        currentEaDepartmentId,
       ),
     });
   }
 
-  /** PW `canModerateRequest` department leg (admin always true). */
-  private async canManageSubmissionDepartment(
-    actor: User,
+  /**
+   * Submission dept snapshot → else current target EA department → managed membership.
+   * adminEq always true.
+   */
+  private inManagedSubmissionDepartment(
+    facts: AbsenceActorFacts,
     request: AbsenceRequest,
-    employee: Employee,
-  ): Promise<boolean> {
-    if (this.access.isAdmin(actor)) return true;
+    currentEaDepartmentId: string | null,
+  ): boolean {
+    if (facts.authz.isAdminEquivalent) return true;
     const deptId =
-      request.departmentIdAtSubmission ?? employee.departmentId ?? null;
+      request.departmentIdAtSubmission ?? currentEaDepartmentId ?? null;
     if (!deptId) return false;
-    const managed = await this.access.managedDepartmentIds(actor);
-    return managed.includes(deptId);
+    return facts.access.managedDepartmentIds.includes(deptId);
   }
 
   private async selfEmployeeId(actor: User): Promise<string | null> {

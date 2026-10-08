@@ -1,4 +1,11 @@
-import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  inject,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   MultiSelectListComponent,
@@ -6,6 +13,7 @@ import {
 } from '../../shared/multi-select-list.component';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
+import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
 import { PositionManagementFacade } from './position-management.facade';
 
 @Component({
@@ -208,10 +216,8 @@ import { PositionManagementFacade } from './position-management.facade';
         z-index: var(--pw-z-modal, 250);
         display: grid;
         place-items: center;
-        align-items: start;
         background: color-mix(in srgb, #0f172a 45%, transparent);
-        padding: calc(var(--shell-topbar-h, 0px) + 0.35rem) 1rem 0.75rem;
-        overflow: hidden;
+        padding: calc(var(--shell-topbar-h, 0px) + 0.75rem) 1rem 0.75rem;
       }
       .modal {
         display: grid;
@@ -363,11 +369,13 @@ import { PositionManagementFacade } from './position-management.facade';
 })
 export class PositionEditDialogComponent implements OnInit, OnDestroy {
   readonly vm = inject(PositionManagementFacade);
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   readonly headingId = 'position-edit-dialog-title';
   private backdropPress = false;
 
   ngOnInit(): void {
+    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

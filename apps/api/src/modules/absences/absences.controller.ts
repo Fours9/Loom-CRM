@@ -341,7 +341,7 @@ export class AbsencesController {
   }
 
   @Post('requests/:id/approve-deletion')
-  @RequirePermissions(Permission.AbsencesApprove)
+  @RequirePermissions(Permission.AbsencesAdmin)
   approveDeletion(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -351,7 +351,7 @@ export class AbsencesController {
   }
 
   @Post('requests/:id/reject-deletion')
-  @RequirePermissions(Permission.AbsencesApprove)
+  @RequirePermissions(Permission.AbsencesAdmin)
   rejectDeletion(
     @CurrentUser() user: User,
     @Param('id') id: string,
