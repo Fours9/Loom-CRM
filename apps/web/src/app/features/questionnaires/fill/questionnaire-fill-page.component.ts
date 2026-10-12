@@ -424,7 +424,9 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
       await firstValueFrom(this.api.acceptProposal(id));
       const detail = this.store.assignment();
       const employeeId = detail?.employeeId;
-      if (detail && employeeId) await this.reloadProposals(employeeId, detail.id);
+      if (detail && employeeId) {
+        await this.reloadProposals(employeeId, detail.id, { soft: true });
+      }
     } catch (err: unknown) {
       this.actionError.set(
         (err as { error?: { message?: string } })?.error?.message ||
@@ -443,7 +445,9 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
       await firstValueFrom(this.api.rejectProposal(id));
       const detail = this.store.assignment();
       const employeeId = detail?.employeeId;
-      if (detail && employeeId) await this.reloadProposals(employeeId, detail.id);
+      if (detail && employeeId) {
+        await this.reloadProposals(employeeId, detail.id, { soft: true });
+      }
     } catch (err: unknown) {
       this.actionError.set(
         (err as { error?: { message?: string } })?.error?.message ||
@@ -457,8 +461,12 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
   private async reloadProposals(
     employeeId: string,
     assignmentId: string,
+    opts?: { soft?: boolean },
   ): Promise<void> {
-    this.proposalsLoading.set(true);
+    const soft = opts?.soft === true;
+    if (!soft) {
+      this.proposalsLoading.set(true);
+    }
     try {
       const res = await firstValueFrom(this.api.listProposals(employeeId));
       this.assignmentProposals.set(

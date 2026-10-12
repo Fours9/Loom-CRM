@@ -154,3 +154,19 @@ export function resolvePeopleProfileTab(
     ? (requested as PeopleProfileTabId)
     : 'data';
 }
+
+/** Deep-link to a People profile tab via `?tab=` (default / omitted = data). */
+export function buildPeopleProfileLink(input: {
+  employeeId: string;
+  tab?: PeopleProfileTabId;
+}): {
+  routerLink: string;
+  queryParams?: { tab: PeopleProfileTabId };
+} {
+  const id = input.employeeId.trim();
+  const routerLink = `/people/${id}`;
+  if (!input.tab || input.tab === 'data') {
+    return { routerLink };
+  }
+  return { routerLink, queryParams: { tab: input.tab } };
+}

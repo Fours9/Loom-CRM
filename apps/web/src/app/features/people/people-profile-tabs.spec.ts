@@ -1,6 +1,7 @@
 import { Permission } from '@loom/contracts-auth';
 import type { EmployeeProfileCapabilities } from '@loom/contracts-employees';
 import {
+  buildPeopleProfileLink,
   canShowAccountAdminTab,
   canShowRoleAccessAdminTab,
   resolvePeopleProfileTab,
@@ -232,5 +233,25 @@ describe('resolvePeopleProfileTab', () => {
 
   it('keeps visible absences (Робота)', () => {
     expect(resolvePeopleProfileTab('absences', visible)).toBe('absences');
+  });
+});
+
+describe('buildPeopleProfileLink', () => {
+  it('omits tab query for default data tab', () => {
+    expect(buildPeopleProfileLink({ employeeId: ' e1 ' })).toEqual({
+      routerLink: '/people/e1',
+    });
+    expect(
+      buildPeopleProfileLink({ employeeId: 'e1', tab: 'data' }),
+    ).toEqual({ routerLink: '/people/e1' });
+  });
+
+  it('adds questionnaires tab query', () => {
+    expect(
+      buildPeopleProfileLink({ employeeId: 'e1', tab: 'questionnaires' }),
+    ).toEqual({
+      routerLink: '/people/e1',
+      queryParams: { tab: 'questionnaires' },
+    });
   });
 });

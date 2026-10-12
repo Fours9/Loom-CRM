@@ -702,6 +702,7 @@ export class PeopleProfilePageComponent implements OnInit {
         tap((employeeId) => {
           this.employeeId = employeeId;
           this.resetProfileState();
+          this.applyTabFromQuery();
           this.loading.set(true);
         }),
         switchMap((employeeId) =>
@@ -719,14 +720,20 @@ export class PeopleProfilePageComponent implements OnInit {
       .subscribe(({ employeeId, profile }) => {
         this.profile.set(profile);
         this.loading.set(false);
+        this.applyTabFromQuery();
         this.loadSecondaryData(employeeId, profile);
       });
+
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.applyTabFromQuery());
   }
 
   setTab(requested: PeopleProfileTabId): void {
     const resolved = resolvePeopleProfileTab(requested, this.visibleTabs());
     if (this.tab() === resolved) return;
     this.withPreservedScroll(() => this.tab.set(resolved));
+    this.syncTabQuery(resolved);
   }
 
   setAbsenceTab(id: AbsenceTabId): void {
@@ -817,6 +824,26 @@ export class PeopleProfilePageComponent implements OnInit {
     this.absenceTab.set('position');
     this.dataSubtab.set('basics');
     this.aboutSubtab.set(null);
+  }
+
+  private applyTabFromQuery(): void {
+    const requested = this.route.snapshot.queryParamMap.get('tab') ?? 'data';
+    const resolved = resolvePeopleProfileTab(requested, this.visibleTabs());
+    if (this.tab() !== resolved) {
+      this.tab.set(resolved);
+    }
+  }
+
+  private syncTabQuery(tab: PeopleProfileTabId): void {
+    const current = this.route.snapshot.queryParamMap.get('tab');
+    const desired = tab === 'data' ? null : tab;
+    if (current === desired) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab: desired },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   /** Keep completeness bar at the same viewport Y when tab body reflows. */

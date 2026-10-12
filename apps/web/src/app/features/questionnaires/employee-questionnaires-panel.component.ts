@@ -284,7 +284,11 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
 
               <div class="subitems">
                 @if (showProposedChanges(item)) {
-                  <details class="fold">
+                  <details
+                    class="fold"
+                    [open]="proposalsExpandedIds().has(item.id)"
+                    (toggle)="onProposalsToggle(item.id, $event)"
+                  >
                     <summary>
                       <span class="fold-title"
                         >Запропоновані зміни до профілю</span
@@ -318,7 +322,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                                       <button
                                         type="button"
                                         class="btn pw-btn"
-                                        (click)="accept(p.id)"
+                                        (click)="accept(item.id, p.id)"
                                       >
                                         Прийняти
                                       </button>
@@ -327,7 +331,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
                                       <button
                                         type="button"
                                         class="btn pw-btn pw-btn--ghost"
-                                        (click)="reject(p.id)"
+                                        (click)="reject(item.id, p.id)"
                                       >
                                         Відхилити
                                       </button>
@@ -704,6 +708,7 @@ export class EmployeeQuestionnairesPanelComponent
   readonly proposals = signal<QuestionnaireProfileProposalItem[]>([]);
   readonly canAssign = signal(false);
   readonly summaryExpandedIds = signal<ReadonlySet<string>>(new Set());
+  readonly proposalsExpandedIds = signal<ReadonlySet<string>>(new Set());
   readonly moreMenuAssignmentId = signal<string | null>(null);
 
   readonly filterCode = signal('');
@@ -847,6 +852,26 @@ export class EmployeeQuestionnairesPanelComponent
     });
   }
 
+  onProposalsToggle(assignmentId: string, event: Event): void {
+    const details = event.currentTarget as HTMLDetailsElement;
+    const open = !!details.open;
+    this.proposalsExpandedIds.update((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(assignmentId);
+      else next.delete(assignmentId);
+      return next;
+    });
+  }
+
+  private keepProposalsExpanded(assignmentId: string): void {
+    this.proposalsExpandedIds.update((prev) => {
+      if (prev.has(assignmentId)) return prev;
+      const next = new Set(prev);
+      next.add(assignmentId);
+      return next;
+    });
+  }
+
   /** Pending proposals for this questionnaire (primary: assignmentId). */
   proposalsForAssignment(
     assignmentId: string,
@@ -909,16 +934,18 @@ export class EmployeeQuestionnairesPanelComponent
     this.showCreate.set(true);
   }
 
-  accept(id: string): void {
-    this.api.acceptProposal(id).subscribe({
-      next: () => this.reload(),
+  accept(assignmentId: string, proposalId: string): void {
+    this.keepProposalsExpanded(assignmentId);
+    this.api.acceptProposal(proposalId).subscribe({
+      next: () => this.reload({ soft: true }),
       error: () => this.error.set('Не вдалося прийняти пропозицію'),
     });
   }
 
-  reject(id: string): void {
-    this.api.rejectProposal(id).subscribe({
-      next: () => this.reload(),
+  reject(assignmentId: string, proposalId: string): void {
+    this.keepProposalsExpanded(assignmentId);
+    this.api.rejectProposal(proposalId).subscribe({
+      next: () => this.reload({ soft: true }),
       error: () => this.error.set('Не вдалося відхилити пропозицію'),
     });
   }
@@ -1001,8 +1028,11 @@ export class EmployeeQuestionnairesPanelComponent
     });
   }
 
-  private reload(): void {
-    this.loading.set(true);
+  private reload(opts?: { soft?: boolean }): void {
+    const soft = opts?.soft === true;
+    if (!soft) {
+      this.loading.set(true);
+    }
     this.error.set(null);
     forkJoin({
       list: this.api

@@ -124,9 +124,13 @@ export class QuestionnaireRevisionCoordinator {
       await firstValueFrom(this.api.submit(id));
       this.store.clearSubmittingKeepAnswers();
       const employeeId = detail.employeeId;
-      await this.router.navigateByUrl(
-        employeeId ? `/people/${employeeId}` : '/people',
-      );
+      if (employeeId) {
+        await this.router.navigate(['/people', employeeId], {
+          queryParams: { tab: 'questionnaires' },
+        });
+      } else {
+        await this.router.navigateByUrl('/people');
+      }
     } catch (err: unknown) {
       this.store.finishSubmitError(
         (err as { error?: { message?: string } })?.error?.message ||

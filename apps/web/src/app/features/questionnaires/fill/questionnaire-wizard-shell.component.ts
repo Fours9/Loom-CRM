@@ -9,6 +9,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
   QUESTIONNAIRE_INTRO_STEP,
@@ -668,6 +669,7 @@ export class QuestionnaireWizardShellComponent {
   readonly revision = inject(QuestionnaireRevisionCoordinator);
   private readonly api = inject(QuestionnairesApiService);
   private readonly orgCatalogApi = inject(OrganizationCatalogApiService);
+  private readonly router = inject(Router);
 
   readonly resolveBusy = input(false);
   readonly navigationComplete = output<void>();
@@ -1129,7 +1131,15 @@ export class QuestionnaireWizardShellComponent {
 
     try {
       await firstValueFrom(this.api.submit(id));
-      await this.store.load(id, this.store.activeStepKey());
+      this.store.clearSubmittingKeepAnswers();
+      const employeeId = this.store.assignment()?.employeeId;
+      if (employeeId) {
+        await this.router.navigate(['/people', employeeId], {
+          queryParams: { tab: 'questionnaires' },
+        });
+      } else {
+        await this.router.navigateByUrl('/people');
+      }
     } catch (err: unknown) {
       this.store.finishSubmitError(
         (err as { error?: { message?: string } })?.error?.message ||
