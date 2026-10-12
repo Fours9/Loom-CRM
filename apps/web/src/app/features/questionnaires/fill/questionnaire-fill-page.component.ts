@@ -113,7 +113,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
               }
               <loom-questionnaire-wizard-shell
                 [resolveBusy]="actionBusy()"
-                (navigationComplete)="focusRailHeading()"
+                (navigationComplete)="onWizardNavigationComplete()"
                 (resolveCompleted)="resolveChangesCompleted()"
                 (resolveDeclined)="resolveChangesDeclined()"
               />
@@ -390,6 +390,11 @@ export class QuestionnaireFillPageComponent implements OnInit, OnDestroy {
     await this.autosave.flush();
     this.store.setActiveStep(stepKey);
     queueMicrotask(() => this.focusRailHeading());
+  }
+
+  onWizardNavigationComplete(): void {
+    this.syncStepQuery(this.store.activeStepKey());
+    this.focusRailHeading();
   }
 
   focusRailHeading(): void {

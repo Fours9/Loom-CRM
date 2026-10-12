@@ -15,6 +15,7 @@ import {
   QUESTIONNAIRE_INTRO_STEP,
   QUESTIONNAIRE_REVIEW_STEP,
 } from '../navigation/questionnaire-step-keys';
+import { leaveQuestionnaireFillAfterSubmit } from '../navigation/questionnaire-navigation';
 import { resolveQuestionnaireNavigationMode } from '../navigation/questionnaire-navigation-mode';
 import {
   reviewRowsForStep,
@@ -1129,17 +1130,11 @@ export class QuestionnaireWizardShellComponent {
       return;
     }
 
+    const employeeId = this.store.assignment()?.employeeId;
     try {
       await firstValueFrom(this.api.submit(id));
       this.store.clearSubmittingKeepAnswers();
-      const employeeId = this.store.assignment()?.employeeId;
-      if (employeeId) {
-        await this.router.navigate(['/people', employeeId], {
-          queryParams: { tab: 'questionnaires' },
-        });
-      } else {
-        await this.router.navigateByUrl('/people');
-      }
+      await leaveQuestionnaireFillAfterSubmit(this.router, employeeId);
     } catch (err: unknown) {
       this.store.finishSubmitError(
         (err as { error?: { message?: string } })?.error?.message ||

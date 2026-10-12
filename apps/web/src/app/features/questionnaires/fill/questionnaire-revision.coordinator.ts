@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { leaveQuestionnaireFillAfterSubmit } from '../navigation/questionnaire-navigation';
 import { QuestionnairesApiService } from '../core/questionnaires-api.service';
 import { QuestionnaireAutosaveCoordinator } from './questionnaire-autosave.coordinator';
 import { QuestionnaireDraftStore } from './questionnaire-draft.store';
@@ -123,14 +124,7 @@ export class QuestionnaireRevisionCoordinator {
     try {
       await firstValueFrom(this.api.submit(id));
       this.store.clearSubmittingKeepAnswers();
-      const employeeId = detail.employeeId;
-      if (employeeId) {
-        await this.router.navigate(['/people', employeeId], {
-          queryParams: { tab: 'questionnaires' },
-        });
-      } else {
-        await this.router.navigateByUrl('/people');
-      }
+      await leaveQuestionnaireFillAfterSubmit(this.router, detail.employeeId);
     } catch (err: unknown) {
       this.store.finishSubmitError(
         (err as { error?: { message?: string } })?.error?.message ||

@@ -1,5 +1,7 @@
 import {
+  buildPeopleQuestionnairesReturnUrl,
   buildQuestionnaireAssignmentLink,
+  leaveQuestionnaireFillAfterSubmit,
   parseQuestionnaireStepQuery,
 } from './questionnaire-navigation';
 import {
@@ -45,6 +47,48 @@ describe('parseQuestionnaireStepQuery', () => {
         get: (n) => (n === 'step' ? '  profile_mirror  ' : null),
       }),
     ).toBe('profile_mirror');
+  });
+});
+
+describe('buildPeopleQuestionnairesReturnUrl', () => {
+  it('deep-links questionnaires tab', () => {
+    expect(buildPeopleQuestionnairesReturnUrl(' e1 ')).toBe(
+      '/people/e1?tab=questionnaires',
+    );
+  });
+
+  it('falls back to people list without employee', () => {
+    expect(buildPeopleQuestionnairesReturnUrl(null)).toBe('/people');
+    expect(buildPeopleQuestionnairesReturnUrl('  ')).toBe('/people');
+  });
+});
+
+describe('leaveQuestionnaireFillAfterSubmit', () => {
+  it('does not hard-assign when router navigation succeeds', async () => {
+    const router = { navigateByUrl: jest.fn(async () => true) };
+    await leaveQuestionnaireFillAfterSubmit(router, 'e1');
+    expect(router.navigateByUrl).toHaveBeenCalledWith(
+      '/people/e1?tab=questionnaires',
+    );
+  });
+
+  it('hard-assigns when router cancels navigation', async () => {
+    const router = { navigateByUrl: jest.fn(async () => false) };
+    const assign = jest.fn();
+    const prev = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...prev, assign },
+    });
+    try {
+      await leaveQuestionnaireFillAfterSubmit(router, 'e1');
+      expect(assign).toHaveBeenCalledWith('/people/e1?tab=questionnaires');
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: prev,
+      });
+    }
   });
 });
 
