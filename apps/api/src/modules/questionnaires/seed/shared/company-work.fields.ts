@@ -139,6 +139,8 @@ const MANAGING_ORG_REF_FIELDS: QuestionnaireSchemaField[] = [
     valueType: 'organization_ref',
     organizationEntity: 'direction',
     profileMirrorKey: 'directionId',
+    createsProfileProposal: true,
+    proposalMapping: { section: 'employment', field: 'directionId' },
     requiredPolicy: 'voluntary',
   },
   {
@@ -148,6 +150,8 @@ const MANAGING_ORG_REF_FIELDS: QuestionnaireSchemaField[] = [
     organizationEntity: 'department',
     cascadeParentKey: 'company_work.direction_id',
     profileMirrorKey: 'departmentId',
+    createsProfileProposal: true,
+    proposalMapping: { section: 'employment', field: 'departmentId' },
     requiredPolicy: 'voluntary',
   },
   {
@@ -157,6 +161,8 @@ const MANAGING_ORG_REF_FIELDS: QuestionnaireSchemaField[] = [
     organizationEntity: 'position',
     cascadeParentKey: 'company_work.department_id',
     profileMirrorKey: 'positionId',
+    createsProfileProposal: true,
+    proposalMapping: { section: 'employment', field: 'positionId' },
     requiredPolicy: 'voluntary',
   },
   {
@@ -281,6 +287,8 @@ export function buildCompanyWorkPositionOnlyFields(): QuestionnaireSchemaField[]
       valueType: 'organization_ref',
       organizationEntity: 'position',
       profileMirrorKey: 'positionId',
+      createsProfileProposal: true,
+      proposalMapping: { section: 'employment', field: 'positionId' },
       requiredPolicy: 'voluntary',
     },
   ];

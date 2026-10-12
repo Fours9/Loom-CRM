@@ -58,9 +58,18 @@ import {
   type StoredQuestionnaireProposedChange,
 } from './proposals/questionnaire-proposed-change';
 import { canApplySkillAddProposal } from './proposals/skill-add-proposal.policy';
+import {
+  buildEmploymentOrgProposalCandidates,
+  employmentOrgEquals,
+  employmentOrgHasAny,
+  extractEmploymentOrgFromAnswers,
+  type EmploymentOrgIds,
+} from './proposals/employment-org-from-answers';
 import { EmployeeSkillAssessmentsFacade } from '../../organization/skills/employee-skill-assessments.facade';
 import { SkillsService } from '../../organization/skills/skills.service';
 import { Skill } from '../../organization/skills/skill.entity';
+import { CurrentEmploymentAssignmentResolver } from '../../organization/employment-catalog/current-employment-assignment.resolver';
+import { Employee } from '../../organization/employees/employee.entity';
 
 type ProposalMapping = { section: string; field: string };
 type SchemaField = {
@@ -106,6 +115,7 @@ export class QuestionnaireProposalService {
     private readonly profiles: EmployeeProfileService,
     private readonly assessments: EmployeeSkillAssessmentsFacade,
     private readonly skillsCatalog: SkillsService,
+    private readonly currentEmployment: CurrentEmploymentAssignmentResolver,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -142,7 +152,10 @@ export class QuestionnaireProposalService {
 
     const scalarFields = schema.steps
       .flatMap((s) => s.fields ?? [])
-      .filter((f) => f.createsProfileProposal && f.proposalMapping);
+      .filter((f) => f.createsProfileProposal && f.proposalMapping)
+      // Employment org is always projected from company_work.*_id answers
+      // (including frozen schemas that predate createsProfileProposal).
+      .filter((f) => f.proposalMapping!.section !== 'employment');
 
     const bundleFields = schema.steps
       .flatMap((s) => s.fields ?? [])
@@ -154,9 +167,14 @@ export class QuestionnaireProposalService {
       manager,
       employee.id,
     );
+    const currentEmploymentOrg = await this.readCurrentEmploymentOrgIds(
+      manager,
+      employee,
+    );
     const current = {
       ...this.readScalarCurrentProfileValues(employee),
       ...this.readContactsProfileValues(currentBundle),
+      ...this.readEmploymentProfileValues(currentEmploymentOrg),
     };
 
     const proposalRepo = manager.getRepository(QuestionnaireProfileProposal);
@@ -251,6 +269,19 @@ export class QuestionnaireProposalService {
         candidates,
       });
     }
+
+    const schemaLabelByKey = new Map(
+      [...fieldsByKey.entries()]
+        .filter(([, f]) => typeof f.label === 'string' && f.label.trim())
+        .map(([key, f]) => [key, f.label!.trim()] as const),
+    );
+    candidates.push(
+      ...buildEmploymentOrgProposalCandidates({
+        answers,
+        current: currentEmploymentOrg,
+        schemaLabelByKey,
+      }),
+    );
 
     const now = new Date();
 
@@ -427,9 +458,14 @@ export class QuestionnaireProposalService {
       this.dataSource.manager,
       employeeId,
     );
+    const currentEmploymentOrg = await this.readCurrentEmploymentOrgIds(
+      this.dataSource.manager,
+      employee,
+    );
     const current = {
       ...this.readScalarCurrentProfileValues(employee),
       ...this.readContactsProfileValues(currentBundle),
+      ...this.readEmploymentProfileValues(currentEmploymentOrg),
     };
 
     const inManagedDept = await this.access.isTargetInManagedDepartments(
@@ -607,6 +643,14 @@ export class QuestionnaireProposalService {
             assignmentId,
           },
         );
+        // Company_work org answers were historically omitted from proposals;
+        // sync employment from the same submission whenever HR accepts any change.
+        await this.syncEmploymentOrgFromSubmissionAnswers(
+          manager,
+          actor,
+          proposal.employeeId,
+          proposal.submissionId,
+        );
         locked.status = 'accepted';
       } else {
         locked.status = 'rejected';
@@ -623,6 +667,12 @@ export class QuestionnaireProposalService {
           field: stored.field,
           exceptProposalId: proposal.id,
         });
+        if (stored.section === 'employment') {
+          await this.supersedePendingEmploymentOrg(manager, {
+            employeeId: proposal.employeeId,
+            exceptProposalId: proposal.id,
+          });
+        }
       }
     });
 
@@ -770,9 +820,184 @@ export class QuestionnaireProposalService {
       return;
     }
 
+    if (change.section === 'employment') {
+      await this.syncEmploymentOrgFromSubmissionAnswers(
+        manager,
+        actor,
+        employeeId,
+        provenance.submissionId,
+      );
+      return;
+    }
+
     throw new BadRequestException(
       `Unsupported proposal section: ${change.section}`,
     );
+  }
+
+  /**
+   * Repair path: write company_work.*_id from every latest submission onto the
+   * employee's current employment assignment when answers differ.
+   * Admin-equivalent only — used after deploy for already-accepted questionnaires.
+   */
+  async backfillEmploymentOrgFromSubmissions(actor: User): Promise<{
+    scanned: number;
+    updated: number;
+    skipped: number;
+  }> {
+    const authz = await this.authorization.resolve(actor.id);
+    if (!authz.isAdminEquivalent) {
+      throw new ForbiddenException('Admin required');
+    }
+
+    const submissions = await this.submissions.find({
+      order: { submittedAt: 'DESC' },
+    });
+
+    const latestByEmployee = new Map<string, QuestionnaireSubmission>();
+    for (const row of submissions) {
+      if (!row.subjectEmployeeId) continue;
+      if (latestByEmployee.has(row.subjectEmployeeId)) continue;
+      const org = extractEmploymentOrgFromAnswers(row.snapshotJson ?? {});
+      if (!employmentOrgHasAny(org)) continue;
+      latestByEmployee.set(row.subjectEmployeeId, row);
+    }
+
+    let updated = 0;
+    let skipped = 0;
+    for (const [employeeId, submission] of latestByEmployee) {
+      const before = await this.readCurrentEmploymentOrgIds(
+        this.dataSource.manager,
+        await this.access.getEmployeeOrFail(employeeId),
+      );
+      await this.syncEmploymentOrgFromSubmissionAnswers(
+        this.dataSource.manager,
+        actor,
+        employeeId,
+        submission.id,
+      );
+      const after = await this.readCurrentEmploymentOrgIds(
+        this.dataSource.manager,
+        await this.access.getEmployeeOrFail(employeeId),
+      );
+      if (employmentOrgEquals(before, after)) {
+        skipped += 1;
+      } else {
+        updated += 1;
+      }
+    }
+
+    return {
+      scanned: latestByEmployee.size,
+      updated,
+      skipped,
+    };
+  }
+
+  private async syncEmploymentOrgFromSubmissionAnswers(
+    manager: EntityManager,
+    actor: User,
+    employeeId: string,
+    submissionId: string,
+  ): Promise<void> {
+    const submission = await manager
+      .getRepository(QuestionnaireSubmission)
+      .findOne({ where: { id: submissionId } });
+    if (!submission) return;
+
+    const proposed = extractEmploymentOrgFromAnswers(
+      submission.snapshotJson ?? {},
+    );
+    if (!employmentOrgHasAny(proposed)) return;
+
+    const employee = await manager.getRepository(Employee).findOne({
+      where: { id: employeeId },
+    });
+    if (!employee) return;
+
+    const assignment = await this.currentEmployment.resolve(employee, manager);
+    if (!assignment) return;
+
+    const current: EmploymentOrgIds = {
+      directionId: assignment.directionId,
+      departmentId: assignment.departmentId,
+      positionId: assignment.positionId,
+    };
+    if (employmentOrgEquals(current, proposed)) return;
+
+    const dto: {
+      directionId?: string | null;
+      departmentId?: string | null;
+      positionId?: string | null;
+    } = {};
+    // Prefer position — EmploymentAssignmentOrganizationResolver fills parents.
+    if (proposed.positionId) {
+      dto.positionId = proposed.positionId;
+      if (proposed.departmentId) dto.departmentId = proposed.departmentId;
+      if (proposed.directionId) dto.directionId = proposed.directionId;
+    } else {
+      if (proposed.departmentId) dto.departmentId = proposed.departmentId;
+      if (proposed.directionId) dto.directionId = proposed.directionId;
+    }
+
+    await this.profiles.updateAssignment(
+      actor,
+      employeeId,
+      assignment.id,
+      dto,
+    );
+  }
+
+  private async supersedePendingEmploymentOrg(
+    manager: EntityManager,
+    input: { employeeId: string; exceptProposalId: string },
+  ): Promise<void> {
+    const pending = await manager.getRepository(QuestionnaireProfileProposal).find({
+      where: { employeeId: input.employeeId, status: 'pending' },
+    });
+    const now = new Date();
+    const toSave: QuestionnaireProfileProposal[] = [];
+    for (const p of pending) {
+      if (p.id === input.exceptProposalId) continue;
+      let change: StoredQuestionnaireProposedChange;
+      try {
+        change = parseQuestionnaireProposedChange(p.proposedChanges);
+      } catch {
+        continue;
+      }
+      if (change.kind !== 'field_update' || change.section !== 'employment') {
+        continue;
+      }
+      p.status = 'superseded';
+      p.reviewedByUserId = null;
+      p.reviewedAt = now;
+      toSave.push(p);
+    }
+    if (toSave.length) {
+      await manager.getRepository(QuestionnaireProfileProposal).save(toSave);
+    }
+  }
+
+  private async readCurrentEmploymentOrgIds(
+    manager: EntityManager,
+    employee: { id: string; currentAssignmentId: string | null },
+  ): Promise<EmploymentOrgIds> {
+    const assignment = await this.currentEmployment.resolve(employee, manager);
+    return {
+      directionId: assignment?.directionId ?? null,
+      departmentId: assignment?.departmentId ?? null,
+      positionId: assignment?.positionId ?? null,
+    };
+  }
+
+  private readEmploymentProfileValues(
+    org: EmploymentOrgIds,
+  ): Record<string, unknown> {
+    return {
+      'employment.directionId': org.directionId,
+      'employment.departmentId': org.departmentId,
+      'employment.positionId': org.positionId,
+    };
   }
 
   private async applySkillAddInTransaction(

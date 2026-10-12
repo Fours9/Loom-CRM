@@ -298,6 +298,17 @@ export class QuestionnairesController {
     return this.proposals.reject(actor, id);
   }
 
+  /**
+   * One-shot repair: copy company_work direction/department/position from the
+   * latest submission onto each employee's current employment assignment.
+   * Admin-equivalent only (service enforces).
+   */
+  @Post('admin/backfill-employment-org')
+  @RequirePermissions(Permission.QuestionnairesApplyProfileChanges)
+  backfillEmploymentOrg(@CurrentUser() actor: User) {
+    return this.proposals.backfillEmploymentOrgFromSubmissions(actor);
+  }
+
   @Get('employees/:employeeId/snapshot-summary')
   @RequirePermissions(Permission.QuestionnairesView)
   snapshotSummary(

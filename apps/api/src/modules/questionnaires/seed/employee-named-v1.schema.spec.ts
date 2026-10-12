@@ -61,5 +61,12 @@ describe('employee-named seed content', () => {
     expect(position.organizationEntity).toBe('position');
     expect(position.cascadeParentKey).toBeUndefined();
     expect(position.profileMirrorKey).toBe('positionId');
+    expect(
+      (position as { createsProfileProposal?: boolean }).createsProfileProposal,
+    ).toBe(true);
+    expect(
+      (position as { proposalMapping?: { section: string; field: string } })
+        .proposalMapping,
+    ).toEqual({ section: 'employment', field: 'positionId' });
   });
 });

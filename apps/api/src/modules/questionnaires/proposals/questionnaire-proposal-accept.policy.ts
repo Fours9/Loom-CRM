@@ -35,6 +35,9 @@ export function classifyProposalProfileWrite(
     case 'contacts.workEmail':
     case 'contacts.workPhone':
     case 'contacts.workTelegram':
+    case 'employment.directionId':
+    case 'employment.departmentId':
+    case 'employment.positionId':
       return 'basic';
     case 'personal.birthDate':
     case 'personal.city':

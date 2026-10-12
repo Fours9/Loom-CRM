@@ -59,6 +59,9 @@ const GENERATED_FIELD_UPDATES: Array<{
   { section: 'contacts', field: 'workTelegram', requirement: 'basic' },
   { section: 'contacts', field: 'personal_replace', requirement: 'personal' },
   { section: 'contacts', field: 'emergency_replace', requirement: 'emergency' },
+  { section: 'employment', field: 'directionId', requirement: 'basic' },
+  { section: 'employment', field: 'departmentId', requirement: 'basic' },
+  { section: 'employment', field: 'positionId', requirement: 'basic' },
 ];
 
 describe('classifyProposalProfileWrite', () => {
@@ -87,7 +90,7 @@ describe('classifyProposalProfileWrite', () => {
 
   it('fails closed on unknown section.field', () => {
     expect(
-      classifyProposalProfileWrite(fieldUpdate('employment', 'positionId')),
+      classifyProposalProfileWrite(fieldUpdate('employment', 'unknownField')),
     ).toBeNull();
   });
 });
@@ -120,6 +123,23 @@ describe('canAcceptQuestionnaireProfileProposal', () => {
       canAcceptQuestionnaireProfileProposal({
         authz: authz({ permissions: manageProfiles }),
         inManagedDept: true,
+        change: fieldUpdate('employment', 'unknownField'),
+      }),
+    ).toBe(false);
+  });
+
+  it('employment org requires ManageProfiles + managed dept', () => {
+    expect(
+      canAcceptQuestionnaireProfileProposal({
+        authz: authz({ permissions: manageProfiles }),
+        inManagedDept: true,
+        change: fieldUpdate('employment', 'positionId'),
+      }),
+    ).toBe(true);
+    expect(
+      canAcceptQuestionnaireProfileProposal({
+        authz: authz({ permissions: manageProfiles }),
+        inManagedDept: false,
         change: fieldUpdate('employment', 'positionId'),
       }),
     ).toBe(false);
