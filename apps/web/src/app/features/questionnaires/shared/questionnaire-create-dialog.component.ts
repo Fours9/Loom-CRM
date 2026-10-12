@@ -1,6 +1,5 @@
 import {
   Component,
-  ElementRef,
   HostListener,
   OnDestroy,
   OnInit,
@@ -22,7 +21,7 @@ import {
   questionnaireTemplateDescription,
 } from '../questionnaire-labels';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
-import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
+import { PwDialogHostDirective } from '../../../shared/ui/pw-dialog-host.directive';
 import {
   PwSelectComponent,
   type PwSelectOption,
@@ -37,6 +36,7 @@ import { firstValueFrom } from 'rxjs';
     QuestionnaireEmployeeTypeaheadComponent,
     PwSelectComponent,
   ],
+  hostDirectives: [PwDialogHostDirective],
   template: `
     <div
       class="backdrop"
@@ -247,7 +247,6 @@ import { firstValueFrom } from 'rxjs';
   ],
 })
 export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
-  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly api = inject(QuestionnairesApiService);
   private readonly scrollLock = inject(OverlayScrollLockService);
   readonly headingId = 'questionnaire-create-dialog-title';
@@ -302,7 +301,6 @@ export class QuestionnaireCreateDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
     const prefill = this.prefillEmployee();
     if (prefill) this.employeeId.set(prefill.id);

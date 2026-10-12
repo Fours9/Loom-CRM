@@ -1,6 +1,5 @@
 import {
   Component,
-  ElementRef,
   HostListener,
   Input,
   OnDestroy,
@@ -11,7 +10,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
-import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
+import { PwDialogHostDirective } from '../../shared/ui/pw-dialog-host.directive';
 import {
   PwSelectComponent,
   type PwSelectOption,
@@ -48,6 +47,7 @@ import {
     HelpTriggerComponent,
     PwSelectComponent,
   ],
+  hostDirectives: [PwDialogHostDirective],
   template: `
     <div
       class="backdrop"
@@ -344,7 +344,6 @@ import {
   ],
 })
 export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
-  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   private backdropPress = false;
 
@@ -523,7 +522,6 @@ export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

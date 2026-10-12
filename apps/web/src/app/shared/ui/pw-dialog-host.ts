@@ -1,5 +1,7 @@
 import type { ElementRef } from '@angular/core';
 
+export type PwDialogHostDetach = () => void;
+
 /**
  * Reparent a dialog host under `.app-shell` / `.loom-absence-module` so
  * `position: fixed` backdrops are viewport-relative.
@@ -23,11 +25,15 @@ import type { ElementRef } from '@angular/core';
  * theme and chrome — losing fixed-position escape is strictly better than
  * losing tokens.
  *
- * Call once from `ngOnInit`. Angular removes the host on destroy from the new parent.
+ * Prefer `PwDialogHostDirective` (`hostDirectives`) on the outermost `@if`
+ * dialog — that is the single lifecycle entry. Call this helper directly only
+ * from that directive (or rare tests). Do **not** reparent an inner nested
+ * dialog separately — that splits Angular parent/child DOM and can leave an
+ * unstyled orphan after destroy (floating labels over the page).
  */
 export function attachPwDialogHostToBody(
   host: ElementRef<HTMLElement>,
-): void {
+): PwDialogHostDetach {
   const el = host.nativeElement;
   const shell =
     document.querySelector<HTMLElement>('.app-shell') ??
@@ -40,9 +46,16 @@ export function attachPwDialogHostToBody(
         'leaving dialog host in place rather than reparenting to bare document.body ' +
         '(would lose --pw-surface / .pw-btn tokens).',
     );
-    return;
+    return () => {
+      /* no-op: host stays where Angular created it */
+    };
   }
   if (el.parentElement !== shell) {
     shell.appendChild(el);
   }
+  return () => {
+    if (el.isConnected) {
+      el.remove();
+    }
+  };
 }

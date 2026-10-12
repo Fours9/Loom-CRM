@@ -1,6 +1,5 @@
 import {
   Component,
-  ElementRef,
   HostListener,
   OnDestroy,
   OnInit,
@@ -11,7 +10,6 @@ import {
 import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
 import type { HelpTourId } from '../../core/help/help-tour.models';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
-import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
 
 @Component({
   selector: 'loom-catalog-edit-dialog',
@@ -135,8 +133,11 @@ import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
     `,
   ],
 })
+/**
+ * Visual chrome only. Reparenting belongs on the outer `@if`-gated host via
+ * `PwDialogHostDirective` — never attach here.
+ */
 export class CatalogEditDialogComponent implements OnInit, OnDestroy {
-  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   readonly headingId = input.required<string>();
   readonly title = input.required<string>();
@@ -146,7 +147,6 @@ export class CatalogEditDialogComponent implements OnInit, OnDestroy {
   private backdropPress = false;
 
   ngOnInit(): void {
-    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

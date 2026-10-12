@@ -1,6 +1,5 @@
 import {
   Component,
-  ElementRef,
   OnDestroy,
   OnInit,
   computed,
@@ -13,7 +12,7 @@ import type { QuestionnaireAttachConstraint } from '@loom/contracts-questionnair
 import type { EmployeeListItem } from '@loom/contracts-employees';
 import { QuestionnaireEmployeeTypeaheadComponent } from '../shared/questionnaire-employee-typeahead.component';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
-import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
+import { PwDialogHostDirective } from '../../../shared/ui/pw-dialog-host.directive';
 
 /**
  * Modal for attaching an unattached/detached assignment to any employee.
@@ -22,6 +21,7 @@ import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
   selector: 'loom-questionnaire-attach-picker',
   standalone: true,
   imports: [QuestionnaireEmployeeTypeaheadComponent],
+  hostDirectives: [PwDialogHostDirective],
   template: `
     <div
       class="backdrop"
@@ -177,7 +177,6 @@ import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
   ],
 })
 export class QuestionnaireAttachPickerComponent implements OnInit, OnDestroy {
-  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   readonly constraint = input<QuestionnaireAttachConstraint>(null);
   readonly busy = input(false);
@@ -196,7 +195,6 @@ export class QuestionnaireAttachPickerComponent implements OnInit, OnDestroy {
   private backdropPress = false;
 
   ngOnInit(): void {
-    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

@@ -1,6 +1,5 @@
 import {
   Component,
-  ElementRef,
   HostListener,
   Input,
   OnDestroy,
@@ -16,7 +15,7 @@ import {
 } from '@loom/contracts-documents';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
-import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
+import { PwDialogHostDirective } from '../../shared/ui/pw-dialog-host.directive';
 import {
   PwSelectComponent,
   type PwSelectOption,
@@ -39,6 +38,7 @@ const MAX_FILES = 20;
   selector: 'loom-employee-document-upload-dialog',
   standalone: true,
   imports: [FormsModule, HelpTriggerComponent, PwSelectComponent],
+  hostDirectives: [PwDialogHostDirective],
   template: `
     <div
       class="backdrop"
@@ -400,7 +400,6 @@ const MAX_FILES = 20;
   ],
 })
 export class EmployeeDocumentUploadDialogComponent implements OnInit, OnDestroy {
-  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   private backdropPress = false;
   private keySeq = 0;
@@ -457,7 +456,6 @@ export class EmployeeDocumentUploadDialogComponent implements OnInit, OnDestroy 
   }
 
   ngOnInit(): void {
-    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

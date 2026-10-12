@@ -1,6 +1,5 @@
 import {
   Component,
-  ElementRef,
   HostListener,
   OnDestroy,
   OnInit,
@@ -13,13 +12,14 @@ import {
 } from '../../shared/multi-select-list.component';
 import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock.service';
 import { HelpTriggerComponent } from '../../core/help/help-trigger.component';
-import { attachPwDialogHostToBody } from '../../shared/ui/pw-dialog-host';
+import { PwDialogHostDirective } from '../../shared/ui/pw-dialog-host.directive';
 import { PositionManagementFacade } from './position-management.facade';
 
 @Component({
   selector: 'loom-position-edit-dialog',
   standalone: true,
   imports: [FormsModule, MultiSelectListComponent, HelpTriggerComponent],
+  hostDirectives: [PwDialogHostDirective],
   template: `
     <div
       class="backdrop"
@@ -369,13 +369,11 @@ import { PositionManagementFacade } from './position-management.facade';
 })
 export class PositionEditDialogComponent implements OnInit, OnDestroy {
   readonly vm = inject(PositionManagementFacade);
-  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   readonly headingId = 'position-edit-dialog-title';
   private backdropPress = false;
 
   ngOnInit(): void {
-    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

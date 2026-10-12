@@ -439,6 +439,9 @@ html[data-theme='dark'] .loom-absence-module {
   Dialog hosts are nested under .pw-stage (isolation + child z-index:1), so an
   inner .backdrop { z-index: 250 } alone cannot cover page chrome / completeness.
   Host itself is a full-viewport fixed layer above stage chrome.
+
+  Outer @if dialogs use hostDirectives: [PwDialogHostDirective] (single lifecycle
+  entry). loom-catalog-edit-dialog stays nested chrome — never reparent alone.
 */
 .app-shell loom-questionnaire-create-dialog,
 .app-shell loom-questionnaire-attach-picker,

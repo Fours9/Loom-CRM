@@ -1,6 +1,5 @@
 import {
   Component,
-  ElementRef,
   HostListener,
   OnDestroy,
   OnInit,
@@ -26,7 +25,7 @@ import {
 import { Surface } from '../../../core/access/can-access-surface';
 import { OverlayScrollLockService } from '../../../core/overlay/overlay-scroll-lock.service';
 import { HelpTriggerComponent } from '../../../core/help/help-trigger.component';
-import { attachPwDialogHostToBody } from '../../../shared/ui/pw-dialog-host';
+import { PwDialogHostDirective } from '../../../shared/ui/pw-dialog-host.directive';
 import {
   MultiSelectListComponent,
   type MultiSelectItem,
@@ -96,6 +95,7 @@ export type PublishedQuestionnaireTemplate = {
   selector: 'loom-account-role-edit-dialog',
   standalone: true,
   imports: [FormsModule, MultiSelectListComponent, HelpTriggerComponent],
+  hostDirectives: [PwDialogHostDirective],
   template: `
     <div
       class="backdrop"
@@ -657,7 +657,6 @@ export type PublishedQuestionnaireTemplate = {
   ],
 })
 export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
-  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly scrollLock = inject(OverlayScrollLockService);
   /** null = create a custom role. */
   readonly role = input<AccountRole | null>(null);
@@ -873,7 +872,6 @@ export class AccountRoleEditDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    attachPwDialogHostToBody(this.host);
     this.scrollLock.acquire();
   }
 

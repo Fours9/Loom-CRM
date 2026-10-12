@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { PwDialogHostDirective } from '../../shared/ui/pw-dialog-host.directive';
 import { CatalogEditDialogComponent } from './catalog-edit-dialog.component';
 import { PositionManagementFacade } from './position-management.facade';
 
@@ -7,6 +8,7 @@ import { PositionManagementFacade } from './position-management.facade';
   selector: 'loom-direction-edit-dialog',
   standalone: true,
   imports: [FormsModule, CatalogEditDialogComponent],
+  hostDirectives: [PwDialogHostDirective],
   template: `
     <loom-catalog-edit-dialog
       [headingId]="headingId"
