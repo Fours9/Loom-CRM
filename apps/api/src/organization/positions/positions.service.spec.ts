@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { Position } from './position.entity';
 import { PositionManagedDepartment } from './position-managed-department.entity';
+import { PositionManagedDirection } from './position-managed-direction.entity';
 import { PositionsService } from './positions.service';
 import type { DepartmentsService } from '../departments/departments.service';
 
@@ -15,6 +16,7 @@ function positionRow(overrides: Partial<Position> = {}): Position {
     isActive: true,
     isDepartmentManagerTemplate: false,
     managedDepartments: [],
+    managedDirections: [],
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -31,11 +33,15 @@ describe('PositionsService PATCH direction semantics', () => {
     const joinRows: PositionManagedDepartment[] = [
       ...((liveRow.managedDepartments ?? []) as PositionManagedDepartment[]),
     ];
+    const directionJoinRows: PositionManagedDirection[] = [
+      ...((liveRow.managedDirections ?? []) as PositionManagedDirection[]),
+    ];
 
     const repo = {
       findOne: jest.fn(async () => ({
         ...liveRow,
         managedDepartments: [...joinRows],
+        managedDirections: [...directionJoinRows],
       })),
       create: jest.fn((row: Partial<Position>) => ({
         id: liveRow.id,
@@ -62,12 +68,28 @@ describe('PositionsService PATCH direction semantics', () => {
       }),
     };
 
+    const managedDirectionRepo = {
+      delete: jest.fn(async ({ positionId }: { positionId: string }) => {
+        for (let i = directionJoinRows.length - 1; i >= 0; i -= 1) {
+          if (directionJoinRows[i]?.positionId === positionId) {
+            directionJoinRows.splice(i, 1);
+          }
+        }
+      }),
+      create: jest.fn((row: Partial<PositionManagedDirection>) => row),
+      save: jest.fn(async (rows: PositionManagedDirection[]) => {
+        directionJoinRows.push(...rows);
+        return rows;
+      }),
+    };
+
     const dataSource = {
       transaction: jest.fn(async (work: (manager: EntityManager) => Promise<unknown>) => {
         const manager = {
           getRepository: (entity: unknown) => {
             if (entity === Position) return repo;
             if (entity === PositionManagedDepartment) return managedRepo;
+            if (entity === PositionManagedDirection) return managedDirectionRepo;
             throw new Error(`Unexpected repository ${String(entity)}`);
           },
         } as unknown as EntityManager;

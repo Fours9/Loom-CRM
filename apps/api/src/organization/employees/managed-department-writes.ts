@@ -7,6 +7,7 @@ import {
   managementKindImpliesManager,
   isManagementKind,
 } from '../employment-catalog/management-kind';
+import { loadPositionManagedDirectionIds } from './managed-direction-writes';
 
 /** Replace EA managed department join rows in the same TX. */
 export async function replaceAssignmentManagedDepartments(
@@ -46,6 +47,7 @@ export type ManagerMembershipState = {
   /** Legacy mirror: kind !== none */
   isDepartmentManager: boolean;
   managedDepartmentIds: string[];
+  managedDirectionIds: string[];
 };
 
 /**
@@ -55,11 +57,14 @@ export type ManagerMembershipState = {
 export function resolveManagerMembershipForCreate(input: {
   position: Position | null;
   positionManagedDepartmentIds: string[];
+  positionManagedDirectionIds: string[];
   explicitManagementKind?: ManagementKind;
   /** @deprecated prefer explicitManagementKind */
   explicitIsDepartmentManager?: boolean;
   explicitManagedDepartmentIds?: string[];
+  explicitManagedDirectionIds?: string[];
   assignmentDepartmentId: string | null;
+  assignmentDirectionId: string | null;
 }): ManagerMembershipState {
   let managementKind: ManagementKind;
   if (input.explicitManagementKind !== undefined) {
@@ -106,7 +111,35 @@ export function resolveManagerMembershipForCreate(input: {
     managedDepartmentIds = [input.assignmentDepartmentId];
   }
 
-  return { managementKind, isDepartmentManager, managedDepartmentIds };
+  let managedDirectionIds: string[];
+  if (managementKind !== ManagementKind.Direction) {
+    managedDirectionIds = [];
+  } else if (input.explicitManagedDirectionIds !== undefined) {
+    managedDirectionIds = [
+      ...new Set(input.explicitManagedDirectionIds.filter(Boolean)),
+    ];
+  } else if (input.position) {
+    managedDirectionIds = [...input.positionManagedDirectionIds];
+  } else {
+    managedDirectionIds = [];
+  }
+
+  if (
+    managementKind === ManagementKind.Direction &&
+    managedDirectionIds.length === 0 &&
+    input.assignmentDirectionId &&
+    (input.explicitManagementKind !== undefined ||
+      input.explicitManagedDirectionIds !== undefined)
+  ) {
+    managedDirectionIds = [input.assignmentDirectionId];
+  }
+
+  return {
+    managementKind,
+    isDepartmentManager,
+    managedDepartmentIds,
+    managedDirectionIds,
+  };
 }
 
 export async function loadPositionManagerTemplate(
@@ -115,22 +148,36 @@ export async function loadPositionManagerTemplate(
 ): Promise<{
   position: Position | null;
   managedDepartmentIds: string[];
+  managedDirectionIds: string[];
 }> {
   if (!positionId) {
-    return { position: null, managedDepartmentIds: [] };
+    return {
+      position: null,
+      managedDepartmentIds: [],
+      managedDirectionIds: [],
+    };
   }
   const position = await manager.getRepository(Position).findOne({
     where: { id: positionId },
     lock: { mode: 'pessimistic_write' },
   });
   if (!position) {
-    return { position: null, managedDepartmentIds: [] };
+    return {
+      position: null,
+      managedDepartmentIds: [],
+      managedDirectionIds: [],
+    };
   }
-  const rows = await manager.getRepository(PositionManagedDepartment).find({
+  const deptRows = await manager.getRepository(PositionManagedDepartment).find({
     where: { positionId },
   });
+  const managedDirectionIds = await loadPositionManagedDirectionIds(
+    manager,
+    positionId,
+  );
   return {
     position,
-    managedDepartmentIds: rows.map((r) => r.departmentId),
+    managedDepartmentIds: deptRows.map((r) => r.departmentId),
+    managedDirectionIds,
   };
 }

@@ -83,6 +83,7 @@ describe('employment-assignment-dialog.model', () => {
       activationCheckedAt: null,
       isDepartmentManager: true,
       managedDepartmentIds: ['dep1'],
+      managedDirectionIds: [],
       updatedAt: '2026-01-02T00:00:00.000Z',
       department: null,
       position: null,
@@ -116,18 +117,20 @@ describe('employment-assignment-dialog.model', () => {
     ).toEqual([]);
   });
 
-  it('drops managed departments for direction leadership', () => {
+  it('drops managed departments for direction leadership and keeps directions', () => {
     const write = toEmploymentAssignmentWrite(
       {
         ...emptyEmploymentAssignmentForm(),
         managementKind: 'direction',
         managedDepartmentIds: ['dep1'],
+        managedDirectionIds: ['dir1', 'dir2'],
       },
       'create',
     );
     expect(write.managementKind).toBe('direction');
     expect(write.isDepartmentManager).toBe(true);
     expect(write.managedDepartmentIds).toEqual([]);
+    expect(write.managedDirectionIds).toEqual(['dir1', 'dir2']);
   });
 
   it('marks catalog names missing from the active list as archival', () => {

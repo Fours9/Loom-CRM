@@ -5,7 +5,8 @@ import { Permission } from '@loom/contracts-auth';
 import { SessionStore } from '../../core/auth/session.store';
 import {
   MANAGEMENT_KIND_OPTIONS,
-  managementKindUsesDepartments,
+  managementKindUsesDepartments as isDepartmentsLeadership,
+  managementKindUsesDirection as isDirectionLeadership,
   toManagementKind,
   type ManagementKind,
 } from '../../shared/organization/labels';
@@ -131,6 +132,7 @@ export class PositionManagementFacade {
   formIsActive = true;
   formManagementKindTemplate: ManagementKind = 'none';
   formManagedDepartmentIds: string[] = [];
+  formManagedDirectionIds: string[] = [];
 
   readonly managementKindOptions = MANAGEMENT_KIND_OPTIONS;
 
@@ -343,24 +345,47 @@ export class PositionManagementFacade {
     return this.activeDepartments().map((d) => ({ id: d.id, label: d.name }));
   }
 
+  managedDirectionPickerItems(): Array<{ id: string; label: string }> {
+    return this.activeDirections().map((d) => ({ id: d.id, label: d.name }));
+  }
+
   /** Managed departments belong to `departments` leadership only. */
   managementKindUsesDepartments(): boolean {
-    return managementKindUsesDepartments(this.formManagementKindTemplate);
+    return isDepartmentsLeadership(this.formManagementKindTemplate);
+  }
+
+  /** Direction leadership requires an explicit managed-directions multi-select. */
+  managementKindUsesDirection(): boolean {
+    return isDirectionLeadership(this.formManagementKindTemplate);
   }
 
   onManagementKindTemplateChange(kind: ManagementKind): void {
     this.formManagementKindTemplate = kind;
-    if (!managementKindUsesDepartments(kind)) {
+    if (!isDepartmentsLeadership(kind)) {
       this.formManagedDepartmentIds = [];
-      return;
-    }
-    if (this.formManagedDepartmentIds.length === 0 && this.formDepartmentId) {
+    } else if (
+      this.formManagedDepartmentIds.length === 0 &&
+      this.formDepartmentId
+    ) {
       this.formManagedDepartmentIds = [this.formDepartmentId];
+    }
+
+    if (!isDirectionLeadership(kind)) {
+      this.formManagedDirectionIds = [];
+    } else if (
+      this.formManagedDirectionIds.length === 0 &&
+      this.formDirectionId
+    ) {
+      this.formManagedDirectionIds = [this.formDirectionId];
     }
   }
 
   onManagedDepartmentsChange(ids: string[]): void {
     this.formManagedDepartmentIds = ids;
+  }
+
+  onManagedDirectionsChange(ids: string[]): void {
+    this.formManagedDirectionIds = ids;
   }
 
   onFormDirectionChange(): void {
@@ -681,6 +706,7 @@ export class PositionManagementFacade {
       p.isDepartmentManagerTemplate,
     );
     this.formManagedDepartmentIds = [...(p.managedDepartmentIds || [])];
+    this.formManagedDirectionIds = [...(p.managedDirectionIds || [])];
     this.loadPositionCatalog(p.id);
     this.positionDialogOpen.set(true);
     this.error.set('');
@@ -736,6 +762,7 @@ export class PositionManagementFacade {
     this.formIsActive = true;
     this.formManagementKindTemplate = 'none';
     this.formManagedDepartmentIds = [];
+    this.formManagedDirectionIds = [];
   }
 
   private resetDraftSession(): void {
@@ -769,9 +796,19 @@ export class PositionManagementFacade {
 
     const departmentId = this.formDepartmentId || null;
     const managementKindTemplate = this.formManagementKindTemplate;
-    const managedDepartmentIds = managementKindUsesDepartments(managementKindTemplate)
+    const managedDepartmentIds = isDepartmentsLeadership(managementKindTemplate)
       ? [...this.formManagedDepartmentIds]
       : [];
+    const managedDirectionIds = isDirectionLeadership(managementKindTemplate)
+      ? [...this.formManagedDirectionIds]
+      : [];
+    if (
+      isDirectionLeadership(managementKindTemplate) &&
+      managedDirectionIds.length === 0
+    ) {
+      this.error.set('Оберіть хоча б один керований напрямок');
+      return;
+    }
     const body = {
       name: this.formName.trim(),
       departmentId,
@@ -781,6 +818,7 @@ export class PositionManagementFacade {
       // Legacy mirror while the backend migration lands.
       isDepartmentManagerTemplate: managementKindTemplate !== 'none',
       managedDepartmentIds,
+      managedDirectionIds,
     };
 
     const id = this.editingId();

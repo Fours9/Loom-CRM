@@ -18,6 +18,7 @@ export type PositionDraftApi = {
     isDepartmentManagerTemplate?: boolean;
     managementKindTemplate?: ManagementKind;
     managedDepartmentIds?: string[];
+    managedDirectionIds?: string[];
   }): Observable<OrgPosition>;
   createPositionSkillRequirement(
     positionId: string,
@@ -149,6 +150,7 @@ export async function createPositionThenApplyDrafts(input: {
     isDepartmentManagerTemplate?: boolean;
     managementKindTemplate?: ManagementKind;
     managedDepartmentIds?: string[];
+    managedDirectionIds?: string[];
   };
   setMode: (mode: PositionDialogMode) => void;
 }): Promise<CreateFlowResult> {

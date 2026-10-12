@@ -10,6 +10,10 @@ import { DepartmentsService } from '../departments/departments.service';
 import { resolvePositionDirectionId } from './resolve-position-direction';
 import { ManagementKind, managementKindImpliesManager, isManagementKind } from '../employment-catalog/management-kind';
 import { replacePositionManagedDepartments } from '../employees/managed-department-writes';
+import {
+  replacePositionManagedDirections,
+  resolveManagedDirectionIds,
+} from '../employees/managed-direction-writes';
 
 export type PositionListQuery = {
   all?: boolean;
@@ -20,6 +24,7 @@ export type PositionListQuery = {
 
 export type PositionView = Position & {
   managedDepartmentIds: string[];
+  managedDirectionIds: string[];
 };
 
 export type PositionListItem = PositionView & {
@@ -57,10 +62,22 @@ function toPositionView(row: Position): PositionView {
   const managedDepartmentIds = (row.managedDepartments ?? []).map(
     (m) => m.departmentId,
   );
+  const managedDirectionIds = (row.managedDirections ?? []).map(
+    (m) => m.directionId,
+  );
   return {
     ...row,
     managedDepartmentIds,
+    managedDirectionIds,
   };
+}
+
+function assertDirectionLeadershipHasSelection(ids: string[]): void {
+  if (ids.length === 0) {
+    throw new BadRequestException(
+      'Керування напрямком вимагає вибору хоча б одного напрямку',
+    );
+  }
 }
 
 function resolveKindFromInput(input: {
@@ -119,6 +136,7 @@ export class PositionsService {
       .leftJoinAndSelect('p.direction', 'direction')
       .leftJoinAndSelect('department.direction', 'deptDirection')
       .leftJoinAndSelect('p.managedDepartments', 'managedDepartments')
+      .leftJoinAndSelect('p.managedDirections', 'managedDirections')
       .orderBy('p.name', 'ASC');
 
     if (!query.all) {
@@ -154,18 +172,40 @@ export class PositionsService {
   /** Scoped management list — not the org catalog. */
   async findManageable(query: {
     all?: boolean;
-    directionId: string | null;
+    directionIds: string[];
     isAdminEquivalent: boolean;
   }): Promise<PositionListItem[]> {
     if (query.isAdminEquivalent) {
       return this.findAll({ all: query.all });
     }
-    if (!query.directionId) {
+    if (!query.directionIds.length) {
       return [];
     }
-    return this.findAll({
-      all: query.all,
-      directionId: query.directionId,
+    const qb = this.positions
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.department', 'department')
+      .leftJoinAndSelect('p.direction', 'direction')
+      .leftJoinAndSelect('department.direction', 'deptDirection')
+      .leftJoinAndSelect('p.managedDepartments', 'managedDepartments')
+      .leftJoinAndSelect('p.managedDirections', 'managedDirections')
+      .orderBy('p.name', 'ASC')
+      .andWhere('p.direction_id IN (:...directionIds)', {
+        directionIds: query.directionIds,
+      });
+    if (!query.all) {
+      qb.andWhere('p.is_active = true');
+    }
+    const rows = await qb.getMany();
+    return rows.map((row) => {
+      const view = toPositionView(row);
+      return {
+        ...view,
+        departmentName: row.department?.name ?? null,
+        directionName:
+          row.direction?.name ??
+          row.department?.direction?.name ??
+          null,
+      };
     });
   }
 
@@ -177,6 +217,7 @@ export class PositionsService {
         'department.direction',
         'direction',
         'managedDepartments',
+        'managedDirections',
       ],
     });
     if (!row) throw new NotFoundException('Position not found');
@@ -191,6 +232,7 @@ export class PositionsService {
     managementKindTemplate?: ManagementKind | string;
     isDepartmentManagerTemplate?: boolean;
     managedDepartmentIds?: string[];
+    managedDirectionIds?: string[];
   }): Promise<PositionView> {
     const departmentId = input.departmentId ?? null;
     const directionId = await this.resolveDirectionId({
@@ -208,6 +250,17 @@ export class PositionsService {
       kindExplicitlyEnabled:
         managementKindTemplate === ManagementKind.Departments,
     });
+    const managedDirectionIds = resolveManagedDirectionIds({
+      managementKind: managementKindTemplate,
+      managedDirectionIds: input.managedDirectionIds ?? [],
+      fallbackDirectionId: directionId,
+      previousManagedDirectionIds: [],
+      kindExplicitlyEnabled:
+        managementKindTemplate === ManagementKind.Direction,
+    });
+    if (managementKindTemplate === ManagementKind.Direction) {
+      assertDirectionLeadershipHasSelection(managedDirectionIds);
+    }
 
     const id = await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(Position);
@@ -226,6 +279,11 @@ export class PositionsService {
         manager,
         saved.id,
         managedDepartmentIds,
+      );
+      await replacePositionManagedDirections(
+        manager,
+        saved.id,
+        managedDirectionIds,
       );
       return saved.id;
     });
@@ -248,6 +306,7 @@ export class PositionsService {
       >
     > & {
       managedDepartmentIds?: string[];
+      managedDirectionIds?: string[];
       managementKindTemplate?: ManagementKind | string;
       isDepartmentManagerTemplate?: boolean;
     },
@@ -288,6 +347,17 @@ export class PositionsService {
       kindExplicitlyEnabled:
         kindTouched && managementKindTemplate === ManagementKind.Departments,
     });
+    const managedDirectionIds = resolveManagedDirectionIds({
+      managementKind: managementKindTemplate,
+      managedDirectionIds: input.managedDirectionIds,
+      fallbackDirectionId: directionId,
+      previousManagedDirectionIds: row.managedDirectionIds,
+      kindExplicitlyEnabled:
+        kindTouched && managementKindTemplate === ManagementKind.Direction,
+    });
+    if (managementKindTemplate === ManagementKind.Direction) {
+      assertDirectionLeadershipHasSelection(managedDirectionIds);
+    }
 
     await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(Position);
@@ -307,6 +377,11 @@ export class PositionsService {
         manager,
         id,
         managedDepartmentIds,
+      );
+      await replacePositionManagedDirections(
+        manager,
+        id,
+        managedDirectionIds,
       );
     });
 

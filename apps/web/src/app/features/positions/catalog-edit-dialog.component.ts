@@ -48,11 +48,13 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
           </div>
         </div>
 
-        @if (error()) {
-          <p class="error">{{ error() }}</p>
-        }
+        <div class="body">
+          @if (error()) {
+            <p class="error">{{ error() }}</p>
+          }
 
-        <ng-content />
+          <ng-content />
+        </div>
       </div>
     </div>
   `,
@@ -69,17 +71,19 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
       }
       .modal {
         display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
         gap: 0.85rem;
         width: min(28rem, 100%);
         margin: auto;
         position: relative;
-        padding: 3.25rem 1.2rem 1.1rem;
+        padding: 3.25rem 0 0;
         border-radius: 12px;
         background: var(--pw-surface);
         border: 1px solid var(--pw-border);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
         max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.75rem);
-        overflow: auto;
+        /* Keep shell open so nested menus are not clipped; .body scrolls. */
+        overflow: visible;
       }
       .head {
         display: flex;
@@ -87,6 +91,7 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
+        padding: 0 1.2rem;
       }
       .head-title {
         display: flex;
@@ -103,12 +108,18 @@ import { OverlayScrollLockService } from '../../core/overlay/overlay-scroll-lock
         align-items: center;
         justify-content: flex-end;
       }
+      .body {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 0 1.2rem 1.1rem;
+      }
       h2 {
         margin: 0;
         font-size: 1.1rem;
       }
       .error {
-        margin: 0;
+        margin: 0 0 0.75rem;
         color: var(--pw-danger);
       }
       .icon-close {

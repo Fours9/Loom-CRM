@@ -1,6 +1,7 @@
 import type { EmploymentAssignmentHistoryItem } from '@loom/contracts-employees';
 import {
   managementKindUsesDepartments,
+  managementKindUsesDirection,
   toManagementKind,
   type ManagementKind,
 } from '../../shared/organization/labels';
@@ -63,6 +64,7 @@ export type EmploymentAssignmentForm = {
   comment: string;
   managementKind: ManagementKind;
   managedDepartmentIds: string[];
+  managedDirectionIds: string[];
 };
 
 export function emptyEmploymentAssignmentForm(): EmploymentAssignmentForm {
@@ -80,6 +82,7 @@ export function emptyEmploymentAssignmentForm(): EmploymentAssignmentForm {
     comment: '',
     managementKind: 'none',
     managedDepartmentIds: [],
+    managedDirectionIds: [],
   };
 }
 
@@ -123,6 +126,7 @@ export function employmentAssignmentFormFromHistory(
       row.isDepartmentManager,
     ),
     managedDepartmentIds: [...(row.managedDepartmentIds || [])],
+    managedDirectionIds: [...(row.managedDirectionIds || [])],
   };
 }
 
@@ -133,7 +137,9 @@ export function applyPositionManagerTemplate(
     isDepartmentManagerTemplate?: boolean;
     managementKindTemplate?: ManagementKind;
     managedDepartmentIds?: string[] | null;
+    managedDirectionIds?: string[] | null;
     departmentId?: string | null;
+    directionId?: string | null;
   } | null,
 ): EmploymentAssignmentForm {
   const managementKind = position
@@ -143,24 +149,39 @@ export function applyPositionManagerTemplate(
       )
     : 'none';
 
-  if (!managementKindUsesDepartments(managementKind)) {
-    return {
-      ...form,
-      managementKind,
-      managedDepartmentIds: [],
-    };
-  }
-  const fromTemplate = [...(position?.managedDepartmentIds || [])].filter(Boolean);
-  const fallbackDept = form.departmentId || position?.departmentId || '';
-  return {
-    ...form,
-    managementKind,
-    managedDepartmentIds:
+  let managedDepartmentIds: string[] = [];
+  if (managementKindUsesDepartments(managementKind)) {
+    const fromTemplate = [...(position?.managedDepartmentIds || [])].filter(
+      Boolean,
+    );
+    const fallbackDept = form.departmentId || position?.departmentId || '';
+    managedDepartmentIds =
       fromTemplate.length > 0
         ? fromTemplate
         : fallbackDept
           ? [fallbackDept]
-          : [],
+          : [];
+  }
+
+  let managedDirectionIds: string[] = [];
+  if (managementKindUsesDirection(managementKind)) {
+    const fromTemplate = [...(position?.managedDirectionIds || [])].filter(
+      Boolean,
+    );
+    const fallbackDir = form.directionId || position?.directionId || '';
+    managedDirectionIds =
+      fromTemplate.length > 0
+        ? fromTemplate
+        : fallbackDir
+          ? [fallbackDir]
+          : [];
+  }
+
+  return {
+    ...form,
+    managementKind,
+    managedDepartmentIds,
+    managedDirectionIds,
   };
 }
 
@@ -170,6 +191,14 @@ export function defaultManagedDepartmentsOnEnable(
 ): string[] {
   if (managedDepartmentIds.length > 0) return [...managedDepartmentIds];
   return departmentId ? [departmentId] : [];
+}
+
+export function defaultManagedDirectionsOnEnable(
+  managedDirectionIds: string[],
+  directionId: string,
+): string[] {
+  if (managedDirectionIds.length > 0) return [...managedDirectionIds];
+  return directionId ? [directionId] : [];
 }
 
 export function toEmploymentAssignmentWrite(
@@ -192,6 +221,9 @@ export function toEmploymentAssignmentWrite(
     isDepartmentManager: form.managementKind !== 'none',
     managedDepartmentIds: managementKindUsesDepartments(form.managementKind)
       ? [...form.managedDepartmentIds]
+      : [],
+    managedDirectionIds: managementKindUsesDirection(form.managementKind)
+      ? [...form.managedDirectionIds]
       : [],
   };
   if (mode === 'edit') {

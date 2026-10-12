@@ -68,6 +68,9 @@ import { QuestionnaireSubmitEqualsClosed1730000039000 } from './migrations/17300
 import { EmployeeProfileRoleGates1730000040000 } from './migrations/1730000040000-EmployeeProfileRoleGates';
 import { PositionManagedDepartment } from '../../organization/positions/position-managed-department.entity';
 import { EmploymentAssignmentManagedDepartment } from '../../organization/employees/employment-assignment-managed-department.entity';
+import { EmploymentAssignmentManagedDirection } from '../../organization/employees/employment-assignment-managed-direction.entity';
+import { PositionManagedDirection } from '../../organization/positions/position-managed-direction.entity';
+import { ManagedDirections1730000049000 } from './migrations/1730000049000-ManagedDirections';
 import { AppSurface } from '../access-control/app-surface.entity';
 import { AccountRole } from '../access-control/account-role.entity';
 import { AccountRoleSurface } from '../access-control/account-role-surface.entity';
@@ -104,6 +107,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       Department,
       Position,
       PositionManagedDepartment,
+      PositionManagedDirection,
       Employee,
       WorkScheduleDay,
       EmployeeManagedDepartment,
@@ -112,6 +116,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       EmployeeImportantDate,
       EmploymentAssignment,
       EmploymentAssignmentManagedDepartment,
+      EmploymentAssignmentManagedDirection,
       Company,
       Direction,
       WorkFormat,
@@ -174,6 +179,7 @@ export function getDataSourceOptions(): DataSourceOptions {
       AbsencesAdminSurface1730000046000,
       EmployeeAccessFieldToggles1730000047000,
       EmployeeNamedQuestionnaireGrant1730000048000,
+      ManagedDirections1730000049000,
     ],
     synchronize: false,
     logging: config.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],

@@ -36,6 +36,8 @@ import { PermissionsModule } from '../../platform/permissions/permissions.module
 import { OrganizationEmployeeErasureFacade } from './organization-employee-erasure.facade';
 import { IdentityRoleProjection } from './identity-role-projection';
 import { PositionManagedDepartment } from '../positions/position-managed-department.entity';
+import { PositionManagedDirection } from '../positions/position-managed-direction.entity';
+import { EmploymentAssignmentManagedDirection } from './employment-assignment-managed-direction.entity';
 import { EmploymentAssignmentOrganizationResolver } from './employment-assignment-organization.resolver';
 import { EmployeeNumberAllocator } from './employee-number.allocator';
 import { EmployeeAbout } from './employee-about.entity';
@@ -49,7 +51,9 @@ import { EmployeeAboutService } from './employee-about.service';
       WorkScheduleDay,
       EmployeeManagedDepartment,
       EmploymentAssignmentManagedDepartment,
+      EmploymentAssignmentManagedDirection,
       PositionManagedDepartment,
+      PositionManagedDirection,
       EmployeeContact,
       EmployeeEmergencyContact,
       EmployeeImportantDate,

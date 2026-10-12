@@ -15,6 +15,7 @@ import { Permission } from '../../platform/permissions/permission.names';
 import { Employee } from '../employees/employee.entity';
 import { EmploymentAssignment } from '../employees/employment-assignment.entity';
 import { EmploymentAssignmentManagedDepartment } from '../employees/employment-assignment-managed-department.entity';
+import { EmploymentAssignmentManagedDirection } from '../employees/employment-assignment-managed-direction.entity';
 import { Department } from '../departments/department.entity';
 import {
   CurrentEmploymentAssignmentResolver,
@@ -64,6 +65,8 @@ export class EmployeeAccessService {
     private readonly assignments: Repository<EmploymentAssignment>,
     @InjectRepository(EmploymentAssignmentManagedDepartment)
     private readonly eaManaged: Repository<EmploymentAssignmentManagedDepartment>,
+    @InjectRepository(EmploymentAssignmentManagedDirection)
+    private readonly eaManagedDirections: Repository<EmploymentAssignmentManagedDirection>,
     @InjectRepository(Department)
     private readonly departments: Repository<Department>,
     private readonly currentAssignment: CurrentEmploymentAssignmentResolver,
@@ -129,7 +132,9 @@ export class EmployeeAccessService {
         activeEa.id,
       );
     } else if (kind === ManagementKind.Direction) {
-      managedDepartmentIds = await this.expandDirectionDepartmentIds(activeEa);
+      managedDepartmentIds = await this.expandManagedDirectionsToDepartments(
+        activeEa,
+      );
     }
 
     return {
@@ -139,7 +144,41 @@ export class EmployeeAccessService {
     };
   }
 
-  private async expandDirectionDepartmentIds(
+  /**
+   * Single entry: `direction` leadership → departments of all managed directions.
+   * Join rows are SoT; EA.directionId is legacy fallback only when joins are empty.
+   */
+  private async expandManagedDirectionsToDepartments(
+    activeEa: EmploymentAssignment,
+  ): Promise<string[]> {
+    const directionIds = await this.managedDirectionIdsForAssignment(
+      activeEa.id,
+    );
+    const ids =
+      directionIds.length > 0
+        ? directionIds
+        : await this.legacySingleDirectionFallback(activeEa);
+    if (!ids.length) return [];
+
+    const rows = await this.departments
+      .createQueryBuilder('d')
+      .select('d.id', 'id')
+      .where('d.direction_id IN (:...ids)', { ids })
+      .getRawMany<{ id: string }>();
+    return rows.map((d) => d.id);
+  }
+
+  private async managedDirectionIdsForAssignment(
+    assignmentId: string,
+  ): Promise<string[]> {
+    const rows = await this.eaManagedDirections.find({
+      where: { assignmentId },
+      select: ['directionId'],
+    });
+    return rows.map((r) => r.directionId);
+  }
+
+  private async legacySingleDirectionFallback(
     activeEa: EmploymentAssignment,
   ): Promise<string[]> {
     let directionId = activeEa.directionId;
@@ -149,12 +188,7 @@ export class EmployeeAccessService {
       });
       directionId = dept?.directionId ?? null;
     }
-    if (!directionId) return [];
-    const rows = await this.departments.find({
-      where: { directionId },
-      select: ['id'],
-    });
-    return rows.map((d) => d.id);
+    return directionId ? [directionId] : [];
   }
 
   async resolveManagedScope(actor: User): Promise<string[]> {

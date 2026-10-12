@@ -52,6 +52,7 @@ export type OrgPosition = {
   isDepartmentManagerTemplate?: boolean;
   managementKindTemplate?: ManagementKind;
   managedDepartmentIds?: string[];
+  managedDirectionIds?: string[];
   departmentName?: string | null;
   directionName?: string | null;
   department?: OrgDepartment | null;
@@ -199,6 +200,7 @@ export class SettingsOrgApiService {
     isDepartmentManagerTemplate?: boolean;
     managementKindTemplate?: ManagementKind;
     managedDepartmentIds?: string[];
+    managedDirectionIds?: string[];
   }): Observable<OrgPosition> {
     return this.http.post<OrgPosition>('/api/v1/positions', body);
   }
@@ -214,6 +216,7 @@ export class SettingsOrgApiService {
       isDepartmentManagerTemplate: boolean;
       managementKindTemplate: ManagementKind;
       managedDepartmentIds: string[];
+      managedDirectionIds: string[];
     }>,
   ): Observable<OrgPosition> {
     return this.http.patch<OrgPosition>(`/api/v1/positions/${id}`, body);

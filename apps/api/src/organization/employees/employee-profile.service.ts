@@ -75,6 +75,7 @@ import {
   replaceAssignmentManagedDepartments,
   resolveManagerMembershipForCreate,
 } from './managed-department-writes';
+import { replaceAssignmentManagedDirections } from './managed-direction-writes';
 import { IdentityRoleProjection } from './identity-role-projection';
 import {
   AssignmentHierarchyChangedDuringResolutionError,
@@ -105,6 +106,7 @@ type AssignmentWriteDto = {
   /** @deprecated use managementKind. */
   isDepartmentManager?: boolean;
   managedDepartmentIds?: string[];
+  managedDirectionIds?: string[];
 };
 
 export type ProfileCapabilities = {
@@ -307,6 +309,7 @@ export class EmployeeProfileService {
             'company',
             'direction',
             'managedDepartments',
+            'managedDirections',
           ],
         })
       : null;
@@ -434,6 +437,9 @@ export class EmployeeProfileService {
               managementKind: assignment.managementKind ?? (assignment.isDepartmentManager ? 'departments' : 'none'),
               managedDepartmentIds: (assignment.managedDepartments ?? []).map(
                 (row) => row.departmentId,
+              ),
+              managedDirectionIds: (assignment.managedDirections ?? []).map(
+                (row) => row.directionId,
               ),
               activationBlockedReason: assignment.activationBlockedReason,
               activationCheckedAt: assignment.activationCheckedAt
@@ -1174,16 +1180,30 @@ export class EmployeeProfileService {
             existing: null,
           });
 
-          const { position, managedDepartmentIds: positionManagedDepartmentIds } =
-            await loadPositionManagerTemplate(manager, resolved.positionId);
+          const {
+            position,
+            managedDepartmentIds: positionManagedDepartmentIds,
+            managedDirectionIds: positionManagedDirectionIds,
+          } = await loadPositionManagerTemplate(manager, resolved.positionId);
           const membership = resolveManagerMembershipForCreate({
             position,
             positionManagedDepartmentIds,
+            positionManagedDirectionIds,
             explicitManagementKind: normalized.managementKind,
             explicitIsDepartmentManager: normalized.isDepartmentManager,
             explicitManagedDepartmentIds: normalized.managedDepartmentIds,
+            explicitManagedDirectionIds: normalized.managedDirectionIds,
             assignmentDepartmentId: resolved.departmentId,
+            assignmentDirectionId: resolved.directionId,
           });
+          if (
+            membership.managementKind === 'direction' &&
+            membership.managedDirectionIds.length === 0
+          ) {
+            throw new BadRequestException(
+              'Керування напрямком вимагає вибору хоча б одного напрямку',
+            );
+          }
 
           const workFormat = await this.assertAssignmentCatalogValue(
             'workFormat',
@@ -1251,6 +1271,11 @@ export class EmployeeProfileService {
             manager,
             assignment.id,
             membership.managedDepartmentIds,
+          );
+          await replaceAssignmentManagedDirections(
+            manager,
+            assignment.id,
+            membership.managedDirectionIds,
           );
 
           if (status === 'active') {
@@ -1427,8 +1452,15 @@ export class EmployeeProfileService {
           const hasExplicitManager = normalized.isDepartmentManager !== undefined;
           const hasExplicitManagedDepts =
             normalized.managedDepartmentIds !== undefined;
-          if (hasExplicitKind || hasExplicitManager || hasExplicitManagedDepts) {
-            const wasManager = row.isDepartmentManager;
+          const hasExplicitManagedDirs =
+            normalized.managedDirectionIds !== undefined;
+          if (
+            hasExplicitKind ||
+            hasExplicitManager ||
+            hasExplicitManagedDepts ||
+            hasExplicitManagedDirs
+          ) {
+            const previousKind = row.managementKind;
             if (hasExplicitKind) {
               row.managementKind = normalized.managementKind!;
               row.isDepartmentManager =
@@ -1440,13 +1472,17 @@ export class EmployeeProfileService {
                 : 'none';
             }
 
-            const explicitlyTogglingOn =
+            const explicitlyTogglingDepartmentsOn =
               (hasExplicitKind &&
                 normalized.managementKind === 'departments' &&
-                !wasManager) ||
+                previousKind !== 'departments') ||
               (hasExplicitManager &&
                 normalized.isDepartmentManager === true &&
-                !wasManager);
+                previousKind === 'none');
+            const explicitlyTogglingDirectionOn =
+              hasExplicitKind &&
+              normalized.managementKind === 'direction' &&
+              previousKind !== 'direction';
 
             if (row.managementKind !== 'departments') {
               await replaceAssignmentManagedDepartments(manager, row.id, []);
@@ -1459,7 +1495,7 @@ export class EmployeeProfileService {
               if (
                 managedDepartmentIds.length === 0 &&
                 row.departmentId &&
-                explicitlyTogglingOn
+                explicitlyTogglingDepartmentsOn
               ) {
                 managedDepartmentIds = [row.departmentId];
               }
@@ -1468,11 +1504,50 @@ export class EmployeeProfileService {
                 row.id,
                 managedDepartmentIds,
               );
-            } else if (explicitlyTogglingOn) {
+            } else if (explicitlyTogglingDepartmentsOn) {
               await replaceAssignmentManagedDepartments(
                 manager,
                 row.id,
                 row.departmentId ? [row.departmentId] : [],
+              );
+            }
+
+            if (row.managementKind !== 'direction') {
+              await replaceAssignmentManagedDirections(manager, row.id, []);
+            } else if (hasExplicitManagedDirs) {
+              let managedDirectionIds = [
+                ...new Set(
+                  (normalized.managedDirectionIds ?? []).filter(Boolean),
+                ),
+              ];
+              if (
+                managedDirectionIds.length === 0 &&
+                row.directionId &&
+                explicitlyTogglingDirectionOn
+              ) {
+                managedDirectionIds = [row.directionId];
+              }
+              if (managedDirectionIds.length === 0) {
+                throw new BadRequestException(
+                  'Керування напрямком вимагає вибору хоча б одного напрямку',
+                );
+              }
+              await replaceAssignmentManagedDirections(
+                manager,
+                row.id,
+                managedDirectionIds,
+              );
+            } else if (explicitlyTogglingDirectionOn) {
+              const fallback = row.directionId ? [row.directionId] : [];
+              if (fallback.length === 0) {
+                throw new BadRequestException(
+                  'Керування напрямком вимагає вибору хоча б одного напрямку',
+                );
+              }
+              await replaceAssignmentManagedDirections(
+                manager,
+                row.id,
+                fallback,
               );
             }
           }
@@ -1598,6 +1673,7 @@ export class EmployeeProfileService {
         'company',
         'direction',
         'managedDepartments',
+        'managedDirections',
       ],
       order: { startDate: 'DESC', createdAt: 'DESC' },
     });
@@ -1622,8 +1698,12 @@ export class EmployeeProfileService {
       probationEndDate: a.probationEndDate,
       comment: a.comment,
       isDepartmentManager: Boolean(a.isDepartmentManager),
+      managementKind: a.managementKind ?? (a.isDepartmentManager ? 'departments' : 'none'),
       managedDepartmentIds: (a.managedDepartments ?? []).map(
         (row) => row.departmentId,
+      ),
+      managedDirectionIds: (a.managedDirections ?? []).map(
+        (row) => row.directionId,
       ),
       activationBlockedReason: a.activationBlockedReason,
       activationCheckedAt: a.activationCheckedAt

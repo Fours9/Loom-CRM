@@ -73,6 +73,14 @@ export function managementKindUsesDepartments(kind: ManagementKind): boolean {
   return kind === 'departments';
 }
 
+/**
+ * `direction` leadership requires an explicit managed-directions multi-select.
+ * Access expands selected directions to all their departments (ADR 0011).
+ */
+export function managementKindUsesDirection(kind: ManagementKind): boolean {
+  return kind === 'direction';
+}
+
 export const VISIBILITY_OVERRIDE_UI = {
   inherit: 'Успадковувати глобальні налаштування',
   all: 'Усі працівники',

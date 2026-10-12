@@ -1339,6 +1339,7 @@ export class EmployeeDataPanelComponent implements OnChanges {
     if (!positionId) {
       this.assignmentForm.managementKind = 'none';
       this.assignmentForm.managedDepartmentIds = [];
+      this.assignmentForm.managedDirectionIds = [];
       return;
     }
     this.orgApi.getPositions(true).subscribe({
@@ -1349,6 +1350,7 @@ export class EmployeeDataPanelComponent implements OnChanges {
         const next = applyPositionManagerTemplate(this.assignmentForm, position);
         this.assignmentForm.managementKind = next.managementKind;
         this.assignmentForm.managedDepartmentIds = next.managedDepartmentIds;
+        this.assignmentForm.managedDirectionIds = next.managedDirectionIds;
       },
       error: () => {
         /* keep current manager fields if template fetch fails */

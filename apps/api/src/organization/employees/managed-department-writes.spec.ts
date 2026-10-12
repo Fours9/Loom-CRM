@@ -10,18 +10,26 @@ describe('resolveManagerMembershipForCreate', () => {
     isDepartmentManagerTemplate: true,
   } as Position;
 
+  const base = {
+    positionManagedDirectionIds: [] as string[],
+    assignmentDirectionId: null as string | null,
+  };
+
   it('copies template when no explicit values', () => {
     const r = resolveManagerMembershipForCreate({
+      ...base,
       position,
       positionManagedDepartmentIds: ['d1', 'd2'],
       assignmentDepartmentId: 'd1',
     });
     expect(r.isDepartmentManager).toBe(true);
     expect(r.managedDepartmentIds).toEqual(['d1', 'd2']);
+    expect(r.managedDirectionIds).toEqual([]);
   });
 
   it('explicit false clears managed depts', () => {
     const r = resolveManagerMembershipForCreate({
+      ...base,
       position,
       positionManagedDepartmentIds: ['d1'],
       explicitIsDepartmentManager: false,
@@ -33,6 +41,7 @@ describe('resolveManagerMembershipForCreate', () => {
 
   it('explicit enable with empty list defaults to assignment department', () => {
     const r = resolveManagerMembershipForCreate({
+      ...base,
       position: null,
       positionManagedDepartmentIds: [],
       explicitIsDepartmentManager: true,
@@ -45,6 +54,7 @@ describe('resolveManagerMembershipForCreate', () => {
 
   it('explicit managed list overrides template', () => {
     const r = resolveManagerMembershipForCreate({
+      ...base,
       position,
       positionManagedDepartmentIds: ['d1'],
       explicitIsDepartmentManager: true,
@@ -61,6 +71,7 @@ describe('resolveManagerMembershipForCreate', () => {
       isDepartmentManagerTemplate: false,
     } as Position;
     const r = resolveManagerMembershipForCreate({
+      ...base,
       position: ordinary,
       positionManagedDepartmentIds: [],
       assignmentDepartmentId: 'd1',
@@ -76,12 +87,33 @@ describe('resolveManagerMembershipForCreate', () => {
       isDepartmentManagerTemplate: false,
     } as Position;
     const r = resolveManagerMembershipForCreate({
+      ...base,
       position: ordinary,
       positionManagedDepartmentIds: [],
       assignmentDepartmentId: 'd1',
+      assignmentDirectionId: 'dir-1',
       explicitManagementKind: ManagementKind.Direction,
     });
     expect(r.managementKind).toBe(ManagementKind.Direction);
     expect(r.isDepartmentManager).toBe(true);
+    expect(r.managedDirectionIds).toEqual(['dir-1']);
+  });
+
+  it('copies managed directions from position template', () => {
+    const director = {
+      id: 'p3',
+      managementKindTemplate: ManagementKind.Direction,
+      isDepartmentManagerTemplate: true,
+    } as Position;
+    const r = resolveManagerMembershipForCreate({
+      position: director,
+      positionManagedDepartmentIds: [],
+      positionManagedDirectionIds: ['dir-a', 'dir-b'],
+      assignmentDepartmentId: null,
+      assignmentDirectionId: 'dir-a',
+    });
+    expect(r.managementKind).toBe(ManagementKind.Direction);
+    expect(r.managedDirectionIds).toEqual(['dir-a', 'dir-b']);
+    expect(r.managedDepartmentIds).toEqual([]);
   });
 });

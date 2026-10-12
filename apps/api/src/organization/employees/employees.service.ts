@@ -44,6 +44,7 @@ import {
   replaceAssignmentManagedDepartments,
   resolveManagerMembershipForCreate,
 } from './managed-department-writes';
+import { replaceAssignmentManagedDirections } from './managed-direction-writes';
 import { BusinessDateClock } from './business-date-clock';
 import { resolveSystemAccountRoleId } from '../../platform/access-control/resolve-system-account-role-id';
 import { AccountRole } from '../../platform/access-control/account-role.entity';
@@ -552,12 +553,17 @@ export class EmployeesService {
           existing: null,
         });
 
-        const { position, managedDepartmentIds: templateDepts } =
-          await loadPositionManagerTemplate(manager, resolved.positionId);
+        const {
+          position,
+          managedDepartmentIds: templateDepts,
+          managedDirectionIds: templateDirs,
+        } = await loadPositionManagerTemplate(manager, resolved.positionId);
         const membership = resolveManagerMembershipForCreate({
           position,
           positionManagedDepartmentIds: templateDepts,
+          positionManagedDirectionIds: templateDirs,
           assignmentDepartmentId: resolved.departmentId,
+          assignmentDirectionId: resolved.directionId,
         });
 
         const employeeRepo = manager.getRepository(Employee);
@@ -648,6 +654,11 @@ export class EmployeesService {
           manager,
           assignment.id,
           membership.managedDepartmentIds,
+        );
+        await replaceAssignmentManagedDirections(
+          manager,
+          assignment.id,
+          membership.managedDirectionIds,
         );
 
         emp.currentAssignmentId = assignment.id;
@@ -1214,15 +1225,20 @@ export class EmployeesService {
       throw new ForbiddenException();
     }
     return this.dataSource.transaction(async (manager) => {
-      const { position, managedDepartmentIds } =
-        await loadPositionManagerTemplate(
-          manager,
-          positionId ? this.optionalUuid(positionId) : null,
-        );
+      const {
+        position,
+        managedDepartmentIds,
+        managedDirectionIds,
+      } = await loadPositionManagerTemplate(
+        manager,
+        positionId ? this.optionalUuid(positionId) : null,
+      );
       const membership = resolveManagerMembershipForCreate({
         position,
         positionManagedDepartmentIds: managedDepartmentIds,
+        positionManagedDirectionIds: managedDirectionIds,
         assignmentDepartmentId: position?.departmentId ?? null,
+        assignmentDirectionId: position?.directionId ?? null,
       });
       const prefix = employeeNumberPrefixFromMembership(membership);
       const employeeNumber = await this.numberAllocator.peekNext(

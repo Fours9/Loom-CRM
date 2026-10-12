@@ -54,7 +54,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 
 ### Access variant 2 (living)
 
-- Position / EA `managementKind` (`none` | `departments` | `direction`); UA: Не керує / Керує відділами / Керує напрямком.
+- Position / EA `managementKind` (`none` | `departments` | `direction`); UA: Не керує / Керує відділами / Керує напрямком. `departments` → `managedDepartmentIds`; `direction` → `managedDirectionIds` (обовʼязковий мультивибір; Access expand усіх відділів обраних напрямків).
 - Account role: `users.account_role_id` + Platform AccessControl; RoleAccess assign (без adminAccess). System: Працівник / Менеджер / Директор / Адміністратор.
 - Absences detail: «Індивідуальні права» → `PATCH access-settings` (dual surface з People).
 - Settings «Доступи»; surfaces matrix; `GET /positions/manage` scoped.
@@ -94,7 +94,7 @@ PW-паритетна картка `/absences/employees/:id`: Напрямок /
 
 - `Дати` редагує employee-level `hiredAt` через `PATCH /employees/:id/employment-meta`. Це дата початку роботи / найму і вона не змінюється автоматично від переводів.
 - `Посада` (підвкладка вкладки **Робота**) використовує shared org catalog snapshot (`directions -> departments -> positions`) і довідники `workFormats` / `employmentTypes`.
-- Створення й редагування призначення — **модалка** (`EmploymentAssignmentDialogComponent`): один exclusive dialog slot (`create` | `edit`), крестик / Escape / backdrop close, scrollable body, кнопка **Створити** або **Зберегти**. Поле **Коментар** → API/DB `comment` (не плутати з `employees.comment`). Historical audit metadata may still have `changeReason`; new assignment API/domain/audit uses `comment`; no backfill. Write path: `EmploymentAssignmentsApiService` → `POST|PATCH …/employment-assignments` з `managementKind` (+ `managedDepartmentIds`) на wire ([ADR 0011](../adr/0011-org-leadership-vs-account-role.md)); DTO AssertNever ↔ contracts.
+- Створення й редагування призначення — **модалка** (`EmploymentAssignmentDialogComponent`): один exclusive dialog slot (`create` | `edit`), крестик / Escape / backdrop close, scrollable body, кнопка **Створити** або **Зберегти**. Поле **Коментар** → API/DB `comment` (не плутати з `employees.comment`). Historical audit metadata may still have `changeReason`; new assignment API/domain/audit uses `comment`; no backfill. Write path: `EmploymentAssignmentsApiService` → `POST|PATCH …/employment-assignments` з `managementKind` (+ `managedDepartmentIds` / `managedDirectionIds`) на wire ([ADR 0011](../adr/0011-org-leadership-vs-account-role.md)); DTO AssertNever ↔ contracts.
 - `companyId` більше не вводиться в UI вручну; компанія лишається read-model, derived з обраного напрямку.
 - Майбутня дата переводу створює `planned` assignment. Поточне активне призначення не перемикається відразу; activation виконується lifecycle service.
 - Якщо planned assignment не може активуватися на дату старту, запис лишається `planned` і показує `activationBlockedReason` в історії/деталях.

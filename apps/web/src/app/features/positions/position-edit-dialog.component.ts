@@ -77,134 +77,153 @@ import { PositionManagementFacade } from './position-management.facade';
           </div>
         </div>
 
-        @if (vm.error()) {
-          <p class="error">{{ vm.error() }}</p>
-        }
-        @if (vm.dialogMode() === 'unresolved-create') {
-          <p class="error">
-            Не вдалося підтвердити результат створення. Перед повторним створенням
-            перевірте список посад.
-          </p>
-        }
-        @if (vm.dialogMode() === 'applying-drafts') {
-          <p class="hint">Додаємо вимоги до навичок…</p>
-        }
-        @if (vm.dialogMode() === 'edit-with-failed-drafts') {
-          <p class="hint">
-            Посаду створено. Деякі вимоги не додано.
-            <button
-              type="button"
-              class="ghost-neutral"
-              (click)="vm.retryFailedDrafts()"
-              [disabled]="vm.saveLocked()"
-            >
-              Повторити невдалі
-            </button>
-          </p>
-        }
+        <div class="body">
+          @if (vm.error()) {
+            <p class="error">{{ vm.error() }}</p>
+          }
+          @if (vm.dialogMode() === 'unresolved-create') {
+            <p class="error">
+              Не вдалося підтвердити результат створення. Перед повторним створенням
+              перевірте список посад.
+            </p>
+          }
+          @if (vm.dialogMode() === 'applying-drafts') {
+            <p class="hint">Додаємо вимоги до навичок…</p>
+          }
+          @if (vm.dialogMode() === 'edit-with-failed-drafts') {
+            <p class="hint">
+              Посаду створено. Деякі вимоги не додано.
+              <button
+                type="button"
+                class="ghost-neutral"
+                (click)="vm.retryFailedDrafts()"
+                [disabled]="vm.saveLocked()"
+              >
+                Повторити невдалі
+              </button>
+            </p>
+          }
 
-        <form class="position-form" novalidate (submit)="$event.preventDefault(); vm.savePosition()">
-          <label>
-            Назва
-            <input
-              data-help-id="positions.dialog.position.name"
-              [(ngModel)]="vm.formName"
-              name="formName"
-              placeholder="Назва посади"
-              [disabled]="vm.saveLocked()"
-            />
-          </label>
-          <div class="org-row">
+          <form class="position-form" novalidate (submit)="$event.preventDefault(); vm.savePosition()">
             <label>
-              Напрямок
-              <select
-                data-help-id="positions.dialog.position.direction"
-                [(ngModel)]="vm.formDirectionId"
-                name="formDirectionId"
-                (ngModelChange)="vm.onFormDirectionChange()"
-                [disabled]="vm.saveLocked() || !vm.canEditPositionDirection()"
-              >
-                @if (vm.canCreateGlobalPosition()) {
-                  <option [ngValue]="''">Без напрямку</option>
-                }
-                @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
-                  <option [ngValue]="dir.id">{{ dir.name }}</option>
-                }
-              </select>
-            </label>
-            <label>
-              Відділ
-              <select
-                data-help-id="positions.dialog.position.department"
-                [(ngModel)]="vm.formDepartmentId"
-                name="formDepartmentId"
-                (ngModelChange)="vm.onFormDepartmentChange()"
+              Назва
+              <input
+                data-help-id="positions.dialog.position.name"
+                [(ngModel)]="vm.formName"
+                name="formName"
+                placeholder="Назва посади"
                 [disabled]="vm.saveLocked()"
-              >
-                <option [ngValue]="''">Без відділу</option>
-                @for (d of vm.formDepartmentOptions(); track d.id) {
-                  <option [ngValue]="d.id">{{ d.name }}</option>
-                }
-              </select>
-            </label>
-          </div>
-          @if (vm.formDirectionId) {
-            <p class="hint">Відділи показуються лише для вибраного напрямку.</p>
-          }
-          @if (!vm.canEditPositionDirection()) {
-            <p class="hint">Напрямок закріплений вашою областю керування.</p>
-          }
-          <label>
-            Опис
-            <textarea
-              [(ngModel)]="vm.formDescription"
-              name="formDescription"
-              rows="2"
-              placeholder="Опис посади (необовʼязково)"
-              [disabled]="vm.saveLocked()"
-            ></textarea>
-          </label>
-          @if (vm.canManagePositions()) {
-            <label>
-              Керівництво
-              <select
-                [ngModel]="vm.formManagementKindTemplate"
-                name="formManagementKindTemplate"
-                [disabled]="vm.saveLocked()"
-                (ngModelChange)="vm.onManagementKindTemplateChange($event)"
-              >
-                @for (opt of vm.managementKindOptions; track opt.value) {
-                  <option [ngValue]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
-            </label>
-            @if (vm.managementKindUsesDepartments()) {
-              <label class="skills-field">
-                Керовані відділи
-                <app-multi-select-list
-                  [items]="vm.managedDepartmentPickerItems()"
-                  [selectedIds]="vm.formManagedDepartmentIds"
-                  [disabled]="vm.saveLocked()"
-                  [showSelectAll]="true"
-                  placeholder="Оберіть керовані відділи"
-                  (selectedIdsChange)="vm.onManagedDepartmentsChange($event)"
-                />
-              </label>
-            }
-            <label class="skills-field">
-              Навички
-              <app-multi-select-list
-                [items]="pickerItems()"
-                [selectedIds]="vm.selectedSkillIds()"
-                [disabled]="vm.skillsEditingLocked()"
-                [searchable]="true"
-                placeholder="Оберіть або знайдіть навичку"
-                searchPlaceholder="Пошук…"
-                (selectedIdsChange)="vm.onSkillPickerChange($event)"
               />
             </label>
-          }
-        </form>
+            <div class="org-row">
+              <label>
+                Напрямок
+                <select
+                  data-help-id="positions.dialog.position.direction"
+                  [(ngModel)]="vm.formDirectionId"
+                  name="formDirectionId"
+                  (ngModelChange)="vm.onFormDirectionChange()"
+                  [disabled]="vm.saveLocked() || !vm.canEditPositionDirection()"
+                >
+                  @if (vm.canCreateGlobalPosition()) {
+                    <option [ngValue]="''">Без напрямку</option>
+                  }
+                  @for (dir of vm.formPositionDirectionOptions(); track dir.id) {
+                    <option [ngValue]="dir.id">{{ dir.name }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                Відділ
+                <select
+                  data-help-id="positions.dialog.position.department"
+                  [(ngModel)]="vm.formDepartmentId"
+                  name="formDepartmentId"
+                  (ngModelChange)="vm.onFormDepartmentChange()"
+                  [disabled]="vm.saveLocked()"
+                >
+                  <option [ngValue]="''">Без відділу</option>
+                  @for (d of vm.formDepartmentOptions(); track d.id) {
+                    <option [ngValue]="d.id">{{ d.name }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            @if (vm.formDirectionId) {
+              <p class="hint">Відділи показуються лише для вибраного напрямку.</p>
+            }
+            @if (!vm.canEditPositionDirection()) {
+              <p class="hint">Напрямок закріплений вашою областю керування.</p>
+            }
+            <label>
+              Опис
+              <textarea
+                [(ngModel)]="vm.formDescription"
+                name="formDescription"
+                rows="2"
+                placeholder="Опис посади (необовʼязково)"
+                [disabled]="vm.saveLocked()"
+              ></textarea>
+            </label>
+            @if (vm.canManagePositions()) {
+              <label>
+                Керівництво
+                <select
+                  [ngModel]="vm.formManagementKindTemplate"
+                  name="formManagementKindTemplate"
+                  [disabled]="vm.saveLocked()"
+                  (ngModelChange)="vm.onManagementKindTemplateChange($event)"
+                >
+                  @for (opt of vm.managementKindOptions; track opt.value) {
+                    <option [ngValue]="opt.value">{{ opt.label }}</option>
+                  }
+                </select>
+              </label>
+              @if (vm.managementKindUsesDepartments()) {
+                <div class="skills-field">
+                  <span class="field-label">Керовані відділи</span>
+                  <app-multi-select-list
+                    [items]="vm.managedDepartmentPickerItems()"
+                    [selectedIds]="vm.formManagedDepartmentIds"
+                    [disabled]="vm.saveLocked()"
+                    [showSelectAll]="true"
+                    placeholder="Оберіть керовані відділи"
+                    (selectedIdsChange)="vm.onManagedDepartmentsChange($event)"
+                  />
+                </div>
+              }
+              @if (vm.managementKindUsesDirection()) {
+                <div class="skills-field">
+                  <span class="field-label">Керовані напрямки</span>
+                  <app-multi-select-list
+                    [items]="vm.managedDirectionPickerItems()"
+                    [selectedIds]="vm.formManagedDirectionIds"
+                    [disabled]="vm.saveLocked()"
+                    [showSelectAll]="true"
+                    placeholder="Оберіть керовані напрямки"
+                    (selectedIdsChange)="vm.onManagedDirectionsChange($event)"
+                  />
+                </div>
+                <p class="hint">
+                  Scope = усі відділи обраних напрямків. Для директора оберіть усі
+                  напрямки («Вибрати всі»).
+                </p>
+              }
+              <div class="skills-field">
+                <span class="field-label">Навички</span>
+                <app-multi-select-list
+                  [items]="pickerItems()"
+                  [selectedIds]="vm.selectedSkillIds()"
+                  [disabled]="vm.skillsEditingLocked()"
+                  [searchable]="true"
+                  placeholder="Оберіть або знайдіть навичку"
+                  searchPlaceholder="Пошук…"
+                  (selectedIdsChange)="vm.onSkillPickerChange($event)"
+                />
+              </div>
+            }
+          </form>
+        </div>
       </div>
     </div>
   `,
@@ -221,15 +240,18 @@ import { PositionManagementFacade } from './position-management.facade';
       }
       .modal {
         display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
         gap: 0.85rem;
         width: min(40rem, 100%);
         margin: 0.35rem auto 0;
         position: relative;
-        padding: 3.25rem 1.2rem 1.1rem;
+        padding: 3.25rem 0 0;
         border-radius: 12px;
         background: var(--pw-surface);
         border: 1px solid var(--pw-border);
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+        max-height: calc(100dvh - var(--shell-topbar-h, 0px) - 1.75rem);
+        /* Keep shell open so multi-select menus are not clipped; .body scrolls. */
         overflow: visible;
       }
       .head {
@@ -237,6 +259,7 @@ import { PositionManagementFacade } from './position-management.facade';
         justify-content: space-between;
         gap: 0.75rem;
         align-items: center;
+        padding: 0 1.2rem;
       }
       .head-title {
         display: flex;
@@ -250,6 +273,12 @@ import { PositionManagementFacade } from './position-management.facade';
         gap: 0.5rem;
         align-items: center;
         justify-content: flex-end;
+      }
+      .body {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 0 1.2rem 1.1rem;
       }
       h2,
       h3 {
@@ -290,9 +319,13 @@ import { PositionManagementFacade } from './position-management.facade';
         gap: 0.5rem;
       }
       .skills-field {
-        margin-top: 0.55rem;
+        display: grid;
         gap: 0.65rem;
+        margin-top: 0.55rem;
         --ms-trigger-height: 4.75rem;
+      }
+      .field-label {
+        font-size: 0.9rem;
       }
       input,
       select,

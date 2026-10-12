@@ -9,7 +9,12 @@ import { Position } from './position.entity';
 
 export type PositionManagementScope = {
   isAdminEquivalent: boolean;
-  /** null = empty manage list / forbid create for non-admin */
+  /**
+   * Directions the actor may manage positions for.
+   * Empty + non-admin = no manage scope; adminEq ignores the list (all).
+   */
+  directionIds: string[];
+  /** @deprecated use directionIds[0] — singular EA direction fallback. */
   directionId: string | null;
 };
 
@@ -29,7 +34,7 @@ export class PositionManagementScopePolicy {
   ): Promise<PositionManagementScope> {
     const authz = await this.authorization.resolve(actor.id, manager);
     if (authz.isAdminEquivalent) {
-      return { isAdminEquivalent: true, directionId: null };
+      return { isAdminEquivalent: true, directionIds: [], directionId: null };
     }
 
     const em = manager;
@@ -37,6 +42,7 @@ export class PositionManagementScopePolicy {
     // This method is called from PositionsService which has DataSource.
     return {
       isAdminEquivalent: false,
+      directionIds: [],
       directionId: null, // filled by resolveWithRepos below
     };
   }
@@ -46,28 +52,42 @@ export class PositionManagementScopePolicy {
     employeeRepo: { findOne: Function },
     currentAssignment: CurrentEmploymentAssignmentResolver,
     departmentRepo: { findOne: Function },
+    managedDirectionIdsLoader?: (assignmentId: string) => Promise<string[]>,
   ): Promise<PositionManagementScope> {
     const authz = await this.authorization.resolve(actor.id);
     if (authz.isAdminEquivalent) {
-      return { isAdminEquivalent: true, directionId: null };
+      return { isAdminEquivalent: true, directionIds: [], directionId: null };
     }
 
     const self = await employeeRepo.findOne({
       where: { userId: actor.id },
     });
     if (!self) {
-      return { isAdminEquivalent: false, directionId: null };
+      return { isAdminEquivalent: false, directionIds: [], directionId: null };
     }
 
     const ea = await currentAssignment.resolve(self as Employee);
-    let directionId = ea?.directionId ?? null;
-    if (!directionId && ea?.departmentId) {
+    let legacyDirectionId = ea?.directionId ?? null;
+    if (!legacyDirectionId && ea?.departmentId) {
       const dept = await departmentRepo.findOne({
         where: { id: ea.departmentId },
       });
-      directionId = (dept as Department | null)?.directionId ?? null;
+      legacyDirectionId = (dept as Department | null)?.directionId ?? null;
     }
-    return { isAdminEquivalent: false, directionId };
+
+    let directionIds: string[] = [];
+    if (ea && managedDirectionIdsLoader) {
+      directionIds = await managedDirectionIdsLoader(ea.id);
+    }
+    if (directionIds.length === 0 && legacyDirectionId) {
+      directionIds = [legacyDirectionId];
+    }
+
+    return {
+      isAdminEquivalent: false,
+      directionIds,
+      directionId: directionIds[0] ?? null,
+    };
   }
 
   assertCanMutate(
@@ -75,7 +95,7 @@ export class PositionManagementScopePolicy {
     position: Pick<Position, 'departmentId' | 'directionId'>,
   ): void {
     if (scope.isAdminEquivalent) return;
-    if (!scope.directionId) {
+    if (!scope.directionIds.length) {
       throw new ForbiddenException('No direction scope for positions manage');
     }
     if (position.departmentId == null && position.directionId == null) {
@@ -84,7 +104,7 @@ export class PositionManagementScopePolicy {
       );
     }
     const posDirection = position.directionId;
-    if (posDirection && posDirection !== scope.directionId) {
+    if (posDirection && !scope.directionIds.includes(posDirection)) {
       throw new ForbiddenException('Position outside actor direction scope');
     }
   }
@@ -94,7 +114,7 @@ export class PositionManagementScopePolicy {
     input: { departmentId: string | null; directionId: string | null },
   ): void {
     if (scope.isAdminEquivalent) return;
-    if (!scope.directionId) {
+    if (!scope.directionIds.length) {
       throw new BadRequestException(
         'Cannot create positions without an active direction assignment',
       );
@@ -104,7 +124,7 @@ export class PositionManagementScopePolicy {
         'Global positions require admin-equivalent access',
       );
     }
-    if (input.directionId && input.directionId !== scope.directionId) {
+    if (input.directionId && !scope.directionIds.includes(input.directionId)) {
       throw new ForbiddenException('Direction outside actor scope');
     }
   }

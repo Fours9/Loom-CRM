@@ -15,6 +15,7 @@ import { PositionSkillRequirement } from '../position-requirements/position-skil
 import { PositionDuty } from '../position-requirements/position-duty.entity';
 import { PositionGoalTemplate } from '../position-requirements/position-goal-template.entity';
 import { PositionManagedDepartment } from './position-managed-department.entity';
+import { PositionManagedDirection } from './position-managed-direction.entity';
 import { ManagementKind } from '../employment-catalog/management-kind';
 
 @Entity({ name: 'positions' })
@@ -68,6 +69,9 @@ export class Position {
 
   @OneToMany(() => PositionManagedDepartment, (row) => row.position)
   managedDepartments?: PositionManagedDepartment[];
+
+  @OneToMany(() => PositionManagedDirection, (row) => row.position)
+  managedDirections?: PositionManagedDirection[];
 
   @OneToMany(() => PositionSkillRequirement, (row) => row.position)
   skillRequirements?: PositionSkillRequirement[];

@@ -15,6 +15,7 @@ import { Position } from '../positions/position.entity';
 import { Company } from '../companies/company.entity';
 import { Direction } from '../companies/direction.entity';
 import { EmploymentAssignmentManagedDepartment } from './employment-assignment-managed-department.entity';
+import { EmploymentAssignmentManagedDirection } from './employment-assignment-managed-direction.entity';
 import { ManagementKind } from '../employment-catalog/management-kind';
 
 export type EmploymentAssignmentStatus = 'active' | 'ended' | 'planned';
@@ -117,6 +118,12 @@ export class EmploymentAssignment {
     (row) => row.assignment,
   )
   managedDepartments?: EmploymentAssignmentManagedDepartment[];
+
+  @OneToMany(
+    () => EmploymentAssignmentManagedDirection,
+    (row) => row.assignment,
+  )
+  managedDirections?: EmploymentAssignmentManagedDirection[];
 
   @Column({ name: 'comment', type: 'text', nullable: true })
   comment!: string | null;

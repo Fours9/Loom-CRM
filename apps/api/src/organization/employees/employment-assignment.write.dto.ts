@@ -47,6 +47,10 @@ export class CreateEmploymentAssignmentDto
   @IsArray()
   @IsUUID('4', { each: true })
   managedDepartmentIds?: string[];
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDirectionIds?: string[];
 }
 
 export class UpdateEmploymentAssignmentDto

@@ -6,6 +6,7 @@ import {
   Input,
   OnChanges,
   OnDestroy,
+  OnInit,
   Output,
   SimpleChanges,
   inject,
@@ -15,6 +16,7 @@ import {
   releasePwOverlay,
   type PwOverlayHandle,
 } from './ui/pw-overlay-session';
+import { listenPwOverlayOutsideClick } from './ui/pw-overlay-outside-click';
 
 export interface MultiSelectItem {
   id: string;
@@ -305,10 +307,13 @@ export interface MultiSelectItem {
     `,
   ],
 })
-export class MultiSelectListComponent implements OnChanges, OnDestroy, PwOverlayHandle {
+export class MultiSelectListComponent
+  implements OnInit, OnChanges, OnDestroy, PwOverlayHandle
+{
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly dropdownMaxPx = 16 * 16;
   private readonly dropdownGapPx = 4;
+  private stopOutsideClick: (() => void) | null = null;
 
   @Input() items: MultiSelectItem[] = [];
   @Input() selectedIds: string[] = [];
@@ -350,6 +355,14 @@ export class MultiSelectListComponent implements OnChanges, OnDestroy, PwOverlay
     );
   }
 
+  ngOnInit(): void {
+    this.stopOutsideClick = listenPwOverlayOutsideClick(
+      this.host,
+      () => this.open,
+      () => this.close(),
+    );
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['selectedIds']) {
       this.localSelectedIds = Array.isArray(this.selectedIds) ? [...this.selectedIds] : [];
@@ -360,6 +373,8 @@ export class MultiSelectListComponent implements OnChanges, OnDestroy, PwOverlay
   }
 
   ngOnDestroy(): void {
+    this.stopOutsideClick?.();
+    this.stopOutsideClick = null;
     releasePwOverlay(this);
   }
 
@@ -367,16 +382,6 @@ export class MultiSelectListComponent implements OnChanges, OnDestroy, PwOverlay
     this.open = false;
     this.openUp = false;
     this.query = '';
-  }
-
-  @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent): void {
-    if (!this.open) {
-      return;
-    }
-    if (!this.host.nativeElement.contains(event.target as Node)) {
-      this.close();
-    }
   }
 
   @HostListener('window:resize')

@@ -27,12 +27,14 @@ import {
 import {
   MANAGEMENT_KIND_OPTIONS,
   managementKindUsesDepartments,
+  managementKindUsesDirection,
   type ManagementKind,
 } from '../../shared/organization/labels';
 import {
   assignmentDialogSubmitLabel,
   assignmentDialogTitle,
   defaultManagedDepartmentsOnEnable,
+  defaultManagedDirectionsOnEnable,
   isArchivalNamedValue,
   type EmploymentAssignmentDialogState,
   type EmploymentAssignmentForm,
@@ -181,8 +183,8 @@ import {
               />
             </label>
             @if (usesManagedDepartments) {
-              <label class="span-2 managed-field">
-                Керовані відділи
+              <div class="span-2 managed-field">
+                <span class="field-label">Керовані відділи</span>
                 <app-multi-select-list
                   [items]="departmentItems"
                   [selectedIds]="form.managedDepartmentIds"
@@ -190,7 +192,19 @@ import {
                   placeholder="Оберіть керовані відділи"
                   (selectedIdsChange)="form.managedDepartmentIds = $event"
                 />
-              </label>
+              </div>
+            }
+            @if (usesManagedDirections) {
+              <div class="span-2 managed-field">
+                <span class="field-label">Керовані напрямки</span>
+                <app-multi-select-list
+                  [items]="directionItems"
+                  [selectedIds]="form.managedDirectionIds"
+                  [showSelectAll]="true"
+                  placeholder="Оберіть керовані напрямки"
+                  (selectedIdsChange)="form.managedDirectionIds = $event"
+                />
+              </div>
             }
           </div>
         </div>
@@ -316,7 +330,13 @@ import {
         flex: 0 0 auto;
       }
       .managed-field {
+        display: grid;
+        gap: 0.25rem;
         --ms-trigger-height: 4.75rem;
+      }
+      .field-label {
+        font-size: 0.9rem;
+        color: var(--pw-muted);
       }
       input {
         border: 1px solid var(--pw-border);
@@ -404,6 +424,17 @@ export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
 
   get usesManagedDepartments(): boolean {
     return managementKindUsesDepartments(this.form.managementKind);
+  }
+
+  get usesManagedDirections(): boolean {
+    return managementKindUsesDirection(this.form.managementKind);
+  }
+
+  get directionItems(): MultiSelectItem[] {
+    return (this.catalog?.directions ?? []).map((d) => ({
+      id: d.id,
+      label: d.name,
+    }));
   }
 
   // --- loom-pw-select option lists (empty value '' == "—" / null on submit) ---
@@ -513,12 +544,20 @@ export class EmploymentAssignmentDialogComponent implements OnInit, OnDestroy {
     this.form.managementKind = kind;
     if (!managementKindUsesDepartments(kind)) {
       this.form.managedDepartmentIds = [];
-      return;
+    } else {
+      this.form.managedDepartmentIds = defaultManagedDepartmentsOnEnable(
+        this.form.managedDepartmentIds,
+        this.form.departmentId,
+      );
     }
-    this.form.managedDepartmentIds = defaultManagedDepartmentsOnEnable(
-      this.form.managedDepartmentIds,
-      this.form.departmentId,
-    );
+    if (!managementKindUsesDirection(kind)) {
+      this.form.managedDirectionIds = [];
+    } else {
+      this.form.managedDirectionIds = defaultManagedDirectionsOnEnable(
+        this.form.managedDirectionIds,
+        this.form.directionId,
+      );
+    }
   }
 
   ngOnInit(): void {

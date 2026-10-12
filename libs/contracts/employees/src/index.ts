@@ -277,6 +277,9 @@ export type EmployeeEmploymentSection = {
   activationCheckedAt: string | null;
   isDepartmentManager: boolean;
   managedDepartmentIds: EntityId[];
+  /** Present when managementKind === 'direction' (ADR 0011 managed directions). */
+  managedDirectionIds?: EntityId[];
+  managementKind?: EmploymentManagementKind;
   company: NamedReference | null;
   direction: NamedReference | null;
   department: NamedReference | null;
@@ -394,6 +397,7 @@ export type EmploymentAssignmentHistoryItem = {
   isDepartmentManager: boolean;
   managementKind?: EmploymentManagementKind;
   managedDepartmentIds: EntityId[];
+  managedDirectionIds: EntityId[];
   updatedAt: string;
   department: NamedReference | null;
   position: NamedReference | null;
@@ -422,6 +426,7 @@ export type CreateEmploymentAssignmentRequest = {
   isDepartmentManager?: boolean;
   managementKind?: EmploymentManagementKind;
   managedDepartmentIds?: EntityId[];
+  managedDirectionIds?: EntityId[];
 };
 
 export type UpdateEmploymentAssignmentRequest =

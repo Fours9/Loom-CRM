@@ -3,6 +3,7 @@ import {
   ElementRef,
   HostListener,
   OnDestroy,
+  OnInit,
   computed,
   forwardRef,
   inject,
@@ -18,6 +19,7 @@ import {
   releasePwOverlay,
   type PwOverlayHandle,
 } from './pw-overlay-session';
+import { listenPwOverlayOutsideClick } from './pw-overlay-outside-click';
 
 export type PwSelectOption = { value: string; label: string };
 
@@ -173,11 +175,12 @@ export type PwSelectOption = { value: string; label: string };
   ],
 })
 export class PwSelectComponent
-  implements ControlValueAccessor, OnDestroy, PwOverlayHandle
+  implements ControlValueAccessor, OnInit, OnDestroy, PwOverlayHandle
 {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly dropdownGapPx = 6;
   private readonly estimatedMenuMaxPx = 280;
+  private stopOutsideClick: (() => void) | null = null;
 
   /** Prefer either `[value]`+`(valueChange)` or `ngModel`/`formControlName` — not both. */
   readonly value = input('');
@@ -219,7 +222,17 @@ export class PwSelectComponent
     this.cvaDisabled.set(isDisabled);
   }
 
+  ngOnInit(): void {
+    this.stopOutsideClick = listenPwOverlayOutsideClick(
+      this.host,
+      () => this.open(),
+      () => this.closeMenu(),
+    );
+  }
+
   ngOnDestroy(): void {
+    this.stopOutsideClick?.();
+    this.stopOutsideClick = null;
     releasePwOverlay(this);
   }
 
@@ -251,14 +264,6 @@ export class PwSelectComponent
       cvaOnTouched: this.onTouched,
     });
     this.closeMenu();
-  }
-
-  @HostListener('document:click', ['$event'])
-  onDocClick(event: MouseEvent): void {
-    if (!this.open()) return;
-    if (!this.host.nativeElement.contains(event.target as Node)) {
-      this.closeMenu();
-    }
   }
 
   @HostListener('window:resize')

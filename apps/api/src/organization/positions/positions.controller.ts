@@ -31,6 +31,7 @@ import { Repository } from 'typeorm';
 import { Employee } from '../employees/employee.entity';
 import { Department } from '../departments/department.entity';
 import { CurrentEmploymentAssignmentResolver } from '../employment-catalog/current-employment-assignment.resolver';
+import { EmploymentAssignmentManagedDirection } from '../employees/employment-assignment-managed-direction.entity';
 
 class CreatePositionDto {
   @IsString()
@@ -61,6 +62,11 @@ class CreatePositionDto {
   @IsArray()
   @IsUUID('4', { each: true })
   managedDepartmentIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDirectionIds?: string[];
 }
 
 class UpdatePositionDto {
@@ -97,6 +103,11 @@ class UpdatePositionDto {
   @IsArray()
   @IsUUID('4', { each: true })
   managedDepartmentIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  managedDirectionIds?: string[];
 }
 
 @Controller('positions')
@@ -112,10 +123,28 @@ export class PositionsController {
     private readonly employees: Repository<Employee>,
     @InjectRepository(Department)
     private readonly departments: Repository<Department>,
+    @InjectRepository(EmploymentAssignmentManagedDirection)
+    private readonly eaManagedDirections: Repository<EmploymentAssignmentManagedDirection>,
   ) {
     this.scopePolicy = new PositionManagementScopePolicy(
       this.authorization,
       this.currentAssignment,
+    );
+  }
+
+  private async resolveScope(user: User) {
+    return this.scopePolicy.resolveForActor(
+      user,
+      this.employees,
+      this.currentAssignment,
+      this.departments,
+      async (assignmentId) => {
+        const rows = await this.eaManagedDirections.find({
+          where: { assignmentId },
+          select: ['directionId'],
+        });
+        return rows.map((r) => r.directionId);
+      },
     );
   }
 
@@ -141,15 +170,10 @@ export class PositionsController {
     @CurrentUser() user: User,
     @Query('all') all?: string,
   ) {
-    const scope = await this.scopePolicy.resolveForActor(
-      user,
-      this.employees,
-      this.currentAssignment,
-      this.departments,
-    );
+    const scope = await this.resolveScope(user);
     return this.positions.findManageable({
       all: all === '1' || all === 'true',
-      directionId: scope.directionId,
+      directionIds: scope.directionIds,
       isAdminEquivalent: scope.isAdminEquivalent,
     });
   }
@@ -157,12 +181,7 @@ export class PositionsController {
   @Post()
   @RequirePermissions(Permission.PositionsManage)
   async create(@CurrentUser() user: User, @Body() dto: CreatePositionDto) {
-    const scope = await this.scopePolicy.resolveForActor(
-      user,
-      this.employees,
-      this.currentAssignment,
-      this.departments,
-    );
+    const scope = await this.resolveScope(user);
     const departmentId = dto.departmentId ?? null;
     const directionId = dto.directionId ?? null;
     this.scopePolicy.assertCanCreate(scope, { departmentId, directionId });
@@ -176,12 +195,7 @@ export class PositionsController {
     @Param('id') id: string,
     @Body() dto: UpdatePositionDto,
   ) {
-    const scope = await this.scopePolicy.resolveForActor(
-      user,
-      this.employees,
-      this.currentAssignment,
-      this.departments,
-    );
+    const scope = await this.resolveScope(user);
     const existing = await this.positions.getOrFail(id);
     this.scopePolicy.assertCanMutate(scope, existing);
     return this.positions.update(id, dto as Parameters<
@@ -192,12 +206,7 @@ export class PositionsController {
   @Delete(':id')
   @RequirePermissions(Permission.PositionsManage)
   async remove(@CurrentUser() user: User, @Param('id') id: string) {
-    const scope = await this.scopePolicy.resolveForActor(
-      user,
-      this.employees,
-      this.currentAssignment,
-      this.departments,
-    );
+    const scope = await this.resolveScope(user);
     const existing = await this.positions.getOrFail(id);
     this.scopePolicy.assertCanMutate(scope, existing);
     await this.positions.hardDelete(id);
