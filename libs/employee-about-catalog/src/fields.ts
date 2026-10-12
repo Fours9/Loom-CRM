@@ -312,6 +312,15 @@ export const ABOUT_FIELD_DEFS: readonly AboutFieldDef[] = [
     maxLength: TEXTAREA,
   },
 
+  // —— experience (soft tenure only; prior_jobs / managed_* stay questionnaire snapshot) ——
+  {
+    key: 'experience.total_tenure',
+    subtab: 'experience',
+    labelUa: 'Загальний досвід у сфері',
+    valueType: 'text',
+    maxLength: TEXT,
+  },
+
   // —— life_goals ——
   {
     key: 'strengths.in_one_year',

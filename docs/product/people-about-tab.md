@@ -19,10 +19,11 @@ Read = `EmployeesView` ∧ surface. Write = pure `canEditEmployeeAbout` (owner+s
 ## Sync (questionnaire submit)
 
 Present-only: keys **PRESENT** in snapshot overwrite About. Absent ≠ clear.  
+Only keys in `ABOUT_FIELD_DEFS` are extracted (`extractAboutKeysFromSnapshot`) — e.g. `experience.total_tenure` syncs; `experience.prior_jobs` does not.  
 Conditional invalidation via `canonicalizeAboutMutation` (e.g. `has_children=no` → clear `family.children`).  
 Clear also via PATCH `null`. Provenance (`last_source_submission_id`, `last_synced_at`) updates only on questionnaire sync.
 
-Atomic write: `EmployeeAboutFacade.mergeAnswers({ set, clearKeys, source })`.
+**Write entry (single):** `EmployeeAboutFacade.mergeAnswers({ set, clearKeys, source })` — used by questionnaire sync and manual PATCH. No second About writer.
 
 ## Hard-delete
 
@@ -46,10 +47,13 @@ Atomic write: `EmployeeAboutFacade.mergeAnswers({ set, clearKeys, source })`.
 | `hobbies` | Хобі та інтереси | hobbies (без gift) |
 | `strengths` | Сильні сторони | strengths (без in_* years) |
 | `work_style` | Стиль роботи | `work_style.*` |
+| `experience` | Досвід | `experience.total_tenure` («Загальний досвід у сфері») |
 | `life_goals` | Цілі | `strengths.in_*` + `career_goals.plan` + `probation_goals.items` |
 
 `life_goals` repeating groups (`career_goals.plan`, `probation_goals.items`) are **editable in About UI** via catalog-projected `children` (same keys as Managing questionnaire). Sync from questionnaire submit remains present-only overwrite; manual PATCH uses the same `EmployeeAboutFacade.mergeAnswers` entry.
 
-**Свідомо поза «Про себе»:** personal/contacts mirrors, experience/education, skills matrix, consents/docs.
+`experience` hosts only soft tenure (`experience.total_tenure`) — same key as Іменна «Загальний досвід у сфері» / Full «Загальний стаж». Prior jobs, managed people/count, achievements stay questionnaire snapshot (Career Profile), not About.
+
+**Свідомо поза «Про себе»:** personal/contacts mirrors, full experience history / education, skills matrix, consents/docs.
 
 Backfill: lazy — лише нові submits + ручний PATCH (історичні snapshots не копіюються міграцією).

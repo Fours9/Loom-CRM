@@ -148,6 +148,7 @@ export function peopleHelpTourIds(): readonly string[] {
     'people.about.hobbies',
     'people.about.strengths',
     'people.about.work-style',
+    'people.about.experience',
     'people.about.life-goals',
     'people.metrics.skills',
     'people.admin.history',

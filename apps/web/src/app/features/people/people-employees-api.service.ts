@@ -27,13 +27,13 @@ export class PeopleEmployeesApiService {
       .set('sortDir', query.sortDir);
     const q = query.q?.trim();
     if (q) params = params.set('q', q);
-    for (const id of query.directionIds) {
+    for (const id of query.directionIds ?? []) {
       params = params.append('directionIds', id);
     }
-    for (const id of query.departmentIds) {
+    for (const id of query.departmentIds ?? []) {
       params = params.append('departmentIds', id);
     }
-    for (const id of query.positionIds) {
+    for (const id of query.positionIds ?? []) {
       params = params.append('positionIds', id);
     }
     return this.http.get<EmployeeListItem[]>('/api/v1/employees', { params });

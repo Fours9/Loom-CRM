@@ -48,7 +48,8 @@ echo   Empty DB seed only: admin@loom.local / Admin123!
 echo Building API...
 call pnpm --filter @loom/api build
 if errorlevel 1 goto :end
-call pnpm -r --parallel dev
+REM Web starts only after API health/live (no Vite proxy ECONNREFUSED race).
+call pnpm dev:apps
 
 :end
 echo.

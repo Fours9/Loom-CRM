@@ -6,6 +6,7 @@ export type AboutSubtabId =
   | 'hobbies'
   | 'strengths'
   | 'work_style'
+  | 'experience'
   | 'life_goals';
 
 export type AboutValueType =

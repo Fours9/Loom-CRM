@@ -37,7 +37,7 @@ Phase 1 boundaries: [ADR 0007](../adr/0007-employee-profile-boundaries.md).
 | Робота | **Посада** (planned/blocked assignment history) + **Графік роботи** + Заявки + Календар (Absences `public-api`: schedule panel через `getEmployee` + `PUT .../schedule`; UI = `ScheduleEditor`. Empty API schedule ≠ default Пн–Пт — дефолт лише в draft при редагуванні. Compat TimeEvent — [work-calendar-roadmap](./work-calendar-roadmap.md)). Підвкладки графіка — за `absences.calendar.view` | завжди (Посада); графік — `absences.calendar.view` |
 | Документи | Documents MVP + confidential (`is_confidential` / `confidential.view`) + агрегат time-event | `documents.view` |
 | Анкети | Directory `/questionnaires` + People panel; assign/cancel/reactivate/close/delete; fill wizard | `questionnaires.view` |
-| Про себе | Profile Core SoT `employee_about` + sync з анкет + editable subtabs — [people-about-tab](./people-about-tab.md), [ADR 0014](../adr/0014-employee-about.md) | surface `people.tab.about` (seed: employee + adminEq) |
+| Про себе | Profile Core SoT `employee_about` + sync з анкет + editable subtabs (вкл. **Досвід** ← `experience.total_tenure`) — [people-about-tab](./people-about-tab.md), [ADR 0014](../adr/0014-employee-about.md) | surface `people.tab.about` (seed: employee + adminEq) |
 | Показники | Stub (roadmap Phase 5 / 8) | завжди |
 | Адміністрування | Підвкладки **Історія** + **Акаунт** + **Роль та допуски**: audit; account lifecycle + email; adminAccess + visibility overrides | `canViewHistory` **або** account/delete **або** access caps |
 

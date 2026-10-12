@@ -15,17 +15,16 @@ import {
   positionSelectOptions,
 } from '../shared/absences-list-filter-options';
 import {
+  directorySortIndicator,
+  sortEmployeeDirectoryItems,
+  toggleDirectorySort,
+  type EmployeeDirectorySortDir,
+  type EmployeeDirectorySortKey,
+} from '../../../shared/employees/employee-directory-sort';
+import {
   EmployeeListItemViewModel,
   toEmployeeListItemVm,
 } from './employee-list-item.vm';
-
-type EmployeeSortKey =
-  | 'fullName'
-  | 'employeeNumber'
-  | 'department'
-  | 'position'
-  | 'role'
-  | 'status';
 
 @Component({
   selector: 'app-employees-page',
@@ -362,8 +361,8 @@ export class EmployeesPageComponent implements OnInit {
   q = '';
   departmentIds: string[] = [];
   positionId = '';
-  sortBy: EmployeeSortKey = 'fullName';
-  sortDir: 'asc' | 'desc' = 'asc';
+  sortBy: EmployeeDirectorySortKey = 'fullName';
+  sortDir: EmployeeDirectorySortDir = 'asc';
   loading = false;
   error = '';
 
@@ -399,34 +398,33 @@ export class EmployeesPageComponent implements OnInit {
   }
 
   onPhoneSortKeySelected(next: string): void {
-    this.onPhoneSortKey(next as EmployeeSortKey);
+    this.onPhoneSortKey(next as EmployeeDirectorySortKey);
   }
 
-  onPhoneSortKey(key: EmployeeSortKey): void {
+  onPhoneSortKey(key: EmployeeDirectorySortKey): void {
     this.sortBy = key;
-    this.load();
+    this.resortItems();
   }
 
   toggleSortDir(): void {
     this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
-    this.load();
+    this.resortItems();
   }
 
-  toggleSort(key: EmployeeSortKey): void {
-    if (this.sortBy === key) {
-      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-      this.sortBy = key;
-      this.sortDir = 'asc';
-    }
-    this.load();
+  toggleSort(key: EmployeeDirectorySortKey): void {
+    const next = toggleDirectorySort(this.sortBy, this.sortDir, key);
+    this.sortBy = next.sortBy;
+    this.sortDir = next.sortDir;
+    this.resortItems();
   }
 
-  sortIndicator(key: EmployeeSortKey): string {
-    if (this.sortBy !== key) {
-      return '↕';
-    }
-    return this.sortDir === 'asc' ? '↑' : '↓';
+  sortIndicator(key: EmployeeDirectorySortKey): string {
+    return directorySortIndicator(this.sortBy, this.sortDir, key);
+  }
+
+  private resortItems(): void {
+    this.items = sortEmployeeDirectoryItems(this.items, this.sortBy, this.sortDir);
+    this.error = '';
   }
 
   private reloadPositions(after?: () => void): void {
@@ -455,7 +453,8 @@ export class EmployeesPageComponent implements OnInit {
       })
       .subscribe({
         next: (rows) => {
-          this.items = rows.map((e) => toEmployeeListItemVm(e));
+          const vms = rows.map((e) => toEmployeeListItemVm(e));
+          this.items = sortEmployeeDirectoryItems(vms, this.sortBy, this.sortDir);
           this.loading = false;
         },
         error: () => {

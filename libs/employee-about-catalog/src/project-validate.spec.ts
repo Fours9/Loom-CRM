@@ -78,6 +78,26 @@ describe('projectEmployeeAbout', () => {
     ]);
   });
 
+  it('projects experience.total_tenure on Досвід subtab', () => {
+    const r = projectEmployeeAbout({
+      answers: { 'experience.total_tenure': '5 років у сфері' },
+    });
+    const exp = r.subtabs.find((s) => s.id === 'experience')!;
+    expect(exp.labelUa).toBe('Досвід');
+    expect(exp.fields.map((f) => f.key)).toEqual(['experience.total_tenure']);
+    expect(exp.fields[0]!.labelUa).toBe('Загальний досвід у сфері');
+    expect(exp.fields[0]!.displayValue).toBe('5 років у сфері');
+  });
+
+  it('accepts experience.total_tenure text patch', () => {
+    const r = validateAboutSubtabPatch({
+      subtabId: 'experience',
+      values: { 'experience.total_tenure': '3 роки' },
+    });
+    expect(r.clearKeys).toEqual([]);
+    expect(r.set).toEqual({ 'experience.total_tenure': '3 роки' });
+  });
+
   it('accepts life_goals repeating patch for career and probation', () => {
     const r = validateAboutSubtabPatch({
       subtabId: 'life_goals',

@@ -31,6 +31,12 @@ export const ABOUT_SUBTAB_DEFS: readonly AboutSubtabDef[] = [
       'Зручна комунікація, фідбек, мотиватори — мʼякий контекст для керівника.',
   },
   {
+    id: 'experience',
+    labelUa: 'Досвід',
+    purposeUa:
+      'Загальний досвід у сфері (experience.total_tenure з іменної / full анкети).',
+  },
+  {
     id: 'life_goals',
     labelUa: 'Цілі',
     purposeUa:

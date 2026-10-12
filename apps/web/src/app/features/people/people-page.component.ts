@@ -27,11 +27,13 @@ import {
   type EmployeeDirectoryFilters,
 } from '../../shared/employees/normalize-directory-filters';
 import {
+  sortEmployeeDirectoryItems,
   toggleDirectorySort,
   type EmployeeDirectorySortDir,
   type EmployeeDirectorySortKey,
 } from '../../shared/employees/employee-directory-sort';
 import { canOpenEmployeeCreate } from '../../shared/employees/can-open-employee-create';
+import { peopleDirectoryLoadErrorMessage } from './people-directory-load-error';
 import { PeopleEmployeesApiService } from './people-employees-api.service';
 
 @Component({
@@ -156,10 +158,8 @@ export class PeoplePageComponent implements OnInit {
               sortDir: this.sortDir(),
             })
             .pipe(
-              catchError(() => {
-                this.error.set(
-                  'Не вдалося завантажити працівників (потрібен вхід)',
-                );
+              catchError((err: unknown) => {
+                this.error.set(peopleDirectoryLoadErrorMessage(err));
                 return of([]);
               }),
             );
@@ -167,7 +167,10 @@ export class PeoplePageComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((rows) => {
-        this.items.set(rows.map((e) => toEmployeeDirectoryItemVm(e)));
+        const vms = rows.map((e) => toEmployeeDirectoryItemVm(e));
+        this.items.set(
+          sortEmployeeDirectoryItems(vms, this.sortBy(), this.sortDir()),
+        );
         this.loading.set(false);
       });
 
@@ -192,21 +195,29 @@ export class PeoplePageComponent implements OnInit {
     this.load$.next();
   }
 
+  /** Sort is in-memory — list has no pagination; avoid refetch races. */
   onSortToggle(key: EmployeeDirectorySortKey): void {
     const next = toggleDirectorySort(this.sortBy(), this.sortDir(), key);
     this.sortBy.set(next.sortBy);
     this.sortDir.set(next.sortDir);
-    this.load$.next();
+    this.resortItems();
   }
 
   onPhoneSortBy(key: EmployeeDirectorySortKey): void {
     this.sortBy.set(key);
-    this.load$.next();
+    this.resortItems();
   }
 
   onToggleSortDir(): void {
     this.sortDir.set(this.sortDir() === 'asc' ? 'desc' : 'asc');
-    this.load$.next();
+    this.resortItems();
+  }
+
+  private resortItems(): void {
+    this.items.set(
+      sortEmployeeDirectoryItems(this.items(), this.sortBy(), this.sortDir()),
+    );
+    this.error.set(null);
   }
 
   private applyNormalized(requested: EmployeeDirectoryFilters): void {

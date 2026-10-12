@@ -4,13 +4,14 @@ import {
 } from './people-about-subtabs';
 
 describe('people-about-subtabs', () => {
-  it('ships all six catalog subtabs', () => {
+  it('ships all catalog subtabs including Досвід', () => {
     expect(visiblePeopleAboutSubtabs().map((t) => t.id)).toEqual([
       'family_home',
       'celebrations',
       'hobbies',
       'strengths',
       'work_style',
+      'experience',
       'life_goals',
     ]);
   });

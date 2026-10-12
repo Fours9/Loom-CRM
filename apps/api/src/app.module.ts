@@ -25,7 +25,8 @@ import { EmployeeDeletionModule } from './application/employee-deletion/employee
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '../../.env'],
+      // Repo-root first (cwd = apps/api): avoids dual JWT_SECRET drift vs apps/api/.env.
+      envFilePath: ['../../.env', '.env'],
     }),
     ApplicationConfigModule,
     TypeOrmModule.forRootAsync({

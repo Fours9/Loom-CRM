@@ -6,8 +6,9 @@
     "node": ">=22 <23"
   },
   "scripts": {
-    "dev": "pnpm migration:run && pnpm -r --parallel dev",
-    "dev:apps": "pnpm -r --parallel dev",
+    "dev": "pnpm migration:run && node scripts/dev-apps.mjs",
+    "dev:apps": "node scripts/dev-apps.mjs",
+    "dev:apps:parallel": "pnpm --filter @loom/api --filter @loom/web --parallel dev",
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",

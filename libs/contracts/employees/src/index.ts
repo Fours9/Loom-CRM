@@ -553,6 +553,7 @@ export type PeopleAboutSubtabId =
   | 'hobbies'
   | 'strengths'
   | 'work_style'
+  | 'experience'
   | 'life_goals';
 
 export type EmployeeAboutFieldOption = {

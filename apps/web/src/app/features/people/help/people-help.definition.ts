@@ -382,6 +382,31 @@ export const PEOPLE_HELP_BUNDLE: HelpDomainBundle = {
       ],
     ),
     steps(
+      'people.about.experience',
+      'Досвід',
+      'Загальний досвід у сфері — мʼякий контекст з іменної / повної анкети, не історія місць роботи.',
+      [
+        {
+          id: 'people.about.experience__tabs',
+          title: 'Підрозділи',
+          body: 'Оберіть «Досвід» або сусідні розділи «Про себе».',
+          anchorId: 'people.about.subtabs',
+        },
+        {
+          id: 'people.about.experience__fields',
+          title: 'Поля розділу',
+          body: 'Тут — «Загальний досвід у сфері». Попередні місця роботи та керівництво людьми лишаються в анкеті.',
+          anchorId: 'people.about.region',
+        },
+        {
+          id: 'people.about.experience__save',
+          title: 'Зберегти',
+          body: 'Записує зміни розділу, якщо редагування дозволене. Submit іменної анкети також синхронізує це поле.',
+          anchorId: 'people.about.save',
+        },
+      ],
+    ),
+    steps(
       'people.about.life-goals',
       'Цілі',
       'Життєві та карʼєрні орієнтири працівника.',

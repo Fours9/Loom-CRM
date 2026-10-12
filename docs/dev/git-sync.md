@@ -90,7 +90,7 @@ copy .env.example .env
 # openssl rand -base64 48
 ```
 
-Поставте унікальний `JWT_SECRET=...` у `.env` (launcher тунелю відхилить `dev-only-change-me-loom-crm-jwt-secret`).
+Поставте унікальний `JWT_SECRET=...` у **кореневому** `.env` (launcher тунелю відхилить `dev-only-change-me-loom-crm-jwt-secret`). Не дублюйте інший секрет у `apps/api/.env` — API віддає перевагу root (див. [operations.md](operations.md) § env SoT).
 
 Далі схема + демо-дані:
 

@@ -130,7 +130,7 @@ Domain actions (permission strings in PR-1): view own assignment · fill own ass
 | --- | --- |
 | `employee-360` (full) | profile_mirror · contacts · family · celebration_dates · experience · education · strengths · hobbies · work_style · consents |
 | `employee-starter` (full / Первинна) | profile_mirror · contacts · family · education · experience · company_work · consents |
-| `employee-named` (full / Іменна) | profile_mirror · contacts (label «Особисті контакти») · experience (`total_tenure` only, label «Загальний досвід у сфері») · company_work (`position_id` freestanding only); PDF single-page |
+| `employee-named` (full / Іменна) | profile_mirror · contacts (label «Особисті контакти») · experience (`total_tenure` only, label «Загальний досвід у сфері» → sync About «Досвід») · company_work (`position_id` freestanding only); PDF single-page |
 | `employee-managing` | profile_mirror · company_work · grade · skills · **goals** (rail/PDF parent; substeps `career_goals` + `probation_goals`) |
 | `employee-docs` | profile_mirror · onboarding · hr_documents |
 
@@ -268,12 +268,14 @@ Seeded in `employee-managing` (voluntary snapshot). **`grade.net_salary` is not 
 
 | key | order | label | valueType | requiredPolicy | destination | mvpStatus |
 |-----|-------|-------|-----------|----------------|-------------|-----------|
-| experience.total_tenure | 10 | Загальний стаж | text | voluntary | questionnaire_snapshot | in_mvp |
+| experience.total_tenure | 10 | Загальний стаж | text | voluntary | questionnaire_snapshot + Profile Core (`employee_about` / About «Досвід») | in_mvp |
 | experience.managed_people | 20 | Керували людьми? | single_choice | voluntary | questionnaire_snapshot | in_mvp |
 | experience.managed_count | 21 | Кількість підлеглих | number | voluntary | questionnaire_snapshot | in_mvp |
 | experience.prior_jobs | 30 | Попередні місця роботи | repeating_group | voluntary | questionnaire_snapshot | in_mvp |
 | experience.achievements | 40 | Досягнення якими пишаюся | textarea | voluntary | questionnaire_snapshot | in_mvp |
 | experience.want_to_learn | 50 | Чого хочу навчитись | textarea | voluntary | questionnaire_snapshot | in_mvp |
+
+Named template overrides the tenure label to «Загальний досвід у сфері». Only `experience.total_tenure` is in `@loom/employee-about-catalog` → sync/PATCH About; other experience keys stay snapshot-only (Career Profile).
 
 `managed_people` options: `yes`, `no`. `managed_count` visibleWhen equals `yes`.  
 `prior_jobs` children: `company`, `position`, `from` (date), `to` (date; empty OK; `to >= from` if both set), `results`.

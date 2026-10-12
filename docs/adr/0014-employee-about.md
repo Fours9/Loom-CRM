@@ -21,3 +21,5 @@ People «Про себе» needs a current soft-profile SoT independent of quest
 - Snapshot remains audit; About is current truth.
 - Concurrent PATCH/sync of different keys do not lose each other.
 - Forgotten About erase fails closed on employee DELETE (RESTRICT).
+- Soft tenure (`experience.total_tenure`) may live in About subtab «Досвід»; full career history (`prior_jobs`, managed_*) stays questionnaire snapshot only.
+- Catalog is the only vocabulary gate: a questionnaire key reaches About iff it is in `ABOUT_FIELD_DEFS` (extracted on submit, validated on PATCH).

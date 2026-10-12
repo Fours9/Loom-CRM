@@ -41,6 +41,8 @@
 
 Валідація при старті API: `getApplicationConfig()` — обов’язкові `DATABASE_URL` і `JWT_SECRET`.
 
+**Dev env SoT (єдина точка):** файл **кореня репо** `.env`. API при старті вантажить спочатку root `.env`, потім `apps/api/.env` (dotenv / ConfigModule не перезаписують уже задані ключі — root виграє). Не тримайте різні `JWT_SECRET` у root і `apps/api/.env` — інакше логін «ніби ок», а частина запитів 401 після рестарту. Краще синхронізувати або прибрати дубль з `apps/api/.env`.
+
 | Змінна | Обов’язкова | Приклад | Призначення |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | **так** | `postgres://loom:loom@127.0.0.1:5432/loom_crm` | підключення TypeORM |
@@ -166,6 +168,9 @@ docker compose logs -f postgres
 | Після оновлення UI «старий» | Браузерний кеш / не перезібраний `web` — `docker compose up -d --build web` |
 | Випадкові зміни в `ProjectWeekend/` | Copy-source read-only — відкотити; `pnpm check:copy-source` |
 | UI клікається, даних немає («бек ніби вимкнений») | Часто **жива вкладка SPA** або процес ще на `:4200`, а API на `:3000` мертвий — не витік БД. Див. § [SPA vs сервер](#spa-shell-vs-вимкнений-сервер) |
+| «Некоректні параметри» на `/people` з фільтром відділ/посада | Раніше DTO вимагав UUID **v4**, а org ids з cutover часто **v5**. List query: `@IsUUID('all')` для `departmentIds` / `positionIds` / `directionIds`. |
+| Сортування списку працівників б’є в API / 400 | FE SoT: in-memory `sortEmployeeDirectoryItems` (People + Absences) — без refetch при кліку по колонці. Server `sortBy` лишається на filter/reload. |
+| Vite `http proxy error` / `ECONNREFUSED 127.0.0.1:3000` одразу після старту | Використовуйте `pnpm dev` / `pnpm dev:apps` / `start.bat` — web стартує лише після `GET /api/v1/health/live` (`scripts/dev-apps.mjs`). Не запускайте `pnpm -r --parallel dev` для apps (є лише `dev:apps:parallel` для свідомого race). `◇ injected env (0)` від dotenv v17 = ключі вже в `process.env`. |
 
 ---
 
@@ -213,5 +218,6 @@ cp .env.example .env
 pnpm install
 pnpm migration:run
 pnpm dev
-# або start.bat на Windows
+# pnpm dev / start.bat → scripts/dev-apps.mjs (API health, потім web)
+# лише apps: pnpm dev:apps
 ```
