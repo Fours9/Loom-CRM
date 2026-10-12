@@ -36,6 +36,8 @@ import { validateDraftAnswersForSubmit } from './questionnaire-answers-validatio
 import { QuestionnaireContextSkillIdBackfillService } from './assignments/questionnaire-context-skill-id-backfill.service';
 import {
   applyCanonicalOrganizationAnswers,
+  organizationTripleConflictsWithContext,
+  organizationTripleHasOrg,
   resolveQuestionnaireOrganizationSelection,
 } from './questionnaire-organization-selection';
 import {
@@ -220,11 +222,12 @@ export class QuestionnaireSubmissionService {
           const v = answers[key];
           return v == null || v === '';
         });
-        const contextHasOrg =
-          catalog.directionId != null ||
-          catalog.departmentId != null ||
-          catalog.positionId != null;
-        if (draftEmpty && contextHasOrg) {
+        const contextOrg = {
+          directionId: catalog.directionId,
+          departmentId: catalog.departmentId,
+          positionId: catalog.positionId,
+        };
+        if (draftEmpty && organizationTripleHasOrg(contextOrg)) {
           applyCanonicalOrganizationAnswers(answers, catalog);
         }
         const resolved = await resolveQuestionnaireOrganizationSelection(
@@ -234,12 +237,13 @@ export class QuestionnaireSubmissionService {
         applyCanonicalOrganizationAnswers(answers, resolved);
         response.answersJson = answers;
         if (
-          resolved.directionId !== catalog.directionId ||
-          resolved.departmentId !== catalog.departmentId ||
-          resolved.positionId !== catalog.positionId
+          organizationTripleConflictsWithContext({
+            context: contextOrg,
+            resolved,
+          })
         ) {
           throw new BadRequestException(
-            'company_work org refs must match assignment context (sync required)',
+            'Організаційні поля не збігаються з контекстом анкети. Збережіть чернетку або синхронізуйте посаду й спробуйте знову.',
           );
         }
       }

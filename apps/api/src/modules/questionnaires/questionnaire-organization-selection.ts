@@ -180,3 +180,33 @@ export function applyCanonicalOrganizationAnswers(
   answers['company_work.department_id'] = org.departmentId;
   answers['company_work.position_id'] = org.positionId;
 }
+
+export type QuestionnaireOrgTriple = {
+  directionId: string | null;
+  departmentId: string | null;
+  positionId: string | null;
+};
+
+export function organizationTripleHasOrg(org: QuestionnaireOrgTriple): boolean {
+  return (
+    org.directionId != null ||
+    org.departmentId != null ||
+    org.positionId != null
+  );
+}
+
+/**
+ * When frozen context already has org, draft must match it (sync first).
+ * When context has no org (e.g. new employee named questionnaire), draft org is allowed.
+ */
+export function organizationTripleConflictsWithContext(input: {
+  context: QuestionnaireOrgTriple;
+  resolved: QuestionnaireOrgTriple;
+}): boolean {
+  if (!organizationTripleHasOrg(input.context)) return false;
+  return (
+    input.resolved.directionId !== input.context.directionId ||
+    input.resolved.departmentId !== input.context.departmentId ||
+    input.resolved.positionId !== input.context.positionId
+  );
+}

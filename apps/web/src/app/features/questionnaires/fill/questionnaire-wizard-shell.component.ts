@@ -343,6 +343,9 @@ const ORG_SYNC_KEYS = [
           Назад
         </button>
         <div class="footer-right">
+          @if (store.submitError(); as err) {
+            <p class="footer-error" role="alert">{{ err }}</p>
+          }
           @if (store.activeStepKey() !== reviewKey) {
             <button
               type="button"
@@ -462,8 +465,21 @@ const ORG_SYNC_KEYS = [
         display: flex;
         flex-wrap: wrap;
         align-items: center;
+        justify-content: flex-end;
         gap: 0.5rem;
         margin-left: auto;
+        max-width: min(100%, 36rem);
+      }
+      .footer-error {
+        margin: 0;
+        flex: 1 1 12rem;
+        font-size: 0.85rem;
+        line-height: 1.35;
+        color: #b42318;
+        text-align: right;
+      }
+      :host-context(html[data-theme='dark']) .footer-error {
+        color: #f97066;
       }
       .btn {
         min-height: 44px;
