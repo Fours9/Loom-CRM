@@ -4,6 +4,7 @@ import {
   OnDestroy,
   OnInit,
   computed,
+  effect,
   forwardRef,
   inject,
   input,
@@ -13,7 +14,9 @@ import {
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import {
+  formatIsoToUa,
   parseIsoParts,
+  parseUaDateToIso,
   toIsoDate,
   todayIsoLocal,
 } from './date-iso.util';
@@ -52,27 +55,46 @@ const MONTHS_UA = [
   ],
   template: `
     <div class="wrap" [class.open]="open()" [class.disabled]="isDisabled()">
-      <button
-        type="button"
+      <div
         class="trigger"
-        [attr.aria-expanded]="open()"
-        [attr.aria-disabled]="isDisabled()"
-        [disabled]="isDisabled()"
-        aria-haspopup="dialog"
-        (click)="toggle($event)"
+        [class.invalid]="typedInvalid()"
+        [class.focused]="typedFocused()"
       >
-        <span class="value" [class.placeholder]="!displayValue()">{{
-          displayValue() || placeholder()
-        }}</span>
-        <span class="icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="18" height="18">
+        <input
+          class="typed"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          [attr.aria-invalid]="typedInvalid() || null"
+          [attr.aria-expanded]="open()"
+          [disabled]="isDisabled()"
+          [placeholder]="placeholder()"
+          [value]="draftText()"
+          (input)="onTypedInput($event)"
+          (focus)="onTypedFocus()"
+          (blur)="onTypedBlur()"
+          (keydown.enter)="onTypedEnter($event)"
+          (keydown.escape)="onTypedEscape($event)"
+        />
+        <button
+          type="button"
+          class="cal-btn"
+          [attr.aria-expanded]="open()"
+          [attr.aria-disabled]="isDisabled()"
+          [disabled]="isDisabled()"
+          aria-haspopup="dialog"
+          aria-label="Відкрити календар"
+          title="Календар"
+          (click)="toggle($event)"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path
               fill="currentColor"
               d="M7 2h2v2h6V2h2v2h3a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3V2zm12 7H5v10h14V9z"
             />
           </svg>
-        </span>
-      </button>
+        </button>
+      </div>
 
       @if (open()) {
         <div class="popover" role="dialog" (click)="$event.stopPropagation()">
@@ -149,46 +171,66 @@ const MONTHS_UA = [
         width: 100%;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
+        gap: 0.35rem;
         box-sizing: border-box;
         min-height: var(--pw-control-h, 2.6rem);
-        padding: 0.45rem 0.7rem;
+        padding: 0.2rem 0.35rem 0.2rem 0.7rem;
         border: 1px solid var(--pw-border-strong, var(--pw-border));
         border-radius: var(--pw-radius, 12px);
         background: var(--pw-input-bg, var(--pw-surface));
         color: var(--pw-text);
-        font: inherit;
-        font-weight: 600;
-        cursor: pointer;
         transition:
           border-color 0.16s ease,
           box-shadow 0.16s ease;
       }
-      .trigger:hover:not(:disabled) {
+      .trigger:hover {
         border-color: color-mix(in srgb, var(--pw-accent) 40%, var(--pw-border));
       }
-      .wrap.open .trigger {
+      .wrap.open .trigger,
+      .trigger.focused {
         border-color: var(--pw-accent);
         box-shadow: var(
           --pw-focus-ring,
           0 0 0 3px color-mix(in srgb, var(--pw-accent) 28%, transparent)
         );
       }
-      .value {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+      .trigger.invalid {
+        border-color: var(--pw-danger, #a32d2d);
       }
-      .placeholder {
+      .typed {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-weight: 600;
+        outline: none;
+        padding: 0.25rem 0;
+        width: 100%;
+      }
+      .typed::placeholder {
         color: var(--pw-muted);
         font-weight: 500;
       }
-      .icon {
+      .cal-btn {
         display: inline-grid;
         place-items: center;
+        flex: 0 0 auto;
+        width: 2.15rem;
+        height: 2.15rem;
+        padding: 0;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
         color: var(--pw-accent);
+        cursor: pointer;
+      }
+      .cal-btn:hover:not(:disabled) {
+        background: var(--pw-accent-soft);
+      }
+      .cal-btn:disabled {
+        cursor: not-allowed;
       }
       .popover {
         position: absolute;
@@ -339,6 +381,9 @@ export class PwDateInputComponent
   private onTouched: () => void = () => undefined;
 
   readonly open = signal(false);
+  readonly draftText = signal('');
+  readonly typedFocused = signal(false);
+  readonly typedInvalid = signal(false);
   readonly viewYear = signal(new Date().getFullYear());
   readonly viewMonth = signal(new Date().getMonth() + 1); // 1-12
   readonly today = todayIsoLocal();
@@ -347,12 +392,13 @@ export class PwDateInputComponent
   readonly currentValue = computed(() => this.internalValue());
   readonly isDisabled = computed(() => this.disabled() || this.cvaDisabled());
 
-  readonly displayValue = computed(() => {
-    const iso = this.currentValue();
-    if (!iso) return '';
-    const { y, m, d } = parseIsoParts(iso);
-    if (!y || !m || !d) return iso;
-    return `${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`;
+  readonly displayValue = computed(() => formatIsoToUa(this.currentValue()));
+
+  /** Keep typed draft in sync with committed ISO unless the user is editing / fixing. */
+  private readonly syncDraftFromValue = effect(() => {
+    const formatted = formatIsoToUa(this.internalValue());
+    if (this.typedFocused() || this.typedInvalid()) return;
+    this.draftText.set(formatted);
   });
 
   readonly monthTitle = computed(() => {
@@ -415,6 +461,63 @@ export class PwDateInputComponent
     this.open.set(false);
   }
 
+  onTypedFocus(): void {
+    this.typedFocused.set(true);
+  }
+
+  onTypedInput(event: Event): void {
+    if (this.isDisabled()) return;
+    const next = (event.target as HTMLInputElement).value;
+    this.draftText.set(next);
+    this.typedInvalid.set(false);
+  }
+
+  onTypedBlur(): void {
+    this.typedFocused.set(false);
+    this.commitTyped();
+    this.onTouched();
+  }
+
+  onTypedEnter(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.commitTyped();
+    this.closeMenu();
+  }
+
+  onTypedEscape(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.draftText.set(this.displayValue());
+    this.typedInvalid.set(false);
+    this.closeMenu();
+  }
+
+  /**
+   * Commit typed `дд.мм.рррр` (or clear). Invalid non-empty text keeps the last
+   * committed ISO and restores the draft display.
+   */
+  commitTyped(): void {
+    if (this.isDisabled()) return;
+    const raw = this.draftText().trim();
+    if (!raw) {
+      this.typedInvalid.set(false);
+      this.commit('');
+      this.draftText.set('');
+      return;
+    }
+    const iso = parseUaDateToIso(raw);
+    if (!iso) {
+      // Keep the typed text so the user can fix it; do not wipe the last ISO.
+      this.typedInvalid.set(true);
+      return;
+    }
+    this.typedInvalid.set(false);
+    this.commit(iso);
+    this.draftText.set(formatIsoToUa(iso));
+    this.syncViewToValue();
+  }
+
   toggle(event: MouseEvent): void {
     event.stopPropagation();
     if (this.isDisabled()) return;
@@ -443,12 +546,16 @@ export class PwDateInputComponent
   choose(iso: string): void {
     if (this.isDisabled()) return;
     this.commit(iso);
+    this.draftText.set(formatIsoToUa(iso));
+    this.typedInvalid.set(false);
     this.closeMenu();
   }
 
   clear(): void {
     if (this.isDisabled()) return;
     this.commit('');
+    this.draftText.set('');
+    this.typedInvalid.set(false);
     this.closeMenu();
   }
 

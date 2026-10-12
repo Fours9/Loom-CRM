@@ -860,10 +860,13 @@ export class PositionManagementFacade {
     this.editingId.set(result.position.id);
     this.formIsActive = result.position.isActive;
     this.reload();
-    this.loadPositionCatalog(result.position.id);
     if (result.mode === 'edit-with-failed-drafts') {
+      this.loadPositionCatalog(result.position.id);
       this.error.set('Посаду створено, але частину вимог не вдалося додати');
+      return;
     }
+    // Successful create (with or without applied drafts): same close entry as PATCH.
+    this.closeAfterSuccessfulSave();
   }
 
   hardDeletePosition(p: OrgPosition): void {
