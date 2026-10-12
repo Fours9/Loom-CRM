@@ -277,6 +277,7 @@ type MetricsTabId = 'skills';
                 <loom-employee-questionnaires-panel
                   [employeeId]="profile()!.header.id"
                   [employeeFullName]="profile()!.header.displayName"
+                  (profileAffected)="reloadProfile()"
                 />
               } @placeholder {
                 <p class="muted">Підготовка анкет…</p>

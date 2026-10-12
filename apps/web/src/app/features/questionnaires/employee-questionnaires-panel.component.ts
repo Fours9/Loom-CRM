@@ -6,6 +6,7 @@ import {
   OnDestroy,
   SimpleChanges,
   inject,
+  output,
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
@@ -698,6 +699,8 @@ export class EmployeeQuestionnairesPanelComponent
   @Input({ required: true }) employeeId!: string;
   /** Optional display name for create dialog prefill. */
   @Input() employeeFullName: string | null = null;
+  /** Fired after a proposal is accepted so People can refresh profile SoT. */
+  readonly profileAffected = output<void>();
 
   readonly loading = signal(false);
   readonly busyAssignmentId = signal<string | null>(null);
@@ -937,7 +940,10 @@ export class EmployeeQuestionnairesPanelComponent
   accept(assignmentId: string, proposalId: string): void {
     this.keepProposalsExpanded(assignmentId);
     this.api.acceptProposal(proposalId).subscribe({
-      next: () => this.reload({ soft: true }),
+      next: () => {
+        this.reload({ soft: true });
+        this.profileAffected.emit();
+      },
       error: () => this.error.set('Не вдалося прийняти пропозицію'),
     });
   }
