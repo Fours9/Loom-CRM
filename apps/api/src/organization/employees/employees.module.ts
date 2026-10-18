@@ -109,6 +109,7 @@ import { EmployeeAboutService } from './employee-about.service';
     OrganizationEmployeeErasureFacade,
     IdentityRoleProjection,
     EmployeeAboutFacade,
+    EmploymentAssignmentOrganizationResolver,
   ],
 })
 export class EmployeesModule {}

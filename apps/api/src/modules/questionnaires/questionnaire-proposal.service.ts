@@ -69,6 +69,8 @@ import { EmployeeSkillAssessmentsFacade } from '../../organization/skills/employ
 import { SkillsService } from '../../organization/skills/skills.service';
 import { Skill } from '../../organization/skills/skill.entity';
 import { CurrentEmploymentAssignmentResolver } from '../../organization/employment-catalog/current-employment-assignment.resolver';
+import { EmploymentAssignmentOrganizationResolver } from '../../organization/employees/employment-assignment-organization.resolver';
+import { EmploymentAssignment } from '../../organization/employees/employment-assignment.entity';
 import { Employee } from '../../organization/employees/employee.entity';
 
 type ProposalMapping = { section: string; field: string };
@@ -116,6 +118,7 @@ export class QuestionnaireProposalService {
     private readonly assessments: EmployeeSkillAssessmentsFacade,
     private readonly skillsCatalog: SkillsService,
     private readonly currentEmployment: CurrentEmploymentAssignmentResolver,
+    private readonly assignmentOrg: EmploymentAssignmentOrganizationResolver,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -643,14 +646,6 @@ export class QuestionnaireProposalService {
             assignmentId,
           },
         );
-        // Company_work org answers were historically omitted from proposals;
-        // sync employment from the same submission whenever HR accepts any change.
-        await this.syncEmploymentOrgFromSubmissionAnswers(
-          manager,
-          actor,
-          proposal.employeeId,
-          proposal.submissionId,
-        );
         locked.status = 'accepted';
       } else {
         locked.status = 'rejected';
@@ -896,7 +891,7 @@ export class QuestionnaireProposalService {
 
   private async syncEmploymentOrgFromSubmissionAnswers(
     manager: EntityManager,
-    actor: User,
+    _actor: User,
     employeeId: string,
     submissionId: string,
   ): Promise<void> {
@@ -925,27 +920,36 @@ export class QuestionnaireProposalService {
     };
     if (employmentOrgEquals(current, proposed)) return;
 
-    const dto: {
-      directionId?: string | null;
-      departmentId?: string | null;
-      positionId?: string | null;
-    } = {};
-    // Prefer position — EmploymentAssignmentOrganizationResolver fills parents.
-    if (proposed.positionId) {
-      dto.positionId = proposed.positionId;
-      if (proposed.departmentId) dto.departmentId = proposed.departmentId;
-      if (proposed.directionId) dto.directionId = proposed.directionId;
-    } else {
-      if (proposed.departmentId) dto.departmentId = proposed.departmentId;
-      if (proposed.directionId) dto.directionId = proposed.directionId;
-    }
+    // Apply on the same manager (no nested updateAssignment TX / capability gate).
+    // Position-first: resolver fills department/direction from the catalog row.
+    const effective = proposed.positionId
+      ? {
+          positionId: proposed.positionId,
+          departmentId: proposed.departmentId,
+          directionId: proposed.directionId,
+        }
+      : {
+          positionId: assignment.positionId,
+          departmentId: proposed.departmentId ?? assignment.departmentId,
+          directionId: proposed.directionId ?? assignment.directionId,
+        };
 
-    await this.profiles.updateAssignment(
-      actor,
-      employeeId,
-      assignment.id,
-      dto,
-    );
+    const resolved = await this.assignmentOrg.resolve(manager, {
+      mode: 'update',
+      effective,
+      existing: {
+        companyId: assignment.companyId,
+        positionId: assignment.positionId,
+        departmentId: assignment.departmentId,
+        directionId: assignment.directionId,
+      },
+    });
+
+    assignment.companyId = resolved.companyId;
+    assignment.directionId = resolved.directionId;
+    assignment.departmentId = resolved.departmentId;
+    assignment.positionId = resolved.positionId;
+    await manager.getRepository(EmploymentAssignment).save(assignment);
   }
 
   private async supersedePendingEmploymentOrg(
