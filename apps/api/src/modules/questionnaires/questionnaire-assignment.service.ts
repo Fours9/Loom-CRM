@@ -82,7 +82,10 @@ import {
 } from './proposals/questionnaire-profile-mirror';
 import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
 import { QuestionnaireContextSkillIdBackfillService } from './assignments/questionnaire-context-skill-id-backfill.service';
-import { applyCanonicalOrganizationAnswers } from './questionnaire-organization-selection';
+import {
+  applyCanonicalOrganizationAnswers,
+  sanitizeOrganizationTripleAgainstCatalog,
+} from './questionnaire-organization-selection';
 import { QuestionnaireSubmissionService } from './questionnaire-submission.service';
 import {
   desiredExtrasFromPersistedContext,
@@ -1355,7 +1358,16 @@ export class QuestionnaireAssignmentService {
     });
     if (!response) return;
     const answers = { ...(response.answersJson ?? {}) };
-    applyCanonicalOrganizationAnswers(answers, parsed.context.positionCatalog);
+    const catalog = parsed.context.positionCatalog;
+    const sanitized = await sanitizeOrganizationTripleAgainstCatalog(
+      {
+        directionId: catalog.directionId,
+        departmentId: catalog.departmentId,
+        positionId: catalog.positionId,
+      },
+      manager,
+    );
+    applyCanonicalOrganizationAnswers(answers, sanitized);
     response.answersJson = answers;
     await manager.getRepository(QuestionnaireResponse).save(response);
   }

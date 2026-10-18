@@ -39,6 +39,7 @@ import {
   organizationTripleConflictsWithContext,
   organizationTripleHasOrg,
   resolveQuestionnaireOrganizationSelection,
+  sanitizeOrganizationTripleAgainstCatalog,
 } from './questionnaire-organization-selection';
 import {
   applyReopenTransition,
@@ -222,13 +223,16 @@ export class QuestionnaireSubmissionService {
           const v = answers[key];
           return v == null || v === '';
         });
-        const contextOrg = {
-          directionId: catalog.directionId,
-          departmentId: catalog.departmentId,
-          positionId: catalog.positionId,
-        };
+        const contextOrg = await sanitizeOrganizationTripleAgainstCatalog(
+          {
+            directionId: catalog.directionId,
+            departmentId: catalog.departmentId,
+            positionId: catalog.positionId,
+          },
+          manager,
+        );
         if (draftEmpty && organizationTripleHasOrg(contextOrg)) {
-          applyCanonicalOrganizationAnswers(answers, catalog);
+          applyCanonicalOrganizationAnswers(answers, contextOrg);
         }
         const resolved = await resolveQuestionnaireOrganizationSelection(
           answers,

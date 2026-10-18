@@ -196,6 +196,40 @@ export function organizationTripleHasOrg(org: QuestionnaireOrgTriple): boolean {
 }
 
 /**
+ * Drop catalog IDs that no longer exist / are inactive.
+ * Frozen context may outlive deleted departments; submit must not re-inject them.
+ */
+export async function sanitizeOrganizationTripleAgainstCatalog(
+  org: QuestionnaireOrgTriple,
+  manager: EntityManager,
+): Promise<QuestionnaireOrgTriple> {
+  let directionId = org.directionId;
+  let departmentId = org.departmentId;
+  let positionId = org.positionId;
+
+  if (directionId) {
+    const row = await manager.getRepository(Direction).findOne({
+      where: { id: directionId },
+    });
+    if (!row || row.isActive === false) directionId = null;
+  }
+  if (departmentId) {
+    const row = await manager.getRepository(Department).findOne({
+      where: { id: departmentId },
+    });
+    if (!row || row.isActive === false) departmentId = null;
+  }
+  if (positionId) {
+    const row = await manager.getRepository(Position).findOne({
+      where: { id: positionId },
+    });
+    if (!row || row.isActive === false) positionId = null;
+  }
+
+  return { directionId, departmentId, positionId };
+}
+
+/**
  * When frozen context already has org, draft must match it (sync first).
  * When context has no org (e.g. new employee named questionnaire), draft org is allowed.
  */

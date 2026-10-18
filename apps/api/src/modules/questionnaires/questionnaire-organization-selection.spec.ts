@@ -1,6 +1,7 @@
 import {
   organizationTripleConflictsWithContext,
   organizationTripleHasOrg,
+  sanitizeOrganizationTripleAgainstCatalog,
 } from './questionnaire-organization-selection';
 
 describe('organizationTripleHasOrg', () => {
