@@ -73,7 +73,13 @@ import { Employee } from '../../organization/employees/employee.entity';
 import { EmployeeContactsFacade } from '../../organization/employees/employee-contacts.facade';
 import { CurrentEmploymentAssignmentResolver } from '../../organization/employment-catalog/current-employment-assignment.resolver';
 import { PositionCatalogFacade } from '../../organization/position-catalog/position-catalog.facade';
-import { buildQuestionnaireProfileMirror } from './proposals/questionnaire-profile-mirror';
+import { Direction } from '../../organization/companies/direction.entity';
+import { Department } from '../../organization/departments/department.entity';
+import { Position } from '../../organization/positions/position.entity';
+import {
+  buildQuestionnaireProfileMirror,
+  type EmploymentMirrorSlice,
+} from './proposals/questionnaire-profile-mirror';
 import { supersedePendingForAssignment } from './proposals/questionnaire-proposal-lifecycle';
 import { QuestionnaireContextSkillIdBackfillService } from './assignments/questionnaire-context-skill-id-backfill.service';
 import { applyCanonicalOrganizationAnswers } from './questionnaire-organization-selection';
@@ -466,7 +472,7 @@ export class QuestionnaireAssignmentService {
     let employment = null;
     if (includeEmployment) {
       const ea = await this.currentEmployment.resolve(employee);
-      employment = ea
+      const rawEmployment = ea
         ? {
             directionId: ea.directionId,
             departmentId: ea.departmentId,
@@ -485,6 +491,9 @@ export class QuestionnaireAssignmentService {
             startDate: null,
             probationEndDate: null,
           };
+      // Drop catalog IDs that no longer exist / are inactive so autofill cannot
+      // poison drafts and trip "Unknown or inactive department|position|…".
+      employment = await this.sanitizeEmploymentMirrorIds(rawEmployment);
     }
 
     const contactsBundle = includePersonal
@@ -1349,6 +1358,41 @@ export class QuestionnaireAssignmentService {
     applyCanonicalOrganizationAnswers(answers, parsed.context.positionCatalog);
     response.answersJson = answers;
     await manager.getRepository(QuestionnaireResponse).save(response);
+  }
+
+  private async sanitizeEmploymentMirrorIds(
+    employment: EmploymentMirrorSlice,
+  ): Promise<EmploymentMirrorSlice> {
+    const manager = this.dataSource.manager;
+    let directionId = employment.directionId;
+    let departmentId = employment.departmentId;
+    let positionId = employment.positionId;
+
+    if (directionId) {
+      const row = await manager.getRepository(Direction).findOne({
+        where: { id: directionId },
+      });
+      if (!row || row.isActive === false) directionId = null;
+    }
+    if (departmentId) {
+      const row = await manager.getRepository(Department).findOne({
+        where: { id: departmentId },
+      });
+      if (!row || row.isActive === false) departmentId = null;
+    }
+    if (positionId) {
+      const row = await manager.getRepository(Position).findOne({
+        where: { id: positionId },
+      });
+      if (!row || row.isActive === false) positionId = null;
+    }
+
+    return {
+      ...employment,
+      directionId,
+      departmentId,
+      positionId,
+    };
   }
 }
 
