@@ -46,11 +46,6 @@ describe('questionnaire seed shared factories', () => {
     expect(position?.valueType).toBe('organization_ref');
     expect(position?.organizationEntity).toBe('position');
     expect(position?.profileMirrorKey).toBe('positionId');
-    expect(position?.createsProfileProposal).toBe(true);
-    expect(position?.proposalMapping).toEqual({
-      section: 'employment',
-      field: 'positionId',
-    });
   });
 
   it('position-only company_work has freestanding position_id', () => {
@@ -59,10 +54,5 @@ describe('questionnaire seed shared factories', () => {
     expect(fields[0]?.key).toBe('company_work.position_id');
     expect(fields[0]?.cascadeParentKey).toBeUndefined();
     expect(fields[0]?.profileMirrorKey).toBe('positionId');
-    expect(fields[0]?.createsProfileProposal).toBe(true);
-    expect(fields[0]?.proposalMapping).toEqual({
-      section: 'employment',
-      field: 'positionId',
-    });
   });
 });
